@@ -52,7 +52,7 @@ app.post('/api/chat', async (req, res) => {
 
   try {
     const stream = client.messages.stream({
-      model: 'claude-opus-4-7',
+      model: 'claude-opus-4-8',
       max_tokens: 64000,
       system: buildSystemPrompt(coupleInfo),
       messages: messages.map(m => ({ role: m.role, content: m.content })),
