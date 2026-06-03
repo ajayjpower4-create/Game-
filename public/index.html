@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <title>Couch — Therapy Session Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,40 +11,65 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+          <span class="logo-icon">🛋️</span>
+          <span class="logo-text">Couch</span>
+          <span class="logo-sub">therapy session simulator</span>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+        <div class="header-actions">
+          <span class="session-badge" id="sessionBadge">Not started</span>
+          <button class="ghost-btn" id="profileBtn" title="Edit the couple's profile">Couple Profile</button>
+          <button class="ghost-btn" id="resetBtn" title="Reset everything">Reset</button>
+        </div>
       </div>
     </header>
 
+    <!-- Couple profile setup -->
+    <section class="profile-panel" id="profilePanel">
+      <div class="profile-inner">
+        <h2>Set up the couple</h2>
+        <p class="profile-help">
+          Paste everything about the couple you'll be counseling — their names, what's going on in
+          their life, the history, the conflict, how each of them reacts to things, their
+          communication styles, anything. The AI will play <strong>both partners</strong>; you are the therapist.
+        </p>
+        <textarea
+          id="coupleInfo"
+          class="couple-info"
+          placeholder="e.g. Maya (34) and James (37), married 6 years, one toddler.&#10;The fight: James took a new job with long hours without really discussing it. Maya feels abandoned and like decisions get made *at* her, not *with* her.&#10;Maya reacts to stress by going cold and over-controlling logistics. James shuts down and gets defensive, then over-apologizes.&#10;Underneath: they still love each other but both feel unseen..."
+        ></textarea>
+        <div class="profile-actions">
+          <button class="primary-btn" id="saveProfileBtn">Begin simulation →</button>
+        </div>
+      </div>
+    </section>
+
     <main class="chat-area" id="chatArea">
       <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+        <div class="welcome-icon">🛋️</div>
+        <h1>The couple is waiting</h1>
+        <p>You're the therapist. They're on the couch. Talk to them — and use these commands:</p>
+        <div class="cmd-guide">
+          <div class="cmd-row"><code>(start</code><span>Begin the therapy session</span></div>
+          <div class="cmd-row"><code>(end</code><span>End the current session</span></div>
+          <div class="cmd-row"><code>(next</code><span>Jump to next week's session</span></div>
+          <div class="cmd-row"><code>(help</code><span>Show the command list again</span></div>
         </div>
+        <p class="welcome-tip">Tip: anything you type that doesn't start with <code>(</code> is spoken to the couple as their therapist.</p>
       </div>
       <div class="messages" id="messages"></div>
     </main>
 
     <footer class="input-area">
+      <div class="cmd-chips" id="cmdChips">
+        <button class="cmd-chip" data-cmd="(start">( start</button>
+        <button class="cmd-chip" data-cmd="(next">( next week</button>
+        <button class="cmd-chip" data-cmd="(end">( end</button>
+      </div>
       <div class="input-container">
         <textarea
           id="messageInput"
           class="message-input"
-          placeholder="Message Swerve..."
+          placeholder="Speak to the couple, or type a ( command…"
           rows="1"
           maxlength="10000"
         ></textarea>
@@ -55,7 +80,7 @@
           </svg>
         </button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
+      <p class="disclaimer">A roleplay simulator for practice — not real therapy or real people.</p>
     </footer>
   </div>
 

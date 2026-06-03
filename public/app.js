@@ -3,41 +3,73 @@ const messagesEl = document.getElementById('messages');
 const welcome = document.getElementById('welcome');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
-const newChatBtn = document.getElementById('newChatBtn');
+const resetBtn = document.getElementById('resetBtn');
+const profileBtn = document.getElementById('profileBtn');
+const profilePanel = document.getElementById('profilePanel');
+const coupleInfoEl = document.getElementById('coupleInfo');
+const saveProfileBtn = document.getElementById('saveProfileBtn');
+const sessionBadge = document.getElementById('sessionBadge');
+const cmdChips = document.getElementById('cmdChips');
 
 let history = [];
 let isStreaming = false;
+let coupleInfo = '';
+let week = 1;
+let inSession = false;
 
-// Auto-resize textarea
+// ---- Profile setup ----
+saveProfileBtn.addEventListener('click', () => {
+  coupleInfo = coupleInfoEl.value.trim();
+  profilePanel.classList.remove('open');
+  input.focus();
+  updateBadge();
+});
+
+profileBtn.addEventListener('click', () => {
+  profilePanel.classList.toggle('open');
+  if (profilePanel.classList.contains('open')) coupleInfoEl.focus();
+});
+
+// Open the profile panel by default on load.
+profilePanel.classList.add('open');
+
+// ---- Input handling ----
 input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 200) + 'px';
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-// Send on Enter (Shift+Enter for newline)
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    if (!sendBtn.disabled) sendMessage();
+    if (!sendBtn.disabled) handleSend();
   }
 });
 
-sendBtn.addEventListener('click', sendMessage);
-newChatBtn.addEventListener('click', resetChat);
+sendBtn.addEventListener('click', handleSend);
+resetBtn.addEventListener('click', resetAll);
 
-// Suggestion chips
-document.querySelectorAll('.suggestion').forEach(btn => {
-  btn.addEventListener('click', () => {
-    input.value = btn.dataset.text;
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-    sendBtn.disabled = false;
-    sendMessage();
+// Command chips below the input.
+cmdChips.querySelectorAll('.cmd-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    if (isStreaming) return;
+    input.value = chip.dataset.cmd;
+    handleSend();
   });
 });
 
-function resetChat() {
+function updateBadge() {
+  if (inSession) {
+    sessionBadge.textContent = `Week ${week} · In session`;
+    sessionBadge.className = 'session-badge active';
+  } else {
+    sessionBadge.textContent = coupleInfo ? `Week ${week} · Not started` : 'Not started';
+    sessionBadge.className = 'session-badge';
+  }
+}
+
+function resetAll() {
   history = [];
   messagesEl.innerHTML = '';
   welcome.style.display = 'flex';
@@ -45,40 +77,112 @@ function resetChat() {
   input.style.height = 'auto';
   sendBtn.disabled = true;
   isStreaming = false;
+  week = 1;
+  inSession = false;
+  updateBadge();
 }
 
-async function sendMessage() {
+// Decide whether the input is a command or a line of dialogue.
+function handleSend() {
   const text = input.value.trim();
   if (!text || isStreaming) return;
 
+  if (text.startsWith('(')) {
+    runCommand(text);
+  } else {
+    sendTurn(text, 'user');
+  }
+}
+
+// Parse and execute a ( command.
+function runCommand(raw) {
+  const cmd = raw.slice(1).trim().toLowerCase().replace(/^\(+/, '').trim();
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  if (cmd.startsWith('start') || cmd.startsWith('begin')) {
+    if (inSession) {
+      addScene(`You're already in session ${week}. Talk to the couple, or use ( end / ( next.`, 'info');
+      return;
+    }
+    inSession = true;
+    updateBadge();
+    addScene(`Session ${week} — begins`, 'start');
+    sendTurn(
+      `(The therapist welcomes the couple into the room and begins therapy session #${week}. Settle in and respond in character.)`,
+      'stage'
+    );
+    return;
+  }
+
+  if (cmd.startsWith('end') || cmd.startsWith('stop') || cmd.startsWith('close')) {
+    if (!inSession) {
+      addScene('No session is currently running. Use ( start to begin one.', 'info');
+      return;
+    }
+    inSession = false;
+    updateBadge();
+    addScene(`Session ${week} — ends`, 'end');
+    sendTurn(
+      `(The therapist brings session #${week} to a close. Give a natural closing beat showing where each partner is as they gather their things to leave.)`,
+      'stage'
+    );
+    return;
+  }
+
+  if (cmd.startsWith('next') || cmd.startsWith('skip') || cmd.startsWith('week')) {
+    week += 1;
+    inSession = true;
+    updateBadge();
+    addScene(`One week later — Session ${week}`, 'next');
+    sendTurn(
+      `(One week has passed. The couple returns for therapy session #${week}. Acknowledge the time that passed — whether they tried what was discussed, what happened during the week, and any shift in mood — then settle in.)`,
+      'stage'
+    );
+    return;
+  }
+
+  if (cmd.startsWith('help') || cmd === '?' || cmd === '') {
+    addScene(
+      '( start — begin the session  •  ( end — end the session  •  ( next — jump to next week  •  anything else is spoken to the couple.',
+      'info'
+    );
+    return;
+  }
+
+  addScene(`Unknown command "(${cmd}". Try ( start, ( end, ( next, or ( help.`, 'info');
+}
+
+// Send a turn to the model. kind: 'user' (therapist speech) or 'stage' (bracketed direction).
+async function sendTurn(text, kind) {
   welcome.style.display = 'none';
   isStreaming = true;
   sendBtn.disabled = true;
   sendBtn.classList.add('loading');
 
-  // Add user message
   history.push({ role: 'user', content: text });
-  appendMessage('user', text);
+  if (kind === 'user') {
+    appendMessage('therapist', text);
+    input.value = '';
+    input.style.height = 'auto';
+  }
 
-  input.value = '';
-  input.style.height = 'auto';
-
-  // Create assistant bubble
-  const { bubble, cursor } = createAssistantBubble();
+  const { bubble, cursor } = createCoupleBubble();
   scrollToBottom();
 
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({ messages: history, coupleInfo }),
     });
 
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let assistantText = '';
+    let coupleText = '';
     let buffer = '';
 
     while (true) {
@@ -102,8 +206,8 @@ async function sendMessage() {
             break;
           }
           if (parsed.text) {
-            assistantText += parsed.text;
-            bubble.innerHTML = renderMarkdown(assistantText);
+            coupleText += parsed.text;
+            bubble.innerHTML = renderMarkdown(coupleText);
             bubble.appendChild(cursor);
             scrollToBottom();
           }
@@ -112,9 +216,9 @@ async function sendMessage() {
     }
 
     cursor.remove();
-    if (assistantText) {
-      history.push({ role: 'assistant', content: assistantText });
-      bubble.innerHTML = renderMarkdown(assistantText);
+    if (coupleText) {
+      history.push({ role: 'assistant', content: coupleText });
+      bubble.innerHTML = renderMarkdown(coupleText);
     }
   } catch (err) {
     cursor.remove();
@@ -133,11 +237,11 @@ function appendMessage(role, content) {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : '◈';
+  avatar.textContent = role === 'therapist' ? '🧑‍⚕️' : '💑';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.innerHTML = role === 'user' ? escapeHtml(content) : renderMarkdown(content);
+  bubble.innerHTML = role === 'therapist' ? escapeHtml(content) : renderMarkdown(content);
 
   div.appendChild(avatar);
   div.appendChild(bubble);
@@ -146,13 +250,13 @@ function appendMessage(role, content) {
   return bubble;
 }
 
-function createAssistantBubble() {
+function createCoupleBubble() {
   const div = document.createElement('div');
-  div.className = 'message assistant';
+  div.className = 'message couple';
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = '◈';
+  avatar.textContent = '💑';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -165,6 +269,16 @@ function createAssistantBubble() {
   div.appendChild(bubble);
   messagesEl.appendChild(div);
   return { bubble, cursor };
+}
+
+// A centered scene marker (session start/end/next/info) in the transcript.
+function addScene(text, variant) {
+  welcome.style.display = 'none';
+  const div = document.createElement('div');
+  div.className = `scene scene-${variant}`;
+  div.innerHTML = `<span>${escapeHtml(text)}</span>`;
+  messagesEl.appendChild(div);
+  scrollToBottom();
 }
 
 function scrollToBottom() {
@@ -184,38 +298,29 @@ function escapeHtml(str) {
 function renderMarkdown(text) {
   let html = escapeHtml(text);
 
-  // Code blocks
   html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
     return `<pre><code>${code.trim()}</code></pre>`;
   });
 
-  // Inline code
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-  // Headers
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-  // Bold & italic
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-  // Blockquote
   html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
-  // Unordered list
   html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
 
-  // Ordered list
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
-  // Horizontal rule
   html = html.replace(/^---$/gm, '<hr>');
 
-  // Paragraphs (double newlines)
   html = html
     .split(/\n\n+/)
     .map(block => {
@@ -227,3 +332,5 @@ function renderMarkdown(text) {
 
   return html;
 }
+
+updateBadge();
