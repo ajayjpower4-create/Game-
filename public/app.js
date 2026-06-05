@@ -10,12 +10,67 @@ const coupleInfoEl = document.getElementById('coupleInfo');
 const saveProfileBtn = document.getElementById('saveProfileBtn');
 const sessionBadge = document.getElementById('sessionBadge');
 const cmdChips = document.getElementById('cmdChips');
+const youRoleOptions = document.getElementById('youRoleOptions');
+const partnerGroup = document.getElementById('partnerGroup');
+const partnerRoleOptions = document.getElementById('partnerRoleOptions');
+
+const ROLE_EMOJI = {
+  therapist: '🧑‍⚕️',
+  husband: '🤵',
+  wife: '👰',
+  boyfriend: '🧍‍♂️',
+  girlfriend: '🧍‍♀️',
+};
+// When you pick a partner role, suggest the "opposite" as your AI partner.
+const PARTNER_DEFAULT = {
+  husband: 'wife',
+  wife: 'husband',
+  boyfriend: 'girlfriend',
+  girlfriend: 'boyfriend',
+};
 
 let history = [];
 let isStreaming = false;
 let coupleInfo = '';
 let week = 1;
 let inSession = false;
+let userRole = 'therapist';
+let partnerRole = null;
+
+// ---- Role selection ----
+function selectCard(container, role) {
+  container.querySelectorAll('.role-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.role === role);
+  });
+}
+
+youRoleOptions.querySelectorAll('.role-card').forEach(card => {
+  card.addEventListener('click', () => {
+    userRole = card.dataset.role;
+    selectCard(youRoleOptions, userRole);
+    if (userRole === 'therapist') {
+      partnerGroup.hidden = true;
+      partnerRole = null;
+    } else {
+      partnerGroup.hidden = false;
+      // default the partner to the opposite role if not chosen yet
+      if (!partnerRole || partnerRole === userRole) {
+        partnerRole = PARTNER_DEFAULT[userRole];
+      }
+      selectCard(partnerRoleOptions, partnerRole);
+    }
+  });
+});
+
+partnerRoleOptions.querySelectorAll('.role-card').forEach(card => {
+  card.addEventListener('click', () => {
+    partnerRole = card.dataset.role;
+    selectCard(partnerRoleOptions, partnerRole);
+  });
+});
+
+// Default selection on load.
+selectCard(youRoleOptions, 'therapist');
 
 // ---- Profile setup ----
 saveProfileBtn.addEventListener('click', () => {
@@ -59,15 +114,24 @@ cmdChips.querySelectorAll('.cmd-chip').forEach(chip => {
   });
 });
 
+function roleTitle(role) {
+  return role ? role.charAt(0).toUpperCase() + role.slice(1) : '';
+}
+
 function updateBadge() {
+  const who = `You: ${roleTitle(userRole)}`;
   if (inSession) {
-    sessionBadge.textContent = `Week ${week} · In session`;
+    sessionBadge.textContent = `${who} · Week ${week} · In session`;
     sessionBadge.className = 'session-badge active';
   } else {
-    sessionBadge.textContent = coupleInfo ? `Week ${week} · Not started` : 'Not started';
+    sessionBadge.textContent = `${who} · Not started`;
     sessionBadge.className = 'session-badge';
   }
 }
+
+// Avatar for the human (you) and for the AI side.
+function userAvatar() { return ROLE_EMOJI[userRole] || '🧑‍⚕️'; }
+function aiAvatar() { return userRole === 'therapist' ? '💑' : '🎭'; }
 
 function resetAll() {
   history = [];
@@ -175,7 +239,7 @@ async function sendTurn(text, kind) {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history, coupleInfo }),
+      body: JSON.stringify({ messages: history, coupleInfo, userRole, partnerRole }),
     });
 
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -237,7 +301,7 @@ function appendMessage(role, content) {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = role === 'therapist' ? '🧑‍⚕️' : '💑';
+  avatar.textContent = role === 'therapist' ? userAvatar() : aiAvatar();
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -256,7 +320,7 @@ function createCoupleBubble() {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = '💑';
+  avatar.textContent = aiAvatar();
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';

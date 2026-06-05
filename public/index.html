@@ -23,20 +23,45 @@
       </div>
     </header>
 
-    <!-- Couple profile setup -->
+    <!-- Setup -->
     <section class="profile-panel" id="profilePanel">
       <div class="profile-inner">
-        <h2>Set up the couple</h2>
-        <p class="profile-help">
-          Paste everything about the couple you'll be counseling — their names, what's going on in
-          their life, the history, the conflict, how each of them reacts to things, their
-          communication styles, anything. The AI will play <strong>both partners</strong>; you are the therapist.
-        </p>
-        <textarea
-          id="coupleInfo"
-          class="couple-info"
-          placeholder="e.g. Maya (34) and James (37), married 6 years, one toddler.&#10;The fight: James took a new job with long hours without really discussing it. Maya feels abandoned and like decisions get made *at* her, not *with* her.&#10;Maya reacts to stress by going cold and over-controlling logistics. James shuts down and gets defensive, then over-apologizes.&#10;Underneath: they still love each other but both feel unseen..."
-        ></textarea>
+        <h2>Set up your session</h2>
+
+        <div class="setup-group">
+          <label class="setup-label">1. Who do you want to be?</label>
+          <div class="role-options" id="youRoleOptions">
+            <button class="role-card" data-role="therapist"><span class="role-emoji">🧑‍⚕️</span>Therapist</button>
+            <button class="role-card" data-role="husband"><span class="role-emoji">🤵</span>Husband</button>
+            <button class="role-card" data-role="wife"><span class="role-emoji">👰</span>Wife</button>
+            <button class="role-card" data-role="boyfriend"><span class="role-emoji">🧍‍♂️</span>Boyfriend</button>
+            <button class="role-card" data-role="girlfriend"><span class="role-emoji">🧍‍♀️</span>Girlfriend</button>
+          </div>
+        </div>
+
+        <div class="setup-group" id="partnerGroup" hidden>
+          <label class="setup-label">2. Who is your partner? <span class="setup-sub">(played by AI — the therapist is AI too)</span></label>
+          <div class="role-options" id="partnerRoleOptions">
+            <button class="role-card" data-role="wife"><span class="role-emoji">👰</span>Wife</button>
+            <button class="role-card" data-role="husband"><span class="role-emoji">🤵</span>Husband</button>
+            <button class="role-card" data-role="girlfriend"><span class="role-emoji">🧍‍♀️</span>Girlfriend</button>
+            <button class="role-card" data-role="boyfriend"><span class="role-emoji">🧍‍♂️</span>Boyfriend</button>
+          </div>
+        </div>
+
+        <div class="setup-group">
+          <label class="setup-label" id="detailsLabel">3. The couple &amp; what's going on</label>
+          <p class="profile-help" id="detailsHelp">
+            Paste everything — names, what's going on in their life, the history, the conflict, how each
+            of them reacts to things, their personalities. The more you give, the realer it gets.
+          </p>
+          <textarea
+            id="coupleInfo"
+            class="couple-info"
+            placeholder="e.g. Maya (34) and James (37), married 6 years, one toddler.&#10;The fight: James took a new job with long hours without really discussing it. Maya feels abandoned and like decisions get made *at* her, not *with* her.&#10;Maya reacts to stress by going cold and ripping into him. James gets defensive, swears, then shuts down.&#10;Underneath: they still love each other but both feel unseen..."
+          ></textarea>
+        </div>
+
         <div class="profile-actions">
           <button class="primary-btn" id="saveProfileBtn">Begin simulation →</button>
         </div>
@@ -46,15 +71,15 @@
     <main class="chat-area" id="chatArea">
       <div class="welcome" id="welcome">
         <div class="welcome-icon">🛋️</div>
-        <h1>The couple is waiting</h1>
-        <p>You're the therapist. They're on the couch. Talk to them — and use these commands:</p>
+        <h1>The room is ready</h1>
+        <p>Type to speak as your character. Run the session with these commands:</p>
         <div class="cmd-guide">
           <div class="cmd-row"><code>(start</code><span>Begin the therapy session</span></div>
           <div class="cmd-row"><code>(end</code><span>End the current session</span></div>
           <div class="cmd-row"><code>(next</code><span>Jump to next week's session</span></div>
           <div class="cmd-row"><code>(help</code><span>Show the command list again</span></div>
         </div>
-        <p class="welcome-tip">Tip: anything you type that doesn't start with <code>(</code> is spoken to the couple as their therapist.</p>
+        <p class="welcome-tip">Tip: anything you type that doesn't start with <code>(</code> is spoken aloud as your character.</p>
       </div>
       <div class="messages" id="messages"></div>
     </main>
@@ -69,7 +94,7 @@
         <textarea
           id="messageInput"
           class="message-input"
-          placeholder="Speak to the couple, or type a ( command…"
+          placeholder="Type your message, or a ( command…"
           rows="1"
           maxlength="10000"
         ></textarea>
