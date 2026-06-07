@@ -41,6 +41,11 @@ html, body {
   margin: 0 auto;
 }
 
+/* Ensure the hidden attribute always wins over display rules below */
+[hidden] {
+  display: none !important;
+}
+
 .logo-icon {
   color: var(--accent);
 }
