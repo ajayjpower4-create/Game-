@@ -1,21 +1,119 @@
+// ===== Elements =====
+const setup = document.getElementById('setup');
+const chatScreen = document.getElementById('chatScreen');
+const roleChoice = document.getElementById('roleChoice');
+const typeChoice = document.getElementById('typeChoice');
+const personaLabel = document.getElementById('personaLabel');
+const personaHint = document.getElementById('personaHint');
+const personaInput = document.getElementById('personaInput');
+const startBtn = document.getElementById('startBtn');
+
 const chatArea = document.getElementById('chatArea');
 const messagesEl = document.getElementById('messages');
-const welcome = document.getElementById('welcome');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const newChatBtn = document.getElementById('newChatBtn');
+const sessionTitle = document.getElementById('sessionTitle');
+const sessionSub = document.getElementById('sessionSub');
 
+// ===== State =====
+let config = { aiRole: null, therapyType: 'both', persona: '' };
 let history = [];
 let isStreaming = false;
 
-// Auto-resize textarea
+const TYPE_LABELS = { anger: 'Anger management', adhd: 'ADHD', both: 'Anger management & ADHD' };
+
+// ===== Setup: role selection =====
+roleChoice.addEventListener('click', (e) => {
+  const btn = e.target.closest('.choice');
+  if (!btn) return;
+  config.aiRole = btn.dataset.role;
+  [...roleChoice.children].forEach(c => c.classList.toggle('active', c === btn));
+  updatePersonaCopy();
+});
+
+// ===== Setup: therapy type selection =====
+typeChoice.addEventListener('click', (e) => {
+  const btn = e.target.closest('.choice');
+  if (!btn) return;
+  config.therapyType = btn.dataset.type;
+  [...typeChoice.children].forEach(c => c.classList.toggle('active', c === btn));
+});
+
+function updatePersonaCopy() {
+  if (config.aiRole === 'therapist') {
+    personaLabel.textContent = 'Describe your therapist';
+    personaHint.textContent = 'Type in their details — name, personality, style, backstory. Leave blank for a blunt, no-bullshit therapist.';
+    personaInput.placeholder = 'e.g. Dr. Marcus Vale, 50s, ex-Marine turned therapist. Gruff, swears constantly, zero patience for excuses but secretly deeply caring...';
+  } else if (config.aiRole === 'client') {
+    personaLabel.textContent = "Describe your client's persona";
+    personaHint.textContent = "Type in their persona — name, age, what brought them in, their attitude and struggles. Leave blank for a defensive, short-fused client.";
+    personaInput.placeholder = 'e.g. Jordan, 24, anger issues after losing a job. Hot-headed, defensive, swears when cornered, blames everyone else but is secretly scared...';
+  }
+}
+
+// ===== Start the session =====
+startBtn.addEventListener('click', startSession);
+
+function startSession() {
+  if (!config.aiRole) {
+    roleChoice.classList.add('nudge');
+    setTimeout(() => roleChoice.classList.remove('nudge'), 500);
+    return;
+  }
+
+  config.persona = personaInput.value.trim();
+  history = [];
+  messagesEl.innerHTML = '';
+
+  // Header info
+  const aiIs = config.aiRole === 'therapist' ? 'AI Therapist' : 'AI Client';
+  const youAre = config.aiRole === 'therapist' ? "You're the client" : "You're the therapist";
+  sessionTitle.textContent = aiIs;
+  sessionSub.textContent = `${youAre} · ${TYPE_LABELS[config.therapyType]}`;
+
+  setup.hidden = true;
+  chatScreen.hidden = false;
+  input.placeholder = config.aiRole === 'therapist'
+    ? 'Talk to your therapist...'
+    : 'Talk to your client...';
+  input.focus();
+
+  // AI opens the session so the user isn't staring at a blank room.
+  kickoff();
+}
+
+// Have the AI speak first to open the session.
+async function kickoff() {
+  const opener = config.aiRole === 'therapist'
+    ? '(The session begins. Open it — greet your client and get things started in your own voice.)'
+    : "(The session begins. You've just walked in and sat down. Say your first thing.)";
+  history.push({ role: 'user', content: opener });
+  await streamReply();
+}
+
+// ===== Reset =====
+newChatBtn.addEventListener('click', () => {
+  if (isStreaming) return;
+  config = { aiRole: null, therapyType: config.therapyType, persona: '' };
+  history = [];
+  messagesEl.innerHTML = '';
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+  // reset role highlight
+  [...roleChoice.children].forEach(c => c.classList.remove('active'));
+  chatScreen.hidden = true;
+  setup.hidden = false;
+});
+
+// ===== Input handling =====
 input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 200) + 'px';
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-// Send on Enter (Shift+Enter for newline)
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -24,46 +122,26 @@ input.addEventListener('keydown', (e) => {
 });
 
 sendBtn.addEventListener('click', sendMessage);
-newChatBtn.addEventListener('click', resetChat);
-
-// Suggestion chips
-document.querySelectorAll('.suggestion').forEach(btn => {
-  btn.addEventListener('click', () => {
-    input.value = btn.dataset.text;
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-    sendBtn.disabled = false;
-    sendMessage();
-  });
-});
-
-function resetChat() {
-  history = [];
-  messagesEl.innerHTML = '';
-  welcome.style.display = 'flex';
-  input.value = '';
-  input.style.height = 'auto';
-  sendBtn.disabled = true;
-  isStreaming = false;
-}
 
 async function sendMessage() {
   const text = input.value.trim();
   if (!text || isStreaming) return;
 
-  welcome.style.display = 'none';
-  isStreaming = true;
-  sendBtn.disabled = true;
-  sendBtn.classList.add('loading');
-
-  // Add user message
   history.push({ role: 'user', content: text });
   appendMessage('user', text);
 
   input.value = '';
   input.style.height = 'auto';
 
-  // Create assistant bubble
+  await streamReply();
+}
+
+// ===== Stream a reply from the AI character =====
+async function streamReply() {
+  isStreaming = true;
+  sendBtn.disabled = true;
+  sendBtn.classList.add('loading');
+
   const { bubble, cursor } = createAssistantBubble();
   scrollToBottom();
 
@@ -71,7 +149,7 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({ messages: history, config }),
     });
 
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -103,7 +181,7 @@ async function sendMessage() {
           }
           if (parsed.text) {
             assistantText += parsed.text;
-            bubble.innerHTML = renderMarkdown(assistantText);
+            bubble.innerHTML = renderText(assistantText);
             bubble.appendChild(cursor);
             scrollToBottom();
           }
@@ -114,7 +192,9 @@ async function sendMessage() {
     cursor.remove();
     if (assistantText) {
       history.push({ role: 'assistant', content: assistantText });
-      bubble.innerHTML = renderMarkdown(assistantText);
+      bubble.innerHTML = renderText(assistantText);
+    } else {
+      bubble.parentElement.remove();
     }
   } catch (err) {
     cursor.remove();
@@ -127,17 +207,25 @@ async function sendMessage() {
   scrollToBottom();
 }
 
+// ===== Rendering =====
+function aiAvatarChar() {
+  return config.aiRole === 'therapist' ? 'T' : 'C';
+}
+function userAvatarChar() {
+  return config.aiRole === 'therapist' ? 'C' : 'T';
+}
+
 function appendMessage(role, content) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : '◈';
+  avatar.textContent = role === 'user' ? userAvatarChar() : aiAvatarChar();
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.innerHTML = role === 'user' ? escapeHtml(content) : renderMarkdown(content);
+  bubble.innerHTML = role === 'user' ? renderText(content) : renderText(content);
 
   div.appendChild(avatar);
   div.appendChild(bubble);
@@ -152,7 +240,7 @@ function createAssistantBubble() {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = '◈';
+  avatar.textContent = aiAvatarChar();
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -180,50 +268,10 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Lightweight markdown renderer
-function renderMarkdown(text) {
-  let html = escapeHtml(text);
-
-  // Code blocks
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code>${code.trim()}</code></pre>`;
-  });
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Headers
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-  // Bold & italic
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-  // Blockquote
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-
-  // Unordered list
-  html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
-
-  // Ordered list
-  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-
-  // Horizontal rule
-  html = html.replace(/^---$/gm, '<hr>');
-
-  // Paragraphs (double newlines)
-  html = html
+// Plain spoken dialogue — just escape and turn newlines into paragraphs.
+function renderText(text) {
+  return escapeHtml(text)
     .split(/\n\n+/)
-    .map(block => {
-      if (/^<(h[123]|ul|ol|pre|blockquote|hr)/.test(block.trim())) return block;
-      const lines = block.replace(/\n/g, '<br>');
-      return `<p>${lines}</p>`;
-    })
-    .join('\n');
-
-  return html;
+    .map(block => `<p>${block.replace(/\n/g, '<br>')}</p>`)
+    .join('');
 }

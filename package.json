@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "therapy-session-sim",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Unfiltered AI therapy session simulator (anger management & ADHD role-play)",
   "main": "server.js",
   "type": "module",
   "scripts": {
