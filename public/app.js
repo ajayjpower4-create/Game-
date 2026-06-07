@@ -62,6 +62,47 @@ const JOB_FORMS = {
         placeholder: 'e.g. Downtown lot squeezed between two buildings, no parking, city inspectors nearby' },
     ],
   },
+  restaurant: {
+    title: 'Restaurant Worker',
+    sub: 'Name the place, pick your rank, choose a layout, set the menu and your coworkers.',
+    fields: [
+      { name: 'name', label: 'Restaurant name', type: 'text',
+        placeholder: "e.g. The Copper Skillet" },
+      { name: 'role', label: 'Your rank', type: 'select',
+        options: ['Dishwasher', 'Busser', 'Host / Hostess', 'Food Runner', 'Server', 'Bartender',
+          'Line Cook', 'Sous Chef', 'Head Chef', 'Kitchen Manager', 'General Manager', 'Owner'],
+        allowCustom: true },
+      { name: 'layout', label: 'Pick a layout', type: 'select',
+        options: [
+          'Cozy bistro — ~12 tables, open kitchen, small bar, one tight server station',
+          'Upscale fine dining — white tablecloths, ~20 tables, full bar, private dining room, big pro kitchen in back',
+          'Busy family diner — counter seats + booths, big flat-top grill, drink station, walk-in cooler in back',
+          'Trendy gastropub — central bar, communal high-tops, patio seating, tight galley kitchen',
+          'Big banquet-style spot — 50+ tables, multiple server stations, long expo line, huge kitchen with a separate prep area',
+        ] },
+      { name: 'menu', label: 'The menu', type: 'textarea',
+        placeholder: 'e.g. Italian-American — wood-fired pizzas, fresh pasta, a few steaks, big wine list, tiramisu' },
+      { name: 'coworkers', label: 'Who works with you', type: 'textarea',
+        placeholder: "e.g. Chef Marco who throws pans, Lena the veteran server, a new busser named Ty, bartender Roni" },
+    ],
+  },
+  fastfood: {
+    title: 'Fast Food Worker',
+    sub: 'Name the place, pick your rank, then type out your own store layout however you want.',
+    fields: [
+      { name: 'name', label: 'Restaurant name', type: 'text',
+        placeholder: "e.g. Burger Barn" },
+      { name: 'role', label: 'Your rank', type: 'select',
+        options: ['Crew Member', 'Cashier', 'Cook / Grill', 'Drive-Thru', 'Shift Lead', 'Assistant Manager', 'General Manager'],
+        allowCustom: true },
+      { name: 'layout', label: 'Type out your store layout', type: 'textarea',
+        placeholder: 'e.g. Double drive-thru lanes, front counter with 3 registers, grill + fry station in back, soft-serve machine by the soda fountain, tiny dining room with 6 booths, drink station, walk-in freezer in back' },
+      { name: 'menu', label: 'The menu', type: 'textarea',
+        placeholder: 'e.g. Smash burgers, crispy chicken sandwich, fries, nuggets, shakes, $5 combo deals' },
+      { name: 'coworkers', label: 'Who works with you', type: 'textarea',
+        placeholder: "e.g. Manager Dee who's always counting the drawer, Marcus on grill, two crew members, and the drive-thru is short-staffed" },
+    ],
+  },
 };
 
 // ---- State ----
