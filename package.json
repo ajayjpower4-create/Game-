@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "on-the-clock-job-sim",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "On The Clock — an unfiltered, realistic AI job simulator (garbage, gas station, construction) powered by Opus 4.8",
   "main": "server.js",
   "type": "module",
   "scripts": {

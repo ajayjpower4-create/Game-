@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <title>On The Clock — AI Job Sim</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,40 +11,68 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+          <span class="logo-icon">⛏</span>
+          <span class="logo-text">On The Clock</span>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
+        <button class="new-chat-btn" id="newChatBtn" title="Quit shift">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
           </svg>
-          New chat
+          Quit shift
         </button>
       </div>
     </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
-        </div>
+    <!-- SCREEN 1: Pick a job -->
+    <main class="screen screen-jobs" id="screenJobs">
+      <div class="hero">
+        <div class="hero-icon">⛏</div>
+        <h1>On The Clock</h1>
+        <p>Clock in. Pick the gig. Run the shift. Unfiltered &amp; real — powered by Opus&nbsp;4.8.</p>
       </div>
+      <div class="job-grid">
+        <button class="job-card" data-job="garbage">
+          <span class="job-emoji">🗑️</span>
+          <span class="job-name">Garbage Collector</span>
+          <span class="job-desc">Pick your crew, your route, and your role on the truck. Run the haul.</span>
+        </button>
+        <button class="job-card" data-job="gas">
+          <span class="job-emoji">⛽</span>
+          <span class="job-name">Gas Station Worker</span>
+          <span class="job-desc">Set your store layout and coworkers. Deal with the customers that walk in.</span>
+        </button>
+        <button class="job-card" data-job="construction">
+          <span class="job-emoji">🏗️</span>
+          <span class="job-name">Construction Worker</span>
+          <span class="job-desc">Pick the project, the crew, your trade, and the site. Build it.</span>
+        </button>
+      </div>
+    </main>
+
+    <!-- SCREEN 2: Setup the shift -->
+    <main class="screen screen-setup" id="screenSetup" hidden>
+      <div class="setup-card">
+        <button class="back-btn" id="backBtn">← Pick a different job</button>
+        <h2 id="setupTitle">Set up your shift</h2>
+        <p class="setup-sub" id="setupSub"></p>
+        <form id="setupForm" class="setup-form"></form>
+        <button class="start-btn" id="startBtn">Clock In →</button>
+      </div>
+    </main>
+
+    <!-- SCREEN 3: The shift (chat) -->
+    <main class="screen screen-chat chat-area" id="chatArea" hidden>
       <div class="messages" id="messages"></div>
     </main>
 
-    <footer class="input-area">
+    <footer class="input-area" id="inputArea" hidden>
       <div class="input-container">
         <textarea
           id="messageInput"
           class="message-input"
-          placeholder="Message Swerve..."
+          placeholder="Do something, say something... (try *grab the bin* or talk to your crew)"
           rows="1"
           maxlength="10000"
         ></textarea>
@@ -55,7 +83,7 @@
           </svg>
         </button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
+      <p class="disclaimer">It's a sim. Your call what happens on the clock.</p>
     </footer>
   </div>
 
