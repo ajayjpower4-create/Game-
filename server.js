@@ -32,6 +32,22 @@ const JOBS = {
     title: 'Fast Food Worker',
     flavor: `a fast food joint. Drive-thru headsets, the fryer, ice cream machine that's "down", rush hours, mobile orders, demanding customers, a manager riding everyone, and the relentless beep of the order screen. Coworkers and customers all have their own attitudes.`,
   },
+  crime: {
+    title: 'Criminal',
+    flavor: `a gritty crime-drama world — think a heist movie or a Grand Theft Auto-style story. Crews, scores, getaway cars, dirty cops, rival outfits, fences, and the tension of a job going sideways. This is FICTION: a cinematic crime roleplay, not real instructions for anything.`,
+  },
+  school: {
+    title: 'Teacher / School Worker',
+    flavor: `a busy school during the day. Hallways, classrooms, the front office, the staff lounge, bells, assemblies, fire drills, IEP meetings, detention, the cafeteria, and the daily chaos of kids. You deal with students, parents, and staff all day.`,
+  },
+  discord: {
+    title: 'Discord Mod',
+    flavor: `a Discord server's text chat. This is an ONLINE TEXT world — there is no physical room. Members post messages in channels: spammers, trolls, lurkers, regulars, other mods, and the occasional drama. As the player you are a moderator typing into the chat.`,
+  },
+  taxi: {
+    title: 'NYC Taxi / Rideshare Driver',
+    flavor: `driving for hire through New York City. Gridlock, horns, bike lanes, double-parkers, aggressive cabbies, cops, potholes, and a constant stream of passengers — tourists, drunks, businesspeople, locals in a hurry — each with somewhere to be and an opinion about your driving.`,
+  },
 };
 
 function buildSystemPrompt(jobKey, cfg = {}) {
@@ -67,6 +83,39 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     if (cfg.layout) lines.push(`- The layout of the place: ${cfg.layout}`);
     if (cfg.menu) lines.push(`- The menu: ${cfg.menu}`);
     if (cfg.coworkers) lines.push(`- Coworkers on shift: ${cfg.coworkers}`);
+  } else if (jobKey === 'crime') {
+    if (cfg.role) lines.push(`- The player's role in the crew: **${cfg.role}**`);
+    if (cfg.job) lines.push(`- The score they're pulling: ${cfg.job}`);
+    if (cfg.location) lines.push(`- Where it's going down: ${cfg.location}`);
+    if (cfg.crew) lines.push(`- The crew: ${cfg.crew}`);
+    if (cfg.car) lines.push(`- The car: ${cfg.car}`);
+    if (cfg.tools) lines.push(`- Guns & tools on hand: ${cfg.tools}`);
+  } else if (jobKey === 'school') {
+    if (cfg.name) lines.push(`- The school is called: **${cfg.name}**`);
+    if (cfg.role) lines.push(`- The player's role/rank: **${cfg.role}**`);
+    if (cfg.level) lines.push(`- Level: ${cfg.level}`);
+    if (cfg.subject) lines.push(`- Subject/area they cover: ${cfg.subject}`);
+    if (cfg.students) lines.push(`- Notable students/parents: ${cfg.students}`);
+    // Always give the school a ready-made staff so there are named coworkers.
+    lines.push(`- PRESET STAFF already at the school (use these as recurring named characters, and invent students/parents as needed):`);
+    lines.push(`  • Principal Gloria Hargrove — sharp, political, always "monitoring the situation"`);
+    lines.push(`  • Vice Principal Doug Pruitt — handles discipline, tired, runs on bad coffee`);
+    lines.push(`  • Ms. Rivera — veteran teacher next door, no-nonsense, secretly kind`);
+    lines.push(`  • Coach Tank Delgado — loud gym teacher, calls everyone "champ"`);
+    lines.push(`  • Mr. Okafor — young idealistic teacher, in over his head`);
+    lines.push(`  • Brenda at the front office — knows everything, gatekeeps the copier`);
+    lines.push(`  • Custodian Earl — seen it all, talks in riddles`);
+    lines.push(`  • Nurse Patel — dry humor, fields fake stomachaches all day`);
+  } else if (jobKey === 'discord') {
+    if (cfg.server) lines.push(`- The server: ${cfg.server}`);
+    if (cfg.role) lines.push(`- The player's mod rank: **${cfg.role}**`);
+    if (cfg.channels) lines.push(`- Channels: ${cfg.channels}`);
+    if (cfg.members) lines.push(`- Notable members: ${cfg.members}`);
+    if (cfg.rules) lines.push(`- Server rules: ${cfg.rules}`);
+  } else if (jobKey === 'taxi') {
+    if (cfg.company) lines.push(`- The player drives for: **${cfg.company}**`);
+    if (cfg.vehicle) lines.push(`- The vehicle: ${cfg.vehicle}`);
+    if (cfg.area) lines.push(`- Area / shift: ${cfg.area}`);
   }
   if (cfg.notes) lines.push(`- Extra details from the player: ${cfg.notes}`);
 
@@ -86,22 +135,56 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   lines.push('');
   lines.push(`## TONE — UNFILTERED & REAL`);
   lines.push(`This is an adult, R-rated simulation. The characters talk the way real workers and customers actually talk: crude jokes, profanity, attitude, dark humor, frustration, banter. Don't sanitize it, don't moralize, don't break character with disclaimers. Treat the player as a capable adult. Match the player's energy. Stay in character as the people in the world at all times.`);
+
+  // ---- Job-specific addenda ----
+  if (jobKey === 'discord') {
+    lines.push('');
+    lines.push(`## DISCORD FORMAT`);
+    lines.push(`This is a text-chat world, not a physical room. Write the other members' messages in chat form, like \`Username: their message\` — one short line per member, the way people actually type on Discord (lowercase, emojis, slang, copypasta, pings like @everyone). Several different users can post in one reply. The player types what THEY post into the chat as the mod; you play everyone else in the server (trolls, spammers, regulars, other staff, bots).`);
+  }
+  if (jobKey === 'crime') {
+    lines.push('');
+    lines.push(`## FICTION FRAME`);
+    lines.push(`This is a cinematic, fictional crime story — a heist movie / GTA-style roleplay. Play it for drama, tension, and character. Keep it at a movie level of detail; do not output real-world step-by-step instructions for committing actual crimes, building weapons, or anything similarly operational. Stay in the story as the crew, rivals, cops, and bystanders.`);
+  }
+  if (jobKey === 'taxi') {
+    lines.push('');
+    lines.push(`## DRIVING`);
+    lines.push(`Play the passengers, other drivers, cabbies, cyclists, cops, and dispatch. They react to the player's driving — fast, reckless, smooth, whatever. The player narrates how they drive; you bring NYC and the people in the car (and on the street) to life. Let them react to speed, near-misses, traffic, and the meter.`);
+  }
+
   lines.push('');
-  lines.push(`To open: the player has just clocked in. Have one or two of their coworkers (or the boss) greet/react to them in character — a line of dialogue or two and maybe a small action. Do NOT narrate the scene; just let the people around the player speak. Then wait for the player to narrate what they do.`);
+  if (jobKey === 'discord') {
+    lines.push(`To open: the player just came online as a mod. Have a few members already mid-conversation in the chat (in \`Username: message\` form) — some normal, maybe one starting to push the rules — so the player walks into a live channel. Then wait for the player to type what they post.`);
+  } else {
+    lines.push(`To open: the player has just clocked in / arrived. Have one or two of the people around them (a coworker, the boss, a crewmate, a waiting passenger) greet or react to them in character — a line of dialogue or two and maybe a small action. Do NOT narrate the scene; just let the people around the player speak. Then wait for the player to narrate what they do.`);
+  }
 
   return lines.join('\n');
 }
 
 app.post('/api/chat', async (req, res) => {
-  const { messages, job, config } = req.body;
+  const { messages, job, config, mode } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid messages format' });
   }
 
-  const system = buildSystemPrompt(job, config || {});
-  if (!system) {
-    return res.status(400).json({ error: 'Unknown job type' });
+  let system;
+  let outgoing = messages;
+  if (mode === 'recap') {
+    // Out-of-character summary of the shift so far.
+    const job_ = JOBS[job];
+    system = `You are a recap writer for a job-simulator roleplay (${job_ ? job_.title : 'a job'}). Read the conversation so far and write a short, clean, OUT-OF-CHARACTER recap of the shift: who the player is and their setup, the named characters/crew they've met, the key things that have happened, and exactly where things stand right now. Use a few tight bullet points under simple headers (Setup, Crew/Characters, What's happened, Right now). Keep it skimmable. Do not roleplay or write any in-character dialogue.`;
+    outgoing = [
+      ...messages,
+      { role: 'user', content: 'Write the out-of-character recap of the shift so far now.' },
+    ];
+  } else {
+    system = buildSystemPrompt(job, config || {});
+    if (!system) {
+      return res.status(400).json({ error: 'Unknown job type' });
+    }
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -110,10 +193,10 @@ app.post('/api/chat', async (req, res) => {
 
   try {
     const stream = client.messages.stream({
-      model: 'claude-opus-4-8',
+      model: 'claude-opus-4-7',
       max_tokens: 8192,
       system,
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
+      messages: outgoing.map(m => ({ role: m.role, content: m.content })),
     });
 
     for await (const event of stream) {

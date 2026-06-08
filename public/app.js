@@ -15,6 +15,17 @@ const setupForm = document.getElementById('setupForm');
 const setupTitle = document.getElementById('setupTitle');
 const setupSub = document.getElementById('setupSub');
 
+const shiftActions = document.getElementById('shiftActions');
+const saveBtn = document.getElementById('saveBtn');
+const recapBtn = document.getElementById('recapBtn');
+const toast = document.getElementById('toast');
+const resumeBanner = document.getElementById('resumeBanner');
+const resumeMeta = document.getElementById('resumeMeta');
+const resumeBtn = document.getElementById('resumeBtn');
+const discardBtn = document.getElementById('discardBtn');
+
+const SAVE_KEY = 'otc_saved_shift';
+
 // ---- Job setup definitions ----
 const JOB_FORMS = {
   garbage: {
@@ -103,7 +114,81 @@ const JOB_FORMS = {
         placeholder: "e.g. Manager Dee who's always counting the drawer, Marcus on grill, two crew members, and the drive-thru is short-staffed" },
     ],
   },
+  crime: {
+    title: 'Criminal',
+    sub: 'A fictional, GTA-style crime story. Set up the score, then play it out.',
+    fields: [
+      { name: 'role', label: 'Your role in the crew', type: 'select',
+        options: ['Mastermind', 'Getaway Driver / Wheelman', 'Muscle / Enforcer', 'Hacker', 'Lookout', 'Safecracker', 'Gunman', 'Con Artist'],
+        allowCustom: true },
+      { name: 'job', label: "The score you're pulling", type: 'select',
+        options: ['Bank heist', 'Jewelry store robbery', 'Armored truck hit', 'Casino job', 'Warehouse break-in', 'Drug deal', 'Car boost ring', 'Stick-up'],
+        allowCustom: true },
+      { name: 'location', label: 'Where it goes down', type: 'text',
+        placeholder: 'e.g. Downtown, 3am, a bank on a quiet corner with one rent-a-cop' },
+      { name: 'crew', label: 'Your crew', type: 'textarea',
+        placeholder: "e.g. Vince the hothead on guns, Lola driving, Doc the inside man who's getting cold feet" },
+      { name: 'car', label: 'The car', type: 'text',
+        placeholder: 'e.g. Blacked-out Dodge Charger, stolen plates, scanner on the dash' },
+      { name: 'tools', label: 'Guns & tools', type: 'textarea',
+        placeholder: 'e.g. Two pistols, a shotgun, zip ties, a duffel, bolt cutters, burner phones, a thermal lance for the safe' },
+    ],
+  },
+  school: {
+    title: 'Teacher / School Worker',
+    sub: 'Name the school, pick your rank, set the details. A full staff is already there.',
+    fields: [
+      { name: 'name', label: 'School name', type: 'text',
+        placeholder: 'e.g. Lincoln Heights High' },
+      { name: 'role', label: 'Your rank / role', type: 'select',
+        options: ['Substitute Teacher', "Teacher's Aide", 'Elementary Teacher', 'Middle School Teacher',
+          'High School Teacher', 'Coach / PE Teacher', 'School Counselor', 'Librarian', 'School Nurse',
+          'Custodian / Janitor', 'Cafeteria Staff', 'Security / Resource Officer', 'Vice Principal',
+          'Principal', 'Superintendent'],
+        allowCustom: true },
+      { name: 'level', label: 'Level', type: 'select',
+        options: ['Elementary', 'Middle School', 'High School', 'K-12', 'Private', 'Charter', 'College'],
+        allowCustom: true },
+      { name: 'subject', label: 'Subject / area (optional)', type: 'text',
+        placeholder: 'e.g. 10th grade Biology' },
+      { name: 'students', label: 'Notable students or parents (optional)', type: 'textarea',
+        placeholder: "e.g. Jayden the class clown, Mia who's always on her phone, and a parent, Mrs. Cole, who emails about everything" },
+    ],
+  },
+  discord: {
+    title: 'Discord Mod',
+    sub: "Set up your server. You'll type what you post in the chat; the AI plays everyone else.",
+    fields: [
+      { name: 'server', label: 'The server (name + what it\'s about)', type: 'text',
+        placeholder: 'e.g. "GamerDen" — a 12k-member gaming server, mostly teens, very active' },
+      { name: 'role', label: 'Your mod rank', type: 'select',
+        options: ['Trial Mod / Helper', 'Moderator', 'Senior Mod', 'Admin', 'Owner', 'Bot Manager'],
+        allowCustom: true },
+      { name: 'channels', label: 'Channels', type: 'textarea',
+        placeholder: 'e.g. #general, #memes, #voice-chat, #off-topic, #mod-log, #report-here' },
+      { name: 'members', label: 'Notable members', type: 'textarea',
+        placeholder: 'e.g. xX_Sniper_Xx who spams, a chill regular named bee, a troll on an alt, and another mod, Kayla' },
+      { name: 'rules', label: 'Server rules (optional)', type: 'text',
+        placeholder: 'e.g. No spam, no slurs, keep NSFW out of general, English only' },
+    ],
+  },
+  taxi: {
+    title: 'NYC Taxi / Rideshare Driver',
+    sub: 'Pick who you drive for and your ride. Then hit the streets.',
+    fields: [
+      { name: 'company', label: 'Who you drive for', type: 'select',
+        options: ['Yellow Cab (NYC medallion)', 'Uber', 'Lyft', 'Via', 'Independent / gypsy cab'],
+        allowCustom: true },
+      { name: 'vehicle', label: 'Your vehicle', type: 'text',
+        placeholder: 'e.g. Beat-up Toyota Camry with 200k miles and a check-engine light' },
+      { name: 'area', label: 'Area / shift', type: 'text',
+        placeholder: 'e.g. Friday night, Manhattan — Times Square to the West Village, bars letting out' },
+    ],
+  },
 };
+
+// For the resume banner
+const JOB_TITLES = Object.fromEntries(Object.entries(JOB_FORMS).map(([k, v]) => [k, v.title]));
 
 // ---- State ----
 let history = [];
@@ -119,12 +204,18 @@ document.querySelectorAll('.job-card').forEach(card => {
 backBtn.addEventListener('click', () => showScreen('jobs'));
 newChatBtn.addEventListener('click', quitToJobs);
 startBtn.addEventListener('click', startShift);
+saveBtn.addEventListener('click', saveShift);
+recapBtn.addEventListener('click', recapShift);
+resumeBtn.addEventListener('click', resumeShift);
+discardBtn.addEventListener('click', discardSave);
 
 function showScreen(name) {
   screenJobs.hidden = name !== 'jobs';
   screenSetup.hidden = name !== 'setup';
   chatArea.hidden = name !== 'chat';
   inputArea.hidden = name !== 'chat';
+  shiftActions.hidden = name !== 'chat';
+  if (name === 'jobs') refreshResumeBanner();
 }
 
 function quitToJobs() {
@@ -259,6 +350,142 @@ function sendMessage() {
   input.value = '';
   input.style.height = 'auto';
   streamReply();
+}
+
+// ---- Save / Resume ----
+function saveShift() {
+  if (!currentJob) return;
+  try {
+    const payload = {
+      job: currentJob,
+      config: currentConfig,
+      history,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+    showToast('Shift saved — your crew is locked in.');
+  } catch {
+    showToast('Could not save (storage full or blocked).');
+  }
+}
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !data.job || !Array.isArray(data.history)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function refreshResumeBanner() {
+  const save = loadSave();
+  if (!save) { resumeBanner.hidden = true; return; }
+  const title = JOB_TITLES[save.job] || 'a shift';
+  const when = new Date(save.savedAt).toLocaleString();
+  resumeMeta.textContent = `${title} · saved ${when}`;
+  resumeBanner.hidden = false;
+}
+
+function resumeShift() {
+  const save = loadSave();
+  if (!save) { refreshResumeBanner(); return; }
+  currentJob = save.job;
+  currentConfig = save.config || {};
+  history = save.history.slice();
+  messagesEl.innerHTML = '';
+  // Re-render the conversation (skip the hidden opener action).
+  history.forEach((m, i) => {
+    if (i === 0 && m.role === 'user' && m.content.startsWith('*clocks in')) return;
+    appendMessage(m.role, m.content);
+  });
+  showScreen('chat');
+  input.focus();
+}
+
+function discardSave() {
+  localStorage.removeItem(SAVE_KEY);
+  refreshResumeBanner();
+}
+
+// ---- Recap ----
+async function recapShift() {
+  if (!currentJob || isStreaming) return;
+  isStreaming = true;
+  recapBtn.disabled = true;
+  sendBtn.disabled = true;
+
+  const { card, body } = createRecapCard();
+  scrollToBottom();
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history, job: currentJob, config: currentConfig, mode: 'recap' }),
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') break;
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) { body.innerHTML = `<div class="error-msg">${escapeHtml(parsed.error)}</div>`; break; }
+          if (parsed.text) { text += parsed.text; body.innerHTML = renderMarkdown(text); scrollToBottom(); }
+        } catch {}
+      }
+    }
+  } catch (err) {
+    body.innerHTML = `<div class="error-msg">Recap failed: ${escapeHtml(err.message)}</div>`;
+  }
+
+  isStreaming = false;
+  recapBtn.disabled = false;
+  sendBtn.disabled = !input.value.trim();
+  scrollToBottom();
+}
+
+function createRecapCard() {
+  const card = document.createElement('div');
+  card.className = 'recap-card';
+  const head = document.createElement('div');
+  head.className = 'recap-head';
+  head.textContent = '📋 Shift recap';
+  const body = document.createElement('div');
+  body.className = 'recap-body';
+  body.innerHTML = '<span class="typing-cursor"></span>';
+  card.appendChild(head);
+  card.appendChild(body);
+  messagesEl.appendChild(card);
+  return { card, body };
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.hidden = false;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => { toast.hidden = true; }, 250);
+  }, 2200);
 }
 
 async function streamReply() {
@@ -418,3 +645,6 @@ function renderMarkdown(text) {
 
   return html;
 }
+
+// ---- Init ----
+refreshResumeBanner();

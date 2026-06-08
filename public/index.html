@@ -14,23 +14,55 @@
           <span class="logo-icon">⛏</span>
           <span class="logo-text">On The Clock</span>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="Quit shift">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-          Quit shift
-        </button>
+        <div class="header-actions" id="shiftActions" hidden>
+          <button class="hbtn" id="saveBtn" title="Save your shift">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            <span class="hbtn-label">Save</span>
+          </button>
+          <button class="hbtn" id="recapBtn" title="Recap your shift">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+            <span class="hbtn-label">Recap</span>
+          </button>
+          <button class="hbtn" id="newChatBtn" title="Quit shift">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            <span class="hbtn-label">Quit</span>
+          </button>
+        </div>
       </div>
     </header>
+    <div class="toast" id="toast" hidden></div>
 
     <!-- SCREEN 1: Pick a job -->
     <main class="screen screen-jobs" id="screenJobs">
       <div class="hero">
         <div class="hero-icon">⛏</div>
         <h1>On The Clock</h1>
-        <p>Clock in. Pick the gig. Run the shift. Unfiltered &amp; real — powered by Opus&nbsp;4.8.</p>
+        <p>Clock in. Pick the gig. Run the shift. Unfiltered &amp; real — powered by Opus&nbsp;4.7.</p>
+      </div>
+      <div class="resume-banner" id="resumeBanner" hidden>
+        <div class="resume-text">
+          <strong>Saved shift found</strong>
+          <span id="resumeMeta"></span>
+        </div>
+        <div class="resume-actions">
+          <button class="resume-btn" id="resumeBtn">Resume</button>
+          <button class="resume-discard" id="discardBtn" title="Delete saved shift">✕</button>
+        </div>
       </div>
       <div class="job-grid">
         <button class="job-card" data-job="garbage">
@@ -57,6 +89,26 @@
           <span class="job-emoji">🍔</span>
           <span class="job-name">Fast Food Worker</span>
           <span class="job-desc">Same deal, but you type out your own store layout however you want.</span>
+        </button>
+        <button class="job-card" data-job="crime">
+          <span class="job-emoji">💰</span>
+          <span class="job-name">Criminal</span>
+          <span class="job-desc">Pick the score, your role, the crew, the car, and your guns &amp; tools. (Fiction.)</span>
+        </button>
+        <button class="job-card" data-job="school">
+          <span class="job-emoji">🏫</span>
+          <span class="job-name">Teacher / School Worker</span>
+          <span class="job-desc">Tons of ranks, a preset staff, your school details. Deal with students &amp; parents.</span>
+        </button>
+        <button class="job-card" data-job="discord">
+          <span class="job-emoji">💬</span>
+          <span class="job-name">Discord Mod</span>
+          <span class="job-desc">Pick your server, channels, and members. Type what you post in the chat.</span>
+        </button>
+        <button class="job-card" data-job="taxi">
+          <span class="job-emoji">🚕</span>
+          <span class="job-name">NYC Taxi / Rideshare</span>
+          <span class="job-desc">Pick your company &amp; ride. Haul passengers and tear down NYC streets.</span>
         </button>
       </div>
     </main>
