@@ -198,6 +198,53 @@ const JOB_FORMS = {
         placeholder: 'e.g. Friday night, Manhattan — Times Square to the West Village, bars letting out' },
     ],
   },
+  warehouse: {
+    title: 'Warehouse Worker',
+    sub: 'Name the warehouse, pick your rank & duties, set the staff. Photos strongly recommended!',
+    fields: [
+      { name: 'name', label: 'Warehouse name', type: 'text',
+        placeholder: 'e.g. Apex Distribution Center #7' },
+      { name: 'role', label: 'Your rank / role', type: 'select',
+        options: ['Picker / Packer', 'Forklift Operator', 'Loader / Dock Worker', 'Receiver', 'Inventory / Cycle Counter',
+          'Lead / Line Lead', 'Shift Supervisor', 'Warehouse Manager'],
+        allowCustom: true },
+      { name: 'duties', label: 'What you do here', type: 'textarea',
+        placeholder: 'e.g. Picking orders off a scanner, racing the rate, loading trucks at the dock' },
+      { name: 'staff', label: 'Staff / who works with you', type: 'textarea',
+        placeholder: "e.g. Supervisor Karen riding the numbers, Tank on the forklift, Lil D who's always late, two temps" },
+    ],
+  },
+  scientist: {
+    title: 'Scientist',
+    sub: 'Pick your lab, your field of science, and the gear you have.',
+    fields: [
+      { name: 'lab', label: 'The lab you work in', type: 'text',
+        placeholder: 'e.g. A university genetics lab in the basement of the bio building' },
+      { name: 'field', label: 'The science you do', type: 'select',
+        options: ['Molecular Biology / Genetics', 'Chemistry', 'Microbiology', 'Physics', 'Neuroscience',
+          'Pharmacology', 'Forensics', 'Materials Science', 'Environmental Science'],
+        allowCustom: true },
+      { name: 'tools', label: 'Equipment & tools you have', type: 'textarea',
+        placeholder: 'e.g. PCR machine, centrifuge, fume hood, -80 freezer, a temperamental mass spec' },
+      { name: 'staff', label: 'Lab mates / coworkers (optional)', type: 'textarea',
+        placeholder: "e.g. Dr. Voss the demanding PI, postdoc Priya, a grad student named Eli who broke the centrifuge" },
+    ],
+  },
+  sports: {
+    title: 'Sports Player',
+    sub: 'Pick the sport, your position, league and coach. Your team is preset for you.',
+    fields: [
+      { name: 'sport', label: 'The sport', type: 'select',
+        options: ['Basketball', 'Football', 'Soccer', 'Baseball', 'Hockey', 'Boxing / MMA', 'Tennis', 'Rugby'],
+        allowCustom: true },
+      { name: 'position', label: 'Your position / role', type: 'text',
+        placeholder: 'e.g. Point guard, starting QB, striker, closer...' },
+      { name: 'league', label: 'The league', type: 'text',
+        placeholder: 'e.g. The NBA, a college team, a scrappy semi-pro league' },
+      { name: 'coach', label: 'Your coach', type: 'text',
+        placeholder: 'e.g. Coach Reeves — old-school, screams a lot, secretly believes in you' },
+    ],
+  },
 };
 
 // For the resume banner
