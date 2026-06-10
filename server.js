@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '30mb' }));
 app.use(express.static(join(__dirname, 'public')));
 
 // ---- Job definitions: how each role's setup maps into the world ----
@@ -47,6 +47,18 @@ const JOBS = {
   taxi: {
     title: 'NYC Taxi / Rideshare Driver',
     flavor: `driving for hire through New York City. Gridlock, horns, bike lanes, double-parkers, aggressive cabbies, cops, potholes, and a constant stream of passengers — tourists, drunks, businesspeople, locals in a hurry — each with somewhere to be and an opinion about your driving.`,
+  },
+  warehouse: {
+    title: 'Warehouse Worker',
+    flavor: `a big distribution warehouse. Forklifts beeping, pallet jacks, towering racks, conveyor belts, pick lists, scanners, the loading dock, quotas and rates, a supervisor watching the numbers, cold aisles, and the ache of a long shift on concrete.`,
+  },
+  scientist: {
+    title: 'Scientist',
+    flavor: `a working research lab. Fume hoods, pipettes, centrifuges, sample freezers, PPE, grant deadlines, a finicky instrument, lab mates, a demanding PI, safety protocols, and experiments that don't always go the way the hypothesis says.`,
+  },
+  sports: {
+    title: 'Sports Player',
+    flavor: `life as a pro/competitive athlete. The locker room, practice, the coach's system, teammates with egos and chemistry, trainers, the press, game-day nerves, and the grind of competition. Your team is already a roster of real personalities around you.`,
   },
 };
 
@@ -116,22 +128,61 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     if (cfg.company) lines.push(`- The player drives for: **${cfg.company}**`);
     if (cfg.vehicle) lines.push(`- The vehicle: ${cfg.vehicle}`);
     if (cfg.area) lines.push(`- Area / shift: ${cfg.area}`);
+  } else if (jobKey === 'warehouse') {
+    if (cfg.name) lines.push(`- The warehouse is called: **${cfg.name}**`);
+    if (cfg.role) lines.push(`- The player's rank/role: **${cfg.role}**`);
+    if (cfg.duties) lines.push(`- What the player does here: ${cfg.duties}`);
+    if (cfg.staff) lines.push(`- Staff / coworkers on shift: ${cfg.staff}`);
+  } else if (jobKey === 'scientist') {
+    if (cfg.lab) lines.push(`- The lab the player works in: ${cfg.lab}`);
+    if (cfg.field) lines.push(`- The kind of science they do: ${cfg.field}`);
+    if (cfg.tools) lines.push(`- Equipment & tools available: ${cfg.tools}`);
+    if (cfg.staff) lines.push(`- Lab mates / coworkers: ${cfg.staff}`);
+  } else if (jobKey === 'sports') {
+    if (cfg.sport) lines.push(`- The sport: **${cfg.sport}**`);
+    if (cfg.position) lines.push(`- The player's position: ${cfg.position}`);
+    if (cfg.league) lines.push(`- The league: ${cfg.league}`);
+    if (cfg.coach) lines.push(`- The coach: ${cfg.coach}`);
+    // Preset team — recurring named characters. Adapt them to the chosen sport.
+    lines.push(`- PRESET TEAM (the player's teammates — use these as recurring named characters; adapt their roles to the sport above):`);
+    lines.push(`  • Marcus "Cap" Boone — team captain, veteran, holds everyone accountable, leads by example`);
+    lines.push(`  • Tyree Jackson — the flashy star, loves the spotlight, big personality`);
+    lines.push(`  • Danny Kowalski — gritty role player, never shuts up in the locker room, comic relief`);
+    lines.push(`  • Andre "Dre" Fontaine — quiet workhorse, lets his play do the talking`);
+    lines.push(`  • Sam Pell — nervous rookie trying to prove himself and earn respect`);
+    if (cfg.coach) lines.push(`  • Plus the coach (${cfg.coach}) running the show`);
   }
   if (cfg.notes) lines.push(`- Extra details from the player: ${cfg.notes}`);
+  if (cfg._hasImages) lines.push(`- The player has attached PHOTO(S) of their real workplace. Treat those images as the ground truth for the layout, equipment, and surroundings — build the world to match what's in the pictures.`);
 
   lines.push('');
-  lines.push(`## YOUR ROLE — PLAY THE CHARACTERS, DON'T NARRATE`);
-  lines.push(`You ONLY play the other characters in the world: the player's coworkers, customers, the boss, bystanders — everyone except the player. You are NOT a narrator.`);
-  lines.push(`- The PLAYER is the narrator and storyteller. They describe the scene, the setting, and their own character's actions. Do NOT narrate the world, the environment, the passage of time, or what the player does, says, sees, or feels. Never write actions for the player's character.`);
-  lines.push(`- Respond strictly AS the characters around the player: their spoken dialogue, their tone and accent, their facial expressions and body language, and their own physical actions (e.g. *Big Mike spits, hauls the bin onto his shoulder*). Keep any *asterisk action* limited to what that character is doing — not scene-setting or player narration.`);
-  lines.push(`- Give every character a name and a distinct personality, attitude, and voice. Make them feel like real people with their own agendas, not props.`);
-  lines.push(`- React to what the player narrates. If the player sets a scene or does something, the characters respond believably. If no character would naturally say or do anything, a character can give a small, natural reaction rather than inventing narration.`);
-  lines.push(`- Don't speak for the player, don't resolve the player's actions for them, and don't describe outcomes from an omniscient view — let consequences land through how the characters behave and what they say.`);
+  lines.push(`## YOUR ROLE — YOU ARE THE CHARACTERS, NOT A NARRATOR (read carefully)`);
+  lines.push(`You play ONLY the other people in the world (coworkers, customers, the boss, crewmates, teammates, bystanders). You are NOT a narrator, storyteller, or game master. The PLAYER does all narration.`);
   lines.push('');
-  lines.push(`## KEEP IT GROUNDED & REAL`);
-  lines.push(`- Characters use real slang, real procedures, real attitudes for this job. They can be wrong, lazy, rude, funny, or helpful.`);
-  lines.push(`- Characters drive drama too: a coworker can start beef, a customer can cause a scene, the boss can come down on someone. Keep the shift alive through the people in it.`);
-  lines.push(`- Keep replies tight — usually just the relevant characters' lines and actions, not walls of text.`);
+  lines.push(`Every single thing you output must be ONE of exactly two things:`);
+  lines.push(`  1. A character SPEAKING — their dialogue.`);
+  lines.push(`  2. A character's OWN physical action, written in *asterisks*, kept to what that specific character does with their body/face/hands.`);
+  lines.push(`Nothing else. No prose. No scene description. No establishing shots.`);
+  lines.push('');
+  lines.push(`HARD BANS — never write any of these:`);
+  lines.push(`- Describing the setting, environment, atmosphere, weather, sounds, or smells ("The warehouse hums with the beep of forklifts...", "The air is thick with...").`);
+  lines.push(`- Describing the player's character — what they see, feel, think, do, or how things affect them ("You feel the cold...", "You step inside and...").`);
+  lines.push(`- Narrating events from an omniscient view, transitions, or the passage of time ("Hours pass...", "Meanwhile...").`);
+  lines.push(`- Stage-direction prose that isn't tied to a specific named character's body.`);
+  lines.push(`If a sentence is not a specific named character talking or physically doing something, DO NOT write it. Delete the urge.`);
+  lines.push('');
+  lines.push(`FORMAT: Attribute everything to a named character. Lead with their name, e.g.:`);
+  lines.push(`  Sal: *tosses you a scanner* "There he is. Aisle 12, those pallets ain't movin' themselves, champ."`);
+  lines.push('');
+  lines.push(`EXAMPLE — player types: "I walk into the warehouse and clock in."`);
+  lines.push(`  WRONG (narration — never do this): "The warehouse is freezing and loud. Forklifts beep in the distance as you swipe your badge. Your supervisor notices you and walks over."`);
+  lines.push(`  RIGHT (characters only): Sal: *looks up from his clipboard, smirks* "Well look who decided to show up." *waves you over* "C'mon, you're on returns with Mia today."  /  Mia: "Don't listen to him, he's been here ten minutes himself."`);
+  lines.push('');
+  lines.push(`- Give every character a name and a distinct personality, voice, and attitude. They have their own agendas — they're not props.`);
+  lines.push(`- React to whatever the player narrates. If nothing would naturally happen, have a character give a small, natural reaction or line — never fill the gap with narration.`);
+  lines.push(`- Don't speak or act for the player's character, and don't resolve their actions for them. Let consequences land through how the characters respond.`);
+  lines.push(`- Characters drive drama: a coworker starts beef, a customer makes a scene, the boss comes down on someone. Keep it alive through the people.`);
+  lines.push(`- Keep it tight — just the relevant characters' lines/actions. No walls of text.`);
   lines.push('');
   lines.push(`## TONE — UNFILTERED & REAL`);
   lines.push(`This is an adult, R-rated simulation. The characters talk the way real workers and customers actually talk: crude jokes, profanity, attitude, dark humor, frustration, banter. Don't sanitize it, don't moralize, don't break character with disclaimers. Treat the player as a capable adult. Match the player's energy. Stay in character as the people in the world at all times.`);
@@ -157,7 +208,7 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   if (jobKey === 'discord') {
     lines.push(`To open: the player just came online as a mod. Have a few members already mid-conversation in the chat (in \`Username: message\` form) — some normal, maybe one starting to push the rules — so the player walks into a live channel. Then wait for the player to type what they post.`);
   } else {
-    lines.push(`To open: the player has just clocked in / arrived. Have one or two of the people around them (a coworker, the boss, a crewmate, a waiting passenger) greet or react to them in character — a line of dialogue or two and maybe a small action. Do NOT narrate the scene; just let the people around the player speak. Then wait for the player to narrate what they do.`);
+    lines.push(`To open: the player has just clocked in / arrived. Open with ONLY one or two named characters (a coworker, the boss, a crewmate, a waiting passenger) greeting or reacting to them — their dialogue and maybe a small *action*. Do NOT write any scene-setting, environment description, or narration of any kind. Start straight on a character's name and their line. Then wait for the player.`);
   }
 
   return lines.join('\n');

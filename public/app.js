@@ -24,7 +24,20 @@ const resumeMeta = document.getElementById('resumeMeta');
 const resumeBtn = document.getElementById('resumeBtn');
 const discardBtn = document.getElementById('discardBtn');
 
+const setupDropzone = document.getElementById('setupDropzone');
+const setupImageInput = document.getElementById('setupImageInput');
+const setupThumbs = document.getElementById('setupThumbs');
+const attachBtn = document.getElementById('attachBtn');
+const chatImageInput = document.getElementById('chatImageInput');
+const pendingThumbs = document.getElementById('pendingThumbs');
+
 const SAVE_KEY = 'otc_saved_shift';
+const MAX_IMAGES = 6;       // per setup / per message
+const MAX_DIM = 1280;       // px — downscale big photos before sending
+
+// Images attached during setup / pending on the next chat message
+let setupImages = [];
+let pendingImages = [];
 
 // ---- Job setup definitions ----
 const JOB_FORMS = {
@@ -209,6 +222,92 @@ recapBtn.addEventListener('click', recapShift);
 resumeBtn.addEventListener('click', resumeShift);
 discardBtn.addEventListener('click', discardSave);
 
+// ---- Image attachments ----
+setupDropzone.addEventListener('click', () => setupImageInput.click());
+setupImageInput.addEventListener('change', (e) => addFiles(e.target.files, setupImages, renderSetupThumbs).then(() => { setupImageInput.value = ''; }));
+attachBtn.addEventListener('click', () => chatImageInput.click());
+chatImageInput.addEventListener('change', (e) => addFiles(e.target.files, pendingImages, renderPendingThumbs).then(() => { chatImageInput.value = ''; }));
+
+// Read, downscale and base64-encode image files into the target array.
+async function addFiles(fileList, target, render) {
+  const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/'));
+  for (const file of files) {
+    if (target.length >= MAX_IMAGES) { showToast(`Max ${MAX_IMAGES} photos.`); break; }
+    try {
+      const part = await fileToImagePart(file);
+      target.push(part);
+    } catch {
+      showToast('Couldn\'t read that image.');
+    }
+  }
+  render();
+}
+
+function fileToImagePart(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let { width, height } = img;
+        const scale = Math.min(1, MAX_DIM / Math.max(width, height));
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        resolve({ media_type: 'image/jpeg', data: dataUrl.split(',')[1], url: dataUrl });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderSetupThumbs() { renderThumbs(setupThumbs, setupImages, renderSetupThumbs); }
+function renderPendingThumbs() {
+  renderThumbs(pendingThumbs, pendingImages, renderPendingThumbs);
+  if (typeof updateSendState === 'function') updateSendState();
+}
+
+function renderThumbs(container, arr, rerender) {
+  container.innerHTML = '';
+  arr.forEach((img, idx) => {
+    const t = document.createElement('div');
+    t.className = 'thumb';
+    t.innerHTML = `<img src="${img.url || `data:${img.media_type};base64,${img.data}`}" alt="photo">` +
+      `<button type="button" class="thumb-x" title="Remove">✕</button>`;
+    t.querySelector('.thumb-x').addEventListener('click', () => { arr.splice(idx, 1); rerender(); });
+    container.appendChild(t);
+  });
+}
+
+// Build message content: a plain string, or content blocks when images are attached.
+function buildContent(text, images) {
+  if (!images || !images.length) return text;
+  const blocks = images.map(img => ({
+    type: 'image',
+    source: { type: 'base64', media_type: img.media_type, data: img.data },
+  }));
+  blocks.push({ type: 'text', text });
+  return blocks;
+}
+
+// Pull display text + image parts back out of a stored message (string or blocks).
+function extractParts(content) {
+  if (typeof content === 'string') return { text: content, images: [] };
+  if (Array.isArray(content)) {
+    const text = content.filter(b => b.type === 'text').map(b => b.text).join(' ');
+    const images = content.filter(b => b.type === 'image' && b.source)
+      .map(b => ({ media_type: b.source.media_type, data: b.source.data }));
+    return { text, images };
+  }
+  return { text: '', images: [] };
+}
+
 function showScreen(name) {
   screenJobs.hidden = name !== 'jobs';
   screenSetup.hidden = name !== 'setup';
@@ -223,6 +322,8 @@ function quitToJobs() {
   messagesEl.innerHTML = '';
   currentJob = null;
   currentConfig = {};
+  pendingImages = [];
+  renderPendingThumbs();
   input.value = '';
   input.style.height = 'auto';
   sendBtn.disabled = true;
@@ -234,6 +335,8 @@ function openSetup(jobKey) {
   const def = JOB_FORMS[jobKey];
   if (!def) return;
   currentJob = jobKey;
+  setupImages = [];
+  renderSetupThumbs();
   setupTitle.textContent = def.title;
   setupSub.textContent = def.sub;
   setupForm.innerHTML = '';
@@ -314,21 +417,32 @@ function collectConfig() {
 
 function startShift() {
   currentConfig = collectConfig();
+  if (setupImages.length) currentConfig._hasImages = true;
+  pendingImages = [];
+  renderPendingThumbs();
   history = [];
   messagesEl.innerHTML = '';
   showScreen('chat');
 
-  // Kick off the scene with a hidden opening action.
-  const opener = '*clocks in and starts the shift*';
-  history.push({ role: 'user', content: opener });
+  // Kick off the scene with a hidden opening action, attaching any setup photos.
+  const openerText = setupImages.length
+    ? '*clocks in and starts the shift* (Photos of my real workplace are attached — use them for the layout.)'
+    : '*clocks in and starts the shift*';
+  history.push({ role: 'user', content: buildContent(openerText, setupImages) });
+  setupImages = [];
+  renderSetupThumbs();
   streamReply();
 }
 
 // ---- Chat input ----
+function updateSendState() {
+  sendBtn.disabled = isStreaming || (!input.value.trim() && !pendingImages.length);
+}
+
 input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-  sendBtn.disabled = !input.value.trim() || isStreaming;
+  updateSendState();
 });
 
 input.addEventListener('keydown', (e) => {
@@ -342,11 +456,14 @@ sendBtn.addEventListener('click', sendMessage);
 
 function sendMessage() {
   const text = input.value.trim();
-  if (!text || isStreaming) return;
+  if ((!text && !pendingImages.length) || isStreaming) return;
 
-  history.push({ role: 'user', content: text });
-  appendMessage('user', text);
+  const imgs = pendingImages.slice();
+  history.push({ role: 'user', content: buildContent(text || '*shows this*', imgs) });
+  appendMessage('user', text, imgs);
 
+  pendingImages = [];
+  renderPendingThumbs();
   input.value = '';
   input.style.height = 'auto';
   streamReply();
@@ -396,11 +513,14 @@ function resumeShift() {
   currentJob = save.job;
   currentConfig = save.config || {};
   history = save.history.slice();
+  pendingImages = [];
+  renderPendingThumbs();
   messagesEl.innerHTML = '';
   // Re-render the conversation (skip the hidden opener action).
   history.forEach((m, i) => {
-    if (i === 0 && m.role === 'user' && m.content.startsWith('*clocks in')) return;
-    appendMessage(m.role, m.content);
+    const { text, images } = extractParts(m.content);
+    if (i === 0 && m.role === 'user' && text.startsWith('*clocks in')) return;
+    appendMessage(m.role, text, images);
   });
   showScreen('chat');
   input.focus();
@@ -457,7 +577,7 @@ async function recapShift() {
 
   isStreaming = false;
   recapBtn.disabled = false;
-  sendBtn.disabled = !input.value.trim();
+  updateSendState();
   scrollToBottom();
 }
 
@@ -552,11 +672,11 @@ async function streamReply() {
 
   isStreaming = false;
   sendBtn.classList.remove('loading');
-  sendBtn.disabled = !input.value.trim();
+  updateSendState();
   scrollToBottom();
 }
 
-function appendMessage(role, content) {
+function appendMessage(role, content, images = []) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
 
@@ -566,7 +686,23 @@ function appendMessage(role, content) {
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.innerHTML = role === 'user' ? escapeHtml(content) : renderMarkdown(content);
+
+  if (images && images.length) {
+    const grid = document.createElement('div');
+    grid.className = 'msg-images';
+    images.forEach(img => {
+      const el = document.createElement('img');
+      el.src = img.url || `data:${img.media_type};base64,${img.data}`;
+      el.alt = 'attached photo';
+      grid.appendChild(el);
+    });
+    bubble.appendChild(grid);
+  }
+  if (content) {
+    const textEl = document.createElement('div');
+    textEl.innerHTML = role === 'user' ? escapeHtml(content) : renderMarkdown(content);
+    bubble.appendChild(textEl);
+  }
 
   div.appendChild(avatar);
   div.appendChild(bubble);
