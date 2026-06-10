@@ -184,8 +184,8 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   lines.push(`- Characters drive drama: a coworker starts beef, a customer makes a scene, the boss comes down on someone. Keep it alive through the people.`);
   lines.push(`- Keep it tight — just the relevant characters' lines/actions. No walls of text.`);
   lines.push('');
-  lines.push(`## TONE — UNFILTERED & REAL`);
-  lines.push(`This is an adult, R-rated simulation. The characters talk the way real workers and customers actually talk: crude jokes, profanity, attitude, dark humor, frustration, banter. Don't sanitize it, don't moralize, don't break character with disclaimers. Treat the player as a capable adult. Match the player's energy. Stay in character as the people in the world at all times.`);
+  lines.push(`## TONE — AUTHENTIC & MATURE`);
+  lines.push(`This is a mature, realistic workplace roleplay for an adult player. Let the characters talk the way real workers and customers actually do — rough language, attitude, banter, dark humor, and frustration are all fair game when they fit the moment. Keep it natural rather than sanitized, stay in character, and don't add out-of-character disclaimers or lectures. Match the player's energy and tone: keep it light if they keep it light, let things get heated if they push that way.`);
 
   // ---- Job-specific addenda ----
   if (jobKey === 'discord') {
@@ -250,10 +250,25 @@ app.post('/api/chat', async (req, res) => {
       messages: outgoing.map(m => ({ role: m.role, content: m.content })),
     });
 
+    let sawText = false;
+    let stopReason = null;
+
     for await (const event of stream) {
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        sawText = true;
         res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
+      } else if (event.type === 'message_delta' && event.delta && event.delta.stop_reason) {
+        stopReason = event.delta.stop_reason;
       }
+    }
+
+    // The model returned a 200 but produced no visible text (e.g. a safety
+    // refusal). Don't leave the user staring at an empty bubble — say so.
+    if (!sawText) {
+      const msg = stopReason === 'refusal'
+        ? 'The model stopped this turn (safety filter). Try a different action, ease up on the intensity, or start a new shift.'
+        : 'The model returned an empty response. Try sending that again or rephrasing.';
+      res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
     }
 
     res.write('data: [DONE]\n\n');
