@@ -13,6 +13,8 @@ const messagesEl = document.getElementById('messages');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const newChatBtn = document.getElementById('newChatBtn');
+const startSessionBtn = document.getElementById('startSessionBtn');
+const endSessionBtn = document.getElementById('endSessionBtn');
 const sessionTitle = document.getElementById('sessionTitle');
 const sessionSub = document.getElementById('sessionSub');
 
@@ -77,19 +79,33 @@ function startSession() {
   input.placeholder = config.aiRole === 'therapist'
     ? 'Talk to your therapist...'
     : 'Talk to your client...';
+  updateControls();
   input.focus();
-
-  // AI opens the session so the user isn't staring at a blank room.
-  kickoff();
 }
 
-// Have the AI speak first to open the session.
-async function kickoff() {
+// ===== Start / End session buttons =====
+startSessionBtn.addEventListener('click', () => {
+  if (isStreaming || history.length > 0) return;
   const opener = config.aiRole === 'therapist'
-    ? '(The session begins. Open it — greet your client and get things started in your own voice.)'
-    : "(The session begins. You've just walked in and sat down. Say your first thing.)";
+    ? '(The session begins. Open it — greet your client and get things started in your own voice. Spoken words only.)'
+    : "(The session begins. You've just walked in and sat down. Say your first thing. Spoken words only.)";
   history.push({ role: 'user', content: opener });
-  await streamReply();
+  streamReply();
+});
+
+endSessionBtn.addEventListener('click', () => {
+  if (isStreaming || history.length === 0) return;
+  const closer = config.aiRole === 'therapist'
+    ? '(The session is ending now. Wrap it up — give your client your closing thoughts, any takeaway or homework, and say goodbye, all in your own voice. Spoken words only.)'
+    : '(The session is ending now. Wrap it up — say your closing thoughts and goodbye in your own voice. Spoken words only.)';
+  history.push({ role: 'user', content: closer });
+  streamReply();
+});
+
+function updateControls() {
+  const started = history.length > 0;
+  startSessionBtn.disabled = started || isStreaming;
+  endSessionBtn.disabled = !started || isStreaming;
 }
 
 // ===== Reset =====
@@ -141,6 +157,7 @@ async function streamReply() {
   isStreaming = true;
   sendBtn.disabled = true;
   sendBtn.classList.add('loading');
+  updateControls();
 
   const { bubble, cursor } = createAssistantBubble();
   scrollToBottom();
@@ -190,9 +207,10 @@ async function streamReply() {
     }
 
     cursor.remove();
-    if (assistantText) {
-      history.push({ role: 'assistant', content: assistantText });
-      bubble.innerHTML = renderText(assistantText);
+    const clean = stripNarration(assistantText);
+    if (clean) {
+      history.push({ role: 'assistant', content: clean });
+      bubble.innerHTML = renderText(clean);
     } else {
       bubble.parentElement.remove();
     }
@@ -204,6 +222,7 @@ async function streamReply() {
   isStreaming = false;
   sendBtn.classList.remove('loading');
   sendBtn.disabled = !input.value.trim();
+  updateControls();
   scrollToBottom();
 }
 
@@ -268,9 +287,22 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Plain spoken dialogue — just escape and turn newlines into paragraphs.
+// Strip any stage direction / action narration the model slips in, so only
+// the spoken words remain.
+function stripNarration(text) {
+  return text
+    .replace(/\*[^*\n]*\*/g, '')        // *leans back*, *sighs*
+    .replace(/_[^_\n]*_/g, '')          // _underscored actions_
+    .replace(/\[[^\]\n]*\]/g, '')       // [pauses], [stage directions]
+    .replace(/[ \t]{2,}/g, ' ')         // collapse double spaces left behind
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^[ \t]+|[ \t]+$/gm, '')
+    .trim();
+}
+
+// Plain spoken dialogue — strip narration, escape, turn newlines into paragraphs.
 function renderText(text) {
-  return escapeHtml(text)
+  return escapeHtml(stripNarration(text))
     .split(/\n\n+/)
     .map(block => `<p>${block.replace(/\n/g, '<br>')}</p>`)
     .join('');

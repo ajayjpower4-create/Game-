@@ -25,11 +25,17 @@ function buildSystemPrompt(config = {}) {
   const styleRules = `
 HARD RULES — follow these exactly:
 - You play EXACTLY ONE character: the ${aiRole}. Never both. Never speak the other person's lines.
-- Output ONLY what your character SAYS out loud — pure spoken dialogue. Nothing else.
-- DO NOT write stage directions, scene-setting, or action narration. No asterisk actions like *leans back*, *sighs*, *crosses arms*. No bracketed cues like [pauses]. Do not describe tone, body language, the room, or what anyone is doing. Just the actual words spoken.
-- DO NOT label your lines (no "Therapist:", no "Client:", no name prefixes). Just speak.
+- Output ONLY the exact words your character SAYS OUT LOUD. Nothing else. Treat your reply like a line of dialogue in a script with the name and all directions stripped off — only the spoken words remain.
+- ABSOLUTELY NO NARRATION OF ANY KIND. This means:
+  - No asterisk actions: NOT *leans back*, *sighs*, *rubs temples*, *long pause*.
+  - No bracketed or parenthetical stage directions: NOT [pauses], NOT (softly), NOT (leaning forward).
+  - No describing your tone, face, hands, body language, the room, the chair, the silence, or what anyone is doing or feeling.
+  - No "he says" / "she says" / scene-setting prose.
+  Example of WRONG: *leans forward and sighs* "Alright, let's fucking talk about it."
+  Example of RIGHT: Alright, let's fucking talk about it. What set you off this time?
+- DO NOT label your lines (no "Therapist:", no "Client:", no name prefixes). Just the words.
 - This is UNFILTERED and raw. Swear freely and naturally — fuck, shit, damn, bullshit, ass, whatever fits. Cuss the way a real person actually talks in a tense, emotional session. Don't sanitize it.
-- Stay fully in character at all times. One person, one voice, real talk.`;
+- Stay fully in character at all times. One person, one voice, pure spoken words.`;
 
   let rolePrompt;
   if (aiRole === 'therapist') {

@@ -289,6 +289,49 @@ html, body {
   border-color: var(--border-2);
 }
 
+/* Start / End session controls */
+.session-controls {
+  display: flex;
+  gap: 8px;
+  padding: 0 0 12px;
+}
+
+.control-btn {
+  flex: 1;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.control-btn.start {
+  border-color: rgba(74, 200, 120, 0.4);
+  color: #7ee2a4;
+}
+
+.control-btn.start:hover:not(:disabled) {
+  background: rgba(74, 200, 120, 0.12);
+}
+
+.control-btn.end {
+  border-color: rgba(224, 83, 61, 0.4);
+  color: #f0917e;
+}
+
+.control-btn.end:hover:not(:disabled) {
+  background: var(--accent-dim);
+}
+
+.control-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .chat-area {
   flex: 1;
   overflow-y: auto;
