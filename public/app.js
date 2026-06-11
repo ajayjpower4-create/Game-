@@ -12,8 +12,8 @@ const chatArea = document.getElementById('chatArea');
 const messagesEl = document.getElementById('messages');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
-const newChatBtn = document.getElementById('newChatBtn');
-const startSessionBtn = document.getElementById('startSessionBtn');
+const setupBtn = document.getElementById('setupBtn');
+const newSessionBtn = document.getElementById('newSessionBtn');
 const endSessionBtn = document.getElementById('endSessionBtn');
 const sessionTitle = document.getElementById('sessionTitle');
 const sessionSub = document.getElementById('sessionSub');
@@ -22,6 +22,7 @@ const sessionSub = document.getElementById('sessionSub');
 let config = { aiRole: null, therapyType: 'both', persona: '' };
 let history = [];
 let isStreaming = false;
+let sessionNum = 1;
 
 const TYPE_LABELS = { anger: 'Anger management', adhd: 'ADHD', both: 'Anger management & ADHD' };
 
@@ -65,34 +66,49 @@ function startSession() {
   }
 
   config.persona = personaInput.value.trim();
-  history = [];
-  messagesEl.innerHTML = '';
-
-  // Header info
-  const aiIs = config.aiRole === 'therapist' ? 'AI Therapist' : 'AI Client';
-  const youAre = config.aiRole === 'therapist' ? "You're the client" : "You're the therapist";
-  sessionTitle.textContent = aiIs;
-  sessionSub.textContent = `${youAre} · ${TYPE_LABELS[config.therapyType]}`;
+  sessionNum = 1;
 
   setup.hidden = true;
   chatScreen.hidden = false;
   input.placeholder = config.aiRole === 'therapist'
     ? 'Talk to your therapist...'
     : 'Talk to your client...';
-  updateControls();
+
+  // Spin up the first session and let the AI open it.
+  beginSession();
   input.focus();
 }
 
-// ===== Start / End session buttons =====
-startSessionBtn.addEventListener('click', () => {
-  if (isStreaming || history.length > 0) return;
+function updateHeader() {
+  const aiIs = config.aiRole === 'therapist' ? 'AI Therapist' : 'AI Client';
+  const youAre = config.aiRole === 'therapist' ? "you're the client" : "you're the therapist";
+  sessionTitle.textContent = `Session ${sessionNum} · ${aiIs}`;
+  sessionSub.textContent = `${youAre} · ${TYPE_LABELS[config.therapyType]}`;
+}
+
+// Clear the room and have the AI open a fresh session.
+function beginSession() {
+  history = [];
+  messagesEl.innerHTML = '';
+  updateHeader();
+  updateControls();
+
   const opener = config.aiRole === 'therapist'
-    ? '(The session begins. Open it — greet your client and get things started in your own voice. Spoken words only.)'
-    : "(The session begins. You've just walked in and sat down. Say your first thing. Spoken words only.)";
+    ? '(A brand new therapy session begins now — a clean slate, no memory of any earlier session. Open it: greet your client and get things started in your own voice. Spoken words only.)'
+    : "(A brand new therapy session begins now — a clean slate, no memory of any earlier session. You've just walked in and sat down. Say your first thing. Spoken words only.)";
   history.push({ role: 'user', content: opener });
   streamReply();
+}
+
+// ===== New session: same setup, next session number =====
+newSessionBtn.addEventListener('click', () => {
+  if (isStreaming) return;
+  sessionNum++;
+  beginSession();
+  input.focus();
 });
 
+// ===== End session: AI wraps up the current one =====
 endSessionBtn.addEventListener('click', () => {
   if (isStreaming || history.length === 0) return;
   const closer = config.aiRole === 'therapist'
@@ -103,13 +119,13 @@ endSessionBtn.addEventListener('click', () => {
 });
 
 function updateControls() {
-  const started = history.length > 0;
-  startSessionBtn.disabled = started || isStreaming;
-  endSessionBtn.disabled = !started || isStreaming;
+  // Once the opener instruction is queued there's something to end.
+  endSessionBtn.disabled = history.length === 0 || isStreaming;
+  newSessionBtn.disabled = isStreaming;
 }
 
-// ===== Reset =====
-newChatBtn.addEventListener('click', () => {
+// ===== Setup: change therapist / persona / focus =====
+setupBtn.addEventListener('click', () => {
   if (isStreaming) return;
   config = { aiRole: null, therapyType: config.therapyType, persona: '' };
   history = [];

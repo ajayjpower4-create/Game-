@@ -309,12 +309,12 @@ html, body {
   transition: all 0.15s;
 }
 
-.control-btn.start {
+.control-btn.new {
   border-color: rgba(74, 200, 120, 0.4);
   color: #7ee2a4;
 }
 
-.control-btn.start:hover:not(:disabled) {
+.control-btn.new:hover:not(:disabled) {
   background: rgba(74, 200, 120, 0.12);
 }
 
