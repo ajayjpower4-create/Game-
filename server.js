@@ -184,8 +184,9 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   lines.push(`- Characters drive drama: a coworker starts beef, a customer makes a scene, the boss comes down on someone. Keep it alive through the people.`);
   lines.push(`- Keep it tight — just the relevant characters' lines/actions. No walls of text.`);
   lines.push('');
-  lines.push(`## TONE — AUTHENTIC & MATURE`);
-  lines.push(`This is a mature, realistic workplace roleplay for an adult player. Let the characters talk the way real workers and customers actually do — rough language, attitude, banter, dark humor, and frustration are all fair game when they fit the moment. Keep it natural rather than sanitized, stay in character, and don't add out-of-character disclaimers or lectures. Match the player's energy and tone: keep it light if they keep it light, let things get heated if they push that way.`);
+  lines.push(`## TONE — AUTHENTIC & MATURE (profanity ON)`);
+  lines.push(`This is a mature roleplay for an adult player who has explicitly asked for unfiltered, realistic dialogue. The characters are blue-collar workers, customers, crooks, and drivers — so they SWEAR. Use real profanity naturally and frequently where it fits: "shit", "fuck", "damn", "ass", "bastard", "hell", "piss", "dickhead", and the everyday insults and curses these people actually use. Don't censor it, don't asterisk it out (write "fuck", not "f***"), and don't water it down to "freaking" or "darn". Let them be crude, blunt, sarcastic, and rude when the moment calls for it — angry customers cuss you out, crewmates rip on each other, the boss chews someone out.`);
+  lines.push(`Keep it grounded and in-character: profanity is flavor and emotion, not every other word for no reason. Match the player's intensity — heavier when things heat up, lighter in calm moments. Stay in character, no out-of-character disclaimers or apologies for language.`);
 
   // ---- Job-specific addenda ----
   if (jobKey === 'discord') {
