@@ -60,6 +60,22 @@ const JOBS = {
     title: 'Sports Player',
     flavor: `life as a pro/competitive athlete. The locker room, practice, the coach's system, teammates with egos and chemistry, trainers, the press, game-day nerves, and the grind of competition. Your team is already a roster of real personalities around you.`,
   },
+  plumber: {
+    title: 'Plumber',
+    flavor: `plumbing work — residential and commercial. Wrenches, snakes, torches, soldering, flooded basements, busted pipes, sewage backups, anxious homeowners, code inspectors, tight crawlspaces, and the grime of the trade.`,
+  },
+  busdriver: {
+    title: 'Bus Driver',
+    flavor: `driving a city or school bus. Fare boxes, transfers, traffic, tight schedules, every-block stops, rowdy kids or rush-hour crowds, fare-dodgers, dispatch on the radio, and a long shift behind the wheel.`,
+  },
+  pilot: {
+    title: 'Airplane Pilot',
+    flavor: `commercial aviation — the cockpit, the crew, and the day of a flight. Pre-flight checks, ATC, weather, turbulence, the cabin crew, passengers, dispatch, and the airline grind from layover hotel to wheels-up to landing.`,
+  },
+  office: {
+    title: 'Office Worker',
+    flavor: `corporate office life. Cubicles, meetings that could've been emails, a passive-aggressive boss, office politics, the break room, deadlines, IT tickets, spreadsheets, water-cooler gossip, and the slow crawl of the 9-to-5.`,
+  },
 };
 
 function buildSystemPrompt(jobKey, cfg = {}) {
@@ -131,6 +147,7 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   } else if (jobKey === 'warehouse') {
     if (cfg.name) lines.push(`- The warehouse is called: **${cfg.name}**`);
     if (cfg.role) lines.push(`- The player's rank/role: **${cfg.role}**`);
+    if (cfg.setting) lines.push(`- Type of warehouse: ${cfg.setting}`);
     if (cfg.duties) lines.push(`- What the player does here: ${cfg.duties}`);
     if (cfg.staff) lines.push(`- Staff / coworkers on shift: ${cfg.staff}`);
   } else if (jobKey === 'scientist') {
@@ -151,6 +168,40 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     lines.push(`  • Andre "Dre" Fontaine — quiet workhorse, lets his play do the talking`);
     lines.push(`  • Sam Pell — nervous rookie trying to prove himself and earn respect`);
     if (cfg.coach) lines.push(`  • Plus the coach (${cfg.coach}) running the show`);
+  } else if (jobKey === 'plumber') {
+    if (cfg.role) lines.push(`- The player's rank: **${cfg.role}**`);
+    if (cfg.job) lines.push(`- What they're working on: ${cfg.job}`);
+    if (cfg.location) lines.push(`- Where the job is: ${cfg.location}`);
+    if (cfg.crew) lines.push(`- The player's crew: ${cfg.crew}`);
+  } else if (jobKey === 'busdriver') {
+    if (cfg.busType) lines.push(`- The bus the player drives: **${cfg.busType}**`);
+    if (cfg.city) lines.push(`- The city: ${cfg.city}`);
+    if (cfg.route) lines.push(`- The route: ${cfg.route}`);
+  } else if (jobKey === 'pilot') {
+    if (cfg.airline) lines.push(`- The airline: **${cfg.airline}**`);
+    if (cfg.role) lines.push(`- The player's rank: **${cfg.role}**`);
+    if (cfg.copilot) lines.push(`- The player's co-pilot: ${cfg.copilot}`);
+    if (cfg.plane) lines.push(`- The plane: ${cfg.plane}`);
+    // Preset flight crew (everyone except the co-pilot, which the player chose).
+    lines.push(`- PRESET FLIGHT CREW (auto-generated recurring characters — use them as needed):`);
+    lines.push(`  • Lead Flight Attendant Renée — runs the cabin, unflappable, seen everything`);
+    lines.push(`  • Flight Attendant Marco — friendly, chatty, good with nervous flyers`);
+    lines.push(`  • Flight Attendant Bex — newer, a little frazzled`);
+    lines.push(`  • Gate Agent Phil — stressed about the on-time departure`);
+    lines.push(`  • ATC / Ground Control — clipped, professional radio voice`);
+    lines.push(`  • Dispatch — feeds weather, fuel, and routing updates`);
+  } else if (jobKey === 'office') {
+    if (cfg.company) lines.push(`- The office / company: **${cfg.company}**`);
+    if (cfg.role) lines.push(`- The player's rank: **${cfg.role}**`);
+    if (cfg.workType) lines.push(`- The type of work they do: ${cfg.workType}`);
+    if (cfg.layout) lines.push(`- The office: ${cfg.layout}`);
+    // Preset coworkers so the office always feels populated.
+    lines.push(`- PRESET COWORKERS (recurring named characters):`);
+    lines.push(`  • Greg, the middle manager — passive-aggressive, loves meetings and "circling back"`);
+    lines.push(`  • Diane from HR — chipper on the surface, watches everything`);
+    lines.push(`  • Kyle in the next cubicle — loud talker, microwaves fish, overshares`);
+    lines.push(`  • Priya, the competent one everyone dumps work on`);
+    lines.push(`  • Old Hank in IT — sighs a lot, "did you try turning it off and on"`);
   }
   if (cfg.notes) lines.push(`- Extra details from the player: ${cfg.notes}`);
   if (cfg._hasImages) lines.push(`- The player has attached PHOTO(S) of their real workplace. Treat those images as the ground truth for the layout, equipment, and surroundings — build the world to match what's in the pictures.`);
@@ -203,11 +254,31 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     lines.push('');
     lines.push(`## DRIVING`);
     lines.push(`Play the passengers, other drivers, cabbies, cyclists, cops, and dispatch. They react to the player's driving — fast, reckless, smooth, whatever. The player narrates how they drive; you bring NYC and the people in the car (and on the street) to life. Let them react to speed, near-misses, traffic, and the meter.`);
+    lines.push(`PLAY "UBER" AS A CHARACTER: voice the Uber app/dispatch itself as its own presence — ride requests pinging in ("New trip — Jamal, 4.7★, 2 min away"), surge-pricing alerts, the passenger rating you after each ride, cancellation fees, support messages, and the app nagging about your acceptance rate. Treat the app like a bossy, robotic coworker riding the player all shift. (If they drive for a different company, voice that company's app/dispatch the same way.)`);
+  }
+  if (jobKey === 'busdriver') {
+    lines.push('');
+    lines.push(`## DRIVING THE BUS`);
+    lines.push(`Play the passengers (or the school kids), other drivers, dispatch on the radio, and anyone at the stops. They react to the player's driving and how they run the route — pace, missed stops, fare disputes, rowdy riders. School-bus runs mean named kids with their own drama; city/MTA runs mean a rotating crowd, fare-dodgers, and dispatch barking about the schedule. The player narrates how they drive; you bring the riders and the road to life.`);
+  }
+  if (jobKey === 'pilot') {
+    lines.push('');
+    lines.push(`## FLYING THE DAY`);
+    lines.push(`Play the co-pilot, the cabin crew, gate agents, ATC, dispatch, and passengers — everyone but the player. Keep cockpit chatter and radio calls reasonably authentic (callsigns, readbacks, checklists) without drowning the scene in jargon. The player flies/handles their role; you bring the crew and the airspace to life and let things go right or wrong (weather, delays, a sick passenger, a tight turnaround).`);
   }
 
   lines.push('');
   if (jobKey === 'discord') {
     lines.push(`To open: the player just came online as a mod. Have a few members already mid-conversation in the chat (in \`Username: message\` form) — some normal, maybe one starting to push the rules — so the player walks into a live channel. Then wait for the player to type what they post.`);
+  } else if (jobKey === 'pilot') {
+    const role = (cfg.role || '').toLowerCase();
+    if (role.includes('attendant') || role.includes('engineer')) {
+      lines.push(`To open: the player is cabin/crew, not flying the plane. Start their day in character for that role — e.g. a flight attendant getting picked apart by the lead FA at the crew briefing, or boarding chaos beginning. Open with ONLY a character's dialogue and small actions (the lead FA, a gate agent, an early passenger). No narration.`);
+    } else if (role.includes('co-pilot') || role.includes('first officer') || role.includes('copilot')) {
+      lines.push(`To open: the player is the CO-PILOT, so it's reversed — the CAPTAIN is picking THEM up. The day starts with the player getting picked up from their layover hotel by the captain. Open with ONLY the captain's dialogue and a small action as they meet the player (e.g. honking outside the hotel, or greeting them in the lobby). No narration — just the captain's line.`);
+    } else {
+      lines.push(`To open: the player is the CAPTAIN. The day starts with the player picking up their co-pilot (${cfg.copilot || 'their First Officer'}) from the co-pilot's hotel, then heading to the airport. Open with ONLY the co-pilot's dialogue and a small action as the player arrives to get them (e.g. the FO climbing into the car, coffee in hand). No narration — just the co-pilot's line. Let the player drive the trip to the airport from there.`);
+    }
   } else {
     lines.push(`To open: the player has just clocked in / arrived. Open with ONLY one or two named characters (a coworker, the boss, a crewmate, a waiting passenger) greeting or reacting to them — their dialogue and maybe a small *action*. Do NOT write any scene-setting, environment description, or narration of any kind. Start straight on a character's name and their line. Then wait for the player.`);
   }
