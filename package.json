@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "contagion-lab",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "AI-powered virus simulator game — design a pathogen and let Claude run the outbreak",
   "main": "server.js",
   "type": "module",
   "scripts": {

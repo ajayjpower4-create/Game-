@@ -3,60 +3,152 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <title>Contagion Lab — AI Virus Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app">
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
-        </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
-      </div>
-    </header>
+    <!-- ===================== SETUP / VIRUS LAB ===================== -->
+    <section class="setup" id="setup">
+      <div class="setup-card">
+        <header class="setup-head">
+          <div class="logo"><span class="logo-icon">☣</span> Contagion Lab</div>
+          <p class="tagline">Design a pathogen. Let the AI run the outbreak.</p>
+        </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+        <div class="field">
+          <label>Virus name</label>
+          <input id="v-name" type="text" placeholder="e.g. Crimson Flu, Project Hollow" maxlength="60">
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Pathogen type</label>
+            <select id="v-type">
+              <option>Virus</option>
+              <option>Bacteria</option>
+              <option>Fungus</option>
+              <option>Prion</option>
+              <option>Parasite</option>
+              <option>Bio-engineered</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Origin country</label>
+            <input id="v-origin" type="text" placeholder="e.g. Brazil" maxlength="40">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Transmission method</label>
+          <input id="v-transmission" type="text" placeholder="e.g. Airborne, blood, water, mosquito..." maxlength="80">
+        </div>
+
+        <div class="field">
+          <label>Infectivity <span class="val" id="infVal">60</span>%</label>
+          <input id="v-infectivity" type="range" min="1" max="100" value="60">
+        </div>
+        <div class="field">
+          <label>Lethality <span class="val" id="lethVal">25</span>%</label>
+          <input id="v-lethality" type="range" min="0" max="100" value="25">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Incubation (days)</label>
+            <input id="v-incubation" type="number" min="0" max="60" value="4">
+          </div>
+          <div class="field">
+            <label>Mutation rate</label>
+            <select id="v-mutation">
+              <option>Low</option>
+              <option selected>Medium</option>
+              <option>High</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Symptoms</label>
+          <input id="v-symptoms" type="text" placeholder="e.g. fever, coughing, hallucinations" maxlength="120">
+        </div>
+
+        <div class="field">
+          <label>Special notes <span class="muted">(optional)</span></label>
+          <textarea id="v-notes" rows="2" placeholder="Anything special: resistant to cold, targets the elderly, drug-resistant..." maxlength="300"></textarea>
+        </div>
+
+        <button class="btn-primary" id="launchBtn">☣ Release into the world</button>
+        <p class="fineprint">Fictional simulation game. No real-world biological instructions are produced.</p>
+      </div>
+    </section>
+
+    <!-- ===================== SIMULATION ===================== -->
+    <section class="sim hidden" id="sim">
+      <!-- Top bar: stats + time controls -->
+      <header class="topbar">
+        <div class="brand"><span class="logo-icon">☣</span> <strong id="simName">Contagion Lab</strong>
+          <span class="phase-badge" id="phaseBadge">Outbreak</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><span class="stat-label">Day</span><span class="stat-num" id="statDay">0</span></div>
+          <div class="stat"><span class="stat-label">Cases</span><span class="stat-num" id="statCases">0</span></div>
+          <div class="stat dead"><span class="stat-label">Deaths</span><span class="stat-num" id="statDeaths">0</span></div>
+          <div class="stat"><span class="stat-label">Countries</span><span class="stat-num" id="statCountries">0</span></div>
+          <div class="stat"><span class="stat-label">R₀</span><span class="stat-num" id="statR0">—</span></div>
+        </div>
+      </header>
+
+      <!-- Time bar -->
+      <div class="timebar-wrap">
+        <div class="time-controls">
+          <button class="tbtn" data-speed="pause" title="Pause">❚❚</button>
+          <button class="tbtn" data-speed="slow" title="Slow">▶</button>
+          <button class="tbtn active" data-speed="normal" title="Normal">▶▶</button>
+          <button class="tbtn" data-speed="fast" title="Fast">▶▶▶</button>
+          <button class="tbtn step" id="stepBtn" title="Advance one day now">⏭ Step</button>
+        </div>
+        <div class="timebar">
+          <div class="timebar-fill" id="timebarFill"></div>
+          <span class="timebar-label" id="timebarLabel">Paused</span>
         </div>
       </div>
-      <div class="messages" id="messages"></div>
-    </main>
 
-    <footer class="input-area">
-      <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-        </button>
+      <div class="sim-body">
+        <!-- Left: live virus editor -->
+        <aside class="panel editor">
+          <h3>Pathogen <button class="ghost-btn" id="applyEdits" title="Apply changes on next report">Apply edits</button></h3>
+          <div class="edit-field"><label>Name</label><input id="e-name" type="text"></div>
+          <div class="edit-field"><label>Transmission</label><input id="e-transmission" type="text"></div>
+          <div class="edit-field"><label>Infectivity <span id="eInfVal"></span>%</label><input id="e-infectivity" type="range" min="1" max="100"></div>
+          <div class="edit-field"><label>Lethality <span id="eLethVal"></span>%</label><input id="e-lethality" type="range" min="0" max="100"></div>
+          <div class="edit-field"><label>Symptoms</label><input id="e-symptoms" type="text"></div>
+          <div class="edit-field"><label>Notes</label><textarea id="e-notes" rows="2"></textarea></div>
+
+          <h3 class="mt">Inject big event</h3>
+          <textarea id="eventInput" class="event-input" rows="3" placeholder="e.g. The virus killed over 30 people in Nigeria yesterday."></textarea>
+          <button class="btn-primary sm" id="eventBtn">⚡ Inject event</button>
+          <div class="event-hints">
+            <button class="hint" data-event="A new mutation made the virus far more contagious.">New mutation</button>
+            <button class="hint" data-event="A vaccine trial began in Germany.">Vaccine trial</button>
+            <button class="hint" data-event="Borders closed across Asia to stop the spread.">Close borders</button>
+          </div>
+        </aside>
+
+        <!-- Center: news feed -->
+        <main class="panel feed">
+          <h3>Global Health Wire</h3>
+          <div class="news" id="news"></div>
+        </main>
+
+        <!-- Right: world map / countries -->
+        <aside class="panel world">
+          <h3>Affected countries</h3>
+          <div class="countries" id="countries">
+            <p class="muted empty">No confirmed cases yet…</p>
+          </div>
+        </aside>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
-    </footer>
+    </section>
   </div>
 
   <script src="app.js"></script>
