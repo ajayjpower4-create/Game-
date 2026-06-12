@@ -24,21 +24,7 @@ On each turn you receive: the player's virus design, the current world state, ho
 3. Apply any player edits to the virus going forward.
 4. Write a short, vivid news bulletin (2-5 sentences) in the voice of a global health news network.
 
-You MUST respond with ONLY a single valid JSON object (no markdown, no code fences, no commentary) matching exactly:
-{
-  "headline": "short punchy news headline",
-  "report": "2-5 sentence news bulletin describing what happened this step",
-  "newCountries": ["names of countries newly reporting cases this step"],
-  "world": {
-    "phase": "one of: Outbreak | Epidemic | Pandemic | Contained | Receding | Eradicated",
-    "totalCases": integer,
-    "totalDeaths": integer,
-    "r0": number,
-    "countries": [
-      { "name": "Country", "cases": integer, "deaths": integer, "status": "one of: Emerging | Spreading | Severe | Critical | Contained | Recovered" }
-    ]
-  }
-}
+You report the outcome of each step by calling the "report_outbreak" tool. Always call that tool exactly once per turn and never reply with plain text.
 
 Rules for the numbers:
 - totalCases and totalDeaths must be >= their previous values (people don't un-get-infected; deaths only rise) UNLESS phase is Receding/Eradicated, where active cases may fall as recoveries outpace new infections.
@@ -46,6 +32,54 @@ Rules for the numbers:
 - Sum of country cases/deaths should roughly match the totals.
 - Keep growth believable for the days elapsed and the virus traits. Don't infect the whole planet on day 2.
 - Always include any country named in a player event.`;
+
+// Forced tool that guarantees a schema-valid response we can read without parsing free text.
+const REPORT_TOOL = {
+  name: 'report_outbreak',
+  description: 'Report the state of the fictional outbreak after advancing the simulation one step.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      headline: { type: 'string', description: 'Short punchy news headline.' },
+      report: { type: 'string', description: '2-5 sentence news bulletin describing what happened this step.' },
+      newCountries: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Names of countries newly reporting cases this step.',
+      },
+      world: {
+        type: 'object',
+        properties: {
+          phase: {
+            type: 'string',
+            enum: ['Outbreak', 'Epidemic', 'Pandemic', 'Contained', 'Receding', 'Eradicated'],
+          },
+          totalCases: { type: 'integer' },
+          totalDeaths: { type: 'integer' },
+          r0: { type: 'number' },
+          countries: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                cases: { type: 'integer' },
+                deaths: { type: 'integer' },
+                status: {
+                  type: 'string',
+                  enum: ['Emerging', 'Spreading', 'Severe', 'Critical', 'Contained', 'Recovered'],
+                },
+              },
+              required: ['name', 'cases', 'deaths', 'status'],
+            },
+          },
+        },
+        required: ['phase', 'totalCases', 'totalDeaths', 'r0', 'countries'],
+      },
+    },
+    required: ['headline', 'report', 'newCountries', 'world'],
+  },
+};
 
 app.post('/api/simulate', async (req, res) => {
   const { virus, world, daysElapsed, events, edits } = req.body || {};
@@ -65,28 +99,34 @@ app.post('/api/simulate', async (req, res) => {
   try {
     const msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 2000,
+      max_tokens: 4000,
       system: SYSTEM_PROMPT,
+      tools: [REPORT_TOOL],
+      tool_choice: { type: 'tool', name: REPORT_TOOL.name },
       messages: [
         {
           role: 'user',
-          content: `Advance the simulation. Here is the current situation as JSON:\n\n${JSON.stringify(userPayload, null, 2)}\n\nRespond with ONLY the JSON object described in your instructions.`,
+          content: `Advance the simulation. Here is the current situation as JSON:\n\n${JSON.stringify(userPayload, null, 2)}\n\nCall the report_outbreak tool with the result.`,
         },
       ],
     });
 
+    // Forced tool use: read the structured input directly — no string parsing needed.
+    const toolUse = msg.content.find((b) => b.type === 'tool_use' && b.name === REPORT_TOOL.name);
+    if (toolUse && toolUse.input) {
+      return res.json(toolUse.input);
+    }
+
+    // Fallback: if the model somehow replied with text, try to salvage JSON from it.
     const text = msg.content
       .filter((b) => b.type === 'text')
       .map((b) => b.text)
       .join('')
       .trim();
-
     const parsed = extractJson(text);
-    if (!parsed) {
-      return res.status(502).json({ error: 'Model returned malformed data.', raw: text.slice(0, 500) });
-    }
+    if (parsed) return res.json(parsed);
 
-    res.json(parsed);
+    return res.status(502).json({ error: 'Model returned malformed data.', raw: text.slice(0, 500) });
   } catch (err) {
     const message = err instanceof Anthropic.APIError
       ? `API error ${err.status}: ${err.message}`
