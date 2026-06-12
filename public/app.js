@@ -4,18 +4,47 @@ const welcome = document.getElementById('welcome');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const newChatBtn = document.getElementById('newChatBtn');
+const profileBtn = document.getElementById('profileBtn');
+const profilePanel = document.getElementById('profilePanel');
+const coupleInfoEl = document.getElementById('coupleInfo');
+const saveProfileBtn = document.getElementById('saveProfileBtn');
+const savedNote = document.getElementById('savedNote');
+const sessionBadge = document.getElementById('sessionBadge');
+const sessionToggleBtn = document.getElementById('sessionToggleBtn');
+const nextWeekBtn = document.getElementById('nextWeekBtn');
+
+const PROFILE_KEY = 'therapy.coupleInfo';
 
 let history = [];
 let isStreaming = false;
+let inSession = false;
+let week = 1;
 
-// Auto-resize textarea
+// ---- Couple profile (persisted) -------------------------------------------
+coupleInfoEl.value = localStorage.getItem(PROFILE_KEY) || '';
+
+profileBtn.addEventListener('click', () => {
+  profilePanel.hidden = !profilePanel.hidden;
+  if (!profilePanel.hidden) coupleInfoEl.focus();
+});
+
+saveProfileBtn.addEventListener('click', () => {
+  localStorage.setItem(PROFILE_KEY, coupleInfoEl.value);
+  savedNote.textContent = 'Saved ✓';
+  setTimeout(() => { savedNote.textContent = ''; }, 1800);
+});
+
+function coupleInfo() {
+  return coupleInfoEl.value.trim();
+}
+
+// ---- Input wiring ----------------------------------------------------------
 input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 200) + 'px';
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-// Send on Enter (Shift+Enter for newline)
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -24,61 +53,117 @@ input.addEventListener('keydown', (e) => {
 });
 
 sendBtn.addEventListener('click', sendMessage);
-newChatBtn.addEventListener('click', resetChat);
+newChatBtn.addEventListener('click', resetAll);
 
-// Suggestion chips
-document.querySelectorAll('.suggestion').forEach(btn => {
-  btn.addEventListener('click', () => {
-    input.value = btn.dataset.text;
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-    sendBtn.disabled = false;
-    sendMessage();
-  });
-});
+sessionToggleBtn.addEventListener('click', () => { if (!isStreaming) toggleSession(); });
+nextWeekBtn.addEventListener('click', () => { if (!isStreaming) nextWeek(); });
 
-function resetChat() {
-  history = [];
-  messagesEl.innerHTML = '';
-  welcome.style.display = 'flex';
-  input.value = '';
-  input.style.height = 'auto';
-  sendBtn.disabled = true;
-  isStreaming = false;
-}
-
-async function sendMessage() {
+// ---- Commands --------------------------------------------------------------
+function sendMessage() {
   const text = input.value.trim();
   if (!text || isStreaming) return;
 
+  // Command: "(" toggles the session (start / end).
+  if (text === '(') {
+    clearInput();
+    toggleSession();
+    return;
+  }
+
+  // Command: ">" advances to next week's session.
+  if (text === '>' || text === '>>' || text.toLowerCase() === '/next') {
+    clearInput();
+    nextWeek();
+    return;
+  }
+
+  clearInput();
+  runTurn(text, { role: 'therapist' });
+}
+
+function toggleSession() {
+  if (!inSession) {
+    inSession = true;
+    updateSessionUI();
+    addDivider(`Session ${week} — started`);
+    runTurn(`[The therapist welcomes the couple in and begins therapy session #${week}.]`, { silent: true });
+  } else {
+    inSession = false;
+    updateSessionUI();
+    addDivider(`Session ${week} — ended`);
+    runTurn('[The therapist signals that time is up and gently ends the session for today.]', { silent: true });
+  }
+}
+
+function nextWeek() {
+  week += 1;
+  inSession = true;
+  updateSessionUI();
+  addDivider(`One week later — Session ${week}`);
+  runTurn(`[One week has passed. The couple returns for therapy session #${week}.]`, { silent: true });
+}
+
+function updateSessionUI() {
+  if (inSession) {
+    sessionBadge.textContent = `In session · Week ${week}`;
+    sessionBadge.classList.add('live');
+    sessionToggleBtn.innerHTML = '( End session';
+  } else {
+    sessionBadge.textContent = week > 1 ? `Between sessions · after Week ${week}` : 'Not in session';
+    sessionBadge.classList.remove('live');
+    sessionToggleBtn.innerHTML = '( Start session';
+  }
+}
+
+function clearInput() {
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+}
+
+function resetAll() {
+  history = [];
+  messagesEl.innerHTML = '';
+  welcome.style.display = 'flex';
+  inSession = false;
+  week = 1;
+  updateSessionUI();
+  clearInput();
+  isStreaming = false;
+}
+
+// ---- Turn execution --------------------------------------------------------
+// `silent` directions (stage cues) are shown as a faint therapist note rather
+// than a normal chat bubble.
+async function runTurn(text, { silent = false } = {}) {
   welcome.style.display = 'none';
   isStreaming = true;
   sendBtn.disabled = true;
   sendBtn.classList.add('loading');
+  setCommandsDisabled(true);
 
-  // Add user message
   history.push({ role: 'user', content: text });
-  appendMessage('user', text);
+  if (silent) {
+    appendDirection(text);
+  } else {
+    appendMessage('user', text);
+  }
 
-  input.value = '';
-  input.style.height = 'auto';
-
-  // Create assistant bubble
-  const { bubble, cursor } = createAssistantBubble();
+  const { bubble, cursor } = createCoupleBubble();
   scrollToBottom();
 
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({ messages: history, coupleInfo: coupleInfo(), week }),
     });
 
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
-    let assistantText = '';
+    let coupleText = '';
     let buffer = '';
 
     while (true) {
@@ -102,8 +187,8 @@ async function sendMessage() {
             break;
           }
           if (parsed.text) {
-            assistantText += parsed.text;
-            bubble.innerHTML = renderMarkdown(assistantText);
+            coupleText += parsed.text;
+            bubble.innerHTML = renderDialogue(coupleText);
             bubble.appendChild(cursor);
             scrollToBottom();
           }
@@ -112,9 +197,9 @@ async function sendMessage() {
     }
 
     cursor.remove();
-    if (assistantText) {
-      history.push({ role: 'assistant', content: assistantText });
-      bubble.innerHTML = renderMarkdown(assistantText);
+    if (coupleText) {
+      history.push({ role: 'assistant', content: coupleText });
+      bubble.innerHTML = renderDialogue(coupleText);
     }
   } catch (err) {
     cursor.remove();
@@ -124,20 +209,27 @@ async function sendMessage() {
   isStreaming = false;
   sendBtn.classList.remove('loading');
   sendBtn.disabled = !input.value.trim();
+  setCommandsDisabled(false);
   scrollToBottom();
 }
 
+function setCommandsDisabled(disabled) {
+  sessionToggleBtn.disabled = disabled;
+  nextWeekBtn.disabled = disabled;
+}
+
+// ---- Rendering -------------------------------------------------------------
 function appendMessage(role, content) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : '◈';
+  avatar.textContent = 'Dr';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.innerHTML = role === 'user' ? escapeHtml(content) : renderMarkdown(content);
+  bubble.innerHTML = escapeHtml(content);
 
   div.appendChild(avatar);
   div.appendChild(bubble);
@@ -146,13 +238,29 @@ function appendMessage(role, content) {
   return bubble;
 }
 
-function createAssistantBubble() {
+function appendDirection(text) {
   const div = document.createElement('div');
-  div.className = 'message assistant';
+  div.className = 'direction';
+  div.textContent = text.replace(/^\[|\]$/g, '');
+  messagesEl.appendChild(div);
+  scrollToBottom();
+}
+
+function addDivider(label) {
+  const div = document.createElement('div');
+  div.className = 'divider';
+  div.innerHTML = `<span>${escapeHtml(label)}</span>`;
+  messagesEl.appendChild(div);
+  scrollToBottom();
+}
+
+function createCoupleBubble() {
+  const div = document.createElement('div');
+  div.className = 'message couple';
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = '◈';
+  avatar.textContent = '❤';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -180,50 +288,22 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Lightweight markdown renderer
-function renderMarkdown(text) {
-  let html = escapeHtml(text);
-
-  // Code blocks
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code>${code.trim()}</code></pre>`;
-  });
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Headers
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-  // Bold & italic
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-  // Blockquote
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-
-  // Unordered list
-  html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
-
-  // Ordered list
-  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-
-  // Horizontal rule
-  html = html.replace(/^---$/gm, '<hr>');
-
-  // Paragraphs (double newlines)
-  html = html
-    .split(/\n\n+/)
-    .map(block => {
-      if (/^<(h[123]|ul|ol|pre|blockquote|hr)/.test(block.trim())) return block;
-      const lines = block.replace(/\n/g, '<br>');
-      return `<p>${lines}</p>`;
+// Render the couple's dialogue: highlight "Name:" speaker labels and
+// *stage directions* in asterisks.
+function renderDialogue(text) {
+  return escapeHtml(text)
+    .split('\n')
+    .map(line => {
+      if (!line.trim()) return '';
+      let html = line;
+      // Speaker label at start of a line: "Name:" or "Name (beat):"
+      html = html.replace(/^([A-Z][\w .'-]{0,30}?):/, '<span class="speaker">$1:</span>');
+      // *stage directions*
+      html = html.replace(/\*([^*]+)\*/g, '<em class="stage">$1</em>');
+      return `<p>${html}</p>`;
     })
-    .join('\n');
-
-  return html;
+    .filter(Boolean)
+    .join('');
 }
+
+updateSessionUI();

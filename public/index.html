@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <title>Couples Therapy — Session Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,40 +11,92 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+          <span class="logo-icon">❤</span>
+          <span class="logo-text">Session</span>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+        <div class="header-right">
+          <span class="session-badge" id="sessionBadge">Not in session</span>
+          <button class="icon-btn" id="profileBtn" title="Couple profile">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            Couple
+          </button>
+          <button class="icon-btn" id="newChatBtn" title="Reset everything">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="1 4 1 10 7 10"></polyline>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+            </svg>
+            Reset
+          </button>
+        </div>
       </div>
     </header>
 
+    <!-- Couple profile panel -->
+    <section class="profile-panel" id="profilePanel" hidden>
+      <div class="profile-inner">
+        <label for="coupleInfo" class="profile-label">Couple profile</label>
+        <p class="profile-hint">
+          Paste everything about the couple here — names, history, what's going on in
+          their life right now, how each partner reacts to things, their triggers,
+          communication styles, what brought them in. The AI will play both partners
+          based on this.
+        </p>
+        <textarea
+          id="coupleInfo"
+          class="profile-textarea"
+          placeholder="e.g.
+Maya (34) and James (36), married 6 years, one toddler. James took a new job with long hours and Maya feels like she's parenting alone. Maya gets sharp and brings up old grievances when hurt; James shuts down and goes quiet, then explodes. Money is tight after a recent move. They still love each other but haven't had a real conversation in weeks..."
+          rows="8"
+        ></textarea>
+        <div class="profile-actions">
+          <span class="saved-note" id="savedNote"></span>
+          <button class="primary-btn" id="saveProfileBtn">Save profile</button>
+        </div>
+      </div>
+    </section>
+
     <main class="chat-area" id="chatArea">
       <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+        <div class="welcome-icon">❤</div>
+        <h1>Couples Therapy Simulator</h1>
+        <p>You're the therapist. The AI is the couple.</p>
+        <div class="how-to">
+          <div class="how-row">
+            <span class="cmd-chip">1</span>
+            <span>Open <strong>Couple</strong> and paste in who they are &amp; what's going on.</span>
+          </div>
+          <div class="how-row">
+            <span class="cmd-chip">(</span>
+            <span>Type <code>(</code> to <strong>start</strong> the session — type it again to <strong>end</strong> it.</span>
+          </div>
+          <div class="how-row">
+            <span class="cmd-chip">&gt;</span>
+            <span>Type <code>&gt;</code> to jump to <strong>next week's</strong> session.</span>
+          </div>
+          <div class="how-row">
+            <span class="cmd-chip">🗣</span>
+            <span>Everything else you type is you speaking as the therapist.</span>
+          </div>
         </div>
       </div>
       <div class="messages" id="messages"></div>
     </main>
 
     <footer class="input-area">
+      <div class="quick-cmds" id="quickCmds">
+        <button class="quick-btn" data-cmd="(" id="sessionToggleBtn">( Start session</button>
+        <button class="quick-btn" data-cmd="&gt;" id="nextWeekBtn">&gt; Next week</button>
+      </div>
       <div class="input-container">
         <textarea
           id="messageInput"
           class="message-input"
-          placeholder="Message Swerve..."
+          placeholder="Speak as the therapist…  ( = start/end · > = next week"
           rows="1"
           maxlength="10000"
         ></textarea>
@@ -55,7 +107,7 @@
           </svg>
         </button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
+      <p class="disclaimer">A roleplay simulator for practice — not real therapy or a substitute for it.</p>
     </footer>
   </div>
 

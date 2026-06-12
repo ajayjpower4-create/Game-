@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "therapy-session-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Couples therapy roleplay simulator — the AI plays the couple, you play the therapist.",
   "main": "server.js",
   "type": "module",
   "scripts": {
