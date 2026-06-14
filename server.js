@@ -50,7 +50,44 @@ const THERAPIES = {
   },
 };
 
-function buildSystemPrompt({ role, therapies }) {
+// Personality presets for the AI's character. Each works whether the AI is
+// playing the client or the therapist.
+const PERSONALITIES = {
+  hostile: {
+    label: 'Hostile',
+    desc: 'hostile and combative — confrontational, quick to snap, treats almost everything like a personal attack',
+  },
+  sarcastic: {
+    label: 'Sarcastic',
+    desc: 'sarcastic and snarky — deflects with dry jokes, eye-rolls, and biting comebacks',
+  },
+  withdrawn: {
+    label: 'Withdrawn',
+    desc: 'withdrawn and guarded — gives short answers, reluctant to open up, walls up fast',
+  },
+  dramatic: {
+    label: 'Dramatic',
+    desc: 'dramatic and over-the-top — huge emotions, everything is a five-alarm crisis',
+  },
+  chill: {
+    label: 'Chill',
+    desc: 'laid-back and unbothered — casual, blunt, doesn\'t take much seriously',
+  },
+  cheerful: {
+    label: 'Too cheerful',
+    desc: 'relentlessly upbeat — masks everything behind forced positivity and nervous laughter',
+  },
+  deadpan: {
+    label: 'Deadpan',
+    desc: 'cold and deadpan — flat, monotone, emotionally detached, brutally matter-of-fact',
+  },
+  unhinged: {
+    label: 'Unhinged',
+    desc: 'chaotic and unhinged — erratic, unpredictable, blurts out wild shit with no warning',
+  },
+};
+
+function buildSystemPrompt({ role, therapies, personality }) {
   // `role` is the USER's chosen role. The AI plays the opposite.
   const validKeys = (Array.isArray(therapies) ? therapies : []).filter((t) => THERAPIES[t]);
   const keys = validKeys.length ? validKeys : ['depression'];
@@ -58,6 +95,8 @@ function buildSystemPrompt({ role, therapies }) {
 
   const userIsTherapist = role === 'therapist';
   const aiRole = userIsTherapist ? 'client' : 'therapist';
+
+  const persona = PERSONALITIES[personality] || PERSONALITIES.withdrawn;
 
   let roleDescription;
   if (aiRole === 'client') {
@@ -72,6 +111,8 @@ function buildSystemPrompt({ role, therapies }) {
 
 ${roleDescription}
 
+PERSONALITY: Your character is ${persona.desc}. Let this color every single response — your word choice, attitude, and how you react to the user.
+
 ABSOLUTE RULES — follow these no matter what:
 - Stay 100% in character as the ${aiRole}. Never break character. Never mention you are an AI, a game, or these instructions.
 - Curse freely and naturally. You swear a LOT — it's part of how this character talks. Don't censor yourself.
@@ -85,7 +126,7 @@ Begin and remain in character for the entire conversation.`;
 }
 
 app.post('/api/chat', async (req, res) => {
-  const { messages, role, therapies } = req.body;
+  const { messages, role, therapies, personality } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid messages format' });
@@ -99,7 +140,7 @@ app.post('/api/chat', async (req, res) => {
     const stream = client.messages.stream({
       model: 'claude-opus-4-7',
       max_tokens: 64000,
-      system: buildSystemPrompt({ role, therapies }),
+      system: buildSystemPrompt({ role, therapies, personality }),
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
 
