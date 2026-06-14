@@ -264,6 +264,8 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   lines.push(`- Describing the player's character — what they see, feel, think, do, or how things affect them ("You feel the cold...", "You step inside and...").`);
   lines.push(`- Narrating events from an omniscient view, transitions, or the passage of time ("Hours pass...", "Meanwhile...").`);
   lines.push(`- Stage-direction prose that isn't tied to a specific named character's body.`);
+  lines.push(`- A standalone *italic line* with no character name in front of it. Putting scene-setting in asterisks is STILL narration and is banned. NEVER write things like \`*the locker room is mostly empty — a couple of guys swapping out*\` or \`*a few minutes later, out in the lot — the Explorer chirps as you unlock it, the CAD boots up slow*\`. Asterisks are ONLY for an action attached to a named character, led by that character's name (e.g. \`Brennan: *pulls a shirt over his head*\`). If an asterisk block has no character's name in front of it, DELETE it.`);
+  lines.push(`- Skipping time or moving the player ("a few minutes later", "out in the lot", "later that day", "you head to..."). The PLAYER controls time and where they go. Never advance time or relocate the scene yourself.`);
   lines.push(`If a sentence is not a specific named character talking or physically doing something, DO NOT write it. Delete the urge.`);
   lines.push('');
   lines.push(`FORMAT: Attribute everything to a named character. Lead with their name, e.g.:`);
@@ -370,6 +372,11 @@ app.post('/api/chat', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
+  // Roleplay turns must be character-only. A line that is a single standalone
+  // *italic block* (no character name in front, no dialogue) is scene narration
+  // — strip it. Recaps are out-of-character prose, so they're never filtered.
+  const filterNarration = mode !== 'recap';
+
   try {
     const stream = client.messages.stream({
       model: 'claude-opus-4-7',
@@ -380,14 +387,50 @@ app.post('/api/chat', async (req, res) => {
 
     let sawText = false;
     let stopReason = null;
+    let lineBuf = '';
+    let rawAll = '';
+    let emittedAny = false;
+
+    const send = (text) => res.write(`data: ${JSON.stringify({ text })}\n\n`);
+
+    const isNarration = (line) => {
+      const t = line.trim();
+      if (t.length < 3) return false;
+      if (t.startsWith('*') && t.endsWith('*')) {
+        const inner = t.slice(1, -1);
+        // Pure italic block with no named character and no spoken dialogue.
+        if (!inner.includes('"') && !inner.includes('*')) return true;
+      }
+      return false;
+    };
+
+    const emitLine = (line, newline) => {
+      if (filterNarration && isNarration(line)) return;
+      if (!line.trim() && !emittedAny) return; // swallow leading blank lines
+      send(newline ? line + '\n' : line);
+      if (line.trim()) emittedAny = true;
+    };
 
     for await (const event of stream) {
       if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
         sawText = true;
-        res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
+        rawAll += event.delta.text;
+        lineBuf += event.delta.text;
+        let idx;
+        while ((idx = lineBuf.indexOf('\n')) !== -1) {
+          emitLine(lineBuf.slice(0, idx), true);
+          lineBuf = lineBuf.slice(idx + 1);
+        }
       } else if (event.type === 'message_delta' && event.delta && event.delta.stop_reason) {
         stopReason = event.delta.stop_reason;
       }
+    }
+    if (lineBuf) emitLine(lineBuf, false);
+
+    // If filtering removed everything (e.g. an alarm-only opener, or a fully
+    // narrated reply), fall back to the raw text so the bubble isn't empty.
+    if (sawText && !emittedAny && rawAll.trim()) {
+      send(rawAll);
     }
 
     // The model returned a 200 but produced no visible text (e.g. a safety
