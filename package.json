@@ -1,12 +1,15 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "therapy-session-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "A mobile therapy session role-play game powered by Claude",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.51.0",

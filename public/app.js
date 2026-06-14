@@ -1,21 +1,106 @@
+// --- Setup screen elements ---
+const setup = document.getElementById('setup');
+const session = document.getElementById('session');
+const roleCards = document.querySelectorAll('.role-card');
+const therapyGrid = document.getElementById('therapyGrid');
+const startBtn = document.getElementById('startBtn');
+
+// --- Session screen elements ---
 const chatArea = document.getElementById('chatArea');
 const messagesEl = document.getElementById('messages');
-const welcome = document.getElementById('welcome');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
-const newChatBtn = document.getElementById('newChatBtn');
+const backBtn = document.getElementById('backBtn');
+const headerMain = document.getElementById('headerMain');
+const headerSub = document.getElementById('headerSub');
 
+const THERAPY_LABELS = {
+  depression: 'Depression',
+  anger: 'Anger issues',
+  adhd: 'ADHD',
+  anxiety: 'Anxiety',
+  vaping: 'Vaping',
+  speech: 'Speech',
+  autism: 'Autism',
+};
+
+let selectedRole = null;
+let selectedTherapies = [];
 let history = [];
 let isStreaming = false;
 
-// Auto-resize textarea
+// ---------- Setup interactions ----------
+roleCards.forEach((card) => {
+  card.addEventListener('click', () => {
+    selectedRole = card.dataset.role;
+    roleCards.forEach((c) => c.classList.toggle('selected', c === card));
+    refreshStartBtn();
+  });
+});
+
+therapyGrid.querySelectorAll('.therapy-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    const t = chip.dataset.therapy;
+    if (selectedTherapies.includes(t)) {
+      selectedTherapies = selectedTherapies.filter((x) => x !== t);
+      chip.classList.remove('selected');
+    } else {
+      selectedTherapies.push(t);
+      chip.classList.add('selected');
+    }
+    refreshStartBtn();
+  });
+});
+
+function refreshStartBtn() {
+  startBtn.disabled = !selectedRole || selectedTherapies.length === 0;
+}
+
+startBtn.addEventListener('click', startSession);
+backBtn.addEventListener('click', endSession);
+
+function startSession() {
+  if (startBtn.disabled) return;
+
+  // The user is one role; the AI plays the other.
+  const aiRole = selectedRole === 'therapist' ? 'the Client' : 'the Therapist';
+  headerMain.textContent = `You: ${selectedRole === 'therapist' ? 'Therapist' : 'Client'}`;
+  headerSub.textContent = `AI: ${aiRole} · ${selectedTherapies.map((t) => THERAPY_LABELS[t]).join(', ')}`;
+
+  history = [];
+  messagesEl.innerHTML = '';
+  setup.classList.add('hidden');
+  session.classList.remove('hidden');
+
+  input.placeholder = selectedRole === 'therapist'
+    ? 'Open the session, doc...'
+    : 'Tell your therapist what\'s up...';
+
+  // Seed the conversation so the AI opens in character.
+  const opener = selectedRole === 'therapist'
+    ? '(The session begins. The client has just sat down. Speak first, in character.)'
+    : '(The session begins. The client has just sat down across from you. Speak first, in character.)';
+
+  history.push({ role: 'user', content: opener });
+  streamResponse();
+  input.focus();
+}
+
+function endSession() {
+  if (isStreaming) return;
+  session.classList.add('hidden');
+  setup.classList.remove('hidden');
+  history = [];
+  input.value = '';
+}
+
+// ---------- Input handling ----------
 input.addEventListener('input', () => {
   input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+  input.style.height = Math.min(input.scrollHeight, 160) + 'px';
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-// Send on Enter (Shift+Enter for newline)
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -24,46 +109,25 @@ input.addEventListener('keydown', (e) => {
 });
 
 sendBtn.addEventListener('click', sendMessage);
-newChatBtn.addEventListener('click', resetChat);
 
-// Suggestion chips
-document.querySelectorAll('.suggestion').forEach(btn => {
-  btn.addEventListener('click', () => {
-    input.value = btn.dataset.text;
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-    sendBtn.disabled = false;
-    sendMessage();
-  });
-});
-
-function resetChat() {
-  history = [];
-  messagesEl.innerHTML = '';
-  welcome.style.display = 'flex';
-  input.value = '';
-  input.style.height = 'auto';
-  sendBtn.disabled = true;
-  isStreaming = false;
-}
-
-async function sendMessage() {
+function sendMessage() {
   const text = input.value.trim();
   if (!text || isStreaming) return;
 
-  welcome.style.display = 'none';
-  isStreaming = true;
-  sendBtn.disabled = true;
-  sendBtn.classList.add('loading');
-
-  // Add user message
   history.push({ role: 'user', content: text });
   appendMessage('user', text);
 
   input.value = '';
   input.style.height = 'auto';
 
-  // Create assistant bubble
+  streamResponse();
+}
+
+async function streamResponse() {
+  isStreaming = true;
+  sendBtn.disabled = true;
+  sendBtn.classList.add('loading');
+
   const { bubble, cursor } = createAssistantBubble();
   scrollToBottom();
 
@@ -71,7 +135,11 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({
+        messages: history,
+        role: selectedRole,
+        therapies: selectedTherapies,
+      }),
     });
 
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -103,7 +171,7 @@ async function sendMessage() {
           }
           if (parsed.text) {
             assistantText += parsed.text;
-            bubble.innerHTML = renderMarkdown(assistantText);
+            bubble.innerHTML = renderText(assistantText);
             bubble.appendChild(cursor);
             scrollToBottom();
           }
@@ -114,7 +182,7 @@ async function sendMessage() {
     cursor.remove();
     if (assistantText) {
       history.push({ role: 'assistant', content: assistantText });
-      bubble.innerHTML = renderMarkdown(assistantText);
+      bubble.innerHTML = renderText(assistantText);
     }
   } catch (err) {
     cursor.remove();
@@ -127,19 +195,15 @@ async function sendMessage() {
   scrollToBottom();
 }
 
+// ---------- Rendering ----------
 function appendMessage(role, content) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
 
-  const avatar = document.createElement('div');
-  avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : '◈';
-
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.innerHTML = role === 'user' ? escapeHtml(content) : renderMarkdown(content);
+  bubble.innerHTML = role === 'user' ? escapeHtml(content) : renderText(content);
 
-  div.appendChild(avatar);
   div.appendChild(bubble);
   messagesEl.appendChild(div);
   scrollToBottom();
@@ -150,10 +214,6 @@ function createAssistantBubble() {
   const div = document.createElement('div');
   div.className = 'message assistant';
 
-  const avatar = document.createElement('div');
-  avatar.className = 'avatar';
-  avatar.textContent = '◈';
-
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
 
@@ -161,7 +221,6 @@ function createAssistantBubble() {
   cursor.className = 'typing-cursor';
   bubble.appendChild(cursor);
 
-  div.appendChild(avatar);
   div.appendChild(bubble);
   messagesEl.appendChild(div);
   return { bubble, cursor };
@@ -180,50 +239,10 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Lightweight markdown renderer
-function renderMarkdown(text) {
+// Render character text: *action beats* become styled italics, newlines kept.
+function renderText(text) {
   let html = escapeHtml(text);
-
-  // Code blocks
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code>${code.trim()}</code></pre>`;
-  });
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Headers
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-  // Bold & italic
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-  // Blockquote
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-
-  // Unordered list
-  html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
-
-  // Ordered list
-  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-
-  // Horizontal rule
-  html = html.replace(/^---$/gm, '<hr>');
-
-  // Paragraphs (double newlines)
-  html = html
-    .split(/\n\n+/)
-    .map(block => {
-      if (/^<(h[123]|ul|ol|pre|blockquote|hr)/.test(block.trim())) return block;
-      const lines = block.replace(/\n/g, '<br>');
-      return `<p>${lines}</p>`;
-    })
-    .join('\n');
-
+  html = html.replace(/\*([^*]+)\*/g, '<span class="action">$1</span>');
+  html = html.replace(/\n/g, '<br>');
   return html;
 }
