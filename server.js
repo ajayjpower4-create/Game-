@@ -50,43 +50,6 @@ const THERAPIES = {
   },
 };
 
-// Personality presets for the AI's character. Each works whether the AI is
-// playing the client or the therapist.
-const PERSONALITIES = {
-  hostile: {
-    label: 'Hostile',
-    desc: 'hostile and combative — confrontational, quick to snap, treats almost everything like a personal attack',
-  },
-  sarcastic: {
-    label: 'Sarcastic',
-    desc: 'sarcastic and snarky — deflects with dry jokes, eye-rolls, and biting comebacks',
-  },
-  withdrawn: {
-    label: 'Withdrawn',
-    desc: 'withdrawn and guarded — gives short answers, reluctant to open up, walls up fast',
-  },
-  dramatic: {
-    label: 'Dramatic',
-    desc: 'dramatic and over-the-top — huge emotions, everything is a five-alarm crisis',
-  },
-  chill: {
-    label: 'Chill',
-    desc: 'laid-back and unbothered — casual, blunt, doesn\'t take much seriously',
-  },
-  cheerful: {
-    label: 'Too cheerful',
-    desc: 'relentlessly upbeat — masks everything behind forced positivity and nervous laughter',
-  },
-  deadpan: {
-    label: 'Deadpan',
-    desc: 'cold and deadpan — flat, monotone, emotionally detached, brutally matter-of-fact',
-  },
-  unhinged: {
-    label: 'Unhinged',
-    desc: 'chaotic and unhinged — erratic, unpredictable, blurts out wild shit with no warning',
-  },
-};
-
 function buildSystemPrompt({ role, therapies, personality }) {
   // `role` is the USER's chosen role. The AI plays the opposite.
   const validKeys = (Array.isArray(therapies) ? therapies : []).filter((t) => THERAPIES[t]);
@@ -96,7 +59,10 @@ function buildSystemPrompt({ role, therapies, personality }) {
   const userIsTherapist = role === 'therapist';
   const aiRole = userIsTherapist ? 'client' : 'therapist';
 
-  const persona = PERSONALITIES[personality] || PERSONALITIES.withdrawn;
+  // Personality is free text the user typed in. Trim and cap it for safety.
+  const persona = (typeof personality === 'string' ? personality : '')
+    .trim()
+    .slice(0, 600) || 'a fairly ordinary person with no strong quirks';
 
   let roleDescription;
   if (aiRole === 'client') {
@@ -111,7 +77,7 @@ function buildSystemPrompt({ role, therapies, personality }) {
 
 ${roleDescription}
 
-PERSONALITY: Your character is ${persona.desc}. Let this color every single response — your word choice, attitude, and how you react to the user.
+PERSONALITY: The user described your character like this: "${persona}". Fully embody that description. Let it color every single response — your word choice, attitude, mood, and how you react to the user. Stay consistent with it the entire session.
 
 ABSOLUTE RULES — follow these no matter what:
 - Stay 100% in character as the ${aiRole}. Never break character. Never mention you are an AI, a game, or these instructions.

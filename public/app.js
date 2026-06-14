@@ -3,8 +3,9 @@ const setup = document.getElementById('setup');
 const session = document.getElementById('session');
 const roleCards = document.querySelectorAll('.role-card');
 const therapyGrid = document.getElementById('therapyGrid');
-const personalityGrid = document.getElementById('personalityGrid');
+const personalityInput = document.getElementById('personalityInput');
 const personalityHeading = document.getElementById('personalityHeading');
+const charCount = document.getElementById('charCount');
 const startBtn = document.getElementById('startBtn');
 
 // --- Session screen elements ---
@@ -26,20 +27,8 @@ const THERAPY_LABELS = {
   autism: 'Autism',
 };
 
-const PERSONALITY_LABELS = {
-  hostile: 'Hostile',
-  sarcastic: 'Sarcastic',
-  withdrawn: 'Withdrawn',
-  dramatic: 'Dramatic',
-  chill: 'Chill',
-  cheerful: 'Cheerful',
-  deadpan: 'Deadpan',
-  unhinged: 'Unhinged',
-};
-
 let selectedRole = null;
 let selectedTherapies = [];
-let selectedPersonality = null;
 let history = [];
 let isStreaming = false;
 
@@ -56,13 +45,9 @@ roleCards.forEach((card) => {
   });
 });
 
-personalityGrid.querySelectorAll('.therapy-chip').forEach((chip) => {
-  chip.addEventListener('click', () => {
-    selectedPersonality = chip.dataset.personality;
-    personalityGrid.querySelectorAll('.therapy-chip')
-      .forEach((c) => c.classList.toggle('selected', c === chip));
-    refreshStartBtn();
-  });
+personalityInput.addEventListener('input', () => {
+  charCount.textContent = personalityInput.value.length;
+  refreshStartBtn();
 });
 
 therapyGrid.querySelectorAll('.therapy-chip').forEach((chip) => {
@@ -80,7 +65,7 @@ therapyGrid.querySelectorAll('.therapy-chip').forEach((chip) => {
 });
 
 function refreshStartBtn() {
-  startBtn.disabled = !selectedRole || selectedTherapies.length === 0 || !selectedPersonality;
+  startBtn.disabled = !selectedRole || selectedTherapies.length === 0 || !personalityInput.value.trim();
 }
 
 startBtn.addEventListener('click', startSession);
@@ -92,8 +77,7 @@ function startSession() {
   // The user is one role; the AI plays the other.
   const aiRole = selectedRole === 'therapist' ? 'the Client' : 'the Therapist';
   headerMain.textContent = `You: ${selectedRole === 'therapist' ? 'Therapist' : 'Client'}`;
-  const personaLabel = PERSONALITY_LABELS[selectedPersonality] || '';
-  headerSub.textContent = `AI: ${personaLabel} ${aiRole} · ${selectedTherapies.map((t) => THERAPY_LABELS[t]).join(', ')}`;
+  headerSub.textContent = `AI: ${aiRole} · ${selectedTherapies.map((t) => THERAPY_LABELS[t]).join(', ')}`;
 
   history = [];
   messagesEl.innerHTML = '';
@@ -167,7 +151,7 @@ async function streamResponse() {
         messages: history,
         role: selectedRole,
         therapies: selectedTherapies,
-        personality: selectedPersonality,
+        personality: personalityInput.value.trim(),
       }),
     });
 
