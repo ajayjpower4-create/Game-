@@ -24,6 +24,7 @@ const resumeMeta = document.getElementById('resumeMeta');
 const resumeBtn = document.getElementById('resumeBtn');
 const discardBtn = document.getElementById('discardBtn');
 
+const daySelect = document.getElementById('daySelect');
 const setupDropzone = document.getElementById('setupDropzone');
 const setupImageInput = document.getElementById('setupImageInput');
 const setupThumbs = document.getElementById('setupThumbs');
@@ -195,8 +196,19 @@ const JOB_FORMS = {
       { name: 'level', label: 'Level', type: 'select',
         options: ['Elementary', 'Middle School', 'High School', 'K-12', 'Private', 'Charter', 'College'],
         allowCustom: true },
+      { name: 'layout', label: 'School layout', type: 'select',
+        options: [
+          'Big public high school — long locker-lined halls, gym, cafeteria, portables out back',
+          'Small elementary school — bright halls, one playground, tight-knit',
+          'Old crumbling inner-city school — metal detectors, worn classrooms',
+          'Fancy private school — manicured campus, small classes, strict',
+          'Sprawling suburban campus — multiple buildings, courtyards',
+        ], allowCustom: true, customMultiline: true,
+        customPlaceholder: 'Describe your own school layout…' },
       { name: 'subject', label: 'Subject / area (optional)', type: 'text',
         placeholder: 'e.g. 10th grade Biology' },
+      { name: 'teachers', label: 'Your own teachers / staff (optional)', type: 'textarea',
+        placeholder: "e.g. Mr. Diaz the cool history teacher, Ms. Bell who hates everyone, Coach Ramos. (Leave blank to use the preset staff.)" },
       { name: 'students', label: 'Notable students or parents (optional)', type: 'textarea',
         placeholder: "e.g. Jayden the class clown, Mia who's always on her phone, and a parent, Mrs. Cole, who emails about everything" },
     ],
@@ -217,8 +229,15 @@ const JOB_FORMS = {
       { name: 'role', label: 'Your mod rank', type: 'select',
         options: ['Trial Mod / Helper', 'Moderator', 'Senior Mod', 'Admin', 'Owner', 'Bot Manager'],
         allowCustom: true },
-      { name: 'channels', label: 'Channels', type: 'textarea',
-        placeholder: 'e.g. #general, #memes, #voice-chat, #off-topic, #mod-log, #report-here' },
+      { name: 'channels', label: 'Channels', type: 'select',
+        options: [
+          '#general, #memes, #off-topic, #voice-chat, #mod-log, #report-here',
+          '#general, #gaming, #clips, #lfg, #announcements, #rules',
+          '#chat, #art, #music, #vent, #pets, #nsfw (locked)',
+          '#welcome, #general, #support, #suggestions, #staff-only',
+          '#shitposting, #drama, #general, #serious, #mod-chat',
+        ], allowCustom: true, customMultiline: true,
+        customPlaceholder: 'List your own channels (e.g. #general, #memes, …)' },
       { name: 'members', label: 'Notable members', type: 'textarea',
         placeholder: 'e.g. xX_Sniper_Xx who spams, a chill regular named bee, a troll on an alt, and another mod, Kayla' },
       { name: 'rules', label: 'Server rules (optional)', type: 'text',
@@ -390,6 +409,86 @@ const JOB_FORMS = {
           'Cramped back office — too many people, one printer',
           'Mostly remote — occasional days in a half-empty office',
         ], allowCustom: true, customPlaceholder: 'Describe your own office…' },
+    ],
+  },
+  police: {
+    title: 'Police Officer',
+    sub: 'Pick your department, rank, partner, car, uniform — and division if you want.',
+    fields: [
+      { name: 'department', label: 'Your police department', type: 'text',
+        placeholder: 'e.g. The 21st Precinct, Riverside PD' },
+      { name: 'role', label: 'Your rank', type: 'select',
+        options: ['Cadet / Recruit', 'Patrol Officer', 'Corporal', 'Detective', 'Sergeant', 'Lieutenant', 'Captain', 'Chief'],
+        allowCustom: true },
+      { name: 'partner', label: 'Your partner (leave blank to ride solo)', type: 'text',
+        placeholder: 'e.g. Officer Reyes — 15-year vet, gruff, secretly soft. Or leave blank.' },
+      { name: 'assignment', label: 'Your assignment (optional)', type: 'select',
+        options: ['Patrol', 'Traffic', 'Narcotics', 'Homicide', 'SWAT', 'K-9', 'Community policing'],
+        allowCustom: true, customPlaceholder: 'Describe your own assignment…' },
+      { name: 'division', label: 'Your division (optional — describe it)', type: 'textarea',
+        placeholder: 'e.g. Major Crimes Unit — a tight team chasing the city\'s worst. Leave blank for none.' },
+      { name: 'car', label: 'Your cop car', type: 'select',
+        options: ['Ford Crown Victoria cruiser', 'Dodge Charger pursuit', 'Chevy Tahoe SUV', 'Unmarked detective sedan', 'Police motorcycle'],
+        allowCustom: true, customPlaceholder: 'Describe your own vehicle…' },
+      { name: 'uniform', label: 'Your uniform', type: 'select',
+        options: ['Standard patrol blues', 'Tactical / SWAT gear', 'Detective plainclothes', 'Traffic / motor uniform', 'Dress uniform'],
+        allowCustom: true, customPlaceholder: 'Describe your own uniform…' },
+    ],
+  },
+  firefighter: {
+    title: 'Fire Department',
+    sub: 'Pick your department, rank, partner, rig, gear — and division if you want.',
+    fields: [
+      { name: 'department', label: 'Your fire department', type: 'text',
+        placeholder: 'e.g. Station 19, Oakwood Fire Dept' },
+      { name: 'role', label: 'Your rank', type: 'select',
+        options: ['Probie / Recruit', 'Firefighter', 'Engineer / Driver', 'Paramedic / EMT', 'Lieutenant', 'Captain', 'Battalion Chief'],
+        allowCustom: true },
+      { name: 'partner', label: 'Your partner (leave blank to go solo)', type: 'text',
+        placeholder: 'e.g. Firefighter Tank Boone — huge, calm, your backup on every call. Or leave blank.' },
+      { name: 'assignment', label: 'Your assignment (optional)', type: 'select',
+        options: ['Engine company', 'Ladder / truck company', 'Rescue squad', 'EMS / ambulance', 'Wildland', 'Hazmat'],
+        allowCustom: true, customPlaceholder: 'Describe your own assignment…' },
+      { name: 'division', label: 'Your division (optional — describe it)', type: 'textarea',
+        placeholder: 'e.g. Heavy Rescue — the crew called for the worst jobs. Leave blank for none.' },
+      { name: 'car', label: 'Your engine / vehicle', type: 'select',
+        options: ['Fire engine (pumper)', 'Ladder truck', 'Rescue squad truck', 'Ambulance', "Chief's command SUV", 'Brush truck'],
+        allowCustom: true, customPlaceholder: 'Describe your own rig…' },
+      { name: 'uniform', label: 'Your gear', type: 'select',
+        options: ['Turnout / bunker gear', 'Station uniform', 'Dress uniform', 'EMS uniform', 'Wildland gear'],
+        allowCustom: true, customPlaceholder: 'Describe your own gear…' },
+    ],
+  },
+  apartment: {
+    title: 'Apartment Complex Worker',
+    sub: 'Pick your complex, its layout, your leasing office, rank, company, and coworkers.',
+    fields: [
+      { name: 'complex', label: 'Your apartment complex', type: 'text',
+        placeholder: 'e.g. The Willows at Eastgate' },
+      { name: 'layout', label: 'Layout of the complex', type: 'select',
+        options: [
+          'Sprawling garden-style — multiple low-rise buildings, pool, parking lots',
+          'Single high-rise tower — elevators, lobby, rooftop deck',
+          'Older walk-up buildings — no elevator, tight stairwells, dated',
+          'Luxury mid-rise — gym, clubhouse, gated parking',
+          'Run-down complex — broken gates, maintenance backlog, sketchy at night',
+        ], allowCustom: true, customMultiline: true,
+        customPlaceholder: 'Describe your own complex layout…' },
+      { name: 'officeLayout', label: 'Layout of the leasing office', type: 'select',
+        options: [
+          'Small front office — two desks, a model unit, key box on the wall',
+          'Big modern leasing center — lounge, coffee bar, glass offices',
+          'Cramped converted-apartment office — paperwork everywhere',
+          'Shared management trailer — temporary, messy, busy',
+        ], allowCustom: true, customMultiline: true,
+        customPlaceholder: 'Describe your own leasing office…' },
+      { name: 'role', label: 'Your rank', type: 'select',
+        options: ['Leasing Agent', 'Assistant Manager', 'Property Manager', 'Maintenance Tech', 'Groundskeeper', 'Front Desk / Concierge', 'Regional Manager'],
+        allowCustom: true },
+      { name: 'company', label: 'Management company', type: 'text',
+        placeholder: 'e.g. Greystar, Hollis Property Group' },
+      { name: 'staff', label: 'Who works with you', type: 'textarea',
+        placeholder: "e.g. Manager Sharon who's always stressed, maintenance guy Big Lou, leasing agent Tasha" },
     ],
   },
 };
@@ -611,6 +710,7 @@ function collectConfig() {
 
 function startShift() {
   currentConfig = collectConfig();
+  if (daySelect && daySelect.value) currentConfig.day = daySelect.value;
   if (setupImages.length) currentConfig._hasImages = true;
   pendingImages = [];
   renderPendingThumbs();
@@ -618,10 +718,10 @@ function startShift() {
   messagesEl.innerHTML = '';
   showScreen('chat');
 
-  // Kick off the scene with a hidden opening action, attaching any setup photos.
+  // The day starts at home — the alarm goes off. Server handles the wake-up opener.
   const openerText = setupImages.length
-    ? '*clocks in and starts the shift* (Photos of my real workplace are attached — use them for the layout.)'
-    : '*clocks in and starts the shift*';
+    ? '*my alarm clock goes off — start of the day* (Photos of my real workplace are attached — use them for the layout.)'
+    : '*my alarm clock goes off — start of the day*';
   history.push({ role: 'user', content: buildContent(openerText, setupImages) });
   setupImages = [];
   renderSetupThumbs();
@@ -713,7 +813,7 @@ function resumeShift() {
   // Re-render the conversation (skip the hidden opener action).
   history.forEach((m, i) => {
     const { text, images } = extractParts(m.content);
-    if (i === 0 && m.role === 'user' && text.startsWith('*clocks in')) return;
+    if (i === 0 && m.role === 'user' && (text.startsWith('*clocks in') || text.startsWith('*my alarm'))) return;
     appendMessage(m.role, text, images);
   });
   showScreen('chat');

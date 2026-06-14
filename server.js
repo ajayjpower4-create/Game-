@@ -76,6 +76,18 @@ const JOBS = {
     title: 'Office Worker',
     flavor: `corporate office life. Cubicles, meetings that could've been emails, a passive-aggressive boss, office politics, the break room, deadlines, IT tickets, spreadsheets, water-cooler gossip, and the slow crawl of the 9-to-5.`,
   },
+  police: {
+    title: 'Police Officer',
+    flavor: `a cop's shift. Roll call, the radio crackling with dispatch, patrol, traffic stops, domestic calls, suspects, victims, witnesses, the public, internal politics, paperwork, and the tension and boredom of the job in equal measure.`,
+  },
+  firefighter: {
+    title: 'Firefighter',
+    flavor: `life at a fire station. The bay with the rigs, the kitchen and bunks, gear checks, the tones dropping for a call, fires, car wrecks, medical runs, the crew's brotherhood and busting, and the rush from a dead-quiet station to a working fire.`,
+  },
+  apartment: {
+    title: 'Apartment Complex Worker',
+    flavor: `working at an apartment complex. The leasing office, tours and applications, rent and late fees, maintenance requests, noise complaints, evictions, the pool and grounds, tenants with every kind of problem, and a management company breathing down your neck.`,
+  },
 };
 
 function buildSystemPrompt(jobKey, cfg = {}) {
@@ -122,18 +134,23 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     if (cfg.name) lines.push(`- The school is called: **${cfg.name}**`);
     if (cfg.role) lines.push(`- The player's role/rank: **${cfg.role}**`);
     if (cfg.level) lines.push(`- Level: ${cfg.level}`);
+    if (cfg.layout) lines.push(`- The school's layout: ${cfg.layout}`);
     if (cfg.subject) lines.push(`- Subject/area they cover: ${cfg.subject}`);
     if (cfg.students) lines.push(`- Notable students/parents: ${cfg.students}`);
-    // Always give the school a ready-made staff so there are named coworkers.
-    lines.push(`- PRESET STAFF already at the school (use these as recurring named characters, and invent students/parents as needed):`);
-    lines.push(`  • Principal Gloria Hargrove — sharp, political, always "monitoring the situation"`);
-    lines.push(`  • Vice Principal Doug Pruitt — handles discipline, tired, runs on bad coffee`);
-    lines.push(`  • Ms. Rivera — veteran teacher next door, no-nonsense, secretly kind`);
-    lines.push(`  • Coach Tank Delgado — loud gym teacher, calls everyone "champ"`);
-    lines.push(`  • Mr. Okafor — young idealistic teacher, in over his head`);
-    lines.push(`  • Brenda at the front office — knows everything, gatekeeps the copier`);
-    lines.push(`  • Custodian Earl — seen it all, talks in riddles`);
-    lines.push(`  • Nurse Patel — dry humor, fields fake stomachaches all day`);
+    if (cfg.teachers) {
+      lines.push(`- The player picked their OWN staff/teachers — use these as the main named coworkers: ${cfg.teachers}`);
+    } else {
+      // No custom staff given — fall back to a ready-made roster.
+      lines.push(`- PRESET STAFF already at the school (use these as recurring named characters, and invent students/parents as needed):`);
+      lines.push(`  • Principal Gloria Hargrove — sharp, political, always "monitoring the situation"`);
+      lines.push(`  • Vice Principal Doug Pruitt — handles discipline, tired, runs on bad coffee`);
+      lines.push(`  • Ms. Rivera — veteran teacher next door, no-nonsense, secretly kind`);
+      lines.push(`  • Coach Tank Delgado — loud gym teacher, calls everyone "champ"`);
+      lines.push(`  • Mr. Okafor — young idealistic teacher, in over his head`);
+      lines.push(`  • Brenda at the front office — knows everything, gatekeeps the copier`);
+      lines.push(`  • Custodian Earl — seen it all, talks in riddles`);
+      lines.push(`  • Nurse Patel — dry humor, fields fake stomachaches all day`);
+    }
   } else if (jobKey === 'discord') {
     if (cfg.server) lines.push(`- The server: ${cfg.server}`);
     if (cfg.role) lines.push(`- The player's mod rank: **${cfg.role}**`);
@@ -202,7 +219,34 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     lines.push(`  • Kyle in the next cubicle — loud talker, microwaves fish, overshares`);
     lines.push(`  • Priya, the competent one everyone dumps work on`);
     lines.push(`  • Old Hank in IT — sighs a lot, "did you try turning it off and on"`);
+  } else if (jobKey === 'police') {
+    if (cfg.department) lines.push(`- The player's department: **${cfg.department}**`);
+    if (cfg.role) lines.push(`- The player's rank: **${cfg.role}**`);
+    if (cfg.partner) lines.push(`- The player's partner: ${cfg.partner}`);
+    else lines.push(`- The player rides solo (no partner).`);
+    if (cfg.assignment) lines.push(`- Assignment: ${cfg.assignment}`);
+    if (cfg.division) lines.push(`- Division: ${cfg.division}`);
+    if (cfg.car) lines.push(`- The player's car: ${cfg.car}`);
+    if (cfg.uniform) lines.push(`- The player's uniform: ${cfg.uniform}`);
+  } else if (jobKey === 'firefighter') {
+    if (cfg.department) lines.push(`- The player's department/station: **${cfg.department}**`);
+    if (cfg.role) lines.push(`- The player's rank: **${cfg.role}**`);
+    if (cfg.partner) lines.push(`- The player's partner: ${cfg.partner}`);
+    else lines.push(`- The player has no fixed partner.`);
+    if (cfg.assignment) lines.push(`- Assignment: ${cfg.assignment}`);
+    if (cfg.division) lines.push(`- Division: ${cfg.division}`);
+    if (cfg.car) lines.push(`- The player's rig/vehicle: ${cfg.car}`);
+    if (cfg.uniform) lines.push(`- The player's gear: ${cfg.uniform}`);
+    lines.push(`- PRESET CREW at the station (recurring named characters): Captain Walsh (calm, decades on the job), Engineer "Doc" Ramirez (drives the rig, dry humor), Probie Lee (eager rookie everyone ribs), and Cap's second Sully (loud, cooks for the house).`);
+  } else if (jobKey === 'apartment') {
+    if (cfg.complex) lines.push(`- The apartment complex: **${cfg.complex}**`);
+    if (cfg.layout) lines.push(`- Layout of the complex: ${cfg.layout}`);
+    if (cfg.officeLayout) lines.push(`- Layout of the leasing office: ${cfg.officeLayout}`);
+    if (cfg.role) lines.push(`- The player's rank: **${cfg.role}**`);
+    if (cfg.company) lines.push(`- The management company: ${cfg.company}`);
+    if (cfg.staff) lines.push(`- Coworkers: ${cfg.staff}`);
   }
+  if (cfg.day) lines.push(`- The day of the week: **${cfg.day}**`);
   if (cfg.notes) lines.push(`- Extra details from the player: ${cfg.notes}`);
   if (cfg._hasImages) lines.push(`- The player has attached PHOTO(S) of their real workplace. Treat those images as the ground truth for the layout, equipment, and surroundings — build the world to match what's in the pictures.`);
 
@@ -229,10 +273,15 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   lines.push(`  WRONG (narration — never do this): "The warehouse is freezing and loud. Forklifts beep in the distance as you swipe your badge. Your supervisor notices you and walks over."`);
   lines.push(`  RIGHT (characters only): Sal: *looks up from his clipboard, smirks* "Well look who decided to show up." *waves you over* "C'mon, you're on returns with Mia today."  /  Mia: "Don't listen to him, he's been here ten minutes himself."`);
   lines.push('');
+  lines.push('');
+  lines.push(`## WHO CONTROLS WHAT (this is the most common mistake — get it right)`);
+  lines.push(`The PLAYER controls the world and the plot. THEY decide what happens, what they do, and — critically — WHO ENTERS THE SCENE. The player narrates the customer walking into the store, the passenger getting in the car or onto the bus, the Uber app pinging, the next call coming in, the time passing. That is THEIR job, not yours.`);
+  lines.push(`You do NOT introduce new people, customers, passengers, events, or scene changes on your own — doing that is narration and it's exactly what you must stop doing. You are reactive: you only voice the characters who are ALREADY in the scene or who the PLAYER brings in. If the player says "a customer walks in", THEN you play that customer. If the player hasn't brought anyone in and isn't talking to anyone, it's fine to give a tiny reaction from an existing character, or even output almost nothing and wait — do NOT manufacture a new arrival or event to fill the space.`);
+  lines.push(`Established characters (a partner, a coworker, the boss already present) can have their own personality and stir things up through their dialogue and actions — but they cannot teleport in new people or narrate the world.`);
+  lines.push('');
   lines.push(`- Give every character a name and a distinct personality, voice, and attitude. They have their own agendas — they're not props.`);
-  lines.push(`- React to whatever the player narrates. If nothing would naturally happen, have a character give a small, natural reaction or line — never fill the gap with narration.`);
+  lines.push(`- React to whatever the player narrates. If nothing would naturally happen, have an existing character give a small, natural reaction or line — never fill the gap with narration or a new arrival.`);
   lines.push(`- Don't speak or act for the player's character, and don't resolve their actions for them. Let consequences land through how the characters respond.`);
-  lines.push(`- Characters drive drama: a coworker starts beef, a customer makes a scene, the boss comes down on someone. Keep it alive through the people.`);
   lines.push(`- Keep it tight — just the relevant characters' lines/actions. No walls of text.`);
   lines.push('');
   lines.push(`## TONE — AUTHENTIC & MATURE (profanity ON)`);
@@ -265,22 +314,29 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     lines.push('');
     lines.push(`## FLYING THE DAY`);
     lines.push(`Play the co-pilot, the cabin crew, gate agents, ATC, dispatch, and passengers — everyone but the player. Keep cockpit chatter and radio calls reasonably authentic (callsigns, readbacks, checklists) without drowning the scene in jargon. The player flies/handles their role; you bring the crew and the airspace to life and let things go right or wrong (weather, delays, a sick passenger, a tight turnaround).`);
+    const prole = (cfg.role || '').toLowerCase();
+    if (prole.includes('attendant') || prole.includes('engineer')) {
+      lines.push(`TODAY'S ARC: the player is cabin/crew, not flying. After they wake and head in, the day runs through the crew briefing, boarding, and the flight — driven by the player.`);
+    } else if (prole.includes('co-pilot') || prole.includes('first officer') || prole.includes('copilot')) {
+      lines.push(`TODAY'S ARC: the player is the CO-PILOT, so it's reversed — after the player wakes in their layover hotel, the CAPTAIN comes to pick THEM up. Let the captain show up once the player is ready to head out; don't rush it.`);
+    } else {
+      lines.push(`TODAY'S ARC: the player is the CAPTAIN. After they wake in their hotel, the day's first task is picking up their co-pilot (${cfg.copilot || 'their First Officer'}) from the co-pilot's hotel, then driving to the airport. Let the co-pilot appear when the player goes to get them — driven by the player.`);
+    }
+  }
+  if (jobKey === 'police' || jobKey === 'firefighter') {
+    lines.push('');
+    lines.push(`## DISPATCH & CALLS`);
+    lines.push(`You voice dispatch/the radio, the partner, fellow ${jobKey === 'police' ? 'officers, suspects, victims, and the public' : 'firefighters, EMS patients, and the public'} — as characters. Follow the WHO CONTROLS WHAT rule: the PLAYER decides when they take action, grab the radio, or roll on a call; you don't manufacture calls or emergencies as narration. Once the player engages a call, voice whoever's on the radio or on scene. Radio traffic is a character's line (e.g. \`Dispatch: "Unit 12, we've got a 10-31 in progress at..."\`), not narration.`);
   }
 
   lines.push('');
+  lines.push(`## OPENING THE DAY (a day-in-the-life sim)`);
+  const dayStr = cfg.day || 'this morning';
   if (jobKey === 'discord') {
-    lines.push(`To open: the player just came online as a mod. Have a few members already mid-conversation in the chat (in \`Username: message\` form) — some normal, maybe one starting to push the rules — so the player walks into a live channel. Then wait for the player to type what they post.`);
-  } else if (jobKey === 'pilot') {
-    const role = (cfg.role || '').toLowerCase();
-    if (role.includes('attendant') || role.includes('engineer')) {
-      lines.push(`To open: the player is cabin/crew, not flying the plane. Start their day in character for that role — e.g. a flight attendant getting picked apart by the lead FA at the crew briefing, or boarding chaos beginning. Open with ONLY a character's dialogue and small actions (the lead FA, a gate agent, an early passenger). No narration.`);
-    } else if (role.includes('co-pilot') || role.includes('first officer') || role.includes('copilot')) {
-      lines.push(`To open: the player is the CO-PILOT, so it's reversed — the CAPTAIN is picking THEM up. The day starts with the player getting picked up from their layover hotel by the captain. Open with ONLY the captain's dialogue and a small action as they meet the player (e.g. honking outside the hotel, or greeting them in the lobby). No narration — just the captain's line.`);
-    } else {
-      lines.push(`To open: the player is the CAPTAIN. The day starts with the player picking up their co-pilot (${cfg.copilot || 'their First Officer'}) from the co-pilot's hotel, then heading to the airport. Open with ONLY the co-pilot's dialogue and a small action as the player arrives to get them (e.g. the FO climbing into the car, coffee in hand). No narration — just the co-pilot's line. Let the player drive the trip to the airport from there.`);
-    }
+    lines.push(`To open: the player just came online as a mod (it's ${dayStr}). Have a few members already mid-conversation in the chat (in \`Username: message\` form) — some normal, maybe one starting to push the rules — so the player walks into a live channel. Then wait for the player to type what they post.`);
   } else {
-    lines.push(`To open: the player has just clocked in / arrived. Open with ONLY one or two named characters (a coworker, the boss, a crewmate, a waiting passenger) greeting or reacting to them — their dialogue and maybe a small *action*. Do NOT write any scene-setting, environment description, or narration of any kind. Start straight on a character's name and their line. Then wait for the player.`);
+    lines.push(`The sim begins AT HOME with the player waking up — it's ${dayStr} morning and their alarm is going off. The VERY FIRST thing in your reply is the alarm itself, written as a tiny cue. This single short cue is the ONLY non-character text you are ever allowed to write — e.g. \`*BZZZT— BZZZT— ${dayStr}, 6:00 AM*\` or the phone screen buzzing on the nightstand. Keep it to one short line.`);
+    lines.push(`Then STOP. Do not get the player out of bed, do not describe the room, do not skip ahead to work, do not introduce anyone. Let the player narrate waking up and starting their day. From the second message on, you are strictly character-only — and the player drives where the day goes (getting ready, the commute, arriving, etc.). Only voice people once the player's narration brings them into the scene (a spouse/roommate, then later coworkers, the partner, passengers, etc.).`);
   }
 
   return lines.join('\n');

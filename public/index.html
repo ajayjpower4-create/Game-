@@ -145,6 +145,21 @@
           <span class="job-name">Office Worker</span>
           <span class="job-desc">Pick your office, rank, and what kind of work you grind out.</span>
         </button>
+        <button class="job-card" data-job="police">
+          <span class="job-emoji">🚓</span>
+          <span class="job-name">Police Officer</span>
+          <span class="job-desc">Pick your department, rank, partner, division, car &amp; uniform.</span>
+        </button>
+        <button class="job-card" data-job="firefighter">
+          <span class="job-emoji">🚒</span>
+          <span class="job-name">Fire Department</span>
+          <span class="job-desc">Pick your department, rank, partner, division, engine &amp; gear.</span>
+        </button>
+        <button class="job-card" data-job="apartment">
+          <span class="job-emoji">🏬</span>
+          <span class="job-name">Apartment Complex</span>
+          <span class="job-desc">Pick your complex, layouts, rank, management company &amp; coworkers.</span>
+        </button>
       </div>
     </main>
 
@@ -154,6 +169,20 @@
         <button class="back-btn" id="backBtn">← Pick a different job</button>
         <h2 id="setupTitle">Set up your shift</h2>
         <p class="setup-sub" id="setupSub"></p>
+
+        <div class="field">
+          <label for="daySelect">What day is it?</label>
+          <select id="daySelect">
+            <option value="Monday">Monday</option>
+            <option value="Tuesday">Tuesday</option>
+            <option value="Wednesday">Wednesday</option>
+            <option value="Thursday">Thursday</option>
+            <option value="Friday" selected>Friday</option>
+            <option value="Saturday">Saturday</option>
+            <option value="Sunday">Sunday</option>
+          </select>
+        </div>
+
         <form id="setupForm" class="setup-form"></form>
 
         <div class="field img-field">
