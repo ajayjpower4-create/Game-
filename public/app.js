@@ -117,11 +117,12 @@ function renderFriendPills() {
 // ===================================================================
 function startNewGame() {
   const player = $('playerName').value.trim() || 'You';
+  const custom = $('customDrama').value.trim();
   game = {
     player,
     grade: menu.grade,
-    dramaId: menu.drama,
-    drama: DRAMA_TEXT[menu.drama] || 'general high school drama',
+    dramaId: custom ? 'custom' : menu.drama,
+    drama: custom || DRAMA_TEXT[menu.drama] || 'general high school drama',
     friends: menu.friends.slice(),
     transport: menu.transport,
     day: 1,
