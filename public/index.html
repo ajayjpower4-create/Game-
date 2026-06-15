@@ -2,52 +2,81 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>High School Drama Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
-        </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+  <!-- ===================== MAIN MENU ===================== -->
+  <div class="screen menu-screen" id="menuScreen">
+    <div class="menu-inner">
+      <div class="menu-title">
+        <h1>HIGH SCHOOL<br><span>DRAMA</span><br>SIMULATOR</h1>
+        <p class="tagline">your school. your friends. your mess.</p>
       </div>
+
+      <div class="menu-card">
+        <label class="menu-label">your name</label>
+        <input type="text" id="playerName" class="menu-input" placeholder="who are you?" maxlength="24" value="You">
+
+        <label class="menu-label">your grade</label>
+        <div class="chip-row" id="gradeRow">
+          <button class="chip" data-grade="9th">9th</button>
+          <button class="chip" data-grade="10th">10th</button>
+          <button class="chip active" data-grade="11th">11th</button>
+          <button class="chip" data-grade="12th">12th</button>
+        </div>
+
+        <label class="menu-label">pick your drama</label>
+        <div class="drama-grid" id="dramaGrid"></div>
+
+        <label class="menu-label">build your friend group</label>
+        <div class="friend-builder">
+          <input type="text" id="friendName" class="menu-input small" placeholder="friend's name" maxlength="24">
+          <input type="text" id="friendNote" class="menu-input small" placeholder="their deal (optional)" maxlength="40">
+          <button class="add-friend-btn" id="addFriendBtn">＋</button>
+        </div>
+        <div class="friend-list" id="friendList"></div>
+
+        <label class="menu-label">how do you get to school?</label>
+        <div class="chip-row" id="transportRow">
+          <button class="chip active" data-transport="walk">🚶 walk</button>
+          <button class="chip" data-transport="drive">🚗 drive</button>
+          <button class="chip" data-transport="bus">🚌 bus</button>
+        </div>
+      </div>
+
+      <button class="start-btn" id="startBtn">START THE DAY</button>
+      <button class="load-btn" id="loadBtn">load a saved game</button>
+    </div>
+  </div>
+
+  <!-- ===================== GAME ===================== -->
+  <div class="screen game-screen hidden" id="gameScreen">
+    <header class="game-header">
+      <button class="hdr-btn" id="menuBackBtn" title="Main menu">☰</button>
+      <div class="hdr-status">
+        <span class="hdr-day" id="hdrDay">Day 1</span>
+        <span class="hdr-time" id="hdrTime">morning · home</span>
+      </div>
+      <button class="hdr-btn" id="saveBtn" title="Save game">💾</button>
+      <button class="hdr-btn phone-toggle" id="phoneToggle" title="Phone">📱</button>
     </header>
 
     <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
-        </div>
-      </div>
       <div class="messages" id="messages"></div>
     </main>
 
+    <div class="quick-cmds" id="quickCmds">
+      <button class="qc" data-cmd="/phone">📱 /phone</button>
+      <button class="qc" data-cmd="/sleep">😴 /sleep</button>
+      <button class="qc" data-cmd="/next day">🌅 /next day</button>
+      <button class="qc" data-cmd="/save">💾 /save</button>
+    </div>
+
     <footer class="input-area">
       <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
+        <textarea id="messageInput" class="message-input" placeholder="say or do something…" rows="1" maxlength="4000"></textarea>
         <button class="send-btn" id="sendBtn" disabled>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="19" x2="12" y2="5"></line>
@@ -55,8 +84,70 @@
           </svg>
         </button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
     </footer>
+
+    <!-- ===================== PHONE PANEL ===================== -->
+    <div class="phone-overlay hidden" id="phoneOverlay">
+      <div class="phone" id="phone">
+        <div class="phone-statusbar">
+          <span id="phoneClock">8:02</span>
+          <span class="phone-notch"></span>
+          <span class="phone-sig">📶 🔋</span>
+        </div>
+
+        <!-- Home screen -->
+        <div class="phone-view phone-home" id="phoneHome">
+          <div class="phone-greeting" id="phoneGreeting">Day 1</div>
+          <div class="app-grid" id="appGrid"></div>
+        </div>
+
+        <!-- App list view (chats) -->
+        <div class="phone-view phone-applist hidden" id="phoneAppList">
+          <div class="app-bar">
+            <button class="app-back" data-target="home">‹</button>
+            <span class="app-title" id="appListTitle">App</span>
+            <button class="app-new" id="newChatBtn" title="New chat">＋</button>
+          </div>
+          <div class="chat-list" id="chatList"></div>
+        </div>
+
+        <!-- Chat thread view -->
+        <div class="phone-view phone-thread hidden" id="phoneThread">
+          <div class="app-bar">
+            <button class="app-back" id="threadBackBtn">‹</button>
+            <span class="app-title" id="threadTitle">Chat</span>
+            <span style="width:32px"></span>
+          </div>
+          <div class="thread-msgs" id="threadMsgs"></div>
+          <div class="thread-input">
+            <input type="text" id="phoneInput" class="phone-text-input" placeholder="message…">
+            <button class="phone-send" id="phoneSendBtn">➤</button>
+          </div>
+        </div>
+
+        <!-- Generic app view (camera/notes/etc) -->
+        <div class="phone-view phone-generic hidden" id="phoneGeneric">
+          <div class="app-bar">
+            <button class="app-back" data-target="home">‹</button>
+            <span class="app-title" id="genericTitle">App</span>
+            <span style="width:32px"></span>
+          </div>
+          <div class="generic-body" id="genericBody"></div>
+        </div>
+
+        <div class="phone-homebar" id="phoneHomeBar"></div>
+      </div>
+      <button class="phone-close" id="phoneCloseBtn">✕ put phone away</button>
+    </div>
+  </div>
+
+  <!-- ===================== SAVE/LOAD MODAL ===================== -->
+  <div class="modal-overlay hidden" id="modalOverlay">
+    <div class="modal">
+      <h2 id="modalTitle">Saved games</h2>
+      <div class="slot-list" id="slotList"></div>
+      <button class="modal-close" id="modalCloseBtn">close</button>
+    </div>
   </div>
 
   <script src="app.js"></script>
