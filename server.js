@@ -156,7 +156,11 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// Health check + catch-all so any path serves the game (no stray "Not Found").
+app.get('/healthz', (_req, res) => res.send('ok'));
+app.get('*', (_req, res) => res.sendFile(join(__dirname, 'public', 'index.html')));
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`High School Drama Simulator running at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`High School Drama Simulator running on port ${PORT}`);
 });

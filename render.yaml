@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: high-school-drama-simulator
+    runtime: node
+    plan: free
+    branch: claude/high-school-drama-simulator-2c9v3a
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: NODE_VERSION
+        value: "20"
