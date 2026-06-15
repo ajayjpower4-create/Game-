@@ -88,6 +88,18 @@ const JOBS = {
     title: 'Apartment Complex Worker',
     flavor: `working at an apartment complex. The leasing office, tours and applications, rent and late fees, maintenance requests, noise complaints, evictions, the pool and grounds, tenants with every kind of problem, and a management company breathing down your neck.`,
   },
+  debate: {
+    title: 'Debate',
+    flavor: `a live debate. The podium and the lights, a moderator, judges, an audience reacting, a timer, an opponent firing back, rebuttals, gotcha moments, and the pressure of arguing your case in real time.`,
+  },
+  doctor: {
+    title: 'Doctor',
+    flavor: `a doctor's day. Exam rooms, the ER or clinic, charts and vitals, nurses, anxious patients and families, tough diagnoses, paperwork, the attending or office manager, and the weight of people's health in your hands.`,
+  },
+  government: {
+    title: 'Government Worker',
+    flavor: `working in government — anywhere from the Oval Office to a DMV counter. Staff, constituents, the press, bureaucracy, red tape, politics, deals, scandals, and the gap between what people want and what the system allows.`,
+  },
 };
 
 function buildSystemPrompt(jobKey, cfg = {}) {
@@ -199,6 +211,7 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     if (cfg.role) lines.push(`- The player's rank: **${cfg.role}**`);
     if (cfg.copilot) lines.push(`- The player's co-pilot: ${cfg.copilot}`);
     if (cfg.plane) lines.push(`- The plane: ${cfg.plane}`);
+    if (cfg.route) lines.push(`- Today's route / flight: ${cfg.route}`);
     // Preset flight crew (everyone except the co-pilot, which the player chose).
     lines.push(`- PRESET FLIGHT CREW (auto-generated recurring characters — use them as needed):`);
     lines.push(`  • Lead Flight Attendant Renée — runs the cabin, unflappable, seen everything`);
@@ -245,6 +258,23 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     if (cfg.role) lines.push(`- The player's rank: **${cfg.role}**`);
     if (cfg.company) lines.push(`- The management company: ${cfg.company}`);
     if (cfg.staff) lines.push(`- Coworkers: ${cfg.staff}`);
+  } else if (jobKey === 'debate') {
+    if (cfg.type) lines.push(`- Type of debate: **${cfg.type}**`);
+    if (cfg.opponent) lines.push(`- The player's opponent: ${cfg.opponent}`);
+    if (cfg.location) lines.push(`- Where it's happening: ${cfg.location}`);
+    if (cfg.topic) lines.push(`- The topic / resolution: ${cfg.topic}`);
+  } else if (jobKey === 'doctor') {
+    if (cfg.place) lines.push(`- The hospital / practice: **${cfg.place}**`);
+    if (cfg.type) lines.push(`- The player is a: **${cfg.type}**`);
+    if (cfg.coworkers) lines.push(`- Coworkers: ${cfg.coworkers}`);
+    else lines.push(`- PRESET COWORKERS: Nurse Gabby (runs the floor, dry humor), Dr. Pell (cocky colleague), receptionist Mona (gatekeeps the schedule), and a tired resident named Owens.`);
+  } else if (jobKey === 'government') {
+    if (cfg.role) lines.push(`- The player's role: **${cfg.role}**`);
+    if (cfg.agency) lines.push(`- Their office / department: ${cfg.agency}`);
+    if (cfg.coworkers) lines.push(`- Who they work with: ${cfg.coworkers}`);
+    if (/president/i.test(cfg.role || '')) {
+      lines.push(`- The player is the PRESIDENT. PRESET STAFF (recurring named characters): Chief of Staff Ramirez (steady, manages the chaos), Press Secretary Dana (spin-ready, frazzled), a Secret Service lead named Agent Cole, a scheming VP, and military/cabinet advisors as needed.`);
+    }
   }
   if (cfg.day) lines.push(`- The day of the week: **${cfg.day}**`);
   if (cfg.notes) lines.push(`- Extra details from the player: ${cfg.notes}`);
@@ -301,6 +331,11 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     lines.push(`## FICTION FRAME`);
     lines.push(`This is a cinematic, fictional crime story — a heist movie / GTA-style roleplay. Play it for drama, tension, and character. Keep it at a movie level of detail; do not output real-world step-by-step instructions for committing actual crimes, building weapons, or anything similarly operational. Stay in the story as the crew, rivals, cops, and bystanders.`);
   }
+  if (jobKey === 'debate') {
+    lines.push('');
+    lines.push(`## THE DEBATE`);
+    lines.push(`You play the OPPONENT (firing back with real counterarguments), the moderator (asking questions, calling time), the judges, and the audience (reactions, murmurs, applause). The PLAYER makes their own arguments — never argue for them or put words in their mouth. Voice the opponent as a sharp, distinct character who actually rebuts the player's points; let the moderator run the structure and the crowd react. Keep each side's turns punchy.`);
+  }
   if (jobKey === 'taxi') {
     lines.push('');
     lines.push(`## DRIVING`);
@@ -332,10 +367,12 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   }
 
   lines.push('');
-  lines.push(`## OPENING THE DAY (a day-in-the-life sim)`);
+  lines.push(`## OPENING THE DAY`);
   const dayStr = cfg.day || 'this morning';
   if (jobKey === 'discord') {
     lines.push(`To open: the player just came online as a mod (it's ${dayStr}). Have a few members already mid-conversation in the chat (in \`Username: message\` form) — some normal, maybe one starting to push the rules — so the player walks into a live channel. Then wait for the player to type what they post.`);
+  } else if (cfg.start === 'arrive') {
+    lines.push(`The player has chosen to SKIP the morning — no alarm, no getting ready, no commute. The sim begins with them already ARRIVED at work (it's ${dayStr}), ready to start. Open with ONLY one or two named characters who are already there (a coworker, the boss, the partner, a waiting patient/passenger) greeting or reacting to them — their dialogue and maybe a small *action*. Do NOT write any scene-setting or narration. Start straight on a character's name and their line, then wait for the player.`);
   } else {
     lines.push(`The sim begins AT HOME with the player waking up — it's ${dayStr} morning and their alarm is going off. The VERY FIRST thing in your reply is the alarm itself, written as a tiny cue. This single short cue is the ONLY non-character text you are ever allowed to write — e.g. \`*BZZZT— BZZZT— ${dayStr}, 6:00 AM*\` or the phone screen buzzing on the nightstand. Keep it to one short line.`);
     lines.push(`Then STOP. Do not get the player out of bed, do not describe the room, do not skip ahead to work, do not introduce anyone. Let the player narrate waking up and starting their day. From the second message on, you are strictly character-only — and the player drives where the day goes (getting ready, the commute, arriving, etc.). Only voice people once the player's narration brings them into the scene (a spouse/roommate, then later coworkers, the partner, passengers, etc.).`);

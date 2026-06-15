@@ -25,6 +25,7 @@ const resumeBtn = document.getElementById('resumeBtn');
 const discardBtn = document.getElementById('discardBtn');
 
 const daySelect = document.getElementById('daySelect');
+const startSelect = document.getElementById('startSelect');
 const setupDropzone = document.getElementById('setupDropzone');
 const setupImageInput = document.getElementById('setupImageInput');
 const setupThumbs = document.getElementById('setupThumbs');
@@ -387,6 +388,15 @@ const JOB_FORMS = {
       { name: 'plane', label: 'Your plane', type: 'select',
         options: ['Boeing 737', 'Airbus A320', 'Boeing 777 (long-haul)', 'Regional jet (CRJ)', 'Private jet (Gulfstream)'],
         allowCustom: true },
+      { name: 'route', label: 'Your route', type: 'select',
+        options: [
+          'LAX → Seattle (SEA)',
+          'BWI → Fort Lauderdale (FLL)',
+          'JFK → Miami (MIA)',
+          'Chicago (ORD) → Denver (DEN)',
+          'Atlanta (ATL) → Los Angeles (LAX)',
+          'Transatlantic: JFK → London (LHR)',
+        ], allowCustom: true, customPlaceholder: 'Type your own route (e.g. LAX to Seattle)…' },
     ],
   },
   office: {
@@ -489,6 +499,51 @@ const JOB_FORMS = {
         placeholder: 'e.g. Greystar, Hollis Property Group' },
       { name: 'staff', label: 'Who works with you', type: 'textarea',
         placeholder: "e.g. Manager Sharon who's always stressed, maintenance guy Big Lou, leasing agent Tasha" },
+    ],
+  },
+  debate: {
+    title: 'Debate',
+    sub: 'Pick the type of debate, your opponent, the venue, and the topic.',
+    fields: [
+      { name: 'type', label: 'Type of debate', type: 'select',
+        options: ['Formal competitive debate', 'Political / candidate debate', 'Courtroom-style debate',
+          'School / college debate club', 'Televised debate', 'Casual heated argument'],
+        allowCustom: true },
+      { name: 'opponent', label: "Who you're debating", type: 'text',
+        placeholder: 'e.g. A smug rival named Trevor, a sitting senator, the school champ' },
+      { name: 'location', label: 'Where the debate is', type: 'select',
+        options: ['A school auditorium', 'A college debate hall', 'A TV studio set', 'A town hall', 'A courtroom'],
+        allowCustom: true, customPlaceholder: 'Describe your own venue…' },
+      { name: 'topic', label: 'The debate topic / resolution', type: 'text',
+        placeholder: 'e.g. "Should AI be regulated?", climate policy, free college' },
+    ],
+  },
+  doctor: {
+    title: 'Doctor',
+    sub: 'Pick your hospital/practice, what kind of doctor you are, and your coworkers.',
+    fields: [
+      { name: 'place', label: 'Your hospital or practice', type: 'text',
+        placeholder: 'e.g. St. Mary\'s General Hospital, Lakeside Family Clinic' },
+      { name: 'type', label: 'Type of doctor', type: 'select',
+        options: ['General / Family Doctor', 'ER Doctor', 'Surgeon', 'Dentist', 'Eye Doctor (Optometrist)',
+          'Pediatrician', 'Psychiatrist', 'Dermatologist', 'OB-GYN'],
+        allowCustom: true },
+      { name: 'coworkers', label: 'Who works with you', type: 'textarea',
+        placeholder: "e.g. Nurse Gabby who runs the floor, Dr. Pell the cocky surgeon, receptionist Mona" },
+    ],
+  },
+  government: {
+    title: 'Government Worker',
+    sub: 'Be the President — or any government role. Pick your job and who you work with.',
+    fields: [
+      { name: 'role', label: 'Type of government worker', type: 'select',
+        options: ['President', 'Senator', 'Governor', 'Mayor', 'City Council member', 'Diplomat / Ambassador',
+          'DMV clerk', 'Postal worker', 'IRS agent', 'Police Commissioner', 'Federal agent'],
+        allowCustom: true },
+      { name: 'agency', label: 'Your office / department (optional)', type: 'text',
+        placeholder: 'e.g. The White House, the State Department, City Hall, the local DMV' },
+      { name: 'coworkers', label: 'Who else you work with', type: 'textarea',
+        placeholder: 'e.g. Chief of Staff Ramirez, a scheming deputy, your overworked secretary' },
     ],
   },
 };
@@ -711,6 +766,8 @@ function collectConfig() {
 function startShift() {
   currentConfig = collectConfig();
   if (daySelect && daySelect.value) currentConfig.day = daySelect.value;
+  const startMode = startSelect ? startSelect.value : 'wakeup';
+  currentConfig.start = startMode;
   if (setupImages.length) currentConfig._hasImages = true;
   pendingImages = [];
   renderPendingThumbs();
@@ -718,10 +775,11 @@ function startShift() {
   messagesEl.innerHTML = '';
   showScreen('chat');
 
-  // The day starts at home — the alarm goes off. Server handles the wake-up opener.
-  const openerText = setupImages.length
-    ? '*my alarm clock goes off — start of the day* (Photos of my real workplace are attached — use them for the layout.)'
+  // Either wake up at home (alarm) or arrive already at work. Server matches the opener.
+  let openerText = startMode === 'arrive'
+    ? '*I arrive at work, ready to start*'
     : '*my alarm clock goes off — start of the day*';
+  if (setupImages.length) openerText += ' (Photos of my real workplace are attached — use them for the layout.)';
   history.push({ role: 'user', content: buildContent(openerText, setupImages) });
   setupImages = [];
   renderSetupThumbs();
@@ -813,7 +871,7 @@ function resumeShift() {
   // Re-render the conversation (skip the hidden opener action).
   history.forEach((m, i) => {
     const { text, images } = extractParts(m.content);
-    if (i === 0 && m.role === 'user' && (text.startsWith('*clocks in') || text.startsWith('*my alarm'))) return;
+    if (i === 0 && m.role === 'user' && (text.startsWith('*clocks in') || text.startsWith('*my alarm') || text.startsWith('*I arrive'))) return;
     appendMessage(m.role, text, images);
   });
   showScreen('chat');
