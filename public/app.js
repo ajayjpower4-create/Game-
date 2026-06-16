@@ -6,6 +6,26 @@ const therapyGrid = document.getElementById('therapyGrid');
 const personalityInput = document.getElementById('personalityInput');
 const personalityHeading = document.getElementById('personalityHeading');
 const charCount = document.getElementById('charCount');
+const presetGrid = document.getElementById('presetGrid');
+const presetLabel = document.getElementById('presetLabel');
+
+// Preset characters for whichever role the AI is playing.
+const PRESETS = {
+  therapist: [
+    { name: 'Dr. Calm', desc: 'a warm, soft-spoken therapist who is endlessly patient and gently validates everything you say' },
+    { name: 'Drill Sergeant', desc: 'a blunt, no-nonsense therapist who dishes out brutal tough love and refuses to coddle you' },
+    { name: 'The Hippie', desc: 'a laid-back therapist who rambles about energy, the universe, and feelings, but is somehow weirdly profound' },
+    { name: 'Burnt-Out Vet', desc: 'a therapist who has done this for 30 years, is jaded and sarcastic, and just says what they really think' },
+    { name: 'Eager Intern', desc: 'a nervous intern fresh out of school who quotes textbooks constantly and tries way too hard to help' },
+  ],
+  client: [
+    { name: 'The Denier', desc: 'a client who insists nothing is wrong and is only here because someone forced them to come' },
+    { name: 'The Oversharer', desc: 'a client with zero filter who trauma-dumps every detail of their life right away' },
+    { name: 'The Tough Guy', desc: "a client who acts like they don't need help and deflects everything with bravado and jokes" },
+    { name: 'The Crier', desc: 'a fragile client who tears up constantly and apologizes for everything' },
+    { name: 'The Know-It-All', desc: "a client who has googled everything and keeps arguing with the therapist's methods" },
+  ],
+};
 const startBtn = document.getElementById('startBtn');
 
 // --- Session screen elements ---
@@ -31,6 +51,8 @@ let selectedRole = null;
 let selectedTherapies = [];
 let history = [];
 let isStreaming = false;
+let weekNumber = 1;
+let sessionActive = false;
 
 // ---------- Setup interactions ----------
 roleCards.forEach((card) => {
@@ -41,12 +63,37 @@ roleCards.forEach((card) => {
     personalityHeading.textContent = selectedRole === 'therapist'
       ? "3. The client's personality"
       : "3. The therapist's personality";
+    renderPresets();
     refreshStartBtn();
   });
 });
 
+function renderPresets() {
+  presetGrid.innerHTML = '';
+  if (!selectedRole) {
+    presetLabel.classList.add('hidden');
+    return;
+  }
+  const aiRole = selectedRole === 'therapist' ? 'client' : 'therapist';
+  presetLabel.classList.remove('hidden');
+  PRESETS[aiRole].forEach((p) => {
+    const btn = document.createElement('button');
+    btn.className = 'therapy-chip preset-chip';
+    btn.textContent = p.name;
+    btn.addEventListener('click', () => {
+      personalityInput.value = p.desc;
+      charCount.textContent = p.desc.length;
+      presetGrid.querySelectorAll('.preset-chip')
+        .forEach((c) => c.classList.toggle('selected', c === btn));
+      refreshStartBtn();
+    });
+    presetGrid.appendChild(btn);
+  });
+}
+
 personalityInput.addEventListener('input', () => {
   charCount.textContent = personalityInput.value.length;
+  presetGrid.querySelectorAll('.preset-chip').forEach((c) => c.classList.remove('selected'));
   refreshStartBtn();
 });
 
@@ -81,21 +128,37 @@ function startSession() {
 
   history = [];
   messagesEl.innerHTML = '';
+  weekNumber = 1;
+  sessionActive = true;
   setup.classList.add('hidden');
   session.classList.remove('hidden');
+  updatePlaceholder();
 
-  input.placeholder = selectedRole === 'therapist'
-    ? 'Open the session, doc...'
-    : 'Tell your therapist what\'s up...';
+  addSystemDivider(`Week 1 — session begins`);
+  addSystemDivider(`Tip: type /end to finish the session, /next week, then /startsession`);
 
-  // Seed the conversation so the AI opens in character.
-  const opener = selectedRole === 'therapist'
-    ? '(The session begins. The client has just sat down. Speak first, in character.)'
-    : '(The session begins. The client has just sat down across from you. Speak first, in character.)';
-
-  history.push({ role: 'user', content: opener });
+  history.push({ role: 'user', content: openerFor(1) });
   streamResponse();
   input.focus();
+}
+
+function openerFor(week) {
+  if (week === 1) {
+    return selectedRole === 'therapist'
+      ? '(The first session begins. The client has just sat down. Speak first, in character.)'
+      : '(The first session begins. The client has just sat down across from you. Speak first, in character.)';
+  }
+  return `(It is now week ${week} of therapy. A new weekly session begins and the same two people sit back down. Greet them and pick up naturally, referencing earlier sessions where it fits. Speak first, in character.)`;
+}
+
+function updatePlaceholder() {
+  if (!sessionActive) {
+    input.placeholder = 'Session over — type /next week, then /startsession';
+    return;
+  }
+  input.placeholder = selectedRole === 'therapist'
+    ? 'Talk to your client...   (/end to finish)'
+    : "Talk to your therapist...   (/end to finish)";
 }
 
 function endSession() {
@@ -104,6 +167,57 @@ function endSession() {
   setup.classList.remove('hidden');
   history = [];
   input.value = '';
+  weekNumber = 1;
+  sessionActive = false;
+}
+
+// Handle the in-game slash commands. Returns nothing; updates state/UI.
+async function handleCommand(raw) {
+  const cmd = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+
+  if (cmd === '/end') {
+    if (!sessionActive) {
+      addSystemDivider('No session is running. Type /startsession to begin one.');
+      return;
+    }
+    history.push({ role: 'user', content: "(The session is now ending for today. Give a brief, in-character closing for this week's session, then stop.)" });
+    await streamResponse();
+    sessionActive = false;
+    addSystemDivider(`— End of week ${weekNumber} session —`);
+    updatePlaceholder();
+    return;
+  }
+
+  if (cmd === '/next week' || cmd === '/nextweek' || cmd === '/next') {
+    if (sessionActive) {
+      addSystemDivider('Finish the current session first with /end.');
+      return;
+    }
+    weekNumber += 1;
+    addSystemDivider(`A week passes... → Week ${weekNumber}`);
+    addSystemDivider('Type /startsession to begin the session.');
+    return;
+  }
+
+  if (cmd === '/startsession' || cmd === '/start session' || cmd === '/start') {
+    if (sessionActive) {
+      addSystemDivider('A session is already in progress.');
+      return;
+    }
+    sessionActive = true;
+    updatePlaceholder();
+    addSystemDivider(`Week ${weekNumber} — session begins`);
+    history.push({ role: 'user', content: openerFor(weekNumber) });
+    await streamResponse();
+    return;
+  }
+
+  if (cmd === '/help') {
+    addSystemDivider('Commands:  /end · /next week · /startsession');
+    return;
+  }
+
+  addSystemDivider('Unknown command. Try:  /end · /next week · /startsession');
 }
 
 // ---------- Input handling ----------
@@ -113,26 +227,32 @@ input.addEventListener('input', () => {
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    if (!sendBtn.disabled) sendMessage();
-  }
-});
-
+// Note: Enter / the iPhone return key inserts a newline. Messages are only
+// sent by tapping the send button.
 sendBtn.addEventListener('click', sendMessage);
 
-function sendMessage() {
+async function sendMessage() {
   const text = input.value.trim();
   if (!text || isStreaming) return;
 
-  history.push({ role: 'user', content: text });
-  appendMessage('user', text);
-
   input.value = '';
   input.style.height = 'auto';
+  sendBtn.disabled = true;
 
-  streamResponse();
+  // Slash commands drive the session/week flow.
+  if (text.startsWith('/')) {
+    await handleCommand(text);
+    return;
+  }
+
+  if (!sessionActive) {
+    addSystemDivider('No active session. Type /next week, then /startsession.');
+    return;
+  }
+
+  history.push({ role: 'user', content: text });
+  appendMessage('user', text);
+  await streamResponse();
 }
 
 async function streamResponse() {
@@ -237,6 +357,14 @@ function createAssistantBubble() {
   div.appendChild(bubble);
   messagesEl.appendChild(div);
   return { bubble, cursor };
+}
+
+function addSystemDivider(text) {
+  const div = document.createElement('div');
+  div.className = 'session-divider';
+  div.innerHTML = `<span>${escapeHtml(text)}</span>`;
+  messagesEl.appendChild(div);
+  scrollToBottom();
 }
 
 function scrollToBottom() {
