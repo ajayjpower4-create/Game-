@@ -52,8 +52,12 @@
         <div class="setup-block">
           <label class="setup-label" id="personaLabel">Describe the therapist</label>
           <p class="setup-hint" id="personaHint">
-            Type in their details — name, personality, style, backstory. Leave blank for a blunt, no-bullshit therapist.
+            Type in their details — name, personality, style, backstory. Pick a preset below, or leave blank for a blunt, no-bullshit therapist.
           </p>
+          <div class="preset-wrap" id="presetWrap" hidden>
+            <span class="preset-heading">Preset therapists — tap to use, then tweak if you want</span>
+            <div class="preset-grid" id="presetGrid"></div>
+          </div>
           <textarea
             id="personaInput"
             class="persona-input"
@@ -88,8 +92,9 @@
           </button>
         </div>
         <div class="session-controls">
-          <button class="control-btn end" id="endSessionBtn" disabled>■ End session</button>
-          <button class="control-btn new" id="newSessionBtn">+ New session</button>
+          <button class="control-btn start" id="startSessionBtn">▶ Start</button>
+          <button class="control-btn end" id="endSessionBtn" disabled>■ End</button>
+          <button class="control-btn new" id="nextWeekBtn">» Next week</button>
         </div>
       </header>
 

@@ -169,6 +169,57 @@ html, body {
   line-height: 1.45;
 }
 
+.preset-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preset-heading {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.preset {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  cursor: pointer;
+  color: var(--text);
+  transition: all 0.15s;
+}
+
+.preset:hover {
+  border-color: var(--border-2);
+  background: var(--surface-2);
+}
+
+.preset.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.preset-name {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.preset-tag {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
 .persona-input {
   width: 100%;
   background: var(--surface);
@@ -309,13 +360,35 @@ html, body {
   transition: all 0.15s;
 }
 
-.control-btn.new {
+.control-btn.start {
   border-color: rgba(74, 200, 120, 0.4);
   color: #7ee2a4;
 }
 
-.control-btn.new:hover:not(:disabled) {
+.control-btn.start:hover:not(:disabled) {
   background: rgba(74, 200, 120, 0.12);
+}
+
+.control-btn.new {
+  border-color: rgba(124, 140, 247, 0.4);
+  color: #aab4f7;
+}
+
+.control-btn.new:hover:not(:disabled) {
+  background: rgba(124, 140, 247, 0.12);
+}
+
+/* Centered status line in the transcript (week markers, hints) */
+.notice {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin: 14px auto;
+  padding: 8px 12px;
+  max-width: 90%;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.2px;
 }
 
 .control-btn.end {
