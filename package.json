@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "villas-at-lincoln-property-manager-sim",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "The Villas at Lincoln Apartments — Property Manager Simulator (Sonnet 4.6 character roleplay game)",
   "main": "server.js",
   "type": "module",
   "scripts": {

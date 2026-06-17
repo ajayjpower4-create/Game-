@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>The Villas at Lincoln — Property Manager Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,52 +11,86 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+          <span class="logo-icon">🏢</span>
+          <div class="logo-text">
+            <span class="logo-title">The Villas at Lincoln</span>
+            <span class="logo-sub">Property Manager Simulator</span>
+          </div>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+        <div class="status-bar">
+          <span class="status-pill" id="dayPill">Day 1</span>
+          <span class="status-pill shift-off" id="shiftPill">Off Shift</span>
+          <button class="icon-btn" id="newGameBtn" title="New game (reset save)">↺</button>
+        </div>
       </div>
     </header>
 
     <main class="chat-area" id="chatArea">
       <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+        <div class="welcome-icon">🏢</div>
+        <h1>The Villas at Lincoln Apartments</h1>
+        <p class="tagline">You're the new Property Manager. 24 buildings. One hell of a crew.</p>
+        <div class="intro-card">
+          <p><strong>You are the narrator.</strong> Describe what you (the manager) do and where you go — the cast only speaks and acts for themselves. They're blunt, they're tired, and they curse.</p>
+          <p>Kick things off below, then drive in through the gate and up the hill.</p>
+        </div>
+        <button class="begin-btn" id="beginBtn">🚗 Arrive at the complex</button>
+        <div class="cmd-legend">
+          <span><code>/start shift</code> begin the workday</span>
+          <span><code>/end shift</code> wrap up</span>
+          <span><code>/nextday</code> a new day</span>
+          <span><code>/Computer</code> use your desk computer</span>
         </div>
       </div>
       <div class="messages" id="messages"></div>
     </main>
 
     <footer class="input-area">
+      <div class="cmd-row" id="cmdRow">
+        <button class="cmd-chip" data-cmd="/start shift">▶ Start shift</button>
+        <button class="cmd-chip" data-cmd="/end shift">⏹ End shift</button>
+        <button class="cmd-chip" data-cmd="/nextday">📅 Next day</button>
+        <button class="cmd-chip" id="computerChip">💻 Computer</button>
+      </div>
       <div class="input-container">
         <textarea
           id="messageInput"
           class="message-input"
-          placeholder="Message Swerve..."
+          placeholder="Narrate what you do…  (the return key won't send — tap ➤)"
           rows="1"
           maxlength="10000"
         ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
+        <button class="send-btn" id="sendBtn" disabled aria-label="Send">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="19" x2="12" y2="5"></line>
             <polyline points="5 12 12 5 19 12"></polyline>
           </svg>
         </button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
+      <p class="disclaimer">Powered by Sonnet 4.6 · Auto-saves every 5 messages</p>
     </footer>
+  </div>
+
+  <!-- Computer overlay -->
+  <div class="computer-overlay" id="computerOverlay" hidden>
+    <div class="computer-window">
+      <div class="computer-topbar">
+        <span class="computer-title">💻 Manager's Desktop</span>
+        <button class="computer-close" id="computerClose" aria-label="Close">✕</button>
+      </div>
+      <div class="computer-body">
+        <p class="computer-hint">Pick an app — it'll pull up the real stuff on your screen.</p>
+        <div class="app-grid">
+          <button class="app-tile" data-app="Email">📧<span>Email</span></button>
+          <button class="app-tile" data-app="Lease Agreements">📄<span>Lease Agreements</span></button>
+          <button class="app-tile" data-app="Pool Pass Applications">🏊<span>Pool Pass Applications</span></button>
+          <button class="app-tile" data-app="Gym Pass Applications">🏋️<span>Gym Pass Applications</span></button>
+          <button class="app-tile" data-app="Staff Time Card Forms">⏱️<span>Staff Time Cards</span></button>
+          <button class="app-tile" data-app="Clubhouse Rental Applications">🏛️<span>Clubhouse Rentals</span></button>
+          <button class="app-tile" data-app="Maintenance Complaints">🔧<span>Maintenance Complaints</span></button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

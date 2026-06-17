@@ -3,52 +3,149 @@ const messagesEl = document.getElementById('messages');
 const welcome = document.getElementById('welcome');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
-const newChatBtn = document.getElementById('newChatBtn');
+const newGameBtn = document.getElementById('newGameBtn');
+const beginBtn = document.getElementById('beginBtn');
+const dayPill = document.getElementById('dayPill');
+const shiftPill = document.getElementById('shiftPill');
+const cmdRow = document.getElementById('cmdRow');
+
+// Computer overlay
+const computerOverlay = document.getElementById('computerOverlay');
+const computerChip = document.getElementById('computerChip');
+const computerClose = document.getElementById('computerClose');
+
+const SAVE_KEY = 'villas-lincoln-save-v1';
+const AUTOSAVE_EVERY = 5; // save automatically after every 5 messages
 
 let history = [];
 let isStreaming = false;
+let day = 1;
+let onShift = false;
+let msgCountSinceSave = 0;
 
-// Auto-resize textarea
+// ---------------------------------------------------------------------------
+//  Save / load  (auto-saves so the player never loses their day/week)
+// ---------------------------------------------------------------------------
+function saveGame() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ history, day, onShift }));
+    msgCountSinceSave = 0;
+  } catch {}
+}
+
+function maybeAutosave() {
+  msgCountSinceSave++;
+  if (msgCountSinceSave >= AUTOSAVE_EVERY) saveGame();
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.history) || data.history.length === 0) return false;
+    history = data.history;
+    day = data.day || 1;
+    onShift = !!data.onShift;
+    welcome.style.display = 'none';
+    for (const m of history) {
+      appendMessage(m.role, m.content);
+    }
+    updateHud();
+    scrollToBottom();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function updateHud() {
+  dayPill.textContent = `Day ${day}`;
+  if (onShift) {
+    shiftPill.textContent = 'On Shift';
+    shiftPill.classList.remove('shift-off');
+    shiftPill.classList.add('shift-on');
+  } else {
+    shiftPill.textContent = 'Off Shift';
+    shiftPill.classList.add('shift-off');
+    shiftPill.classList.remove('shift-on');
+  }
+}
+
+// ---------------------------------------------------------------------------
+//  Input handling
+//  NOTE: The return/enter key intentionally does NOT send the message
+//  (so the iPhone return button just adds a new line). Use the ➤ button.
+// ---------------------------------------------------------------------------
 input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 200) + 'px';
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-// Send on Enter (Shift+Enter for newline)
-input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    if (!sendBtn.disabled) sendMessage();
-  }
+// Deliberately do not send on Enter — return key inserts a newline only.
+
+sendBtn.addEventListener('click', () => sendMessage());
+newGameBtn.addEventListener('click', resetGame);
+beginBtn.addEventListener('click', () => {
+  sendMessage('I pull up to the front gate of The Villas at Lincoln Apartments in my car and roll down my window for the security guards.');
 });
 
-sendBtn.addEventListener('click', sendMessage);
-newChatBtn.addEventListener('click', resetChat);
+// Command chips
+cmdRow.querySelectorAll('.cmd-chip[data-cmd]').forEach(btn => {
+  btn.addEventListener('click', () => sendMessage(btn.dataset.cmd));
+});
 
-// Suggestion chips
-document.querySelectorAll('.suggestion').forEach(btn => {
-  btn.addEventListener('click', () => {
-    input.value = btn.dataset.text;
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-    sendBtn.disabled = false;
-    sendMessage();
+// Computer overlay open/close
+computerChip.addEventListener('click', openComputer);
+computerClose.addEventListener('click', closeComputer);
+computerOverlay.addEventListener('click', (e) => {
+  if (e.target === computerOverlay) closeComputer();
+});
+document.querySelectorAll('.app-tile').forEach(tile => {
+  tile.addEventListener('click', () => {
+    closeComputer();
+    sendMessage(`/Computer ${tile.dataset.app}`);
   });
 });
 
-function resetChat() {
+function openComputer() {
+  if (isStreaming) return;
+  computerOverlay.hidden = false;
+}
+function closeComputer() {
+  computerOverlay.hidden = true;
+}
+
+function resetGame() {
+  if (!confirm('Start a brand new game? This erases your saved progress.')) return;
   history = [];
+  day = 1;
+  onShift = false;
+  msgCountSinceSave = 0;
   messagesEl.innerHTML = '';
   welcome.style.display = 'flex';
   input.value = '';
   input.style.height = 'auto';
   sendBtn.disabled = true;
   isStreaming = false;
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
+  updateHud();
 }
 
-async function sendMessage() {
-  const text = input.value.trim();
+// Adjust game state from slash commands the player issues
+function applyCommandState(text) {
+  const t = text.trim().toLowerCase();
+  if (t === '/start shift') { onShift = true; updateHud(); }
+  else if (t === '/end shift') { onShift = false; updateHud(); }
+  else if (t === '/nextday') { day++; onShift = false; updateHud(); }
+}
+
+// ---------------------------------------------------------------------------
+//  Send a turn
+// ---------------------------------------------------------------------------
+async function sendMessage(forcedText) {
+  const text = (forcedText !== undefined ? forcedText : input.value).trim();
   if (!text || isStreaming) return;
 
   welcome.style.display = 'none';
@@ -56,14 +153,17 @@ async function sendMessage() {
   sendBtn.disabled = true;
   sendBtn.classList.add('loading');
 
-  // Add user message
+  applyCommandState(text);
+
   history.push({ role: 'user', content: text });
   appendMessage('user', text);
+  maybeAutosave();
 
-  input.value = '';
-  input.style.height = 'auto';
+  if (forcedText === undefined) {
+    input.value = '';
+    input.style.height = 'auto';
+  }
 
-  // Create assistant bubble
   const { bubble, cursor } = createAssistantBubble();
   scrollToBottom();
 
@@ -115,6 +215,7 @@ async function sendMessage() {
     if (assistantText) {
       history.push({ role: 'assistant', content: assistantText });
       bubble.innerHTML = renderMarkdown(assistantText);
+      maybeAutosave();
     }
   } catch (err) {
     cursor.remove();
@@ -127,13 +228,16 @@ async function sendMessage() {
   scrollToBottom();
 }
 
+// ---------------------------------------------------------------------------
+//  Rendering
+// ---------------------------------------------------------------------------
 function appendMessage(role, content) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : '◈';
+  avatar.textContent = role === 'user' ? 'YOU' : '🏢';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -152,7 +256,7 @@ function createAssistantBubble() {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = '◈';
+  avatar.textContent = '🏢';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -184,38 +288,29 @@ function escapeHtml(str) {
 function renderMarkdown(text) {
   let html = escapeHtml(text);
 
-  // Code blocks
   html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
     return `<pre><code>${code.trim()}</code></pre>`;
   });
 
-  // Inline code
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-  // Headers
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-  // Bold & italic
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-  // Blockquote
   html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
-  // Unordered list
   html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
 
-  // Ordered list
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
-  // Horizontal rule
   html = html.replace(/^---$/gm, '<hr>');
 
-  // Paragraphs (double newlines)
   html = html
     .split(/\n\n+/)
     .map(block => {
@@ -227,3 +322,12 @@ function renderMarkdown(text) {
 
   return html;
 }
+
+// ---------------------------------------------------------------------------
+//  Boot
+// ---------------------------------------------------------------------------
+// Save before the tab closes so nothing is lost between autosaves.
+window.addEventListener('beforeunload', saveGame);
+
+loadGame();
+updateHud();
