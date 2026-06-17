@@ -797,8 +797,14 @@ input.addEventListener('input', () => {
   updateSendState();
 });
 
+// On touch devices (iPhone/Android), the return key should insert a newline,
+// not send — sending is done with the send button. Enter-to-send is desktop-only.
+const isTouchDevice = (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches)
+  || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')
+  || (navigator.maxTouchPoints || 0) > 0;
+
 input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice) {
     e.preventDefault();
     if (!sendBtn.disabled) sendMessage();
   }
