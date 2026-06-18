@@ -17,8 +17,11 @@
         </div>
         <div class="header-actions">
           <span class="session-badge" id="sessionBadge">Not started</span>
-          <button class="ghost-btn" id="profileBtn" title="Edit the couple's profile">Couple Profile</button>
-          <button class="ghost-btn" id="resetBtn" title="Reset everything">Reset</button>
+          <button class="ghost-btn" id="switchBtn" title="Switch who you're playing mid-session">Switch</button>
+          <button class="ghost-btn" id="saveBtn" title="Save this session">Save</button>
+          <button class="ghost-btn" id="savesBtn" title="Load a saved session">Saves</button>
+          <button class="ghost-btn" id="profileBtn" title="Edit the setup">Setup</button>
+          <button class="ghost-btn" id="resetBtn" title="Start over">Reset</button>
         </div>
       </div>
     </header>
@@ -27,6 +30,11 @@
     <section class="profile-panel" id="profilePanel">
       <div class="profile-inner">
         <h2>Set up your session</h2>
+
+        <div class="resume-banner" id="resumeBanner" hidden>
+          <span>You have an unfinished session.</span>
+          <button class="primary-btn small" id="resumeBtn">▸ Resume last session</button>
+        </div>
 
         <div class="setup-group">
           <label class="setup-label">1. Who do you want to be?</label>
@@ -40,7 +48,7 @@
         </div>
 
         <div class="setup-group" id="partnerGroup" hidden>
-          <label class="setup-label">2. Who is your partner? <span class="setup-sub">(played by AI — the therapist is AI too)</span></label>
+          <label class="setup-label">2. Who is your partner? <span class="setup-sub">(AI plays them and the therapist)</span></label>
           <div class="role-options" id="partnerRoleOptions">
             <button class="role-card" data-role="wife"><span class="role-emoji">👰</span>Wife</button>
             <button class="role-card" data-role="husband"><span class="role-emoji">🤵</span>Husband</button>
@@ -50,15 +58,26 @@
         </div>
 
         <div class="setup-group">
-          <label class="setup-label" id="detailsLabel">3. The couple &amp; what's going on</label>
-          <p class="profile-help" id="detailsHelp">
+          <label class="setup-label">Therapy office layout</label>
+          <div class="role-options" id="officeOptions">
+            <button class="role-card" data-office="cozy"><span class="role-emoji">🛋️</span>Cozy</button>
+            <button class="role-card" data-office="modern"><span class="role-emoji">🪟</span>Modern</button>
+            <button class="role-card" data-office="luxe"><span class="role-emoji">💎</span>Luxe</button>
+            <button class="role-card" data-office="clinical"><span class="role-emoji">🏥</span>Clinical</button>
+            <button class="role-card" data-office="garden"><span class="role-emoji">🪴</span>Garden</button>
+          </div>
+        </div>
+
+        <div class="setup-group">
+          <label class="setup-label">The couple &amp; what's going on</label>
+          <p class="profile-help">
             Paste everything — names, what's going on in their life, the history, the conflict, how each
             of them reacts to things, their personalities. The more you give, the realer it gets.
           </p>
           <textarea
             id="coupleInfo"
             class="couple-info"
-            placeholder="e.g. Maya (34) and James (37), married 6 years, one toddler.&#10;The fight: James took a new job with long hours without really discussing it. Maya feels abandoned and like decisions get made *at* her, not *with* her.&#10;Maya reacts to stress by going cold and ripping into him. James gets defensive, swears, then shuts down.&#10;Underneath: they still love each other but both feel unseen..."
+            placeholder="e.g. Maya (34) and James (37), married 6 years, one toddler.&#10;The fight: James took a new job with long hours without really discussing it. Maya feels abandoned.&#10;Maya goes cold and rips into him. James gets defensive, swears, then shuts down.&#10;Underneath: they still love each other but both feel unseen..."
           ></textarea>
         </div>
 
@@ -74,27 +93,28 @@
         <h1>The room is ready</h1>
         <p>Type to speak as your character. Run the session with these commands:</p>
         <div class="cmd-guide">
-          <div class="cmd-row"><code>(start</code><span>Begin the therapy session</span></div>
-          <div class="cmd-row"><code>(end</code><span>End the current session</span></div>
-          <div class="cmd-row"><code>(next</code><span>Jump to next week's session</span></div>
-          <div class="cmd-row"><code>(help</code><span>Show the command list again</span></div>
+          <div class="cmd-row"><code>/start</code><span>Begin the therapy session</span></div>
+          <div class="cmd-row"><code>/end</code><span>End the current session</span></div>
+          <div class="cmd-row"><code>/next</code><span>Jump to next week's session</span></div>
+          <div class="cmd-row"><code>/switch</code><span>Change who you're playing</span></div>
+          <div class="cmd-row"><code>/help</code><span>Show the command list again</span></div>
         </div>
-        <p class="welcome-tip">Tip: anything you type that doesn't start with <code>(</code> is spoken aloud as your character.</p>
+        <p class="welcome-tip">Tip: press <b>Send</b> (the arrow) to send — <b>Enter</b> just makes a new line. Anything not starting with <code>/</code> is spoken aloud as your character.</p>
       </div>
       <div class="messages" id="messages"></div>
     </main>
 
     <footer class="input-area">
       <div class="cmd-chips" id="cmdChips">
-        <button class="cmd-chip" data-cmd="(start">( start</button>
-        <button class="cmd-chip" data-cmd="(next">( next week</button>
-        <button class="cmd-chip" data-cmd="(end">( end</button>
+        <button class="cmd-chip" data-cmd="/start">/start</button>
+        <button class="cmd-chip" data-cmd="/next">/next week</button>
+        <button class="cmd-chip" data-cmd="/end">/end</button>
       </div>
       <div class="input-container">
         <textarea
           id="messageInput"
           class="message-input"
-          placeholder="Type your message, or a ( command…"
+          placeholder="Type your message, or a / command…  (Enter = new line, button = send)"
           rows="1"
           maxlength="10000"
         ></textarea>
@@ -107,6 +127,47 @@
       </div>
       <p class="disclaimer">A roleplay simulator for practice — not real therapy or real people.</p>
     </footer>
+  </div>
+
+  <!-- Switch-role modal -->
+  <div class="modal-overlay" id="switchModal" hidden>
+    <div class="modal">
+      <h3>Switch who you're playing</h3>
+      <p class="modal-help">Change your role mid-session. The story keeps going from here.</p>
+      <label class="setup-label">You are now…</label>
+      <div class="role-options" id="switchYouOptions">
+        <button class="role-card" data-role="therapist"><span class="role-emoji">🧑‍⚕️</span>Therapist</button>
+        <button class="role-card" data-role="husband"><span class="role-emoji">🤵</span>Husband</button>
+        <button class="role-card" data-role="wife"><span class="role-emoji">👰</span>Wife</button>
+        <button class="role-card" data-role="boyfriend"><span class="role-emoji">🧍‍♂️</span>Boyfriend</button>
+        <button class="role-card" data-role="girlfriend"><span class="role-emoji">🧍‍♀️</span>Girlfriend</button>
+      </div>
+      <div class="setup-group" id="switchPartnerGroup" hidden>
+        <label class="setup-label">Your partner (AI)</label>
+        <div class="role-options" id="switchPartnerOptions">
+          <button class="role-card" data-role="wife"><span class="role-emoji">👰</span>Wife</button>
+          <button class="role-card" data-role="husband"><span class="role-emoji">🤵</span>Husband</button>
+          <button class="role-card" data-role="girlfriend"><span class="role-emoji">🧍‍♀️</span>Girlfriend</button>
+          <button class="role-card" data-role="boyfriend"><span class="role-emoji">🧍‍♂️</span>Boyfriend</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="ghost-btn" id="switchCancel">Cancel</button>
+        <button class="primary-btn" id="switchConfirm">Switch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Saves modal -->
+  <div class="modal-overlay" id="savesModal" hidden>
+    <div class="modal">
+      <h3>Saved sessions</h3>
+      <p class="modal-help">Pick a session to load right where you left off.</p>
+      <div class="saves-list" id="savesList"></div>
+      <div class="modal-actions">
+        <button class="ghost-btn" id="savesClose">Close</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
