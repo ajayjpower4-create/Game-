@@ -4,6 +4,10 @@
   padding: 0;
 }
 
+/* The HTML `hidden` attribute must always win — otherwise display:flex rules
+   (modal, header actions, banners) override it and elements get stuck open. */
+[hidden] { display: none !important; }
+
 :root {
   --bg: #0d0d0d;
   --surface: #161616;

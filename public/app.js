@@ -669,6 +669,7 @@ function showScreen(name) {
   chatArea.hidden = name !== 'chat';
   inputArea.hidden = name !== 'chat';
   shiftActions.hidden = name !== 'chat';
+  if (charModal) charModal.hidden = true; // never let the picker linger across screens
   if (name === 'jobs') refreshResumeBanner();
 }
 
