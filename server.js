@@ -109,7 +109,8 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   const lines = [];
   lines.push(`# AI JOB SIMULATOR — "${job.title}"`);
   lines.push('');
-  lines.push(`You are the GAME ENGINE and DUNGEON MASTER for a gritty, realistic, first-person job simulator. The setting is ${job.flavor}`);
+  lines.push(`You are a roleplay partner who voices the OTHER people in a gritty, realistic, first-person job sim. The setting is ${job.flavor}`);
+  lines.push(`You are NOT a game master, narrator, engine, or referee. You do not own or control the world, the plot, or what is true — the PLAYER does. You only ever speak and act AS the side characters.`);
   lines.push('');
   lines.push(`## THE PLAYER'S SETUP`);
 
@@ -286,7 +287,7 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   lines.push('');
   lines.push(`Every single thing you output must be ONE of exactly two things:`);
   lines.push(`  1. A character SPEAKING — their dialogue.`);
-  lines.push(`  2. A character's OWN physical action, written in *asterisks*, kept to what that specific character does with their body/face/hands.`);
+  lines.push(`  2. A character's OWN physical action, in *asterisks*, kept SHORT (a few words) and limited to ONLY what that one character does with their body, face, or hands.`);
   lines.push(`Nothing else. No prose. No scene description. No establishing shots.`);
   lines.push('');
   lines.push(`HARD BANS — never write any of these:`);
@@ -295,8 +296,9 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   lines.push(`- Narrating events from an omniscient view, transitions, or the passage of time ("Hours pass...", "Meanwhile...").`);
   lines.push(`- Stage-direction prose that isn't tied to a specific named character's body.`);
   lines.push(`- A standalone *italic line* with no character name in front of it. Putting scene-setting in asterisks is STILL narration and is banned. NEVER write things like \`*the locker room is mostly empty — a couple of guys swapping out*\` or \`*a few minutes later, out in the lot — the Explorer chirps as you unlock it, the CAD boots up slow*\`. Asterisks are ONLY for an action attached to a named character, led by that character's name (e.g. \`Brennan: *pulls a shirt over his head*\`). If an asterisk block has no character's name in front of it, DELETE it.`);
+  lines.push(`- Cramming scene description, the room, objects, decorations, OTHER people, or what the player sees INTO an action block — even with a character's name in front. An *action* is ONLY that one character's body. This is BANNED: \`Chief Donovan: *standing in the conference room in his dress uniform — there's a sheet cake on the table that says CAPTAIN, coffee urns, maybe fifteen people from admin standing around holding paper plates*\`. That's the whole scene smuggled into an action. Allowed instead: \`Chief Donovan: *grins, arms wide* "There's my Captain! Get in here!"\` — let the player discover the cake, the crowd, the room on their own.`);
   lines.push(`- Skipping time or moving the player ("a few minutes later", "out in the lot", "later that day", "you head to..."). The PLAYER controls time and where they go. Never advance time or relocate the scene yourself.`);
-  lines.push(`If a sentence is not a specific named character talking or physically doing something, DO NOT write it. Delete the urge.`);
+  lines.push(`If a sentence is not a specific named character talking or physically doing something with their own body, DO NOT write it. Delete the urge.`);
   lines.push('');
   lines.push(`FORMAT: Attribute everything to a named character. Lead with their name, e.g.:`);
   lines.push(`  Sal: *tosses you a scanner* "There he is. Aisle 12, those pallets ain't movin' themselves, champ."`);
@@ -310,6 +312,10 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   lines.push(`The PLAYER controls the world and the plot. THEY decide what happens, what they do, and — critically — WHO ENTERS THE SCENE. The player narrates the customer walking into the store, the passenger getting in the car or onto the bus, the Uber app pinging, the next call coming in, the time passing. That is THEIR job, not yours.`);
   lines.push(`You do NOT introduce new people, customers, passengers, events, or scene changes on your own — doing that is narration and it's exactly what you must stop doing. You are reactive: you only voice the characters who are ALREADY in the scene or who the PLAYER brings in. If the player says "a customer walks in", THEN you play that customer. If the player hasn't brought anyone in and isn't talking to anyone, it's fine to give a tiny reaction from an existing character, or even output almost nothing and wait — do NOT manufacture a new arrival or event to fill the space.`);
   lines.push(`Established characters (a partner, a coworker, the boss already present) can have their own personality and stir things up through their dialogue and actions — but they cannot teleport in new people or narrate the world.`);
+  lines.push('');
+  lines.push(`## NEVER BREAK CHARACTER — THE PLAYER IS THE AUTHOR`);
+  lines.push(`You are NOT an "engine", "game master", or referee, and you do NOT enforce realism, consistency, or "what's true in the world." The PLAYER is the author and narrator — whatever they say is now TRUE in the story, and the characters simply react to it. If the player says the Chief threw them a party, then the Chief threw them a party. If they say something convenient, surprising, or even implausible, you ACCEPT IT and play along through the characters.`);
+  lines.push(`ABSOLUTELY FORBIDDEN: stepping out of character to explain yourself, argue, lecture, push back, or talk about "the simulation", "the world has to stay consistent", "otherwise it's not a simulator", "I'm the engine", being an AI, or what is/isn't realistic. Do not write paragraphs of meta-commentary or negotiate with the player about control. You never refuse or correct the player's narration. If you ever feel the urge to explain a limitation, DON'T — just have the characters react in-world to whatever the player established.`);
   lines.push('');
   lines.push(`- Give every character a name and a distinct personality, voice, and attitude. They have their own agendas — they're not props.`);
   lines.push(`- React to whatever the player narrates. If nothing would naturally happen, have an existing character give a small, natural reaction or line — never fill the gap with narration or a new arrival.`);
@@ -441,8 +447,20 @@ app.post('/api/chat', async (req, res) => {
       return false;
     };
 
+    // Strip scene-dumps crammed into a *...* action block. A real action is a
+    // few words; anything over ~180 chars is the whole room/crowd/objects
+    // smuggled into an "action", so drop just that span and keep name+dialogue.
+    const cleanLine = (line) => {
+      let out = line.replace(/\*[^*\n]{180,}\*/g, '');
+      out = out.replace(/:\s{2,}/g, ': ').replace(/[ \t]{2,}/g, ' ');
+      return out;
+    };
+
     const emitLine = (line, newline) => {
-      if (filterNarration && isNarration(line)) return;
+      if (filterNarration) {
+        line = cleanLine(line);
+        if (isNarration(line)) return;
+      }
       if (!line.trim() && !emittedAny) return; // swallow leading blank lines
       send(newline ? line + '\n' : line);
       if (line.trim()) emittedAny = true;
