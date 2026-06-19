@@ -978,23 +978,69 @@ function showToast(msg) {
 async function openCharModal() {
   if (!currentJob) return;
   charModal.hidden = false;
-  charList.innerHTML = '<div class="char-empty">Summarizing your shift and finding characters…</div>';
+  charList.innerHTML = '<div class="char-empty">Finding the characters in your shift…</div>';
 
-  let characters = [];
+  // Reliable source: pull speaker names straight out of the chat ("Marcus:", "Officer Brennan:").
+  const local = extractCharactersFromHistory();
+  // Render immediately so the user never sees a false "nobody here".
+  renderCharList(local);
+
+  // Then try to enrich with AI-written descriptions of the recent messages.
   if (history.length > 1) {
     try {
       const res = await fetch('/api/characters', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history, job: currentJob }),
+        body: JSON.stringify({ messages: history.slice(-16), job: currentJob }),
       });
-      if (res.ok) {
+      if (res.ok && !charModal.hidden) {
         const data = await res.json();
-        if (Array.isArray(data.characters)) characters = data.characters;
+        if (Array.isArray(data.characters)) {
+          renderCharList(mergeCharacters(local, data.characters));
+        }
       }
     } catch {}
   }
-  renderCharList(characters);
+}
+
+// Pull NPC names out of the assistant's lines. The roleplay format leads each
+// line with the speaker's name + colon, so this is reliable and instant.
+function extractCharactersFromHistory() {
+  const SKIP = new Set(['ooc', 'note', 'warning', 'system', 'you', 'me', 'i', 'http', 'https', 'dispatch note', 'p.s']);
+  const order = [];
+  const counts = new Map();   // lowerName -> count
+  const display = new Map();  // lowerName -> original casing
+  for (const m of history) {
+    if (m.role !== 'assistant') continue;
+    const { text } = extractParts(m.content);
+    const re = /(?:^|\n)\s*\*?([A-Z][A-Za-z0-9 .'’\-]{1,38}?)\*?\s*:/g;
+    let mt;
+    while ((mt = re.exec(text)) !== null) {
+      const name = mt[1].trim().replace(/\*/g, '').trim();
+      const key = name.toLowerCase();
+      if (name.length < 2 || SKIP.has(key)) continue;
+      if (/^https?$/i.test(name)) continue;
+      if (!counts.has(key)) { order.push(key); display.set(key, name); }
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  }
+  return order
+    .sort((a, b) => counts.get(b) - counts.get(a))
+    .slice(0, 12)
+    .map(k => ({ name: display.get(k), desc: '' }));
+}
+
+// Merge AI descriptions onto the locally-found names; keep any names the AI missed.
+function mergeCharacters(local, ai) {
+  const byKey = new Map();
+  for (const c of local) byKey.set(c.name.toLowerCase(), { name: c.name, desc: '' });
+  for (const c of (ai || [])) {
+    if (!c || !c.name) continue;
+    const key = c.name.toLowerCase();
+    if (byKey.has(key)) byKey.get(key).desc = c.desc || byKey.get(key).desc;
+    else byKey.set(key, { name: c.name, desc: c.desc || '' });
+  }
+  return [...byKey.values()].slice(0, 14);
 }
 
 function renderCharList(characters) {

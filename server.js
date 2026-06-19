@@ -522,15 +522,24 @@ app.post('/api/characters', async (req, res) => {
   }
 
   const job_ = JOBS[job];
-  const system = `You are analyzing a roleplay transcript from a job-simulator (${job_ ? job_.title : 'a job'}). Identify the distinct NAMED characters that have appeared so far — the people the assistant has voiced (coworkers, customers, the boss, partners, bystanders, etc.). Do NOT include the player's own character.
-Respond with ONLY a JSON array, no prose, no markdown fences. Each item: {"name": "Character Name", "desc": "a 4-8 word description"}. Up to 10 characters, most prominent first. If there are none yet, return [].`;
+
+  // Build a plain transcript so the model ANALYZES it rather than continuing the roleplay.
+  const transcript = messages.map(m => {
+    let text = '';
+    if (typeof m.content === 'string') text = m.content;
+    else if (Array.isArray(m.content)) text = m.content.filter(b => b.type === 'text').map(b => b.text).join(' ');
+    return `${m.role === 'assistant' ? '[CHARACTERS]' : '[PLAYER]'} ${text}`;
+  }).join('\n');
+
+  const system = `You analyze a transcript from a roleplay job sim (${job_ ? job_.title : 'a job'}). Lines marked [CHARACTERS] are spoken by NPCs the player has met; lines marked [PLAYER] are the player. List the distinct NAMED characters the player could step into — the NPCs (coworkers, customers, the boss, partners, bystanders, dispatch, etc.). In this format the speaker's name is usually written before a colon, like "Marcus:" or "Officer Brennan:".
+Respond with ONLY a JSON array — no prose, no markdown fences. Each item: {"name": "Character Name", "desc": "a 4-8 word description"}. Up to 12 characters, most prominent first. If genuinely none, return [].`;
 
   try {
     const resp = await client.messages.create({
       model: 'claude-opus-4-7',
       max_tokens: 1024,
       system,
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
+      messages: [{ role: 'user', content: `Transcript:\n\n${transcript}\n\nNow list the named NPC characters as a JSON array.` }],
     });
     let text = '';
     for (const block of resp.content) {
@@ -546,7 +555,7 @@ Respond with ONLY a JSON array, no prose, no markdown fences. Each item: {"name"
           characters = parsed
             .filter(c => c && typeof c.name === 'string' && c.name.trim())
             .map(c => ({ name: String(c.name).trim().slice(0, 60), desc: String(c.desc || '').trim().slice(0, 120) }))
-            .slice(0, 10);
+            .slice(0, 12);
         }
       } catch {}
     }
