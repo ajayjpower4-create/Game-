@@ -15,6 +15,15 @@
           <span class="logo-text">On The Clock</span>
         </div>
         <div class="header-actions" id="shiftActions" hidden>
+          <button class="hbtn" id="charBtn" title="Switch character">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span class="hbtn-label">Cast</span>
+          </button>
           <button class="hbtn" id="saveBtn" title="Save your shift">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -256,6 +265,18 @@
       </div>
       <p class="disclaimer">It's a sim. You narrate; the AI is the characters.</p>
     </footer>
+  </div>
+
+  <!-- Character switch modal -->
+  <div class="modal-overlay" id="charModal" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <span>Switch character</span>
+        <button class="modal-close" id="charClose" title="Close">✕</button>
+      </div>
+      <p class="modal-sub">Step into anyone who's shown up in your shift — or go back to being yourself. You can switch any time.</p>
+      <div class="char-list" id="charList"></div>
+    </div>
   </div>
 
   <script src="app.js"></script>

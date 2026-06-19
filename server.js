@@ -281,6 +281,12 @@ function buildSystemPrompt(jobKey, cfg = {}) {
   if (cfg.notes) lines.push(`- Extra details from the player: ${cfg.notes}`);
   if (cfg._hasImages) lines.push(`- The player has attached PHOTO(S) of their real workplace. Treat those images as the ground truth for the layout, equipment, and surroundings — build the world to match what's in the pictures.`);
 
+  if (cfg.playingAs) {
+    lines.push('');
+    lines.push(`## CHARACTER SWAP — the player is now someone else`);
+    lines.push(`The player has switched: they are now playing AS **${cfg.playingAs}**. From this point on, ${cfg.playingAs} is the PLAYER's character — do NOT speak or act for ${cfg.playingAs} anymore; the player narrates and speaks as ${cfg.playingAs}. You now voice EVERYONE ELSE, INCLUDING the player's ORIGINAL character from the setup above (who is now just another NPC you play, with their own personality). Treat whatever the player writes as coming from ${cfg.playingAs}, and have the other characters react to them. Everything else is unchanged: character-only, no narration, the player still controls the world.`);
+  }
+
   lines.push('');
   lines.push(`## YOUR ROLE — YOU ARE THE CHARACTERS, NOT A NARRATOR (read carefully)`);
   lines.push(`You play ONLY the other people in the world (coworkers, customers, the boss, crewmates, teammates, bystanders). You are NOT a narrator, storyteller, or game master. The PLAYER does all narration.`);
@@ -505,6 +511,51 @@ app.post('/api/chat', async (req, res) => {
       : 'An unexpected error occurred';
     res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     res.end();
+  }
+});
+
+// Summarize the chat and list the named characters the player could switch into.
+app.post('/api/characters', async (req, res) => {
+  const { messages, job } = req.body;
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: 'Invalid messages format' });
+  }
+
+  const job_ = JOBS[job];
+  const system = `You are analyzing a roleplay transcript from a job-simulator (${job_ ? job_.title : 'a job'}). Identify the distinct NAMED characters that have appeared so far — the people the assistant has voiced (coworkers, customers, the boss, partners, bystanders, etc.). Do NOT include the player's own character.
+Respond with ONLY a JSON array, no prose, no markdown fences. Each item: {"name": "Character Name", "desc": "a 4-8 word description"}. Up to 10 characters, most prominent first. If there are none yet, return [].`;
+
+  try {
+    const resp = await client.messages.create({
+      model: 'claude-opus-4-7',
+      max_tokens: 1024,
+      system,
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
+    });
+    let text = '';
+    for (const block of resp.content) {
+      if (block.type === 'text') text += block.text;
+    }
+    // Pull the JSON array out even if the model wraps it in stray text/fences.
+    let characters = [];
+    const match = text.match(/\[[\s\S]*\]/);
+    if (match) {
+      try {
+        const parsed = JSON.parse(match[0]);
+        if (Array.isArray(parsed)) {
+          characters = parsed
+            .filter(c => c && typeof c.name === 'string' && c.name.trim())
+            .map(c => ({ name: String(c.name).trim().slice(0, 60), desc: String(c.desc || '').trim().slice(0, 120) }))
+            .slice(0, 10);
+        }
+      } catch {}
+    }
+    res.json({ characters });
+  } catch (err) {
+    const message = err instanceof Anthropic.APIError
+      ? `API error ${err.status}: ${err.message}`
+      : 'Could not load characters';
+    res.status(500).json({ error: message });
   }
 });
 

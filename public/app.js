@@ -16,6 +16,10 @@ const setupTitle = document.getElementById('setupTitle');
 const setupSub = document.getElementById('setupSub');
 
 const shiftActions = document.getElementById('shiftActions');
+const charBtn = document.getElementById('charBtn');
+const charModal = document.getElementById('charModal');
+const charClose = document.getElementById('charClose');
+const charList = document.getElementById('charList');
 const saveBtn = document.getElementById('saveBtn');
 const recapBtn = document.getElementById('recapBtn');
 const toast = document.getElementById('toast');
@@ -569,6 +573,9 @@ saveBtn.addEventListener('click', saveShift);
 recapBtn.addEventListener('click', recapShift);
 resumeBtn.addEventListener('click', resumeShift);
 discardBtn.addEventListener('click', discardSave);
+charBtn.addEventListener('click', openCharModal);
+charClose.addEventListener('click', () => { charModal.hidden = true; });
+charModal.addEventListener('click', (e) => { if (e.target === charModal) charModal.hidden = true; });
 
 // ---- Image attachments ----
 setupDropzone.addEventListener('click', () => setupImageInput.click());
@@ -964,6 +971,79 @@ function showToast(msg) {
     toast.classList.remove('show');
     setTimeout(() => { toast.hidden = true; }, 250);
   }, 2200);
+}
+
+// ---- Switch character ----
+async function openCharModal() {
+  if (!currentJob) return;
+  charModal.hidden = false;
+  charList.innerHTML = '<div class="char-empty">Summarizing your shift and finding characters…</div>';
+
+  let characters = [];
+  if (history.length > 1) {
+    try {
+      const res = await fetch('/api/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: history, job: currentJob }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.characters)) characters = data.characters;
+      }
+    } catch {}
+  }
+  renderCharList(characters);
+}
+
+function renderCharList(characters) {
+  charList.innerHTML = '';
+
+  // "Play as yourself" option.
+  const selfOpt = document.createElement('button');
+  selfOpt.className = 'char-opt' + (!currentConfig.playingAs ? ' current' : '');
+  selfOpt.innerHTML = `<span class="char-opt-name">Yourself ${currentConfig.playingAs ? '' : '✓'}</span>` +
+    `<span class="char-opt-desc">Your original character from the setup</span>`;
+  selfOpt.addEventListener('click', () => selectPersona(null));
+  charList.appendChild(selfOpt);
+
+  if (!characters.length) {
+    const empty = document.createElement('div');
+    empty.className = 'char-empty';
+    empty.textContent = 'No other characters have shown up yet — keep playing and they\'ll appear here.';
+    charList.appendChild(empty);
+    return;
+  }
+
+  characters.forEach(c => {
+    const opt = document.createElement('button');
+    opt.className = 'char-opt' + (currentConfig.playingAs === c.name ? ' current' : '');
+    opt.innerHTML = `<span class="char-opt-name">${escapeHtml(c.name)}${currentConfig.playingAs === c.name ? ' ✓' : ''}</span>` +
+      (c.desc ? `<span class="char-opt-desc">${escapeHtml(c.desc)}</span>` : '');
+    opt.addEventListener('click', () => selectPersona(c.name));
+    charList.appendChild(opt);
+  });
+}
+
+function selectPersona(name) {
+  charModal.hidden = true;
+  if (!name) {
+    if (!currentConfig.playingAs) return; // already yourself
+    delete currentConfig.playingAs;
+    appendSystemNote('🔄 You\'re back to playing as yourself.');
+  } else {
+    if (currentConfig.playingAs === name) return;
+    currentConfig.playingAs = name;
+    appendSystemNote(`🎭 You're now playing as ${name}. The AI plays everyone else.`);
+  }
+}
+
+function appendSystemNote(text) {
+  const note = document.createElement('div');
+  note.className = 'sys-note';
+  note.textContent = text;
+  messagesEl.appendChild(note);
+  scrollToBottom();
 }
 
 async function streamReply() {
