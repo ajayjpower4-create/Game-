@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <title>Budget Planner — Can You Make It?</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,52 +11,193 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+          <span class="logo-icon">💰</span>
+          <span class="logo-text">Budget Planner</span>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+        <button class="ghost-btn" id="restartBtn" title="Start over">Restart</button>
       </div>
     </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
-        </div>
-      </div>
-      <div class="messages" id="messages"></div>
-    </main>
+    <!-- Progress bar -->
+    <div class="progress" id="progress">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
 
-    <footer class="input-area">
-      <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-        </button>
-      </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
-    </footer>
+    <main class="screen" id="screen">
+
+      <!-- Step 0: Intro -->
+      <section class="step active" data-step="intro">
+        <div class="intro">
+          <div class="intro-icon">💸</div>
+          <h1>Can You Make It In Life?</h1>
+          <p>Build out your monthly finances — your job, car, subscriptions, home and expenses. At the end, an AI financial coach sizes it all up and tells you if you're going to <strong>make it</strong> or be <strong>broke</strong>.</p>
+          <button class="primary-btn" data-action="next">Start Simulation →</button>
+        </div>
+      </section>
+
+      <!-- Step 1: Job -->
+      <section class="step" data-step="job">
+        <div class="step-head">
+          <span class="step-emoji">💼</span>
+          <h2>Your Job</h2>
+          <p>What do you do for work?</p>
+        </div>
+        <div class="fields">
+          <label class="field">
+            <span>Job description / title</span>
+            <input type="text" id="jobTitle" placeholder="e.g. Line Cook, Software Engineer, Nurse">
+          </label>
+          <label class="field">
+            <span>Where you work (employer)</span>
+            <input type="text" id="jobEmployer" placeholder="e.g. Target, City Hospital, Self-employed">
+          </label>
+          <label class="field">
+            <span>Your rank / level</span>
+            <input type="text" id="jobRank" placeholder="e.g. Entry-level, Manager, Senior">
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>Money per hour ($)</span>
+              <input type="number" id="jobWage" min="0" step="0.25" placeholder="18.00">
+            </label>
+            <label class="field">
+              <span>Hours per week</span>
+              <input type="number" id="jobHours" min="0" max="168" step="1" placeholder="40">
+            </label>
+          </div>
+        </div>
+        <div class="nav">
+          <button class="ghost-btn" data-action="back">← Back</button>
+          <button class="primary-btn" data-action="next">Next →</button>
+        </div>
+      </section>
+
+      <!-- Step 2: Car -->
+      <section class="step" data-step="car">
+        <div class="step-head">
+          <span class="step-emoji">🚗</span>
+          <h2>Your Car</h2>
+          <p>Do you have a car?</p>
+        </div>
+        <div class="toggle-row">
+          <button class="toggle-btn" id="carYes" data-car="yes">Yes, I have a car</button>
+          <button class="toggle-btn" id="carNo" data-car="no">No car</button>
+        </div>
+        <div class="fields" id="carFields" hidden>
+          <label class="field">
+            <span>Type of car</span>
+            <input type="text" id="carType" placeholder="e.g. Honda Civic, Used truck, Tesla">
+          </label>
+          <label class="field">
+            <span>Monthly car note ($)</span>
+            <input type="number" id="carNote" min="0" step="1" placeholder="350">
+          </label>
+        </div>
+        <div class="nav">
+          <button class="ghost-btn" data-action="back">← Back</button>
+          <button class="primary-btn" data-action="next">Next →</button>
+        </div>
+      </section>
+
+      <!-- Step 3: Subscriptions -->
+      <section class="step" data-step="subs">
+        <div class="step-head">
+          <span class="step-emoji">📺</span>
+          <h2>Subscriptions</h2>
+          <p>Streaming, music, gym, apps — add what you pay for.</p>
+        </div>
+        <div class="list" id="subsList"></div>
+        <button class="add-btn" id="addSub">+ Add subscription</button>
+        <div class="nav">
+          <button class="ghost-btn" data-action="back">← Back</button>
+          <button class="primary-btn" data-action="next">Next →</button>
+        </div>
+      </section>
+
+      <!-- Step 4: Home -->
+      <section class="step" data-step="home">
+        <div class="step-head">
+          <span class="step-emoji">🏠</span>
+          <h2>Your Home</h2>
+          <p>Where you live and what it costs.</p>
+        </div>
+        <div class="fields">
+          <label class="field">
+            <span>Rent or mortgage ($/month)</span>
+            <input type="number" id="homeRent" min="0" step="1" placeholder="1200">
+          </label>
+          <label class="field">
+            <span>Gas &amp; electric ($/month)</span>
+            <input type="number" id="homeUtil" min="0" step="1" placeholder="180">
+          </label>
+        </div>
+        <div class="nav">
+          <button class="ghost-btn" data-action="back">← Back</button>
+          <button class="primary-btn" data-action="next">Next →</button>
+        </div>
+      </section>
+
+      <!-- Step 5: Extra expenses -->
+      <section class="step" data-step="extra">
+        <div class="step-head">
+          <span class="step-emoji">🛒</span>
+          <h2>Extra Expenses</h2>
+          <p>The everyday stuff. Add anything else you spend on.</p>
+        </div>
+        <div class="fields">
+          <label class="field">
+            <span>Groceries ($/month)</span>
+            <input type="number" id="exGroceries" min="0" step="1" placeholder="400">
+          </label>
+          <label class="field">
+            <span>Gas for the car ($/month)</span>
+            <input type="number" id="exCarGas" min="0" step="1" placeholder="150">
+          </label>
+        </div>
+        <div class="list" id="extraList"></div>
+        <button class="add-btn" id="addExtra">+ Add another expense</button>
+        <div class="nav">
+          <button class="ghost-btn" data-action="back">← Back</button>
+          <button class="primary-btn" data-action="next">See the verdict 🔮</button>
+        </div>
+      </section>
+
+      <!-- Step 6: Results -->
+      <section class="step" data-step="results">
+        <div class="summary-cards">
+          <div class="card income">
+            <span class="card-label">Take-home / mo</span>
+            <span class="card-value" id="resIncome">$0</span>
+          </div>
+          <div class="card expense">
+            <span class="card-label">Expenses / mo</span>
+            <span class="card-value" id="resExpenses">$0</span>
+          </div>
+          <div class="card leftover" id="leftoverCard">
+            <span class="card-label">Leftover / mo</span>
+            <span class="card-value" id="resLeftover">$0</span>
+          </div>
+        </div>
+
+        <div class="breakdown" id="breakdown"></div>
+
+        <div class="verdict-box">
+          <div class="verdict-head">
+            <span class="verdict-emoji">🤖</span>
+            <h3>The Coach's Verdict</h3>
+          </div>
+          <div class="verdict-text" id="verdictText">
+            <div class="thinking" id="thinking">Crunching your numbers<span class="dots"><span>.</span><span>.</span><span>.</span></span></div>
+          </div>
+        </div>
+
+        <div class="nav">
+          <button class="ghost-btn" data-action="back">← Back</button>
+          <button class="primary-btn" id="restartBtn2">Start over 🔄</button>
+        </div>
+      </section>
+
+    </main>
   </div>
 
   <script src="app.js"></script>

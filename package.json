@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "budget-planner-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "A budget planner where you simulate your finances and find out if you'll make it in life or go broke",
   "main": "server.js",
   "type": "module",
   "scripts": {
