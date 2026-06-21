@@ -4,9 +4,56 @@ const welcome = document.getElementById('welcome');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const newChatBtn = document.getElementById('newChatBtn');
+const saveStatus = document.getElementById('saveStatus');
+
+const SAVE_KEY = 'dentist-sim-uk-save';
+const AUTOSAVE_EVERY = 5; // The game automatically saves every five messages.
 
 let history = [];
 let isStreaming = false;
+let messageCount = 0;
+
+// ---- Persistence (auto-save every 5 messages) ----
+function saveGame() {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ history }));
+  } catch {}
+}
+
+function maybeAutosave() {
+  messageCount++;
+  saveGame(); // always persist so nothing is lost on mobile
+  if (messageCount % AUTOSAVE_EVERY === 0) {
+    flashSaved();
+  }
+}
+
+function flashSaved() {
+  if (!saveStatus) return;
+  const prev = saveStatus.textContent;
+  saveStatus.textContent = '✓ Game saved';
+  saveStatus.classList.add('saved');
+  clearTimeout(flashSaved._t);
+  flashSaved._t = setTimeout(() => {
+    saveStatus.classList.remove('saved');
+    saveStatus.textContent = 'Press Send to play · Auto-saves every 5 messages';
+  }, 1800);
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.history) || data.history.length === 0) return;
+    history = data.history;
+    welcome.style.display = 'none';
+    for (const msg of history) {
+      appendMessage(msg.role, msg.content);
+    }
+    scrollToBottom();
+  } catch {}
+}
 
 // Auto-resize textarea
 input.addEventListener('input', () => {
@@ -15,13 +62,8 @@ input.addEventListener('input', () => {
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-// Send on Enter (Shift+Enter for newline)
-input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    if (!sendBtn.disabled) sendMessage();
-  }
-});
+// On mobile the return key must NOT send — it inserts a new line.
+// The player must press the Send button. (Per game design.)
 
 sendBtn.addEventListener('click', sendMessage);
 newChatBtn.addEventListener('click', resetChat);
@@ -38,13 +80,16 @@ document.querySelectorAll('.suggestion').forEach(btn => {
 });
 
 function resetChat() {
+  if (history.length > 0 && !confirm('Start a new game? Your current saved game will be erased.')) return;
   history = [];
+  messageCount = 0;
   messagesEl.innerHTML = '';
   welcome.style.display = 'flex';
   input.value = '';
   input.style.height = 'auto';
   sendBtn.disabled = true;
   isStreaming = false;
+  try { localStorage.removeItem(SAVE_KEY); } catch {}
 }
 
 async function sendMessage() {
@@ -59,6 +104,7 @@ async function sendMessage() {
   // Add user message
   history.push({ role: 'user', content: text });
   appendMessage('user', text);
+  maybeAutosave();
 
   input.value = '';
   input.style.height = 'auto';
@@ -115,6 +161,7 @@ async function sendMessage() {
     if (assistantText) {
       history.push({ role: 'assistant', content: assistantText });
       bubble.innerHTML = renderMarkdown(assistantText);
+      maybeAutosave();
     }
   } catch (err) {
     cursor.remove();
@@ -133,7 +180,7 @@ function appendMessage(role, content) {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : '◈';
+  avatar.textContent = role === 'user' ? 'You' : '🦷';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -152,7 +199,7 @@ function createAssistantBubble() {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = '◈';
+  avatar.textContent = '🦷';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -227,3 +274,6 @@ function renderMarkdown(text) {
 
   return html;
 }
+
+// Restore saved game on load
+loadGame();

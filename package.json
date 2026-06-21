@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "dentist-simulator-uk",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Dentist Simulator UK — an AI chatbot roleplay game set in a modern UK dental practice",
   "main": "server.js",
   "type": "module",
   "scripts": {
