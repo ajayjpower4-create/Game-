@@ -3,51 +3,193 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <title>Family Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app">
+<div class="app">
+
+  <!-- ===================== SETUP WIZARD ===================== -->
+  <div id="setup" class="setup">
+    <div class="setup-inner">
+      <div class="setup-head">
+        <div class="logo">🏠 <span>Family Simulator</span></div>
+        <p class="tagline">Live the life of a good family… or a real shitshow. You decide.</p>
+      </div>
+
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+
+      <!-- Step 0: title / load -->
+      <section class="step active" data-step="0">
+        <h2>Start a family</h2>
+        <p class="muted">Build your household from scratch, or jump back into a saved game.</p>
+        <div class="btn-col">
+          <button class="big-btn" id="startNew">＋ New family</button>
+          <button class="big-btn ghost" id="loadSaved">📂 Load saved game</button>
+        </div>
+        <input type="file" id="importFile" accept="application/json" hidden>
+        <p class="muted tiny">Saved games live in this browser. You can also export a save file to keep forever.</p>
+      </section>
+
+      <!-- Step 1: rank -->
+      <section class="step" data-step="1">
+        <h2>Who are you in this family?</h2>
+        <p class="muted">Pick your rank. You'll play this person (you can switch later).</p>
+        <div class="choices" id="rankChoices">
+          <button class="choice" data-val="dad">👨 Dad</button>
+          <button class="choice" data-val="mom">👩 Mom</button>
+        </div>
+        <label class="field">
+          <span>Your name <em>(optional)</em></span>
+          <input type="text" id="playerName" placeholder="e.g. Frank" maxlength="40">
+        </label>
+        <div class="step-nav">
+          <button class="nav-btn ghost" data-prev>Back</button>
+          <button class="nav-btn" data-next id="rankNext" disabled>Next</button>
+        </div>
+      </section>
+
+      <!-- Step 2: class -->
+      <section class="step" data-step="2">
+        <h2>How's the family doing for money?</h2>
+        <p class="muted">Pick your class. It sets the whole vibe.</p>
+        <div class="choices col" id="classChoices">
+          <button class="choice" data-val="dirt poor">🪤 Dirt poor</button>
+          <button class="choice" data-val="poor">💸 Poor</button>
+          <button class="choice" data-val="working class">🔧 Working class</button>
+          <button class="choice" data-val="middle class">🏡 Middle class</button>
+          <button class="choice" data-val="upper middle class">📈 Upper middle class</button>
+          <button class="choice" data-val="rich / upper class">💰 Rich (upper class)</button>
+          <button class="choice" data-val="upper upper class">💎 Upper upper class</button>
+          <button class="choice" data-val="upper upper upper class — obscenely wealthy">👑 Upper upper upper class</button>
+        </div>
+        <div class="step-nav">
+          <button class="nav-btn ghost" data-prev>Back</button>
+          <button class="nav-btn" data-next id="classNext" disabled>Next</button>
+        </div>
+      </section>
+
+      <!-- Step 3: partner -->
+      <section class="step" data-step="3">
+        <h2>Your other half</h2>
+        <p class="muted">Name and describe your partner — or fly solo.</p>
+        <div class="choices" id="partnerToggle">
+          <button class="choice" data-val="partnered">💍 I have a partner</button>
+          <button class="choice" data-val="single">🙅 I'm single</button>
+        </div>
+        <div id="partnerForm" class="hidden">
+          <label class="field">
+            <span>They are my…</span>
+            <select id="partnerRelation">
+              <option>wife</option><option>husband</option>
+              <option>girlfriend</option><option>boyfriend</option>
+              <option>partner</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Name</span>
+            <input type="text" id="partnerName" placeholder="e.g. Linda" maxlength="40">
+          </label>
+          <label class="field">
+            <span>Describe them</span>
+            <textarea id="partnerDesc" placeholder="Personality, looks, attitude, quirks… e.g. loud, loving, never shuts up about her diet" maxlength="500"></textarea>
+          </label>
+        </div>
+        <div class="step-nav">
+          <button class="nav-btn ghost" data-prev>Back</button>
+          <button class="nav-btn" data-next id="partnerNext" disabled>Next</button>
+        </div>
+      </section>
+
+      <!-- Step 4: kids -->
+      <section class="step" data-step="4">
+        <h2>The kids</h2>
+        <p class="muted">Add as many as you want. Or none — your call.</p>
+        <div id="kidsList" class="member-list"></div>
+        <button class="add-btn" id="addKid">＋ Add a kid</button>
+        <div class="step-nav">
+          <button class="nav-btn ghost" data-prev>Back</button>
+          <button class="nav-btn" data-next>Next</button>
+        </div>
+      </section>
+
+      <!-- Step 5: relatives -->
+      <section class="step" data-step="5">
+        <h2>Extended family</h2>
+        <p class="muted">Grandmas, uncles, aunts, nephews, the freeloading cousin… add whoever.</p>
+        <div id="relativesList" class="member-list"></div>
+        <button class="add-btn" id="addRelative">＋ Add a relative</button>
+        <div class="step-nav">
+          <button class="nav-btn ghost" data-prev>Back</button>
+          <button class="nav-btn" data-next>Next</button>
+        </div>
+      </section>
+
+      <!-- Step 6: place -->
+      <section class="step" data-step="6">
+        <h2>Where do you live?</h2>
+        <label class="field">
+          <span>State</span>
+          <select id="usState"></select>
+        </label>
+        <p class="muted">What kind of place?</p>
+        <div class="choices col" id="landChoices">
+          <button class="choice" data-val="a farm out on farmland">🚜 Farmland</button>
+          <button class="choice" data-val="a normal house with a backyard">🏡 Normal house w/ backyard</button>
+          <button class="choice" data-val="an apartment">🏢 Apartment</button>
+          <button class="choice" data-val="a mobile home / trailer">🚐 Trailer</button>
+          <button class="choice" data-val="a mansion on a big estate">🏰 Mansion / estate</button>
+          <button class="choice" data-val="custom">✏️ Something else…</button>
+        </div>
+        <input type="text" id="landCustom" class="hidden" placeholder="Describe where you live" maxlength="120">
+        <div class="step-nav">
+          <button class="nav-btn ghost" data-prev>Back</button>
+          <button class="nav-btn" data-next id="placeNext" disabled>Next</button>
+        </div>
+      </section>
+
+      <!-- Step 7: pets -->
+      <section class="step" data-step="7">
+        <h2>Any pets?</h2>
+        <p class="muted">Optional — dogs, cats, a goat, whatever.</p>
+        <div id="petsList" class="member-list"></div>
+        <button class="add-btn" id="addPet">＋ Add a pet</button>
+        <div class="step-nav">
+          <button class="nav-btn ghost" data-prev>Back</button>
+          <button class="nav-btn" id="finishSetup">🚀 Start living</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ===================== GAME ===================== -->
+  <div id="game" class="game hidden">
     <header class="header">
       <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+        <div class="logo small">🏠 <span id="familyTitle">Family</span></div>
+        <div class="header-meta">
+          <span class="day-pill" id="dayPill">Monday · Day 1</span>
+          <select id="charSwitch" title="Switch which family member you control"></select>
+          <button class="icon-btn" id="menuBtn" title="Menu">⋯</button>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+      </div>
+      <div id="menu" class="menu hidden">
+        <button data-cmd="/wake-up">☀️ Wake up</button>
+        <button data-cmd="/sleep">🌙 Go to sleep</button>
+        <button id="saveBtn">💾 Save game</button>
+        <button id="exportBtn">⬇️ Export save file</button>
+        <button id="quitBtn" class="danger">✖ Quit to menu</button>
       </div>
     </header>
 
     <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
-        </div>
-      </div>
       <div class="messages" id="messages"></div>
     </main>
 
     <footer class="input-area">
       <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
+        <textarea id="messageInput" class="message-input"
+          placeholder="Say or do something as your character…" rows="1" maxlength="4000"></textarea>
         <button class="send-btn" id="sendBtn" disabled>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="19" x2="12" y2="5"></line>
@@ -55,10 +197,22 @@
           </svg>
         </button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
+      <p class="disclaimer">/wake-up · /sleep · /switch · /save — type or use the ⋯ menu. It's a game; it cusses.</p>
     </footer>
   </div>
 
-  <script src="app.js"></script>
+  <div id="toast" class="toast hidden"></div>
+</div>
+
+<!-- Load slots modal -->
+<div id="loadModal" class="modal hidden">
+  <div class="modal-card">
+    <h3>Load a saved game</h3>
+    <div id="slotList" class="slot-list"></div>
+    <button class="nav-btn ghost" id="closeLoad">Close</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>

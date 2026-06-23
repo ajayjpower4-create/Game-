@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "family-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Family Simulator — a chatbot roleplay game where you live life as a good or bad family",
   "main": "server.js",
   "type": "module",
   "scripts": {
