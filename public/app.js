@@ -237,10 +237,21 @@ function refreshDayPill() {
 }
 
 // ---- character switching ----
+// When the player takes over a new family member, the AI must STOP playing that
+// member and go back to playing whoever the player just left. We hand the AI an
+// explicit memo (delivered with the player's next message so chat turns stay valid).
+let pendingMemo = null;
+
 $('charSwitch').addEventListener('change', (e) => {
   const id = e.target.value;
+  const prevLabel = activeLabel(game);              // who I was a second ago
   game.activeCharacter = id === 'self' ? '' : id;
-  appendSystemNote(`You're now playing ${activeLabel(game)}.`);
+  const nowLabel = activeLabel(game);               // who I am now
+  if (nowLabel === prevLabel) return;
+
+  pendingMemo = `[CHARACTER SWITCH — the player has changed who they control. They are NOW playing ${nowLabel}, so from this point on do NOT speak, act, think, or decide anything as ${nowLabel} — that is the player. Go back to playing ${prevLabel} and every other family member as normal.]`;
+
+  appendSystemNote(`🎭 You're now playing ${nowLabel}. The family will play ${prevLabel} from here on.`);
   scrollToBottom();
 });
 
@@ -257,7 +268,11 @@ input.addEventListener('input', () => {
   input.style.height = Math.min(input.scrollHeight, 160) + 'px';
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
+// On phones/tablets the Return key should NOT send — it just makes a newline.
+// You send with the ➤ button. On desktop, Enter still sends (Shift+Enter = newline).
+const IS_TOUCH = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || ('ontouchstart' in window);
 input.addEventListener('keydown', (e) => {
+  if (IS_TOUCH) return;                       // let Return insert a newline on mobile
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!sendBtn.disabled) handleSend(); }
 });
 sendBtn.addEventListener('click', handleSend);
@@ -294,7 +309,13 @@ function doWake(raw) {
 async function sendToFamily(text) {
   isStreaming = true; sendBtn.disabled = true; sendBtn.classList.add('loading');
 
-  game.history.push({ role: 'user', content: text });
+  // If a character switch just happened, ride the memo along with this message so
+  // the AI is told to stop playing the character the player took over. We store the
+  // full content (memo + text) in history but only show the player's words on screen.
+  const content = pendingMemo ? `${pendingMemo}\n\n${text}` : text;
+  pendingMemo = null;
+
+  game.history.push({ role: 'user', content });
   appendMessage('user', text);
 
   const { bubble, cursor } = createAssistantBubble();
@@ -342,8 +363,10 @@ async function sendToFamily(text) {
 }
 
 // ---- rendering ----
+function stripMemo(s) { return s.replace(/^\[CHARACTER SWITCH[\s\S]*?\]\s*/, ''); }
+
 function renderHistoryMessage(m) {
-  if (m.role === 'user') appendMessage('user', m.content);
+  if (m.role === 'user') appendMessage('user', stripMemo(m.content));
   else { const { bubble } = createAssistantBubble(); bubble.innerHTML = renderFamily(m.content); }
 }
 
