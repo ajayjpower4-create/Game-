@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "trade-worker-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Trade Worker Simulator — an AI roleplay game where you live the life of a trade worker",
   "main": "server.js",
   "type": "module",
   "scripts": {

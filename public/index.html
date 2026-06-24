@@ -2,61 +2,92 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Trade Worker Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app">
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+    <!-- ===== SETUP WIZARD ===== -->
+    <div class="setup" id="setup">
+      <div class="setup-inner">
+        <div class="brand">
+          <div class="brand-mark">🔧</div>
+          <h1>Trade Worker Simulator</h1>
+          <p class="tagline">Pick your trade. Build your crew. Clock in.</p>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
-      </div>
-    </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+        <div class="progress" id="progress"></div>
+
+        <div class="step-wrap" id="stepWrap"></div>
+
+        <div class="setup-nav">
+          <button class="btn ghost" id="backBtn">Back</button>
+          <button class="btn primary" id="nextBtn">Next</button>
         </div>
-      </div>
-      <div class="messages" id="messages"></div>
-    </main>
 
-    <footer class="input-area">
-      <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-        </button>
+        <button class="link-btn" id="loadSavedBtn" hidden>↻ Load saved shift</button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
-    </footer>
+    </div>
+
+    <!-- ===== GAME / CHAT ===== -->
+    <div class="game" id="game" hidden>
+      <header class="header">
+        <div class="header-inner">
+          <div class="job-info">
+            <span class="job-title" id="hdrTitle">Trade Worker Simulator</span>
+            <span class="job-sub" id="hdrSub"></span>
+          </div>
+          <div class="header-actions">
+            <button class="icon-btn" id="crewBtn" title="Manage crew">👷</button>
+            <button class="icon-btn" id="saveBtn" title="Save shift">💾</button>
+            <button class="icon-btn" id="quitBtn" title="End shift">⏻</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="chat-area" id="chatArea">
+        <div class="shift-banner" id="shiftBanner">
+          <p>Your crew, your van, your company are set.</p>
+          <button class="btn primary big" id="startShiftBtn">/startshift</button>
+          <p class="hint">or type <code>/startshift</code> below to clock in</p>
+        </div>
+        <div class="messages" id="messages"></div>
+      </main>
+
+      <footer class="input-area">
+        <div class="input-container">
+          <textarea
+            id="messageInput"
+            class="message-input"
+            placeholder="Say something to your crew…"
+            rows="1"
+            maxlength="8000"
+          ></textarea>
+          <button class="send-btn" id="sendBtn" disabled title="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+          </button>
+        </div>
+        <p class="disclaimer" id="enterHint"></p>
+      </footer>
+    </div>
+
+    <!-- ===== CREW MODAL ===== -->
+    <div class="modal-overlay" id="crewModal" hidden>
+      <div class="modal">
+        <div class="modal-head">
+          <h2>Your Crew</h2>
+          <button class="icon-btn" id="closeCrewBtn">✕</button>
+        </div>
+        <p class="modal-sub">Swap crew in and out any time. Changes apply to the rest of the shift.</p>
+        <div id="crewEditList" class="crew-edit-list"></div>
+        <button class="btn ghost full" id="addCrewBtn">+ Add crew member</button>
+        <button class="btn primary full" id="saveCrewBtn">Save crew</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
