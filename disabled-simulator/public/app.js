@@ -199,7 +199,7 @@ async function sendMessage() {
   input.value = '';
   input.style.height = 'auto';
 
-  const { bubble, cursor } = createAssistantBubble();
+  const { row, bubble, cursor } = createAssistantBubble();
 
   try {
     const res = await fetch('/api/chat', {
@@ -245,7 +245,8 @@ async function sendMessage() {
     cursor.remove();
     if (assistantText) {
       state.messages.push({ role: 'assistant', content: assistantText });
-      bubble.innerHTML = renderText(assistantText);
+      row.remove();
+      renderAssistantBlocks(assistantText);
       handleTimeAdvance(text);
       msgsSinceAutosave += 1;
       if (msgsSinceAutosave >= 3) {
@@ -284,19 +285,70 @@ function gameStateForServer() {
 }
 
 function appendMessage(role, content) {
+  if (role === 'assistant') {
+    renderAssistantBlocks(content);
+    return;
+  }
   const div = document.createElement('div');
   div.className = `message ${role}`;
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : '◈';
+  avatar.textContent = 'U';
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.innerHTML = role === 'user' ? escapeHtml(content) : renderText(content);
+  bubble.innerHTML = escapeHtml(content);
   div.appendChild(avatar);
   div.appendChild(bubble);
   document.getElementById('messages').appendChild(div);
   scrollToBottom();
   return bubble;
+}
+
+// Parses "Name: dialogue" lines (blank-line separated per speaker) into labeled blocks
+function parseSpeakerBlocks(text) {
+  const speakerRe = /^([A-Z][A-Za-z.'\- ]{1,28}):\s?(.*)$/;
+  const blocks = [];
+  let current = null;
+  for (const line of text.split('\n')) {
+    const m = line.match(speakerRe);
+    if (m) {
+      if (current) blocks.push(current);
+      current = { speaker: m[1].trim(), text: m[2] };
+    } else if (current) {
+      current.text += (line.trim() ? (current.text ? '\n' : '') + line : '');
+    } else {
+      current = { speaker: null, text: line };
+    }
+  }
+  if (current) blocks.push(current);
+  return blocks.filter(b => b.text.trim() || b.speaker);
+}
+
+function renderAssistantBlocks(content) {
+  const blocks = parseSpeakerBlocks(content);
+  const messagesEl = document.getElementById('messages');
+  blocks.forEach(b => {
+    const div = document.createElement('div');
+    div.className = 'message assistant';
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = b.speaker ? b.speaker.charAt(0).toUpperCase() : '◈';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    if (b.speaker) {
+      const label = document.createElement('div');
+      label.className = 'speaker-name';
+      label.textContent = b.speaker;
+      bubble.appendChild(label);
+    }
+    const textSpan = document.createElement('div');
+    textSpan.innerHTML = renderText(b.text.trim());
+    bubble.appendChild(textSpan);
+    div.appendChild(avatar);
+    div.appendChild(bubble);
+    messagesEl.appendChild(div);
+  });
+  scrollToBottom();
 }
 
 function createAssistantBubble() {
@@ -314,7 +366,7 @@ function createAssistantBubble() {
   div.appendChild(bubble);
   document.getElementById('messages').appendChild(div);
   scrollToBottom();
-  return { bubble, cursor };
+  return { row: div, bubble, cursor };
 }
 
 function scrollToBottom() {
