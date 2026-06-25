@@ -8,6 +8,14 @@ const app = express();
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 app.use(express.json());
+
+// Never let the browser serve a stale index.html — it points at versioned assets.
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+  next();
+});
 app.use(express.static(join(__dirname, 'public')));
 
 const STAFF_ROSTER = `
