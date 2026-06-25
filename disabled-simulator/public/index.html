@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Disabled Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- Step 0: Title / continue -->
+    <section class="screen" id="screen-title">
+      <div class="screen-inner">
+        <h1>Disabled Simulator</h1>
+        <p class="subtitle">A narrative chat game set at Lincoln High School.</p>
+        <button class="btn primary" id="btnNewGame">New Game</button>
+        <button class="btn" id="btnContinue" style="display:none">Continue Saved Game</button>
+      </div>
+    </section>
+
+    <!-- Step 1: Mode select -->
+    <section class="screen" id="screen-mode" hidden>
+      <div class="screen-inner">
+        <h2>Choose your role</h2>
+        <div class="cards">
+          <button class="card" data-mode="play">
+            <h3>Play the Teen</h3>
+            <p>You type and act directly as the disabled teenager. The AI plays everyone else.</p>
+          </button>
+          <button class="card" data-mode="control">
+            <h3>Control Mode</h3>
+            <p>You play the teen's mind — directing their stress, anxiety, anger, and impulses from the inside. The AI plays the teen's outward behavior plus everyone else.</p>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 2: Character creation -->
+    <section class="screen" id="screen-character" hidden>
+      <div class="screen-inner">
+        <h2>Create your character</h2>
+        <form id="formCharacter">
+          <label>Name<input type="text" id="charName" required></label>
+          <label>Age<input type="number" id="charAge" min="13" max="19" value="16" required></label>
+          <label>Grade
+            <select id="charGrade">
+              <option value="9">9th</option>
+              <option value="10">10th</option>
+              <option value="11" selected>11th</option>
+              <option value="12">12th</option>
+            </select>
+          </label>
+          <label>Condition
+            <select id="charCondition"></select>
+          </label>
+          <label>Severity
+            <select id="charSeverity">
+              <option value="mild">Mild</option>
+              <option value="moderate" selected>Moderate</option>
+              <option value="severe">Severe</option>
+            </select>
+          </label>
+          <label>Anything else? (optional)
+            <textarea id="charNotes" rows="2" placeholder="Likes, dislikes, quirks, anything that matters..."></textarea>
+          </label>
+          <button class="btn primary" type="submit">Next</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Step 3: Parent setup -->
+    <section class="screen" id="screen-parents" hidden>
+      <div class="screen-inner">
+        <h2>Family setup</h2>
+        <form id="formParents">
+          <fieldset>
+            <legend>Parent / Guardian 1</legend>
+            <label>Name<input type="text" id="p1Name" required></label>
+            <label>Age<input type="number" id="p1Age" min="25" max="80" value="42" required></label>
+            <label>Occupation<input type="text" id="p1Occupation" required></label>
+            <label>Personality trait<input type="text" id="p1Trait" placeholder="e.g. short-tempered but protective" required></label>
+          </fieldset>
+
+          <label class="checkbox"><input type="checkbox" id="addParent2"> Add a second parent/guardian</label>
+
+          <fieldset id="parent2Fields" hidden>
+            <legend>Parent / Guardian 2</legend>
+            <label>Name<input type="text" id="p2Name"></label>
+            <label>Age<input type="number" id="p2Age" min="25" max="80" value="44"></label>
+            <label>Occupation<input type="text" id="p2Occupation"></label>
+            <label>Personality trait<input type="text" id="p2Trait" placeholder="e.g. calm but checked out"></label>
+          </fieldset>
+
+          <button class="btn primary" type="submit">Start Game</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Step 4: Game -->
+    <section class="screen" id="screen-game" hidden>
+      <header class="game-header">
+        <div class="day-badge" id="dayBadge">Monday</div>
+        <div class="header-actions">
+          <button class="icon-btn" id="btnSave" title="Save">Save</button>
+          <button class="icon-btn" id="btnQuit" title="Quit to title">Quit</button>
+        </div>
+      </header>
+
+      <div class="control-panel" id="controlPanel" hidden>
+        <div class="slider-row">
+          <label>Stress <span id="stressVal">20</span><input type="range" id="stressSlider" min="0" max="100" value="20"></label>
+          <label>Anxiety <span id="anxietyVal">20</span><input type="range" id="anxietySlider" min="0" max="100" value="20"></label>
+          <label>Anger <span id="angerVal">10</span><input type="range" id="angerSlider" min="0" max="100" value="10"></label>
+        </div>
+        <div class="control-inputs">
+          <input type="text" id="injectInput" placeholder="Inject a command (optional)...">
+          <input type="text" id="voiceInput" placeholder="Voice / intrusive thought (optional)...">
+        </div>
+      </div>
+
+      <main class="chat-area" id="chatArea">
+        <div class="hint" id="gameHint">It's Monday morning. Type <code>/wakeup</code> to start the day, or <code>/sleep</code> to end it. Use the Save button anytime.</div>
+        <div class="messages" id="messages"></div>
+      </main>
+
+      <footer class="input-area">
+        <div class="input-container">
+          <textarea id="messageInput" class="message-input" placeholder="Say or do something..." rows="1" maxlength="4000"></textarea>
+          <button class="send-btn" id="sendBtn" disabled>Send</button>
+        </div>
+      </footer>
+    </section>
+
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
