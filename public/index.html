@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>King of the World Simulator</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
   <div class="app">
@@ -27,8 +27,9 @@
         <div class="welcome-icon">♛</div>
         <h1>King of the World Simulator</h1>
         <p>It is 2050. You are the King. Robots run the world. Your family does not.</p>
-        <div class="suggestions">
-          <button class="suggestion" id="startBtn">Start Game</button>
+        <div class="start-box">
+          <input type="text" id="kingNameInput" class="name-input" placeholder="Enter your name, Your Majesty" maxlength="40" autocomplete="off">
+          <button class="suggestion start-btn" id="startBtn">Start Game</button>
         </div>
       </div>
       <div class="messages" id="messages"></div>
@@ -54,6 +55,6 @@
     </footer>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

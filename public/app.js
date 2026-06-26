@@ -7,11 +7,13 @@ const newChatBtn = document.getElementById('newChatBtn');
 const startBtn = document.getElementById('startBtn');
 const saveBtn = document.getElementById('saveBtn');
 const loadBtn = document.getElementById('loadBtn');
+const kingNameInput = document.getElementById('kingNameInput');
 
 const SAVE_KEY = 'kotw-save';
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
 let history = [];
+let kingName = '';
 let isStreaming = false;
 let autosaveTimer = null;
 
@@ -37,8 +39,18 @@ startBtn.addEventListener('click', startGame);
 saveBtn.addEventListener('click', saveGame);
 loadBtn.addEventListener('click', loadGame);
 
+// Let the player start by pressing Enter in the name field
+kingNameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    startGame();
+  }
+});
+
 function resetChat() {
   history = [];
+  kingName = '';
+  kingNameInput.value = '';
   messagesEl.innerHTML = '';
   welcome.style.display = 'flex';
   input.value = '';
@@ -49,6 +61,8 @@ function resetChat() {
 }
 
 function startGame() {
+  if (isStreaming) return;
+  kingName = kingNameInput.value.trim();
   welcome.style.display = 'none';
   startAutosave();
   history.push({ role: 'user', content: '[GAME START]' });
@@ -70,7 +84,7 @@ function stopAutosave() {
 
 function saveGame() {
   if (!history.length) return;
-  localStorage.setItem(SAVE_KEY, JSON.stringify(history));
+  localStorage.setItem(SAVE_KEY, JSON.stringify({ kingName, history }));
 }
 
 function loadGame() {
@@ -79,13 +93,16 @@ function loadGame() {
 
   try {
     const saved = JSON.parse(raw);
-    if (!Array.isArray(saved) || !saved.length) return;
+    // Support both the new { kingName, history } shape and old bare arrays.
+    const savedHistory = Array.isArray(saved) ? saved : saved.history;
+    if (!Array.isArray(savedHistory) || !savedHistory.length) return;
 
-    history = saved;
+    history = savedHistory;
+    kingName = (saved && saved.kingName) || '';
     messagesEl.innerHTML = '';
     welcome.style.display = 'none';
 
-    for (const msg of saved) {
+    for (const msg of history) {
       if (msg.role === 'user' && msg.content === '[GAME START]') continue;
       const bubble = appendMessage(msg.role, msg.content);
       if (msg.role === 'assistant') bubble.innerHTML = renderMarkdown(msg.content);
@@ -124,7 +141,7 @@ async function streamAssistantReply(bubble, cursor) {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({ messages: history, kingName }),
     });
 
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -249,6 +266,9 @@ function renderMarkdown(text) {
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+  // Speaker name tags: a line starting with **Name:** becomes a labelled tag
+  html = html.replace(/^\*\*([^*\n]+?):\*\*/gm, '<span class="speaker">$1</span>');
 
   // Bold & italic
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
