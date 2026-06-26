@@ -4,9 +4,16 @@ const welcome = document.getElementById('welcome');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const newChatBtn = document.getElementById('newChatBtn');
+const startBtn = document.getElementById('startBtn');
+const saveBtn = document.getElementById('saveBtn');
+const loadBtn = document.getElementById('loadBtn');
+
+const SAVE_KEY = 'kotw-save';
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
 let history = [];
 let isStreaming = false;
+let autosaveTimer = null;
 
 // Auto-resize textarea
 input.addEventListener('input', () => {
@@ -15,9 +22,10 @@ input.addEventListener('input', () => {
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-// Send on Enter (Shift+Enter for newline)
+// Send on Enter (Shift+Enter for newline). On iPhone, the return key never
+// sends — it only inserts a newline; the King must tap the send button.
 input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  if (e.key === 'Enter' && !e.shiftKey && !isIOS) {
     e.preventDefault();
     if (!sendBtn.disabled) sendMessage();
   }
@@ -25,17 +33,9 @@ input.addEventListener('keydown', (e) => {
 
 sendBtn.addEventListener('click', sendMessage);
 newChatBtn.addEventListener('click', resetChat);
-
-// Suggestion chips
-document.querySelectorAll('.suggestion').forEach(btn => {
-  btn.addEventListener('click', () => {
-    input.value = btn.dataset.text;
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-    sendBtn.disabled = false;
-    sendMessage();
-  });
-});
+startBtn.addEventListener('click', startGame);
+saveBtn.addEventListener('click', saveGame);
+loadBtn.addEventListener('click', loadGame);
 
 function resetChat() {
   history = [];
@@ -45,6 +45,55 @@ function resetChat() {
   input.style.height = 'auto';
   sendBtn.disabled = true;
   isStreaming = false;
+  stopAutosave();
+}
+
+function startGame() {
+  welcome.style.display = 'none';
+  startAutosave();
+  history.push({ role: 'user', content: '[GAME START]' });
+
+  const { bubble, cursor } = createAssistantBubble();
+  scrollToBottom();
+  streamAssistantReply(bubble, cursor);
+}
+
+function startAutosave() {
+  stopAutosave();
+  autosaveTimer = setInterval(saveGame, 3 * 60 * 1000);
+}
+
+function stopAutosave() {
+  if (autosaveTimer) clearInterval(autosaveTimer);
+  autosaveTimer = null;
+}
+
+function saveGame() {
+  if (!history.length) return;
+  localStorage.setItem(SAVE_KEY, JSON.stringify(history));
+}
+
+function loadGame() {
+  const raw = localStorage.getItem(SAVE_KEY);
+  if (!raw) return;
+
+  try {
+    const saved = JSON.parse(raw);
+    if (!Array.isArray(saved) || !saved.length) return;
+
+    history = saved;
+    messagesEl.innerHTML = '';
+    welcome.style.display = 'none';
+
+    for (const msg of saved) {
+      if (msg.role === 'user' && msg.content === '[GAME START]') continue;
+      const bubble = appendMessage(msg.role, msg.content);
+      if (msg.role === 'assistant') bubble.innerHTML = renderMarkdown(msg.content);
+    }
+
+    startAutosave();
+    scrollToBottom();
+  } catch {}
 }
 
 async function sendMessage() {
@@ -52,9 +101,6 @@ async function sendMessage() {
   if (!text || isStreaming) return;
 
   welcome.style.display = 'none';
-  isStreaming = true;
-  sendBtn.disabled = true;
-  sendBtn.classList.add('loading');
 
   // Add user message
   history.push({ role: 'user', content: text });
@@ -66,6 +112,13 @@ async function sendMessage() {
   // Create assistant bubble
   const { bubble, cursor } = createAssistantBubble();
   scrollToBottom();
+  await streamAssistantReply(bubble, cursor);
+}
+
+async function streamAssistantReply(bubble, cursor) {
+  isStreaming = true;
+  sendBtn.disabled = true;
+  sendBtn.classList.add('loading');
 
   try {
     const res = await fetch('/api/chat', {

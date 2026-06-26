@@ -72,6 +72,11 @@ html, body {
   font-size: 20px;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .new-chat-btn {
   display: flex;
   align-items: center;

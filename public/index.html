@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <title>King of the World Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,29 +11,24 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+          <span class="logo-icon">♛</span>
+          <span class="logo-text">King of the World</span>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+        <div class="header-actions">
+          <button class="new-chat-btn" id="saveBtn" title="Save game">Save</button>
+          <button class="new-chat-btn" id="loadBtn" title="Load game">Load</button>
+          <button class="new-chat-btn" id="newChatBtn" title="New game">New game</button>
+        </div>
       </div>
     </header>
 
     <main class="chat-area" id="chatArea">
       <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
+        <div class="welcome-icon">♛</div>
+        <h1>King of the World Simulator</h1>
+        <p>It is 2050. You are the King. Robots run the world. Your family does not.</p>
         <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+          <button class="suggestion" id="startBtn">Start Game</button>
         </div>
       </div>
       <div class="messages" id="messages"></div>
@@ -44,7 +39,7 @@
         <textarea
           id="messageInput"
           class="message-input"
-          placeholder="Message Swerve..."
+          placeholder="Speak as the King..."
           rows="1"
           maxlength="10000"
         ></textarea>
@@ -55,7 +50,7 @@
           </svg>
         </button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
+      <p class="disclaimer">King of the World Simulator — autosaves every 3 minutes.</p>
     </footer>
   </div>
 
