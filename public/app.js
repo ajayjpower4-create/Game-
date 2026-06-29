@@ -8,6 +8,9 @@ const personalityHeading = document.getElementById('personalityHeading');
 const charCount = document.getElementById('charCount');
 const presetGrid = document.getElementById('presetGrid');
 const presetLabel = document.getElementById('presetLabel');
+const savedBlock = document.getElementById('savedBlock');
+const savedList = document.getElementById('savedList');
+const saveStatus = document.getElementById('saveStatus');
 
 // Preset characters for whichever role the AI is playing.
 const PRESETS = {
@@ -53,6 +56,146 @@ let history = [];
 let isStreaming = false;
 let weekNumber = 1;
 let sessionActive = false;
+let currentSaveId = null;
+
+// ---------- Saved sessions (localStorage) ----------
+const STORE_KEY = 'tss_saves_v1';
+
+function loadSaves() {
+  try {
+    return JSON.parse(localStorage.getItem(STORE_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function persistSaves(arr) {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(arr));
+  } catch {}
+}
+
+function genId() {
+  return 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+// Snapshot the live session into its save slot. Called after every turn.
+function autoSave() {
+  if (!currentSaveId) return;
+  const saves = loadSaves();
+  const entry = {
+    id: currentSaveId,
+    role: selectedRole,
+    therapies: selectedTherapies,
+    personality: personalityInput.value.trim(),
+    weekNumber,
+    sessionActive,
+    history,
+    updatedAt: Date.now(),
+  };
+  const idx = saves.findIndex((s) => s.id === currentSaveId);
+  if (idx >= 0) saves[idx] = entry;
+  else saves.push(entry);
+  persistSaves(saves);
+  flashSaved();
+}
+
+function flashSaved() {
+  saveStatus.textContent = 'Saved ✓';
+  saveStatus.classList.add('show');
+  clearTimeout(flashSaved._t);
+  flashSaved._t = setTimeout(() => saveStatus.classList.remove('show'), 1400);
+}
+
+function deleteSave(id) {
+  persistSaves(loadSaves().filter((s) => s.id !== id));
+  renderSavedList();
+}
+
+function timeAgo(ts) {
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function renderSavedList() {
+  const saves = loadSaves().sort((a, b) => b.updatedAt - a.updatedAt);
+  savedList.innerHTML = '';
+  if (!saves.length) {
+    savedBlock.classList.add('hidden');
+    return;
+  }
+  savedBlock.classList.remove('hidden');
+  saves.forEach((s) => {
+    const row = document.createElement('div');
+    row.className = 'saved-item';
+
+    const info = document.createElement('button');
+    info.className = 'saved-info';
+    const roleName = s.role === 'therapist' ? 'You: Therapist' : 'You: Client';
+    const ts = (s.therapies || []).map((t) => THERAPY_LABELS[t]).join(', ');
+    const state = s.sessionActive ? 'in session' : 'between sessions';
+    info.innerHTML = `<span class="saved-title">Week ${s.weekNumber} · ${roleName}</span>`
+      + `<span class="saved-sub">${escapeHtml(ts)} · ${state} · ${timeAgo(s.updatedAt)}</span>`;
+    info.addEventListener('click', () => resumeSave(s.id));
+
+    const del = document.createElement('button');
+    del.className = 'saved-del';
+    del.setAttribute('aria-label', 'Delete saved session');
+    del.textContent = '✕';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteSave(s.id);
+    });
+
+    row.appendChild(info);
+    row.appendChild(del);
+    savedList.appendChild(row);
+  });
+}
+
+function resumeSave(id) {
+  const save = loadSaves().find((s) => s.id === id);
+  if (!save) return;
+
+  currentSaveId = save.id;
+  selectedRole = save.role;
+  selectedTherapies = save.therapies || [];
+  personalityInput.value = save.personality || '';
+  weekNumber = save.weekNumber || 1;
+  sessionActive = !!save.sessionActive;
+  history = save.history || [];
+
+  const aiRole = selectedRole === 'therapist' ? 'the Client' : 'the Therapist';
+  headerMain.textContent = `You: ${selectedRole === 'therapist' ? 'Therapist' : 'Client'}`;
+  headerSub.textContent = `AI: ${aiRole} · ${selectedTherapies.map((t) => THERAPY_LABELS[t]).join(', ')}`;
+
+  messagesEl.innerHTML = '';
+  renderHistory();
+  addSystemDivider(`Resumed — Week ${weekNumber}${sessionActive ? '' : ' (between sessions)'}`);
+  if (!sessionActive) addSystemDivider('Type /next week, then /startsession to continue.');
+
+  setup.classList.add('hidden');
+  session.classList.remove('hidden');
+  updatePlaceholder();
+  input.focus();
+}
+
+// Re-draw the chat transcript from saved history, skipping the bracketed
+// stage-direction prompts we inject (openers / closing cues).
+function renderHistory() {
+  history.forEach((m) => {
+    if (m.role === 'user') {
+      if (/^\(.*\)$/s.test(m.content.trim())) return;
+      appendMessage('user', m.content);
+    } else if (m.role === 'assistant') {
+      appendMessage('assistant', m.content);
+    }
+  });
+}
 
 // ---------- Setup interactions ----------
 roleCards.forEach((card) => {
@@ -130,6 +273,7 @@ function startSession() {
   messagesEl.innerHTML = '';
   weekNumber = 1;
   sessionActive = true;
+  currentSaveId = genId();
   setup.classList.add('hidden');
   session.classList.remove('hidden');
   updatePlaceholder();
@@ -161,14 +305,15 @@ function updatePlaceholder() {
     : "Talk to your therapist...   (/end to finish)";
 }
 
+// The back button saves and returns to setup — the thread stays in the library.
 function endSession() {
   if (isStreaming) return;
+  autoSave();
   session.classList.add('hidden');
   setup.classList.remove('hidden');
-  history = [];
+  renderSavedList();
   input.value = '';
-  weekNumber = 1;
-  sessionActive = false;
+  currentSaveId = null;
 }
 
 // Handle the in-game slash commands. Returns nothing; updates state/UI.
@@ -185,6 +330,7 @@ async function handleCommand(raw) {
     sessionActive = false;
     addSystemDivider(`— End of week ${weekNumber} session —`);
     updatePlaceholder();
+    autoSave();
     return;
   }
 
@@ -196,6 +342,7 @@ async function handleCommand(raw) {
     weekNumber += 1;
     addSystemDivider(`A week passes... → Week ${weekNumber}`);
     addSystemDivider('Type /startsession to begin the session.');
+    autoSave();
     return;
   }
 
@@ -325,6 +472,7 @@ async function streamResponse() {
   isStreaming = false;
   sendBtn.classList.remove('loading');
   sendBtn.disabled = !input.value.trim();
+  autoSave();
   scrollToBottom();
 }
 
@@ -387,3 +535,6 @@ function renderText(text) {
   html = html.replace(/\n/g, '<br>');
   return html;
 }
+
+// Show any previously saved sessions on first load.
+renderSavedList();

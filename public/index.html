@@ -18,6 +18,11 @@
           <p class="tagline">Run a session. Pick your seat. The AI plays the rest — unfiltered.</p>
         </div>
 
+        <div class="setup-block saved-block hidden" id="savedBlock">
+          <h2>Saved sessions</h2>
+          <div class="saved-list" id="savedList"></div>
+        </div>
+
         <div class="setup-block">
           <h2>1. Who are you?</h2>
           <div class="role-grid">
@@ -70,7 +75,7 @@
     <section class="session hidden" id="session">
       <header class="header">
         <div class="header-inner">
-          <button class="back-btn" id="backBtn" title="End session">
+          <button class="back-btn" id="backBtn" title="Save &amp; exit">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="19" y1="12" x2="5" y2="12"></line>
               <polyline points="12 19 5 12 12 5"></polyline>
@@ -80,6 +85,7 @@
             <span class="header-main" id="headerMain">Session</span>
             <span class="header-sub" id="headerSub"></span>
           </div>
+          <span class="save-status" id="saveStatus"></span>
         </div>
       </header>
 
