@@ -90,14 +90,14 @@ const TRADES = {
       'Storm cleanup — haul off downed limbs and debris',
     ],
   },
-  'Auto Mechanic': {
-    icon: '🚗',
+  'Solar Panel Installer': {
+    icon: '☀️',
     jobs: [
-      'Diagnose why a car cranks but won\'t start',
-      'Full brake job on all four corners',
-      'Drop and replace a blown transmission',
-      'Chase down a check-engine light with three codes',
-      'Replace worn suspension and do an alignment',
+      'Mount a full rooftop solar array on a two-story house',
+      'Wire the panels into a new inverter and main panel',
+      'Install a battery backup system in the garage',
+      'Troubleshoot an existing array that stopped producing',
+      'Run a ground-mount solar install out in a field',
     ],
   },
 };
