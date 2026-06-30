@@ -1,62 +1,126 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pizza City — Register</title>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
-        </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-emoji">🍕</span>
+      <div>
+        <h1>Pizza City</h1>
+        <p class="tagline" id="tagline">Authentic New York Style Pizza</p>
       </div>
-    </header>
+    </div>
+    <div class="topbar-info">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="contact" id="contact"></div>
+    </div>
+  </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+  <section class="stats-bar" id="statsBar">
+    <div class="stat"><span class="stat-label">Today's Sales</span><span class="stat-value" id="statSales">$0.00</span></div>
+    <div class="stat"><span class="stat-label">Paid Orders</span><span class="stat-value" id="statCount">0</span></div>
+    <div class="stat"><span class="stat-label">Cash</span><span class="stat-value" id="statCash">$0.00</span></div>
+    <div class="stat"><span class="stat-label">Card</span><span class="stat-value" id="statCard">$0.00</span></div>
+    <div class="stat next-order"><span class="stat-label">Next Auto Order</span><span class="stat-value" id="statNextOrder">--:--</span></div>
+  </section>
+
+  <main class="layout">
+    <section class="panel menu-panel">
+      <div class="panel-header">
+        <h2>Take an Order</h2>
+        <div class="cart-summary">
+          <span id="cartCount">0 items</span>
+          <span id="cartTotal">$0.00</span>
         </div>
       </div>
-      <div class="messages" id="messages"></div>
-    </main>
+      <div class="category-tabs" id="categoryTabs"></div>
+      <div class="menu-items" id="menuItems"></div>
 
-    <footer class="input-area">
-      <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-        </button>
+      <div class="cart" id="cart">
+        <h3>Current Order <span class="cart-source-badge">In-Store</span></h3>
+        <ul class="cart-list" id="cartList"></ul>
+        <div class="cart-totals">
+          <div><span>Subtotal</span><span id="cartSubtotal">$0.00</span></div>
+          <div><span>Tax</span><span id="cartTax">$0.00</span></div>
+          <div class="cart-total-row"><span>Total</span><span id="cartTotalRow">$0.00</span></div>
+        </div>
+        <div class="cart-actions">
+          <button id="clearCartBtn" class="btn btn-ghost">Clear</button>
+          <button id="sendOrderBtn" class="btn btn-primary">Send Order</button>
+        </div>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
-    </footer>
+    </section>
+
+    <section class="panel queue-panel">
+      <div class="panel-header">
+        <h2>Orders Queue</h2>
+        <button id="refreshBtn" class="btn btn-ghost btn-small">Refresh</button>
+      </div>
+      <div class="queue-list" id="queueList">
+        <p class="empty-state">No orders yet. Orders will appear here.</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- BYO Toppings Modal -->
+  <div id="byoModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>Build Your Own Pizza</h3>
+      <p class="modal-sub">18" Cheese Pizza — additional toppings $2.50 each</p>
+      <div class="toppings-grid" id="toppingsGrid"></div>
+      <div class="modal-actions">
+        <button id="byoCancelBtn" class="btn btn-ghost">Cancel</button>
+        <button id="byoAddBtn" class="btn btn-primary">Add to Order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Modal -->
+  <div id="payModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>Take Payment</h3>
+      <p class="modal-sub" id="payOrderLabel"></p>
+      <p class="pay-total">Total Due: <span id="payTotal">$0.00</span></p>
+      <div class="pay-method-tabs">
+        <button class="pay-method-btn active" data-method="cash">Cash</button>
+        <button class="pay-method-btn" data-method="card">Card</button>
+      </div>
+      <div id="cashFields" class="pay-fields">
+        <label for="tenderedInput">Cash Tendered</label>
+        <input type="number" id="tenderedInput" min="0" step="0.01" placeholder="0.00" />
+        <div class="quick-cash" id="quickCash"></div>
+        <p class="change-due">Change Due: <span id="changeDue">$0.00</span></p>
+      </div>
+      <div id="cardFields" class="pay-fields hidden">
+        <p>Confirm card payment of <strong id="cardAmount">$0.00</strong>.</p>
+      </div>
+      <p class="pay-error" id="payError"></p>
+      <div class="modal-actions">
+        <button id="payCancelBtn" class="btn btn-ghost">Cancel</button>
+        <button id="payConfirmBtn" class="btn btn-primary">Confirm Payment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Source Picker Modal (for auto-generated orders) -->
+  <div id="sourceModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h3>New Order Arrived</h3>
+      <p class="modal-sub">Where did this order come from?</p>
+      <div class="source-list" id="sourceOrderItems"></div>
+      <div class="source-buttons">
+        <button class="btn btn-source" data-source="doordash">DoorDash</button>
+        <button class="btn btn-source" data-source="ubereats">Uber Eats</button>
+        <button class="btn btn-source" data-source="online">Online Order</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
