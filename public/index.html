@@ -2,61 +2,183 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Billionaire Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app">
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
-        </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
-      </div>
-    </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+    <!-- ============ START SCREEN ============ -->
+    <section class="screen" id="startScreen">
+      <div class="start-inner">
+        <div class="big-icon">💰</div>
+        <h1 class="title-gold">Billionaire Simulator</h1>
+        <p class="subtitle">Live the life. Run the empire. Deal with the family.</p>
+        <div class="start-buttons">
+          <button class="btn gold" id="newGameBtn">New Game</button>
+          <button class="btn ghost hidden" id="continueBtn">Continue Saved Game</button>
+        </div>
+        <p class="save-info hidden" id="saveInfo"></p>
+      </div>
+    </section>
+
+    <!-- ============ SETUP WIZARD ============ -->
+    <section class="screen hidden" id="setupScreen">
+      <div class="setup-inner">
+        <div class="setup-progress"><div class="setup-progress-bar" id="progressBar"></div></div>
+
+        <!-- Step 1: Name -->
+        <div class="step" data-step="0">
+          <h2>What's your name?</h2>
+          <input type="text" id="nameInput" class="text-input" placeholder="e.g. Max Sterling" maxlength="60" enterkeyhint="done">
+        </div>
+
+        <!-- Step 2: Wealth tier -->
+        <div class="step hidden" data-step="1">
+          <h2>What are you?</h2>
+          <div class="option-grid" id="tierOptions">
+            <button class="option-card" data-value="Millionaire"><span class="opt-emoji">💵</span><span class="opt-title">Millionaire</span><span class="opt-desc">Rich enough to be annoying about it</span></button>
+            <button class="option-card" data-value="Billionaire"><span class="opt-emoji">💎</span><span class="opt-title">Billionaire</span><span class="opt-desc">Private jet money. Island money.</span></button>
+            <button class="option-card" data-value="Trillionaire"><span class="opt-emoji">👑</span><span class="opt-title">Trillionaire</span><span class="opt-desc">Countries call YOU for a loan</span></button>
+          </div>
+        </div>
+
+        <!-- Step 3: Fame -->
+        <div class="step hidden" data-step="2">
+          <h2>What are you known for?</h2>
+          <input type="text" id="knownForInput" class="text-input" placeholder="e.g. Tech genius, crypto king, real estate mogul..." maxlength="200" enterkeyhint="done">
+          <h3>Companies you own</h3>
+          <input type="text" id="companiesInput" class="text-input" placeholder="e.g. SterlingX, NovaBank, Apex Motors..." maxlength="200" enterkeyhint="done">
+          <h3>TV shows you've been on <span class="optional">(optional)</span></h3>
+          <input type="text" id="tvShowsInput" class="text-input" placeholder="e.g. Shark Tank, my own reality show..." maxlength="200" enterkeyhint="done">
+        </div>
+
+        <!-- Step 4: Girlfriend -->
+        <div class="step hidden" data-step="3">
+          <h2>Do you have a girlfriend?</h2>
+          <div class="option-row" id="gfToggle">
+            <button class="option-card small" data-value="yes"><span class="opt-emoji">❤️</span><span class="opt-title">Yes</span></button>
+            <button class="option-card small" data-value="no"><span class="opt-emoji">🚫</span><span class="opt-title">No</span></button>
+          </div>
+          <div class="sub-form hidden" id="gfForm">
+            <h3>Her name</h3>
+            <input type="text" id="gfNameInput" class="text-input" placeholder="e.g. Vanessa" maxlength="60" enterkeyhint="done">
+            <h3>Describe her</h3>
+            <textarea id="gfDescInput" class="text-input area" placeholder="e.g. Instagram model, dramatic, spends my money like it's a sport..." maxlength="400" rows="3" enterkeyhint="enter"></textarea>
+          </div>
+        </div>
+
+        <!-- Step 5: Kids -->
+        <div class="step hidden" data-step="4">
+          <h2>Do you have kids?</h2>
+          <div class="option-row" id="kidsToggle">
+            <button class="option-card small" data-value="yes"><span class="opt-emoji">👶</span><span class="opt-title">Yes</span></button>
+            <button class="option-card small" data-value="no"><span class="opt-emoji">🚫</span><span class="opt-title">No</span></button>
+          </div>
+          <div class="sub-form hidden" id="kidsForm">
+            <div id="kidsList"></div>
+            <button class="btn ghost small-btn" id="addKidBtn">+ Add a kid</button>
+          </div>
+        </div>
+
+        <!-- Step 6: Villa -->
+        <div class="step hidden" data-step="5">
+          <h2>Where do you live?</h2>
+          <div class="option-grid" id="villaOptions">
+            <button class="option-card" data-value="A cliffside Malibu mega-villa with an infinity pool hanging over the Pacific, 14 bedrooms, a private beach, and a garage elevator."><span class="opt-emoji">🌊</span><span class="opt-title">Malibu Cliff Villa</span><span class="opt-desc">Infinity pool over the Pacific</span></button>
+            <button class="option-card" data-value="A Miami waterfront compound with a superyacht dock, glass walls, a nightclub in the basement, and palm trees flown in from the Maldives."><span class="opt-emoji">🌴</span><span class="opt-title">Miami Waterfront Compound</span><span class="opt-desc">Yacht dock &amp; basement nightclub</span></button>
+            <button class="option-card" data-value="A centuries-old Lake Como estate in Italy with marble halls, a vineyard, a staff of 30, and a speedboat garage."><span class="opt-emoji">🏛️</span><span class="opt-title">Lake Como Estate</span><span class="opt-desc">Old money. Marble everything.</span></button>
+            <button class="option-card" data-value="none"><span class="opt-emoji">🏙️</span><span class="opt-title">No Villa</span><span class="opt-desc">Just a casual penthouse</span></button>
+          </div>
+        </div>
+
+        <!-- Step 7: Private jet -->
+        <div class="step hidden" data-step="6">
+          <h2>Private jet?</h2>
+          <div class="option-grid" id="jetOptions">
+            <button class="option-card" data-value="A Gulfstream G800 with a cream leather interior, a bedroom, and my initials painted on the tail."><span class="opt-emoji">✈️</span><span class="opt-title">Gulfstream G800</span><span class="opt-desc">The classic flex</span></button>
+            <button class="option-card" data-value="A converted Boeing 747-8 'Flying Palace' with a gold-trimmed dining room, cinema, and onboard chef."><span class="opt-emoji">🛩️</span><span class="opt-title">747 Flying Palace</span><span class="opt-desc">A literal house with wings</span></button>
+            <button class="option-card" data-value="A Bombardier Global 8000 — the fastest business jet on earth — kept fueled 24/7 with two pilots on standby."><span class="opt-emoji">🚀</span><span class="opt-title">Global 8000</span><span class="opt-desc">Fastest jet in the sky</span></button>
+            <button class="option-card" data-value="none"><span class="opt-emoji">🚫</span><span class="opt-title">No Jet</span><span class="opt-desc">First class is fine... I guess</span></button>
+          </div>
+        </div>
+
+        <!-- Step 8: Yacht -->
+        <div class="step hidden" data-step="7">
+          <h2>Yacht?</h2>
+          <div class="option-grid" id="yachtOptions">
+            <button class="option-card" data-value="A 90-meter superyacht called 'Poseidon' with a glass-bottom pool, jet ski garage, and a crew of 25."><span class="opt-emoji">🛥️</span><span class="opt-title">90m "Poseidon"</span><span class="opt-desc">Glass-bottom pool superyacht</span></button>
+            <button class="option-card" data-value="A 140-meter megayacht with two helipads, a submarine bay, a beach club deck, and its own support vessel."><span class="opt-emoji">🚁</span><span class="opt-title">140m Megayacht</span><span class="opt-desc">Two helipads and a submarine</span></button>
+            <button class="option-card" data-value="A restored classic 60-meter yacht from the 1930s, all teak and brass, that old money types drool over."><span class="opt-emoji">⚓</span><span class="opt-title">Classic 60m</span><span class="opt-desc">Vintage teak &amp; brass elegance</span></button>
+            <button class="option-card" data-value="none"><span class="opt-emoji">🚫</span><span class="opt-title">No Yacht</span><span class="opt-desc">Boats are a hole in the water</span></button>
+          </div>
+        </div>
+
+        <!-- Step 9: Cars -->
+        <div class="step hidden" data-step="8">
+          <h2>Car collection?</h2>
+          <div class="option-grid" id="carsOptions">
+            <button class="option-card" data-value="A hypercar collection: Bugatti Chiron, Koenigsegg Jesko, LaFerrari, McLaren F1, and a one-off Pagani."><span class="opt-emoji">🏎️</span><span class="opt-title">Hypercar Collection</span><span class="opt-desc">Bugatti, Koenigsegg, Pagani...</span></button>
+            <button class="option-card" data-value="A classic collection: '62 Ferrari 250 GTO, '55 Mercedes 300SL Gullwing, '67 Shelby GT500 — museum grade."><span class="opt-emoji">🚗</span><span class="opt-title">Classic Collection</span><span class="opt-desc">Museum-grade vintage icons</span></button>
+            <button class="option-card" data-value="A chrome fleet: matching chrome-wrapped Rolls-Royce Cullinan, Lamborghini Urus, and G-Wagon with my logo on the doors."><span class="opt-emoji">✨</span><span class="opt-title">Chrome Fleet</span><span class="opt-desc">Chrome-wrapped and loud</span></button>
+            <button class="option-card" data-value="none"><span class="opt-emoji">🚫</span><span class="opt-title">No Cars</span><span class="opt-desc">I get driven everywhere</span></button>
+          </div>
+        </div>
+
+        <div class="setup-nav">
+          <button class="btn ghost" id="backBtn">Back</button>
+          <button class="btn gold" id="nextBtn">Next</button>
         </div>
       </div>
-      <div class="messages" id="messages"></div>
-    </main>
+    </section>
 
-    <footer class="input-area">
-      <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-        </button>
-      </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
-    </footer>
+    <!-- ============ GAME SCREEN ============ -->
+    <section class="screen hidden" id="gameScreen">
+      <header class="header">
+        <div class="header-inner">
+          <div class="logo">
+            <span class="logo-icon">💰</span>
+            <span class="logo-text" id="headerName">Billionaire Simulator</span>
+          </div>
+          <div class="header-actions">
+            <button class="btn ghost small-btn" id="saveBtn">Save</button>
+            <button class="btn ghost small-btn" id="menuBtn">Menu</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="chat-area" id="chatArea">
+        <div class="game-intro" id="gameIntro">
+          <p>💰 <strong>You're home.</strong> The family's around. Say something, do something, start some drama — it's your world.</p>
+          <p class="hint">Tip: type actions like <em>*I walk in holding shopping bags*</em> or just talk.</p>
+        </div>
+        <div class="messages" id="messages"></div>
+      </main>
+
+      <footer class="input-area">
+        <div class="input-container">
+          <textarea
+            id="messageInput"
+            class="message-input"
+            placeholder="Say or do something..."
+            rows="1"
+            maxlength="4000"
+            enterkeyhint="enter"
+            autocomplete="off"
+            autocapitalize="sentences"
+          ></textarea>
+          <button class="send-btn" id="sendBtn" disabled aria-label="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+          </button>
+        </div>
+        <p class="disclaimer">Auto-saves when you leave. Characters are fictional and have filthy mouths.</p>
+      </footer>
+    </section>
+
   </div>
 
   <script src="app.js"></script>

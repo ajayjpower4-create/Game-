@@ -1,69 +1,332 @@
+// ===== Billionaire Simulator =====
+
+const SAVE_KEY = 'billionaire-sim-save-v1';
+
+// Screens
+const startScreen = document.getElementById('startScreen');
+const setupScreen = document.getElementById('setupScreen');
+const gameScreen = document.getElementById('gameScreen');
+
+// Start screen
+const newGameBtn = document.getElementById('newGameBtn');
+const continueBtn = document.getElementById('continueBtn');
+const saveInfo = document.getElementById('saveInfo');
+
+// Wizard
+const steps = Array.from(document.querySelectorAll('.step'));
+const progressBar = document.getElementById('progressBar');
+const backBtn = document.getElementById('backBtn');
+const nextBtn = document.getElementById('nextBtn');
+
+// Game
+const headerName = document.getElementById('headerName');
 const chatArea = document.getElementById('chatArea');
 const messagesEl = document.getElementById('messages');
-const welcome = document.getElementById('welcome');
+const gameIntro = document.getElementById('gameIntro');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
-const newChatBtn = document.getElementById('newChatBtn');
+const saveBtn = document.getElementById('saveBtn');
+const menuBtn = document.getElementById('menuBtn');
 
+let profile = null;
 let history = [];
 let isStreaming = false;
+
+let currentStep = 0;
+const wizard = {
+  tier: null,
+  hasGf: null,
+  hasKids: null,
+  villa: null,
+  jet: null,
+  yacht: null,
+  cars: null,
+};
+
+// ============ START SCREEN ============
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !data.profile || !Array.isArray(data.history)) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function refreshStartScreen() {
+  const save = loadSave();
+  if (save) {
+    continueBtn.classList.remove('hidden');
+    saveInfo.classList.remove('hidden');
+    const when = save.savedAt ? new Date(save.savedAt).toLocaleString() : 'unknown';
+    saveInfo.textContent = `Saved game: ${save.profile.name} (${save.profile.tier}) — ${when}`;
+  } else {
+    continueBtn.classList.add('hidden');
+    saveInfo.classList.add('hidden');
+  }
+}
+
+newGameBtn.addEventListener('click', () => {
+  const save = loadSave();
+  if (save && !confirm('Starting a new game will overwrite your saved game when you play. Continue?')) return;
+  showScreen(setupScreen);
+  goToStep(0);
+});
+
+continueBtn.addEventListener('click', () => {
+  const save = loadSave();
+  if (!save) return refreshStartScreen();
+  profile = save.profile;
+  history = save.history;
+  startGame(true);
+});
+
+function showScreen(screen) {
+  for (const s of [startScreen, setupScreen, gameScreen]) s.classList.add('hidden');
+  screen.classList.remove('hidden');
+}
+
+// ============ SETUP WIZARD ============
+
+function goToStep(n) {
+  currentStep = n;
+  steps.forEach(s => s.classList.toggle('hidden', Number(s.dataset.step) !== n));
+  progressBar.style.width = `${((n + 1) / steps.length) * 100}%`;
+  backBtn.textContent = n === 0 ? 'Cancel' : 'Back';
+  nextBtn.textContent = n === steps.length - 1 ? 'Start Living Rich' : 'Next';
+}
+
+backBtn.addEventListener('click', () => {
+  if (currentStep === 0) {
+    showScreen(startScreen);
+    refreshStartScreen();
+  } else {
+    goToStep(currentStep - 1);
+  }
+});
+
+nextBtn.addEventListener('click', () => {
+  if (!validateStep(currentStep)) return;
+  if (currentStep === steps.length - 1) {
+    finishSetup();
+  } else {
+    goToStep(currentStep + 1);
+  }
+});
+
+function flash(el) {
+  el.classList.remove('shake');
+  void el.offsetWidth;
+  el.classList.add('shake');
+}
+
+function validateStep(n) {
+  switch (n) {
+    case 0: {
+      const el = document.getElementById('nameInput');
+      if (!el.value.trim()) { flash(el); return false; }
+      return true;
+    }
+    case 1:
+      if (!wizard.tier) { flash(document.getElementById('tierOptions')); return false; }
+      return true;
+    case 2: {
+      const el = document.getElementById('knownForInput');
+      if (!el.value.trim()) { flash(el); return false; }
+      return true;
+    }
+    case 3:
+      if (wizard.hasGf === null) { flash(document.getElementById('gfToggle')); return false; }
+      if (wizard.hasGf) {
+        const el = document.getElementById('gfNameInput');
+        if (!el.value.trim()) { flash(el); return false; }
+      }
+      return true;
+    case 4:
+      if (wizard.hasKids === null) { flash(document.getElementById('kidsToggle')); return false; }
+      if (wizard.hasKids) {
+        const names = Array.from(document.querySelectorAll('.kid-name'));
+        if (names.length === 0 || names.some(i => !i.value.trim())) {
+          if (names.length === 0) addKidRow();
+          names.forEach(i => { if (!i.value.trim()) flash(i); });
+          return false;
+        }
+      }
+      return true;
+    case 5:
+      if (!wizard.villa) { flash(document.getElementById('villaOptions')); return false; }
+      return true;
+    case 6:
+      if (!wizard.jet) { flash(document.getElementById('jetOptions')); return false; }
+      return true;
+    case 7:
+      if (!wizard.yacht) { flash(document.getElementById('yachtOptions')); return false; }
+      return true;
+    case 8:
+      if (!wizard.cars) { flash(document.getElementById('carsOptions')); return false; }
+      return true;
+  }
+  return true;
+}
+
+// Option-card selection helpers
+function wireOptionGroup(containerId, key, onSelect) {
+  const container = document.getElementById(containerId);
+  container.addEventListener('click', (e) => {
+    const card = e.target.closest('.option-card');
+    if (!card) return;
+    container.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    wizard[key] = card.dataset.value;
+    if (onSelect) onSelect(card.dataset.value);
+  });
+}
+
+wireOptionGroup('tierOptions', 'tier');
+wireOptionGroup('villaOptions', 'villa');
+wireOptionGroup('jetOptions', 'jet');
+wireOptionGroup('yachtOptions', 'yacht');
+wireOptionGroup('carsOptions', 'cars');
+
+// Girlfriend yes/no
+document.getElementById('gfToggle').addEventListener('click', (e) => {
+  const card = e.target.closest('.option-card');
+  if (!card) return;
+  document.querySelectorAll('#gfToggle .option-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  wizard.hasGf = card.dataset.value === 'yes';
+  document.getElementById('gfForm').classList.toggle('hidden', !wizard.hasGf);
+});
+
+// Kids yes/no
+document.getElementById('kidsToggle').addEventListener('click', (e) => {
+  const card = e.target.closest('.option-card');
+  if (!card) return;
+  document.querySelectorAll('#kidsToggle .option-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  wizard.hasKids = card.dataset.value === 'yes';
+  document.getElementById('kidsForm').classList.toggle('hidden', !wizard.hasKids);
+  if (wizard.hasKids && document.querySelectorAll('.kid-row').length === 0) addKidRow();
+});
+
+document.getElementById('addKidBtn').addEventListener('click', addKidRow);
+
+function addKidRow() {
+  const list = document.getElementById('kidsList');
+  const row = document.createElement('div');
+  row.className = 'kid-row';
+  row.innerHTML = `
+    <div class="kid-row-head">
+      <input type="text" class="text-input kid-name" placeholder="Kid's name" maxlength="60" enterkeyhint="done">
+      <button class="remove-kid" title="Remove" aria-label="Remove kid">✕</button>
+    </div>
+    <textarea class="text-input area kid-desc" placeholder="Describe them (e.g. 16, spoiled, wants a Lambo for their birthday...)" maxlength="300" rows="2" enterkeyhint="enter"></textarea>
+  `;
+  row.querySelector('.remove-kid').addEventListener('click', () => row.remove());
+  list.appendChild(row);
+}
+
+function finishSetup() {
+  const kids = Array.from(document.querySelectorAll('.kid-row')).map(row => ({
+    name: row.querySelector('.kid-name').value.trim(),
+    description: row.querySelector('.kid-desc').value.trim(),
+  })).filter(k => k.name);
+
+  profile = {
+    name: document.getElementById('nameInput').value.trim(),
+    tier: wizard.tier,
+    knownFor: document.getElementById('knownForInput').value.trim(),
+    companies: document.getElementById('companiesInput').value.trim(),
+    tvShows: document.getElementById('tvShowsInput').value.trim(),
+    girlfriend: wizard.hasGf ? {
+      name: document.getElementById('gfNameInput').value.trim(),
+      description: document.getElementById('gfDescInput').value.trim(),
+    } : null,
+    kids: wizard.hasKids ? kids : [],
+    villa: wizard.villa === 'none' ? null : wizard.villa,
+    jet: wizard.jet === 'none' ? null : wizard.jet,
+    yacht: wizard.yacht === 'none' ? null : wizard.yacht,
+    cars: wizard.cars === 'none' ? null : wizard.cars,
+  };
+
+  history = [];
+  saveGame();
+  startGame(false);
+}
+
+// ============ SAVE SYSTEM ============
+
+function saveGame() {
+  if (!profile) return;
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      profile,
+      history,
+      savedAt: Date.now(),
+    }));
+  } catch { /* storage full or unavailable */ }
+}
+
+saveBtn.addEventListener('click', () => {
+  saveGame();
+  saveBtn.textContent = 'Saved ✓';
+  setTimeout(() => { saveBtn.textContent = 'Save'; }, 1500);
+});
+
+// Auto-save whenever the user leaves / backgrounds the app (covers iPhone app switch & close)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveGame();
+});
+window.addEventListener('pagehide', saveGame);
+
+menuBtn.addEventListener('click', () => {
+  saveGame();
+  showScreen(startScreen);
+  refreshStartScreen();
+});
+
+// ============ GAME ============
+
+function startGame(restored) {
+  headerName.textContent = profile.name;
+  messagesEl.innerHTML = '';
+  gameIntro.style.display = restored && history.length > 0 ? 'none' : 'block';
+  for (const m of history) appendMessage(m.role, m.content);
+  showScreen(gameScreen);
+  scrollToBottom();
+}
 
 // Auto-resize textarea
 input.addEventListener('input', () => {
   input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+  input.style.height = Math.min(input.scrollHeight, 160) + 'px';
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-// Send on Enter (Shift+Enter for newline)
-input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    if (!sendBtn.disabled) sendMessage();
-  }
-});
+// NOTE: Enter / the iPhone return key intentionally does NOT send.
+// It just inserts a new line — only the send button sends the message.
 
 sendBtn.addEventListener('click', sendMessage);
-newChatBtn.addEventListener('click', resetChat);
-
-// Suggestion chips
-document.querySelectorAll('.suggestion').forEach(btn => {
-  btn.addEventListener('click', () => {
-    input.value = btn.dataset.text;
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-    sendBtn.disabled = false;
-    sendMessage();
-  });
-});
-
-function resetChat() {
-  history = [];
-  messagesEl.innerHTML = '';
-  welcome.style.display = 'flex';
-  input.value = '';
-  input.style.height = 'auto';
-  sendBtn.disabled = true;
-  isStreaming = false;
-}
 
 async function sendMessage() {
   const text = input.value.trim();
   if (!text || isStreaming) return;
 
-  welcome.style.display = 'none';
+  gameIntro.style.display = 'none';
   isStreaming = true;
   sendBtn.disabled = true;
   sendBtn.classList.add('loading');
 
-  // Add user message
   history.push({ role: 'user', content: text });
   appendMessage('user', text);
 
   input.value = '';
   input.style.height = 'auto';
 
-  // Create assistant bubble
   const { bubble, cursor } = createAssistantBubble();
   scrollToBottom();
 
@@ -71,7 +334,7 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({ profile, messages: history }),
     });
 
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -103,18 +366,19 @@ async function sendMessage() {
           }
           if (parsed.text) {
             assistantText += parsed.text;
-            bubble.innerHTML = renderMarkdown(assistantText);
+            bubble.innerHTML = renderDialogue(assistantText);
             bubble.appendChild(cursor);
             scrollToBottom();
           }
-        } catch {}
+        } catch { /* partial line */ }
       }
     }
 
     cursor.remove();
     if (assistantText) {
       history.push({ role: 'assistant', content: assistantText });
-      bubble.innerHTML = renderMarkdown(assistantText);
+      bubble.innerHTML = renderDialogue(assistantText);
+      saveGame();
     }
   } catch (err) {
     cursor.remove();
@@ -131,15 +395,10 @@ function appendMessage(role, content) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
 
-  const avatar = document.createElement('div');
-  avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : '◈';
-
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.innerHTML = role === 'user' ? escapeHtml(content) : renderMarkdown(content);
+  bubble.innerHTML = role === 'user' ? renderPlayerText(content) : renderDialogue(content);
 
-  div.appendChild(avatar);
   div.appendChild(bubble);
   messagesEl.appendChild(div);
   scrollToBottom();
@@ -150,10 +409,6 @@ function createAssistantBubble() {
   const div = document.createElement('div');
   div.className = 'message assistant';
 
-  const avatar = document.createElement('div');
-  avatar.className = 'avatar';
-  avatar.textContent = '◈';
-
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
 
@@ -161,7 +416,6 @@ function createAssistantBubble() {
   cursor.className = 'typing-cursor';
   bubble.appendChild(cursor);
 
-  div.appendChild(avatar);
   div.appendChild(bubble);
   messagesEl.appendChild(div);
   return { bubble, cursor };
@@ -180,50 +434,29 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// Lightweight markdown renderer
-function renderMarkdown(text) {
+// Player messages: *actions* italicized
+function renderPlayerText(text) {
   let html = escapeHtml(text);
-
-  // Code blocks
-  html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code>${code.trim()}</code></pre>`;
-  });
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Headers
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-  // Bold & italic
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-  // Blockquote
-  html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
-
-  // Unordered list
-  html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
-  html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
-
-  // Ordered list
-  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-
-  // Horizontal rule
-  html = html.replace(/^---$/gm, '<hr>');
-
-  // Paragraphs (double newlines)
-  html = html
-    .split(/\n\n+/)
-    .map(block => {
-      if (/^<(h[123]|ul|ol|pre|blockquote|hr)/.test(block.trim())) return block;
-      const lines = block.replace(/\n/g, '<br>');
-      return `<p>${lines}</p>`;
-    })
-    .join('\n');
-
-  return html;
+  html = html.replace(/\*([^*\n]+)\*/g, '<em class="action">*$1*</em>');
+  return html.replace(/\n/g, '<br>');
 }
+
+// Character dialogue: "Name: line" gets a styled name, *actions* italicized
+function renderDialogue(text) {
+  const lines = escapeHtml(text).split('\n');
+  const out = [];
+  for (let line of lines) {
+    if (!line.trim()) continue;
+    line = line.replace(/\*([^*\n]+)\*/g, '<em class="action">*$1*</em>');
+    const m = line.match(/^([^:<]{1,40}?):\s+(.*)$/);
+    if (m) {
+      out.push(`<p class="dialogue-line"><span class="char-name">${m[1]}:</span> ${m[2]}</p>`);
+    } else {
+      out.push(`<p class="dialogue-line">${line}</p>`);
+    }
+  }
+  return out.join('');
+}
+
+// ============ INIT ============
+refreshStartScreen();
