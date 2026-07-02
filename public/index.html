@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Lifeguard Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,42 +11,70 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+          <span class="logo-icon">🛟</span>
+          <span class="logo-text">Lifeguard Simulator</span>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+        <div class="header-actions" id="headerActions" hidden>
+          <span class="game-info" id="gameInfo"></span>
+          <button class="header-btn" id="saveBtn" title="Save game">Save</button>
+          <button class="header-btn" id="newGameBtn" title="Start a new game">New Game</button>
+        </div>
       </div>
     </header>
 
     <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+
+      <!-- Title screen -->
+      <section class="setup-screen" id="screen-title">
+        <div class="title-icon">🛟</div>
+        <h1>Lifeguard Simulator</h1>
+        <p class="tagline">The pool is packed. The families are unhinged. You're on duty.</p>
+        <div class="title-buttons">
+          <button class="primary-btn" id="btnNewGame">New Game</button>
+          <button class="secondary-btn" id="btnContinue" hidden>Continue Saved Game</button>
         </div>
-      </div>
-      <div class="messages" id="messages"></div>
+      </section>
+
+      <!-- Step 1: Name -->
+      <section class="setup-screen" id="screen-name" hidden>
+        <h2><span class="step-num">1</span> What's your name, guard?</h2>
+        <div class="name-row">
+          <input type="text" id="nameInput" class="name-input" maxlength="30" placeholder="Enter your name" autocomplete="off" enterkeyhint="done">
+          <button class="primary-btn" id="btnNameNext" disabled>Next</button>
+        </div>
+      </section>
+
+      <!-- Step 2: Rank -->
+      <section class="setup-screen" id="screen-rank" hidden>
+        <h2><span class="step-num">2</span> Pick your lifeguard rank</h2>
+        <div class="card-grid" id="rankGrid"></div>
+      </section>
+
+      <!-- Step 3: Pool -->
+      <section class="setup-screen" id="screen-pool" hidden>
+        <h2><span class="step-num">3</span> Pick your pool</h2>
+        <div class="card-grid" id="poolGrid"></div>
+      </section>
+
+      <!-- Step 4: Team -->
+      <section class="setup-screen" id="screen-team" hidden>
+        <h2><span class="step-num">4</span> Pick your lifeguard team</h2>
+        <div class="card-grid" id="teamGrid"></div>
+      </section>
+
+      <!-- Game -->
+      <div class="messages" id="messages" hidden></div>
     </main>
 
-    <footer class="input-area">
+    <footer class="input-area" id="inputArea" hidden>
       <div class="input-container">
         <textarea
           id="messageInput"
           class="message-input"
-          placeholder="Message Swerve..."
+          placeholder="What do you do?"
           rows="1"
           maxlength="10000"
+          enterkeyhint="enter"
         ></textarea>
         <button class="send-btn" id="sendBtn" disabled>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -55,8 +83,10 @@
           </svg>
         </button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
+      <p class="disclaimer">Characters are fictional and foul-mouthed. Your game auto-saves when you leave.</p>
     </footer>
+
+    <div class="toast" id="toast" hidden></div>
   </div>
 
   <script src="app.js"></script>

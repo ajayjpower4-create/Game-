@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "lifeguard-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Chatbot-style lifeguard roleplay game powered by Claude Sonnet 5",
   "main": "server.js",
   "type": "module",
   "scripts": {
