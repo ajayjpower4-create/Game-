@@ -111,7 +111,7 @@ function startGame(gameSetup, gameHistory) {
   gameInfo.textContent = `${setup.name} · ${setup.rank} · ${setup.pool} · ${setup.team}`;
 
   messagesEl.innerHTML = '';
-  appendSystemNote(`You're on duty at ${setup.pool} with the ${setup.team}. Say or do something — the families will react. You can hit Save any time; the game also saves itself when you leave.`);
+  appendSystemNote(`You're the ${setup.rank} on duty at ${setup.pool} with the ${setup.team}. Say or do something — everybody at the pool will react. You can hit Save any time; the game also saves itself when you leave.`);
   for (const m of history) appendMessage(m.role, m.content);
 
   saveGame();
