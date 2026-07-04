@@ -2,61 +2,191 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Business Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app">
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
-        </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
-      </div>
-    </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
+    <!-- ============ HOME SCREEN ============ -->
+    <section class="screen" id="homeScreen">
+      <div class="home-inner">
+        <div class="home-logo">🏪</div>
+        <h1>Business Simulator</h1>
+        <p class="tagline">Build it. Staff it. Survive it.</p>
+        <button class="btn btn-primary btn-big" id="newGameBtn">+ New Business</button>
+        <div class="saves-section">
+          <h2>Your Businesses</h2>
+          <div class="saves-list" id="savesList"></div>
+          <p class="saves-empty" id="savesEmpty">No saved businesses yet. Start one!</p>
         </div>
       </div>
-      <div class="messages" id="messages"></div>
-    </main>
+    </section>
 
-    <footer class="input-area">
-      <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-        </button>
+    <!-- ============ SETUP WIZARD ============ -->
+    <section class="screen hidden" id="setupScreen">
+      <header class="header">
+        <div class="header-inner">
+          <button class="icon-btn" id="setupBackBtn">←</button>
+          <span class="header-title" id="setupTitle">Create Your Character</span>
+          <span class="step-dots" id="stepDots"></span>
+        </div>
+      </header>
+
+      <div class="setup-body">
+        <!-- Step 1: Character -->
+        <div class="setup-step" data-step="1">
+          <h2>Who are you?</h2>
+          <label class="field">
+            <span>Your name</span>
+            <input type="text" id="charName" maxlength="60" placeholder="e.g. Jordan Reyes">
+          </label>
+          <label class="field">
+            <span>Your age</span>
+            <input type="number" id="charAge" min="1" max="120" placeholder="e.g. 27">
+          </label>
+          <label class="field">
+            <span>Any other details about you (optional)</span>
+            <textarea id="charDetails" rows="3" maxlength="600" placeholder="Backstory, personality, why you're starting this business..."></textarea>
+          </label>
+        </div>
+
+        <!-- Step 2: Business -->
+        <div class="setup-step hidden" data-step="2">
+          <h2>Your business</h2>
+          <label class="field">
+            <span>Business name</span>
+            <input type="text" id="bizName" maxlength="80" placeholder="e.g. Golden Fork Bistro">
+          </label>
+          <label class="field">
+            <span>What kind of business? (anything — 5 star restaurant, tech repair store, mechanic...)</span>
+            <input type="text" id="bizType" maxlength="120" placeholder="e.g. 5 star restaurant">
+          </label>
+          <div class="field">
+            <span>Location</span>
+            <div class="choice-grid" id="locationChoices">
+              <button class="choice" data-value="Mall">🏬 Mall</button>
+              <button class="choice" data-value="Plaza">⛲ Plaza</button>
+              <button class="choice" data-value="Shopping center">🛍️ Shopping center</button>
+              <button class="choice" data-value="Own little building on the side of the road">🛖 Own little building on the side of the road</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Staff -->
+        <div class="setup-step hidden" data-step="3">
+          <h2>Your staff</h2>
+          <div class="choice-grid two" id="staffModeChoices">
+            <button class="choice" data-value="auto">🎲 Auto-generate staff</button>
+            <button class="choice" data-value="manual">✍️ Type in my own staff</button>
+          </div>
+
+          <div class="staff-auto hidden" id="staffAutoPanel">
+            <label class="field">
+              <span>How many staff members do you want?</span>
+              <input type="number" id="staffCount" min="1" max="12" value="4">
+            </label>
+            <label class="field">
+              <span>What roles do you need? (optional)</span>
+              <input type="text" id="staffRoles" maxlength="200" placeholder="e.g. cashier, cook, cleaner">
+            </label>
+            <label class="field">
+              <span>What's the personality mix?</span>
+              <select id="staffVibe">
+                <option value="a mixed bag of personalities">Mixed bag</option>
+                <option value="chill and easygoing">Chill &amp; easygoing</option>
+                <option value="chaotic, loud, and mouthy">Chaotic &amp; mouthy</option>
+                <option value="serious and professional">Serious &amp; professional</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>How experienced are they?</span>
+              <select id="staffExp">
+                <option value="mixed experience levels">Mixed</option>
+                <option value="total rookies, first job energy">Total rookies</option>
+                <option value="seasoned pros who've seen everything">Seasoned pros</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Anything else about them? (optional)</span>
+              <input type="text" id="staffNotes" maxlength="200" placeholder="e.g. one of them is my cousin">
+            </label>
+            <button class="btn btn-secondary" id="generateStaffBtn">🎲 Generate Staff</button>
+            <div class="staff-roster" id="staffRoster"></div>
+          </div>
+
+          <div class="staff-manual hidden" id="staffManualPanel">
+            <label class="field">
+              <span>List your staff — one per line (name, age, role, personality)</span>
+              <textarea id="staffManualText" rows="6" maxlength="1500" placeholder="Tony, 45, head chef, hot-tempered perfectionist&#10;Mia, 22, waitress, sweet but clumsy"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <!-- Step 4: Final details -->
+        <div class="setup-step hidden" data-step="4">
+          <h2>Final details</h2>
+          <label class="field">
+            <span>Opening hours</span>
+            <input type="text" id="bizHours" maxlength="80" placeholder="e.g. 9am – 9pm, closed Mondays">
+          </label>
+          <label class="field">
+            <span>Starting budget</span>
+            <input type="text" id="bizBudget" maxlength="60" placeholder="e.g. $25,000">
+          </label>
+          <label class="field">
+            <span>Anything else about your business? (optional)</span>
+            <textarea id="bizExtra" rows="3" maxlength="600" placeholder="Vibe, decor, goals, rivals, family drama..."></textarea>
+          </label>
+        </div>
+
+        <p class="setup-error hidden" id="setupError"></p>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
-    </footer>
+
+      <footer class="setup-footer">
+        <button class="btn btn-primary btn-big" id="setupNextBtn">Next →</button>
+      </footer>
+    </section>
+
+    <!-- ============ GAME SCREEN ============ -->
+    <section class="screen hidden" id="gameScreen">
+      <header class="header">
+        <div class="header-inner">
+          <button class="icon-btn" id="exitGameBtn" title="Save &amp; exit">←</button>
+          <div class="header-biz">
+            <span class="header-title" id="gameBizName">Business</span>
+            <span class="header-sub" id="gameBizSub"></span>
+          </div>
+          <span class="autosave-tag" id="autosaveTag">saved</span>
+        </div>
+      </header>
+
+      <main class="chat-area" id="chatArea">
+        <div class="messages" id="messages"></div>
+      </main>
+
+      <footer class="input-area">
+        <div class="input-container">
+          <textarea
+            id="messageInput"
+            class="message-input"
+            placeholder="Say or do something..."
+            rows="1"
+            maxlength="4000"
+            enterkeyhint="enter"
+          ></textarea>
+          <button class="send-btn" id="sendBtn" disabled title="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+          </button>
+        </div>
+        <p class="disclaimer">Tap the arrow to send — return just makes a new line.</p>
+      </footer>
+    </section>
+
   </div>
 
   <script src="app.js"></script>
