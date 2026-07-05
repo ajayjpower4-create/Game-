@@ -318,6 +318,7 @@ const sendBtn = $('sendBtn');
 
 function openGame(save) {
   currentSave = save;
+  if (!save.profile.mode) save.profile.mode = 'owner';
   const b = save.profile.business || {};
   $('gameBizName').textContent = b.name || 'Business';
   $('gameBizSub').textContent = [b.type, b.location].filter(Boolean).join(' · ');
@@ -330,16 +331,102 @@ function openGame(save) {
   autoresize();
   sendBtn.disabled = true;
   isStreaming = false;
+  updateModeUI();
+  updateTtsUI();
   showScreen('game');
   scrollToBottom();
 }
 
 $('exitGameBtn').addEventListener('click', () => {
+  stopSpeaking();
   persistSave();
   currentSave = null;
   showScreen('home');
   renderSavesList();
 });
+
+// ---------- Text-to-speech ----------
+
+const TTS_KEY = 'bizsim_tts';
+let ttsEnabled = localStorage.getItem(TTS_KEY) === 'on';
+
+function updateTtsUI() {
+  $('ttsBtn').textContent = ttsEnabled ? '🔊' : '🔇';
+  $('ttsBtn').classList.toggle('on', ttsEnabled);
+  $('ttsBtn').title = ttsEnabled ? 'Voice on — tap to turn off' : 'Read messages out loud';
+}
+
+$('ttsBtn').addEventListener('click', () => {
+  ttsEnabled = !ttsEnabled;
+  localStorage.setItem(TTS_KEY, ttsEnabled ? 'on' : 'off');
+  updateTtsUI();
+  if (ttsEnabled) {
+    // Speaking inside this tap unlocks speech on iPhone
+    speak('Voice on.');
+  } else {
+    stopSpeaking();
+  }
+});
+
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  const clean = text
+    .replace(/\*[^*]*\*/g, '')       // drop *actions*
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!clean) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(clean);
+  u.rate = 1.05;
+  window.speechSynthesis.speak(u);
+}
+
+function stopSpeaking() {
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+}
+
+// ---------- Customer mode ----------
+
+function updateModeUI() {
+  const inCustomer = currentSave && currentSave.profile.mode === 'customer';
+  $('modeBtn').textContent = inCustomer ? '👔' : '🛍️';
+  $('modeBtn').classList.toggle('on', inCustomer);
+  $('modeBtn').title = inCustomer ? 'Go back to being the boss' : 'Walk in as a customer';
+  $('modeBanner').classList.toggle('hidden', !inCustomer);
+}
+
+function switchMode() {
+  if (!currentSave || isStreaming) return;
+  const p = currentSave.profile;
+  const bizName = (p.business && p.business.name) || 'the store';
+
+  if (p.mode !== 'customer') {
+    const persona = (window.prompt(
+      'Who are you walking in as?\n(e.g. "Dave, a grumpy old regular" — leave blank for a random customer)'
+    ) || '').trim();
+    p.mode = 'customer';
+    p.customerPersona = persona || 'a regular walk-in customer';
+    updateModeUI();
+    persistSave();
+    sendMessage(
+      `(Mode switch: I'm now walking into ${bizName} as a customer — ${p.customerPersona}. My owner character isn't around. The staff are working a normal shift and have NO idea this customer is the boss. Have whoever's up front greet me like any customer.)`,
+      { hidden: true }
+    );
+  } else {
+    const ownerName = (p.character && p.character.name) || 'the owner';
+    p.mode = 'owner';
+    p.customerPersona = '';
+    updateModeUI();
+    persistSave();
+    sendMessage(
+      `(Mode switch: the customer visit is over. I'm back to being ${ownerName}, the owner, walking in as the boss.)`,
+      { hidden: true }
+    );
+  }
+}
+
+$('modeBtn').addEventListener('click', switchMode);
+$('modeBannerBack').addEventListener('click', switchMode);
 
 // Textarea autoresize + send button state.
 // Return/Enter is NOT bound to send — it just makes a newline.
@@ -421,6 +508,7 @@ async function sendMessage(text, opts = {}) {
       currentSave.messages.push({ role: 'assistant', content: assistantText });
       bubble.innerHTML = renderDialogue(assistantText);
       persistSave();
+      if (ttsEnabled) speak(assistantText);
     } else if (!bubble.innerHTML) {
       bubble.innerHTML = '<div class="error-msg">No response — try again.</div>';
     }

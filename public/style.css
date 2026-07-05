@@ -180,6 +180,36 @@ html, body {
 }
 .autosave-tag.show { opacity: 1; }
 
+.toggle-btn {
+  font-size: 18px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+}
+.toggle-btn.on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+
+.mode-banner {
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+  text-align: center;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
 /* ===== Setup ===== */
 .setup-body {
   flex: 1;
