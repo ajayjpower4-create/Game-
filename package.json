@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "call-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Call Simulator — a chatbot-style game where you simulate phone calls as anybody",
   "main": "server.js",
   "type": "module",
   "scripts": {
