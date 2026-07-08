@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "criminal-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Criminal Simulator — a fictional crime-drama chatbot game where you play the boss and the AI plays your crew",
   "main": "server.js",
   "type": "module",
   "scripts": {

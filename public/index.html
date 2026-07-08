@@ -2,63 +2,223 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Criminal Simulator</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☠️</text></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app">
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
-        </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
-      </div>
-    </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
-        </div>
+    <!-- ============ TITLE SCREEN ============ -->
+    <section class="screen active" id="screen-title">
+      <div class="title-wrap">
+        <div class="skull">☠</div>
+        <h1 class="game-title">CRIMINAL<br>SIMULATOR</h1>
+        <p class="tagline">Build your empire. Run your crew. Answer to no one.</p>
+        <button class="btn btn-primary btn-big" id="btnNewGame">NEW GAME</button>
+        <button class="btn btn-ghost btn-big hidden" id="btnContinue">CONTINUE</button>
       </div>
-      <div class="messages" id="messages"></div>
-    </main>
+    </section>
 
-    <footer class="input-area">
-      <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-        </button>
+    <!-- ============ SETUP WIZARD ============ -->
+    <section class="screen" id="screen-setup">
+      <div class="setup-wrap">
+        <div class="setup-progress" id="setupProgress"></div>
+
+        <!-- Step: country -->
+        <div class="step" data-step="country">
+          <h2>Where do you run your operation?</h2>
+          <p class="hint">Pick a country, or type your own.</p>
+          <div class="chips" id="countryChips">
+            <button class="chip" data-value="United States">United States</button>
+            <button class="chip" data-value="Italy">Italy</button>
+            <button class="chip" data-value="Mexico">Mexico</button>
+            <button class="chip" data-value="Japan">Japan</button>
+            <button class="chip" data-value="Russia">Russia</button>
+            <button class="chip" data-value="Brazil">Brazil</button>
+            <button class="chip" data-value="United Kingdom">United Kingdom</button>
+            <button class="chip" data-value="Colombia">Colombia</button>
+          </div>
+          <input type="text" class="text-input" id="countryInput" placeholder="Or type any country..." enterkeyhint="done">
+          <button class="btn btn-primary" id="btnCountryNext" disabled>NEXT</button>
+        </div>
+
+        <!-- Step: compound yes/no -->
+        <div class="step hidden" data-step="compound">
+          <h2>Do you have a criminal compound?</h2>
+          <p class="hint">Your fortress. Your headquarters. Or nothing at all.</p>
+          <div class="big-choice">
+            <button class="choice-card" id="btnCompoundYes">
+              <span class="choice-icon">🏰</span>
+              <span class="choice-label">YES</span>
+              <span class="choice-sub">I've got a compound</span>
+            </button>
+            <button class="choice-card" id="btnCompoundNo">
+              <span class="choice-icon">🌫</span>
+              <span class="choice-label">NO</span>
+              <span class="choice-sub">I work from the shadows</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step: compound details -->
+        <div class="step hidden" data-step="compoundDetails">
+          <h2>Your compound</h2>
+          <p class="hint">How big is it?</p>
+          <div class="chips" id="sizeChips">
+            <button class="chip" data-value="small hideout">Small hideout</button>
+            <button class="chip" data-value="mid-size compound">Mid-size compound</button>
+            <button class="chip" data-value="large fortified compound">Large &amp; fortified</button>
+            <button class="chip" data-value="massive walled estate">Massive walled estate</button>
+          </div>
+          <p class="hint">What do you store inside it?</p>
+          <textarea class="text-input" id="compoundContentsInput" rows="3" placeholder="Cash, cars, an armory, servers, a vault..." enterkeyhint="done"></textarea>
+          <button class="btn btn-primary" id="btnCompoundNext" disabled>NEXT</button>
+        </div>
+
+        <!-- Step: crime -->
+        <div class="step hidden" data-step="crime">
+          <h2>What's your operation?</h2>
+          <p class="hint">Pick your line of work, or type your own.</p>
+          <div class="chips" id="crimeChips">
+            <button class="chip" data-value="bank heists">Bank heists</button>
+            <button class="chip" data-value="smuggling">Smuggling</button>
+            <button class="chip" data-value="counterfeiting">Counterfeiting</button>
+            <button class="chip" data-value="art theft">Art theft</button>
+            <button class="chip" data-value="underground casinos">Underground casinos</button>
+            <button class="chip" data-value="protection rackets">Protection rackets</button>
+            <button class="chip" data-value="cybercrime">Cybercrime</button>
+            <button class="chip" data-value="car theft ring">Car theft ring</button>
+          </div>
+          <input type="text" class="text-input" id="crimeInput" placeholder="Or type your own operation..." enterkeyhint="done">
+          <button class="btn btn-primary" id="btnCrimeNext" disabled>NEXT</button>
+        </div>
+
+        <!-- Step: crew choice -->
+        <div class="step hidden" data-step="crewChoice">
+          <h2>Your crew</h2>
+          <p class="hint">Every boss needs people. Build them yourself or let fate deal you a hand.</p>
+          <div class="big-choice">
+            <button class="choice-card" id="btnCrewOwn">
+              <span class="choice-icon">✍️</span>
+              <span class="choice-label">MY OWN</span>
+              <span class="choice-sub">I'll write my crew</span>
+            </button>
+            <button class="choice-card" id="btnCrewAuto">
+              <span class="choice-icon">🎲</span>
+              <span class="choice-label">GENERATE</span>
+              <span class="choice-sub">Deal me a crew</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Step: crew manual -->
+        <div class="step hidden" data-step="crewOwn">
+          <h2>Write your crew</h2>
+          <p class="hint">One per line: <b>Name - role - personality</b></p>
+          <textarea class="text-input" id="crewOwnInput" rows="6" placeholder="Tony - driver - hot-headed cousin who never shuts up&#10;Lena - tech - cold, sarcastic, best hacker in the city&#10;Big Mo - muscle - gentle giant with a bad temper" enterkeyhint="done"></textarea>
+          <button class="btn btn-primary" id="btnCrewOwnNext" disabled>NEXT</button>
+        </div>
+
+        <!-- Step: crew auto questions -->
+        <div class="step hidden" data-step="crewAuto">
+          <h2>Tell me about your crew</h2>
+          <p class="hint">How many people?</p>
+          <div class="chips" id="crewSizeChips">
+            <button class="chip" data-value="2">2</button>
+            <button class="chip" data-value="3">3</button>
+            <button class="chip" data-value="4">4</button>
+            <button class="chip" data-value="5">5</button>
+            <button class="chip" data-value="6">6</button>
+          </div>
+          <p class="hint">Who are they to you?</p>
+          <div class="chips" id="crewBondChips">
+            <button class="chip" data-value="family — blood relatives">Family</button>
+            <button class="chip" data-value="childhood friends">Childhood friends</button>
+            <button class="chip" data-value="hired professionals">Hired professionals</button>
+            <button class="chip" data-value="ex-cons who owe the boss">Ex-cons who owe me</button>
+          </div>
+          <p class="hint">What's their strength?</p>
+          <div class="chips" id="crewStrengthChips">
+            <button class="chip" data-value="pure muscle">Muscle</button>
+            <button class="chip" data-value="brains and tech">Brains &amp; tech</button>
+            <button class="chip" data-value="smooth talkers and con artists">Smooth talkers</button>
+            <button class="chip" data-value="drivers and getaway experts">Wheelmen</button>
+            <button class="chip" data-value="a balanced mix">Mixed</button>
+          </div>
+          <p class="hint">What's their temper?</p>
+          <div class="chips" id="crewTemperChips">
+            <button class="chip" data-value="cold and calculated">Cold &amp; calm</button>
+            <button class="chip" data-value="loud, wild and reckless">Loud &amp; wild</button>
+            <button class="chip" data-value="paranoid and jumpy">Paranoid</button>
+            <button class="chip" data-value="all over the place">All over the place</button>
+          </div>
+          <button class="btn btn-primary" id="btnGenerateCrew" disabled>GENERATE CREW</button>
+        </div>
+
+        <!-- Step: crew review -->
+        <div class="step hidden" data-step="crewReview">
+          <h2>Your crew</h2>
+          <div class="crew-list" id="crewList"></div>
+          <div class="row">
+            <button class="btn btn-ghost" id="btnRegenCrew">REROLL</button>
+            <button class="btn btn-primary" id="btnCrewAccept">KEEP THEM</button>
+          </div>
+        </div>
+
+        <!-- Step: vehicles -->
+        <div class="step hidden" data-step="vehicles">
+          <h2>Your vehicles</h2>
+          <p class="hint">What's in the garage? List anything — or leave it empty.</p>
+          <textarea class="text-input" id="vehiclesInput" rows="3" placeholder="Blacked-out SUV, stolen ambulance, two dirt bikes, a speedboat..." enterkeyhint="done"></textarea>
+          <button class="btn btn-primary" id="btnVehiclesNext">NEXT</button>
+        </div>
+
+        <!-- Step: tools -->
+        <div class="step hidden" data-step="tools">
+          <h2>Your tools &amp; gear</h2>
+          <p class="hint">Guns, knives, equipment — whatever you're packing.</p>
+          <textarea class="text-input" id="toolsInput" rows="3" placeholder="Two pistols, a shotgun, lockpicks, burner phones, duffel bags..." enterkeyhint="done"></textarea>
+          <button class="btn btn-primary" id="btnStartGame">START THE GAME</button>
+        </div>
+
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
-    </footer>
+    </section>
+
+    <!-- ============ GAME / CHAT ============ -->
+    <section class="screen" id="screen-game">
+      <header class="game-header">
+        <div class="game-header-left">
+          <span class="skull-small">☠</span>
+          <div>
+            <div class="game-header-title" id="hudCrime">Criminal Simulator</div>
+            <div class="game-header-sub" id="hudCountry"></div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-small" id="btnNewGameInGame">NEW GAME</button>
+      </header>
+
+      <main class="chat-area" id="chatArea">
+        <div class="messages" id="messages"></div>
+      </main>
+
+      <footer class="composer">
+        <div class="composer-inner">
+          <textarea id="messageInput" placeholder="Talk to your crew, boss..." rows="1" enterkeyhint="enter"></textarea>
+          <button id="sendBtn" disabled aria-label="Send">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+        <div class="autosave-note" id="autosaveNote">auto-saved</div>
+      </footer>
+    </section>
+
   </div>
-
   <script src="app.js"></script>
 </body>
 </html>
