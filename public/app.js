@@ -177,11 +177,22 @@ async function requestReply() {
 
   let text = '';
   try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scenario: state.scenario, messages: state.history }),
-    });
+    // Retry the connection a few times: a sleeping free-tier server or a
+    // flaky mobile connection makes the first attempt die with "Load failed".
+    let res;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scenario: state.scenario, messages: state.history }),
+        });
+        break;
+      } catch (e) {
+        if (attempt >= 2) throw e;
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+      }
+    }
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
     const reader = res.body.getReader();
@@ -225,8 +236,21 @@ async function requestReply() {
     }
   } catch (err) {
     cursor.remove();
-    bubble.innerHTML = `<span class="error-msg">📵 ${escapeHtml(err.message)} — try again</span>`;
-    // Drop the failed exchange's pending state; the user's last message stays in history
+    const isNetwork = err instanceof TypeError ||
+      /load failed|failed to fetch|network/i.test(err.message);
+    const friendly = isNetwork
+      ? 'Connection dropped — the server may have been waking up.'
+      : err.message;
+    bubble.innerHTML = `<span class="error-msg">📵 ${escapeHtml(friendly)}</span>`;
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'retry-btn';
+    retryBtn.textContent = 'Tap to retry';
+    retryBtn.addEventListener('click', () => {
+      line.remove();
+      requestReply();
+    });
+    bubble.appendChild(retryBtn);
+    // The user's last message stays in history, so retrying re-asks for the reply
   }
 
   isStreaming = false;
@@ -400,6 +424,14 @@ resumeBtn.addEventListener('click', takeOffHold);
 musicModal.addEventListener('click', (e) => {
   if (e.target === musicModal) closeMusicModal();
 });
+
+// Keep the server awake while the game is open: free-tier hosts spin down
+// after ~15 idle minutes and the next request fails with "Load failed".
+setInterval(() => {
+  if (document.visibilityState === 'visible') {
+    fetch('/api/ping').catch(() => {});
+  }
+}, 4 * 60 * 1000);
 
 // Save when leaving the page so the call resumes next visit
 window.addEventListener('pagehide', saveCall);
