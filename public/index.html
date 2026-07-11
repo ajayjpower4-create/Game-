@@ -2,63 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Game Dev / Owner Simulator</title>
+  <link rel="stylesheet" href="game.css">
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
-        </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+  <header class="topbar">
+    <div class="topbar-title">
+      <span class="hash">🎮</span>
+      <div>
+        <h1>Game Dev / Owner Simulator</h1>
+        <p>Run the game. Run the servers. Survive the staff team.</p>
       </div>
-    </header>
+    </div>
+    <button id="newGameBtn" class="new-game-btn">New Game</button>
+  </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
-        </div>
-      </div>
-      <div class="messages" id="messages"></div>
-    </main>
+  <main id="chatArea" class="chat-area">
+    <div id="messages" class="messages"></div>
+  </main>
 
-    <footer class="input-area">
-      <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-        </button>
-      </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
-    </footer>
+  <div id="rankChips" class="rank-chips">
+    <button class="rank-chip" data-text="Owner">👑 Owner</button>
+    <button class="rank-chip" data-text="Head Developer">🛠️ Head Developer</button>
+    <button class="rank-chip" data-text="Developer">💻 Developer</button>
+    <button class="rank-chip" data-text="Discord Server Staff">🛡️ Server Staff</button>
+    <button class="rank-chip" data-text="Discord Mod">🔨 Discord Mod</button>
   </div>
 
-  <script src="app.js"></script>
+  <footer class="input-bar">
+    <textarea id="messageInput" placeholder="Message..." rows="1" enterkeyhint="enter"></textarea>
+    <button id="sendBtn" disabled aria-label="Send">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </footer>
+
+  <script src="game.js"></script>
 </body>
 </html>
