@@ -18,19 +18,15 @@
     <button id="newGameBtn" class="new-game-btn">New Game</button>
   </header>
 
-  <main id="chatArea" class="chat-area">
+  <main id="setupArea" class="setup-area">
+    <div id="setupPanel" class="setup-panel"></div>
+  </main>
+
+  <main id="chatArea" class="chat-area hidden">
     <div id="messages" class="messages"></div>
   </main>
 
-  <div id="rankChips" class="rank-chips">
-    <button class="rank-chip" data-text="Owner">👑 Owner</button>
-    <button class="rank-chip" data-text="Head Developer">🛠️ Head Developer</button>
-    <button class="rank-chip" data-text="Developer">💻 Developer</button>
-    <button class="rank-chip" data-text="Discord Server Staff">🛡️ Server Staff</button>
-    <button class="rank-chip" data-text="Discord Mod">🔨 Discord Mod</button>
-  </div>
-
-  <footer class="input-bar">
+  <footer id="inputBar" class="input-bar hidden">
     <textarea id="messageInput" placeholder="Message..." rows="1" enterkeyhint="enter"></textarea>
     <button id="sendBtn" disabled aria-label="Send">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>

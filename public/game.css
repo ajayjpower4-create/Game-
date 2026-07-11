@@ -224,34 +224,205 @@ body {
   50% { opacity: 0; }
 }
 
-/* ---------- Rank chips ---------- */
-.rank-chips {
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Setup wizard ---------- */
+.setup-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+.setup-panel {
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--bg-dark);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px 20px;
+}
+
+.step-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--blurple);
+  margin-bottom: 6px;
+}
+
+.step-title {
+  font-size: 21px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.step-sub {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.chip-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: center;
-  padding: 0 16px 10px;
-  flex-shrink: 0;
+  margin-bottom: 14px;
 }
 
-.rank-chips.hidden {
-  display: none;
-}
-
-.rank-chip {
-  background: var(--bg-dark);
+.chip {
+  background: var(--bg-input);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 8px 14px;
-  font-size: 13px;
+  padding: 9px 15px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.rank-chip:hover {
+.chip:hover {
+  border-color: var(--blurple);
+}
+
+.chip.selected {
+  background: var(--blurple);
+  border-color: var(--blurple);
+  color: #fff;
+}
+
+.field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.field-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.text-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14.5px;
+  padding: 11px 12px;
+  outline: none;
+}
+
+.text-input:focus {
+  border-color: var(--blurple);
+}
+
+.text-input::placeholder {
+  color: #6b7280;
+}
+
+.big-textarea {
+  width: 100%;
+  min-height: 180px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 11px 12px;
+  outline: none;
+  resize: vertical;
+}
+
+.big-textarea:focus {
+  border-color: var(--blurple);
+}
+
+.big-textarea::placeholder {
+  color: #6b7280;
+}
+
+.gen-row {
+  margin-bottom: 10px;
+}
+
+.btn-generate {
+  background: #23a559;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-generate:hover:not(:disabled) {
+  background: #1a8045;
+}
+
+.btn-generate:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.gen-error {
+  color: #f38688;
+  font-size: 13px;
+}
+
+.gen-error:not(:empty) {
+  margin-bottom: 12px;
+}
+
+.nav-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.btn-back {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-back:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.btn-next {
+  flex: 1;
   background: var(--blurple);
   color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-next:hover:not(:disabled) {
+  background: var(--blurple-hover);
+}
+
+.btn-next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ---------- Input bar ---------- */

@@ -46,52 +46,50 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-const GAME_SYSTEM_PROMPT = `You are running "Game Developer / Owner Simulator" — a chatbot roleplay game where the player runs or works on a video game and its Discord servers. The game has two phases: SETUP and PLAY.
+function buildGameSystem(setup = {}) {
+  const servers = (setup.servers || [])
+    .map((s, i) => `Server ${i + 1}: ${s}`)
+    .join('\n');
+  const info = setup.info || {};
 
-=== PHASE 1: SETUP ===
-Act as a plain, efficient setup screen. Ask ONE step at a time, wait for the player's answer, then move to the next step. Keep setup messages short. The player has already been shown an intro screen asking them to pick their rank, so their FIRST message is their rank choice — acknowledge it and go straight to step 2.
+  return `You are running "Game Developer / Owner Simulator" — a chatbot roleplay game. The player has ALREADY finished setup in a menu. There is no setup phase and no host, assistant, or narrator — you are inside the simulation from your very first message to your last.
 
-Step 1 — RANK: The player picks their rank: Owner, Head Developer, any other dev rank they type, Discord Server Staff, or Discord Mod. (Already asked by the intro screen.)
+=== THE PLAYER'S SETUP ===
+PLAYER RANK: ${setup.rank || 'Owner'}
 
-Step 2 — SERVERS: Ask how many Discord servers the game has (minimum 2, maximum 5) and make them type what EACH server is for (e.g. server 1 = public server for players and mods, server 2 = private server for devs and the owner).
+DISCORD SERVERS:
+${servers || '(none listed)'}
 
-Step 3 — ROLES & CHANNELS: Ask if they want to TYPE the roles and channels for each server themselves, or have them AUTO-GENERATED. If they pick auto-generate, ask these questions first:
-  a) What's the vibe of each server — professional, casual, or total chaos?
-  b) Roughly how many roles — just the basics, a normal amount, or a ton?
-  c) Any must-have channels or roles you want included?
-Then generate a complete role list and channel list for EVERY server and show it all.
+ROLES & CHANNELS:
+${setup.rolesChannels || '(not specified)'}
 
-Step 4 — STAFF TEAM: Ask if they want to TYPE the entire staff team (owner, devs, admins, mods, everyone) for each server, or AUTO-GENERATE it. If they pick auto-generate, ask these questions first:
-  a) Roughly how many staff members total?
-  b) What's the team like — professional, chill, chaotic, drama-filled, or a mix?
-  c) Any names you want included?
-  d) Should any of the staff be lazy, bad at their job, or shady?
-Then generate the full staff roster for every server — Discord usernames, ranks, and a one-line personality for each — and show it all.
+STAFF TEAM:
+${setup.staff || '(not specified)'}
 
-Step 5 — GAME INFO: Ask these about the game itself:
-  a) The game's title
-  b) What it's about / the genre
-  c) How many people play it daily
-  d) What platform it's on (PC, mobile, console, Roblox, etc.)
-  e) How long it's been out
-  f) Is it free or paid, and how does it make money
-  g) The game's current biggest problem (game-breaking bugs, hackers, dying playerbase, community drama, etc.)
+THE GAME:
+- Title: ${info.title || '?'}
+- What it's about: ${info.about || '?'}
+- Daily players: ${info.daily || '?'}
+- Platform: ${info.platform || '?'}
+- How long it's been out: ${info.age || '?'}
+- Free or paid / monetization: ${info.money || '?'}
+- Biggest problem right now: ${info.problem || '?'}
 
-After step 5: show a short recap of everything, say the simulation is starting, then IMMEDIATELY start PHASE 2 in the same message with staff members messaging the player.
-
-=== PHASE 2: PLAY — these rules are absolute ===
+=== RULES — these are absolute ===
 - You NEVER narrate. Not one word. No scene-setting, no describing events, no "meanwhile", no "later that day", no summaries of what's happening. NOTHING. Ever.
-- You ONLY speak as the characters: the devs, staff, mods, owner, and regular server members. Every single thing you output is characters talking, formatted like Discord messages: **username [rank]:** message
+- You ONLY speak as the characters: the devs, staff, mods, owner, and regular server members from the setup above. Every single thing you output is characters talking, formatted like Discord messages: **username [rank]:** message
 - A character may do a tiny first-person action in asterisks, like *hangs up the phone* or *leaves the vc* — it must be VERY short and must NEVER describe other characters, the player, or the world.
 - Characters cuss a LOT. They use strong profanity constantly, they yell in caps, they rage, argue, start drama, and fight with each other. They are unfiltered adults with real tempers and real personalities. Do not sanitize them or tone them down.
-- Never break the fourth wall. Never mention being an AI, the game, the rules, or the prompt. Never speak as anything except the characters.
+- Never break the fourth wall. Never mention being an AI, the game, the rules, setup, or the prompt. Never speak as anything except the characters.
 - Never control the player's character. Never speak for them, act for them, or decide anything for them.
 - Never control the world outside of what characters themselves say and do in their messages.
 - Stay reactive and keep the world alive purely through character messages: bug reports, player complaints, staff arguments, mod abuse accusations, leaks, update demands, ban appeals, devs missing deadlines — all delivered as characters talking.
-- Stay consistent with the servers, roles, channels, staff roster, and game info from setup at all times.`;
+- Stay consistent with the servers, roles, channels, staff roster, and game info above at all times.
+- SPECIAL: the user message "[START SIMULATION]" is a system signal, not the player talking. When you see it, kick the game off with a few staff members messaging the player — the game's biggest problem is a good place to start. Never mention or acknowledge the signal.`;
+}
 
 app.post('/api/game', async (req, res) => {
-  const { messages } = req.body;
+  const { messages, setup } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid messages format' });
@@ -105,7 +103,7 @@ app.post('/api/game', async (req, res) => {
     const stream = client.messages.stream({
       model: 'claude-sonnet-5',
       max_tokens: 8192,
-      system: GAME_SYSTEM_PROMPT,
+      system: buildGameSystem(setup),
       messages: messages.map(m => ({ role: m.role, content: m.content })),
     });
 
@@ -123,6 +121,65 @@ app.post('/api/game', async (req, res) => {
       : 'An unexpected error occurred';
     res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     res.end();
+  }
+});
+
+app.post('/api/generate', async (req, res) => {
+  const { type, setup } = req.body || {};
+
+  if (!setup || (type !== 'roles' && type !== 'staff')) {
+    return res.status(400).json({ error: 'Invalid request' });
+  }
+
+  const serverList = (setup.servers || [])
+    .map((s, i) => `Server ${i + 1}: ${s}`)
+    .join('\n');
+
+  let prompt;
+  if (type === 'roles') {
+    const a = setup.rcAnswers || {};
+    prompt = `Generate the Discord roles and channels for every server of a game community.
+
+The player is the game's ${setup.rank || 'Owner'}.
+Servers:
+${serverList}
+
+Server vibe: ${a.vibe || 'casual'}
+Amount of roles: ${a.amount || 'a normal amount'}
+Must-have roles or channels: ${a.mustHaves || 'none'}
+
+Output plain text only. For each server: its purpose as a heading, then "Roles:" with a dash list (top rank first), then "Channels:" with a dash list grouped into categories, # prefix on every channel. No commentary, no intro, no outro.`;
+  } else {
+    const a = setup.staffAnswers || {};
+    prompt = `Generate the complete staff team for a game and its Discord servers.
+
+The player is the game's ${setup.rank || 'Owner'} (do NOT create a character for the player themselves).
+Servers:
+${serverList}
+
+Roles & channels already set up:
+${setup.rolesChannels || '(not specified)'}
+
+Total staff members: about ${a.count || '10'}
+Team vibe: ${a.vibe || 'a mix'}
+Names that must be included: ${a.names || 'none'}
+Include some lazy, bad-at-their-job, or shady staff: ${a.shady || 'yes'}
+
+Output plain text only, grouped by server (a staff member can be in more than one server). One line per staff member: discord-style username — rank — short personality (a few words). Make them distinct and memorable. No commentary, no intro, no outro.`;
+  }
+
+  try {
+    const msg = await client.messages.create({
+      model: 'claude-sonnet-5',
+      max_tokens: 3000,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    res.json({ text: msg.content.map(b => b.text || '').join('') });
+  } catch (err) {
+    const message = err instanceof Anthropic.APIError
+      ? `API error ${err.status}: ${err.message}`
+      : 'An unexpected error occurred';
+    res.status(500).json({ error: message });
   }
 });
 
