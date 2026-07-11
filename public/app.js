@@ -832,23 +832,29 @@ function sendMessage() {
   renderPendingThumbs();
   input.value = '';
   input.style.height = 'auto';
+  autoSave(); // persist the player's message right away
   streamReply();
 }
 
 // ---- Save / Resume ----
 function saveShift() {
-  if (!currentJob) return;
+  if (autoSave()) showToast('Shift saved — your crew is locked in.');
+  else showToast('Could not save (storage full or blocked).');
+}
+
+// Silent save used for auto-save after every message. Returns true on success.
+function autoSave() {
+  if (!currentJob) return false;
   try {
-    const payload = {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
       job: currentJob,
       config: currentConfig,
       history,
       savedAt: Date.now(),
-    };
-    localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
-    showToast('Shift saved — your crew is locked in.');
+    }));
+    return true;
   } catch {
-    showToast('Could not save (storage full or blocked).');
+    return false;
   }
 }
 
@@ -1083,6 +1089,7 @@ function selectPersona(name) {
     currentConfig.playingAs = name;
     appendSystemNote(`🎭 You're now playing as ${name}. The AI plays everyone else.`);
   }
+  autoSave(); // persist the character change
 }
 
 function appendSystemNote(text) {
@@ -1155,6 +1162,7 @@ async function streamReply() {
     bubble.innerHTML = `<div class="error-msg">Connection error: ${escapeHtml(err.message)}</div>`;
   }
 
+  autoSave(); // auto-save the shift after every reply
   isStreaming = false;
   sendBtn.classList.remove('loading');
   updateSendState();

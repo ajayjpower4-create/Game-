@@ -428,7 +428,7 @@ app.post('/api/chat', async (req, res) => {
 
   try {
     const stream = client.messages.stream({
-      model: 'claude-opus-4-7',
+      model: 'claude-sonnet-5',
       max_tokens: 8192,
       system,
       messages: outgoing.map(m => ({ role: m.role, content: m.content })),
@@ -536,7 +536,7 @@ Respond with ONLY a JSON array — no prose, no markdown fences. Each item: {"na
 
   try {
     const resp = await client.messages.create({
-      model: 'claude-opus-4-7',
+      model: 'claude-sonnet-5',
       max_tokens: 1024,
       system,
       messages: [{ role: 'user', content: `Transcript:\n\n${transcript}\n\nNow list the named NPC characters as a JSON array.` }],
