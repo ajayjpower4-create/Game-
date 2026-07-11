@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Game Dev / Owner Simulator</title>
+  <link rel="stylesheet" href="game.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-title">
+      <span class="hash">🎮</span>
+      <div>
+        <h1>Game Dev / Owner Simulator</h1>
+        <p>Run the game. Run the servers. Survive the staff team.</p>
+      </div>
+    </div>
+    <button id="newGameBtn" class="new-game-btn">New Game</button>
+  </header>
+
+  <main id="chatArea" class="chat-area">
+    <div id="messages" class="messages"></div>
+  </main>
+
+  <div id="rankChips" class="rank-chips">
+    <button class="rank-chip" data-text="Owner">👑 Owner</button>
+    <button class="rank-chip" data-text="Head Developer">🛠️ Head Developer</button>
+    <button class="rank-chip" data-text="Developer">💻 Developer</button>
+    <button class="rank-chip" data-text="Discord Server Staff">🛡️ Server Staff</button>
+    <button class="rank-chip" data-text="Discord Mod">🔨 Discord Mod</button>
+  </div>
+
+  <footer class="input-bar">
+    <textarea id="messageInput" placeholder="Message..." rows="1" enterkeyhint="enter"></textarea>
+    <button id="sendBtn" disabled aria-label="Send">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </footer>
+
+  <script src="game.js"></script>
+</body>
+</html>
