@@ -149,3 +149,13 @@ html, body {
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .modal-head h2 { font-size: 19px; }
 .modal-sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+
+/* ===== CUSSING METER ===== */
+.cuss-value { text-align: center; font-size: 18px; font-weight: 700; margin: 6px 0 14px; }
+.cuss-range { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 5px;
+  background: linear-gradient(90deg, #4caf7d, var(--amber), var(--danger)); outline: none; }
+.cuss-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px;
+  border-radius: 50%; background: #fff; border: 3px solid var(--amber); cursor: pointer; }
+.cuss-range::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: #fff;
+  border: 3px solid var(--amber); cursor: pointer; }
+.cuss-scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin: 8px 2px 18px; }

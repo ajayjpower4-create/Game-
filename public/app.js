@@ -127,7 +127,16 @@ let cfg = {
   van: null,
   company: '',
   companyDesc: '',
+  cussLevel: 2,
 };
+
+const CUSS_LABELS = [
+  '🧼 Clean — no swearing',
+  '🙂 Light — barely any',
+  '😐 Moderate — normal jobsite',
+  '😤 Heavy — foul-mouthed',
+  '🤬 Filthy — no filter',
+];
 
 let history = [];
 let isStreaming = false;
@@ -152,6 +161,12 @@ const enterHint = document.getElementById('enterHint');
 
 const hdrTitle = document.getElementById('hdrTitle');
 const hdrSub = document.getElementById('hdrSub');
+const cussBtn = document.getElementById('cussBtn');
+const cussModal = document.getElementById('cussModal');
+const cussRange = document.getElementById('cussRange');
+const cussValue = document.getElementById('cussValue');
+const saveCussBtn = document.getElementById('saveCussBtn');
+const closeCussBtn = document.getElementById('closeCussBtn');
 const crewBtn = document.getElementById('crewBtn');
 const saveBtn = document.getElementById('saveBtn');
 const quitBtn = document.getElementById('quitBtn');
@@ -311,6 +326,7 @@ loadSavedBtn.onclick = () => {
 
 // ===================== GAME =====================
 function startGame(resuming = false) {
+  if (!Number.isInteger(cfg.cussLevel)) cfg.cussLevel = 2;
   setupEl.hidden = true;
   gameEl.hidden = false;
   hdrTitle.textContent = `${cfg.rank} ${cfg.trade}`;
@@ -485,6 +501,19 @@ saveCrewBtn.onclick = () => {
   autosave();
 };
 function renderCrewEditor() { renderCrewBuilder(crewEditList); }
+
+// ===================== CUSSING METER =====================
+function updateCussLabel() {
+  cussValue.textContent = CUSS_LABELS[+cussRange.value];
+}
+cussBtn.onclick = () => {
+  cussRange.value = cfg.cussLevel;
+  updateCussLabel();
+  cussModal.hidden = false;
+};
+cussRange.oninput = () => { cfg.cussLevel = +cussRange.value; updateCussLabel(); };
+closeCussBtn.onclick = () => { cussModal.hidden = true; };
+saveCussBtn.onclick = () => { cussModal.hidden = true; autosave(); };
 
 // ===================== SAVE / LOAD =====================
 function autosave() {
