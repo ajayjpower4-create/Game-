@@ -54,10 +54,17 @@ Then open **http://localhost:3000**.
   ROAD, a two-sided STOP/SLOW flagger paddle, and more
 - **Equipment** — steel pole bundles, pallets and pallet stacks, sandbags,
   steel road plates, light towers, generators, flashing arrow boards, message
-  boards, DOT work trucks, a mini excavator, and the all-important porta-john
+  boards, a mini excavator, and the all-important porta-john
+- **DOT fleet** — work truck with beacons, chevrons and your state DOT's door
+  decals, tandem dump truck loaded with gravel, crash attenuator (TMA) truck
+  with a raised flashing arrow board, and a supervisor SUV with an amber
+  light bar
 
-Traffic is simulated: close a lane with cones or barricades and cars will merge
-out of it (or stop if you close the whole road).
+The highway is 2 km of true American right-hand traffic, lined with billboards
+running fake ads (BIG TEX BURGERS, BLOCKY & SONS LAW, SLEEPY PINES MOTEL...).
+Traffic is simulated — close a lane with cones or barricades and cars merge out
+of it (or stop if you close the whole road) — and DOT trucks roll by in the
+flow.
 
 ## Tech
 
