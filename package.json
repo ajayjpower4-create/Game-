@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "construction-highway-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Construction Highway Simulator — build construction zones on real US highways",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.51.0",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "three": "0.160.0"
   }
 }
