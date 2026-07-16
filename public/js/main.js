@@ -36,12 +36,21 @@ let roadInfo = null;         // computed lane geometry for current highway
 let groundMeshes = [];       // raycast targets for placement
 let placedRoot, placed = [];
 let ghost = null, ghostDef = null, buildYaw = 0, ghostOk = false;
+let buildStretch = 1;        // [ and ] stretch props that support it
 let blinkers = [];           // {mat, phase, speed} flashing lights
 let cars = [];
 let laneBlockers = { A: [], B: [] };  // per-lane sorted arrays of z positions
 let clouds = [];
-let sun = null;
+let sun = null, hemiLight = null, ambLight = null, skyDome = null;
+let buildingMats = [];       // window materials that glow at night
+let towerSpots = [];         // real lights on placed light towers
+let timeIdx = 0;             // 0 day, 1 dusk, 2 night
 let photoCount = 0;
+
+// drivable vehicles
+let vehiclesRoot = null;
+let vehicles = [];           // {group, def, heading, speed, steer}
+let driving = null;
 
 const raycaster = new THREE.Raycaster();
 const CENTER = new THREE.Vector2(0, 0);
@@ -474,7 +483,33 @@ function signBuilder(texOpts, { w = 1.1, h = 1.1, postH = 2.1, twoPost = false, 
 }
 
 function buildCatalog() {
+  const drivableWrap = (make) => () => {
+    const m = make().mesh;
+    m.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    return m;
+  };
   return [
+    // ---------- VEHICLES (drivable — press E to get in) ----------
+    { cat: 'Vehicles', id: 'fleet_pickup', icon: '🛻', name: 'DOT Crew Pickup', drivable: true,
+      desc: 'Crew cab fleet pickup — blue dash striping, DIAL 511',
+      blocks: false, build: drivableWrap(makeFleetPickup) },
+    { cat: 'Vehicles', id: 'utility_truck', icon: '🚐', name: 'Utility Service Truck', drivable: true,
+      desc: 'Service body, compartment doors, overhead ladder rack',
+      blocks: false, build: drivableWrap(makeUtilityTruck) },
+    { cat: 'Vehicles', id: 'stake_truck', icon: '🚚', name: 'Stake Bed Truck', drivable: true,
+      desc: 'Long-hood cab with chrome grille and stake bed',
+      blocks: false, build: drivableWrap(makeStakeTruck) },
+    { cat: 'Vehicles', id: 'sign_truck', icon: '🪧', name: 'Custom Sign Truck', drivable: true,
+      customText: true,
+      desc: 'Flatbed with a big message board — you write the message',
+      blocks: false, build: drivableWrap(() => makeSignTruck(signTruckText)) },
+    { cat: 'Vehicles', id: 'drive_dump', icon: '🚚', name: 'DOT Dump Truck', drivable: true,
+      desc: 'Drive the tandem dump truck around the site',
+      blocks: false, build: () => CATALOG.find((d) => d.id === 'dump_truck').build() },
+    { cat: 'Vehicles', id: 'drive_tma', icon: '🚛', name: 'Crash Truck (TMA)', drivable: true,
+      desc: 'Drive the attenuator truck into position',
+      blocks: false, build: () => CATALOG.find((d) => d.id === 'tma_truck').build() },
+
     // ---------- CONES ----------
     { cat: 'Cones', id: 'cone_skinny', icon: '🔶', name: 'Skinny Cone',
       desc: '28" standard traffic cone', blocks: true, build: coneBuilder(0.14, 0.72, 1) },
@@ -588,6 +623,27 @@ function buildCatalog() {
         { shape: 'octagon', bg: '#c1121f', big: 'STOP', fg: '#fff' },
         { w: 0.75, h: 0.75, postH: 1.7, backTex: { shape: 'octagon', bg: '#ff7900', big: 'SLOW' } }
       ) },
+    { cat: 'Signs', id: 's_prepstop', icon: '⚠️', name: 'BE PREPARED TO STOP',
+      desc: 'Queue warning diamond', blocks: true,
+      build: signBuilder({ lines: ['BE', 'PREPARED', 'TO STOP'] }) },
+    { cat: 'Signs', id: 's_utility', icon: '⚠️', name: 'UTILITY WORK',
+      desc: 'Utility work ahead diamond', blocks: true,
+      build: signBuilder({ lines: ['UTILITY', 'WORK', 'AHEAD'] }) },
+    { cat: 'Signs', id: 's_bump', icon: '⚠️', name: 'BUMP',
+      desc: 'Rough pavement warning', blocks: true,
+      build: signBuilder({ big: 'BUMP' }) },
+    { cat: 'Signs', id: 's_freshoil', icon: '🛢️', name: 'FRESH OIL',
+      desc: 'Fresh oil / loose gravel plaque', blocks: true,
+      build: signBuilder({ shape: 'rect', bg: '#ff7900', lines: ['FRESH', 'OIL'] }, { w: 1.1, h: 0.8, postH: 1.9 }) },
+    { cat: 'Signs', id: 's_reduced', icon: '⚠️', name: 'REDUCED SPEED AHEAD',
+      desc: 'Speed reduction warning', blocks: true,
+      build: signBuilder({ lines: ['REDUCED', 'SPEED', 'AHEAD'] }) },
+    { cat: 'Signs', id: 's_exitclosed', icon: '⛔', name: 'EXIT CLOSED',
+      desc: 'Exit closure panel', blocks: true,
+      build: signBuilder({ shape: 'rect', bg: '#ff7900', lines: ['EXIT', 'CLOSED'] }, { w: 1.3, h: 0.8, twoPost: true }) },
+    { cat: 'Signs', id: 's_trucks', icon: '⚠️', name: 'TRUCKS ENTERING',
+      desc: 'Trucks entering highway warning', blocks: true,
+      build: signBuilder({ lines: ['TRUCKS', 'ENTERING', 'HIGHWAY'] }) },
 
     // ---------- EQUIPMENT ----------
     { cat: 'Equipment', id: 'steel_poles', icon: '🏗️', name: 'Steel Pole Bundle',
@@ -651,6 +707,12 @@ function buildCatalog() {
         head.position.set(0.2, 5.35, 0);
         head.rotation.x = 0.35;
         g.add(head);
+        // real light source — switched on by the time-of-day system
+        const spot = new THREE.SpotLight('#fff3c4', 0, 60, 0.85, 0.5, 1.2);
+        spot.position.set(0.2, 5.3, 0);
+        spot.target.position.set(0.2, 0, 7);
+        spot.visible = false;
+        g.add(spot, spot.target);
         return g;
       } },
     { cat: 'Equipment', id: 'generator', icon: '🔌', name: 'Generator',
@@ -853,6 +915,244 @@ function buildCatalog() {
         g.add(box(0.06, 0.25, 0.06, '#ddd', 0.56, 1.1, 0.25));
         return g;
       } },
+
+    // ---------- PROPS ----------
+    { cat: 'Props', id: 'toolbox', icon: '🧰', name: 'Toolbox',
+      desc: 'Red mechanic toolbox', blocks: false, build: () => {
+        const g = new THREE.Group();
+        g.add(box(0.62, 0.3, 0.3, '#c0261d', 0, 0.16, 0));
+        g.add(box(0.64, 0.1, 0.32, '#8f1a13', 0, 0.36, 0));
+        g.add(box(0.2, 0.05, 0.06, '#2a2c30', 0, 0.44, 0));
+        g.add(box(0.05, 0.08, 0.32, '#d8dade', -0.31, 0.3, 0));
+        g.add(box(0.05, 0.08, 0.32, '#d8dade', 0.31, 0.3, 0));
+        return g;
+      } },
+    { cat: 'Props', id: 'jobbox', icon: '🗄️', name: 'Job Site Gang Box',
+      desc: 'Heavy steel storage chest', blocks: true, build: () => {
+        const g = new THREE.Group();
+        g.add(box(1.6, 0.75, 0.75, '#d8a713', 0, 0.55, 0));
+        g.add(box(1.62, 0.14, 0.77, '#b58a0d', 0, 0.98, 0));
+        g.add(box(0.3, 0.06, 0.1, '#2a2c30', 0, 1.06, 0.3));
+        for (const cx of [-0.65, 0.65]) for (const cz of [-0.28, 0.28]) {
+          g.add(cyl(0.09, 0.09, 0.16, '#26282c', cx, 0.1, cz, 8));
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'step_ladder', icon: '🪜', name: 'Step Ladder',
+      desc: 'A-frame fiberglass step ladder', blocks: false, build: () => {
+        const g = new THREE.Group();
+        for (const dz of [-0.42, 0.42]) {
+          for (const dx of [-0.28, 0.28]) {
+            const rail = box(0.06, 1.7, 0.09, dz < 0 ? '#d8a713' : '#c2c6cc', dx, 0.82, dz);
+            rail.rotation.x = dz < 0 ? 0.28 : -0.28;
+            g.add(rail);
+          }
+        }
+        for (let i = 0; i < 4; i++) {
+          const step = box(0.55, 0.05, 0.14, '#d8dade', 0, 0.3 + i * 0.38, -0.32 + i * 0.11);
+          g.add(step);
+        }
+        g.add(box(0.6, 0.05, 0.3, '#c0261d', 0, 1.62, 0));
+        return g;
+      } },
+    { cat: 'Props', id: 'ext_ladder', icon: '🪜', name: 'Extension Ladder',
+      desc: 'Long leaning ladder — stretch it with [ ]', blocks: false, stretch: 'z', build: () => {
+        const g = new THREE.Group();
+        const lean = new THREE.Group();
+        for (const dx of [-0.25, 0.25]) {
+          lean.add(box(0.06, 0.1, 4.2, '#d8dade', dx, 0, 0));
+        }
+        for (let i = 0; i < 12; i++) {
+          lean.add(box(0.46, 0.05, 0.07, '#c2c6cc', 0, 0, -1.9 + i * 0.35));
+        }
+        lean.position.y = 1.55;
+        lean.rotation.x = -0.75;   // leaning up
+        g.add(lean);
+        return g;
+      } },
+    { cat: 'Props', id: 'bucket', icon: '🪣', name: 'Asphalt Bucket',
+      desc: 'Sealcoat / asphalt patch bucket', blocks: false, build: () => {
+        const g = new THREE.Group();
+        g.add(cyl(0.18, 0.15, 0.38, '#17181a', 0, 0.19, 0, 14));
+        g.add(cyl(0.185, 0.185, 0.04, '#33373d', 0, 0.4, 0, 14));
+        const lbl = cyl(0.181, 0.181, 0.14, '#e8e8e8', 0, 0.22, 0, 14);
+        g.add(lbl);
+        return g;
+      } },
+    { cat: 'Props', id: 'bucket_stack', icon: '🪣', name: 'Bucket Pallet',
+      desc: 'Pallet stacked with asphalt buckets', blocks: true, build: () => {
+        const g = palletMesh(1);
+        for (let i = 0; i < 6; i++) {
+          const b = cyl(0.18, 0.15, 0.38, i % 2 ? '#17181a' : '#3a3d42', -0.4 + (i % 3) * 0.4, 0.34, i < 3 ? -0.28 : 0.28, 12);
+          g.add(b);
+          g.add(cyl(0.185, 0.185, 0.04, '#33373d', b.position.x, 0.55, b.position.z, 12));
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'steel_beam', icon: '🏗️', name: 'Steel I-Beam',
+      desc: 'Structural beam on cribbing — stretch with [ ]', blocks: true, stretch: 'z', build: () => {
+        const g = new THREE.Group();
+        g.add(box(0.3, 0.15, 0.3, '#7a5a34', 0, 0.075, -1.6));
+        g.add(box(0.3, 0.15, 0.3, '#7a5a34', 0, 0.075, 1.6));
+        const m = shiny('#9aa2ad', { metalness: 0.5, roughness: 0.4 });
+        const flangeB = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 4.4), m);
+        flangeB.position.y = 0.18;
+        const web = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.34, 4.4), m);
+        web.position.y = 0.38;
+        const flangeT = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.06, 4.4), m);
+        flangeT.position.y = 0.58;
+        flangeB.castShadow = web.castShadow = flangeT.castShadow = true;
+        g.add(flangeB, web, flangeT);
+        return g;
+      } },
+    { cat: 'Props', id: 'beam_column', icon: '🏛️', name: 'Steel Column',
+      desc: 'Vertical I-beam column — stretch height with [ ]', blocks: true, stretch: 'y', build: () => {
+        const g = new THREE.Group();
+        g.add(box(0.7, 0.06, 0.7, '#6f7680', 0, 0.03, 0));
+        const m = shiny('#9aa2ad', { metalness: 0.5, roughness: 0.4 });
+        const web = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.4, 0.3), m);
+        web.position.y = 1.76;
+        const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.36, 3.4, 0.06), m);
+        f1.position.set(0, 1.76, 0.17);
+        const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.36, 3.4, 0.06), m);
+        f2.position.set(0, 1.76, -0.17);
+        web.castShadow = f1.castShadow = f2.castShadow = true;
+        g.add(web, f1, f2);
+        return g;
+      } },
+    { cat: 'Props', id: 'rebar', icon: '🥢', name: 'Rebar Bundle',
+      desc: 'Bundle of rebar — stretch with [ ]', blocks: false, stretch: 'z', build: () => {
+        const g = new THREE.Group();
+        for (let i = 0; i < 8; i++) {
+          const r = cyl(0.025, 0.025, 3.4, '#6b4f3a', (Math.random() - 0.5) * 0.22, 0.05 + Math.random() * 0.16, (Math.random() - 0.5) * 0.2, 6);
+          r.rotation.x = Math.PI / 2;
+          g.add(r);
+        }
+        g.add(box(0.34, 0.26, 0.08, '#8a9099', 0, 0.13, -1.0));
+        g.add(box(0.34, 0.26, 0.08, '#8a9099', 0, 0.13, 1.0));
+        return g;
+      } },
+    { cat: 'Props', id: 'pipe_concrete', icon: '⭕', name: 'Concrete Pipe',
+      desc: 'Big culvert section — stretch with [ ]', blocks: true, stretch: 'z', build: () => {
+        const g = new THREE.Group();
+        const pipe = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.7, 0.7, 2.4, 16, 1, true),
+          lamb('#b9bbb6', { side: THREE.DoubleSide })
+        );
+        pipe.rotation.x = Math.PI / 2;
+        pipe.position.y = 0.7;
+        pipe.castShadow = true;
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.07, 8, 16), lamb('#a5a7a2'));
+        rim.position.set(0, 0.7, 1.2);
+        const rim2 = rim.clone();
+        rim2.position.z = -1.2;
+        g.add(pipe, rim, rim2);
+        return g;
+      } },
+    { cat: 'Props', id: 'scaffold', icon: '🏗️', name: 'Scaffold Tower',
+      desc: 'Two-level scaffolding with planks', blocks: true, build: () => {
+        const g = new THREE.Group();
+        const m = shiny('#c2c6cc');
+        for (const dx of [-0.9, 0.9]) for (const dz of [-0.6, 0.6]) {
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 3.8, 8), m);
+          leg.position.set(dx, 1.9, dz);
+          leg.castShadow = true;
+          g.add(leg);
+        }
+        for (const y of [1.2, 2.4, 3.6]) {
+          for (const dz of [-0.6, 0.6]) {
+            const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.8, 6), m);
+            bar.rotation.z = Math.PI / 2;
+            bar.position.set(0, y, dz);
+            g.add(bar);
+          }
+          const cross = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.1, 6), m);
+          cross.rotation.z = Math.PI / 2;
+          cross.rotation.y = 0.6;
+          cross.position.set(0, y - 0.5, 0);
+          g.add(cross);
+        }
+        for (const y of [1.25, 2.45]) {
+          for (let k = 0; k < 4; k++) {
+            g.add(box(0.42, 0.05, 1.3, '#a3763f', -0.68 + k * 0.45, y, 0));
+          }
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'dirt_pile', icon: '⛰️', name: 'Dirt Pile + Shovel',
+      desc: 'Fresh dig with a shovel stuck in it', blocks: true, build: () => {
+        const g = new THREE.Group();
+        const pile = new THREE.Mesh(new THREE.ConeGeometry(1.3, 0.9, 9), lamb('#6e532f'));
+        pile.position.y = 0.45;
+        pile.castShadow = true;
+        g.add(pile);
+        const handle = cyl(0.03, 0.03, 1.2, '#a3763f', 0.4, 1.15, 0.2, 6);
+        handle.rotation.z = 0.5;
+        g.add(handle);
+        const blade = box(0.24, 0.3, 0.04, '#8a9099', 0.13, 0.68, 0.2);
+        blade.rotation.z = 0.5;
+        g.add(blade);
+        return g;
+      } },
+    { cat: 'Props', id: 'gravel_pile', icon: '🪨', name: 'Gravel Pile',
+      desc: 'Crushed aggregate pile', blocks: true, build: () => {
+        const g = new THREE.Group();
+        const pile = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.0, 10), lamb('#8f8b82'));
+        pile.position.y = 0.5;
+        pile.castShadow = true;
+        g.add(pile);
+        for (let i = 0; i < 6; i++) {
+          const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.1 + Math.random() * 0.08, 0), lamb('#7d7a72'));
+          const a = Math.random() * Math.PI * 2;
+          rock.position.set(Math.cos(a) * (1.2 + Math.random() * 0.4), 0.08, Math.sin(a) * (1.2 + Math.random() * 0.4));
+          g.add(rock);
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'cooler', icon: '🧊', name: 'Water Cooler',
+      desc: 'Orange crew cooler with cup sleeve', blocks: false, build: () => {
+        const g = new THREE.Group();
+        g.add(cyl(0.24, 0.24, 0.5, '#e85d04', 0, 0.27, 0, 14));
+        g.add(cyl(0.25, 0.25, 0.09, '#f5f5f5', 0, 0.56, 0, 14));
+        g.add(box(0.06, 0.05, 0.08, '#f5f5f5', 0, 0.16, 0.24));
+        g.add(cyl(0.05, 0.05, 0.3, '#f5f5f5', 0.33, 0.2, 0, 8));
+        return g;
+      } },
+    { cat: 'Props', id: 'wheelbarrow', icon: '🛒', name: 'Wheelbarrow',
+      desc: 'Contractor wheelbarrow', blocks: false, build: () => {
+        const g = new THREE.Group();
+        const tub = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.35, 0.4, 10, 1, true), lamb('#c0261d', { side: THREE.DoubleSide }));
+        tub.position.set(0, 0.55, 0.2);
+        tub.scale.z = 0.7;
+        tub.castShadow = true;
+        g.add(tub);
+        const bottom = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.04, 10), lamb('#a01f17'));
+        bottom.position.set(0, 0.37, 0.2);
+        bottom.scale.z = 0.7;
+        g.add(bottom);
+        for (const hx of [-0.22, 0.22]) {
+          const h = box(0.05, 0.05, 1.5, '#a3763f', hx, 0.42, -0.35);
+          h.rotation.x = 0.12;
+          g.add(h);
+          g.add(box(0.05, 0.35, 0.05, '#6f7680', hx, 0.2, -0.55));
+        }
+        const wheel = makeWheel(0.22, 0.12);
+        wheel.position.set(0, 0.22, 0.75);
+        g.add(wheel);
+        return g;
+      } },
+    { cat: 'Props', id: 'cable_reel', icon: '🧵', name: 'Cable Reel',
+      desc: 'Big wooden utility spool', blocks: true, build: () => {
+        const g = new THREE.Group();
+        const side1 = cyl(0.7, 0.7, 0.1, '#a3763f', 0, 0.7, 0.35, 16);
+        side1.rotation.x = Math.PI / 2;
+        const side2 = cyl(0.7, 0.7, 0.1, '#a3763f', 0, 0.7, -0.35, 16);
+        side2.rotation.x = Math.PI / 2;
+        const core = cyl(0.32, 0.32, 0.62, '#2a2c30', 0, 0.7, 0, 14);
+        core.rotation.x = Math.PI / 2;
+        g.add(side1, side2, core);
+        return g;
+      } },
   ];
 }
 
@@ -870,7 +1170,7 @@ function palletMesh(count) {
 }
 
 const CATALOG = buildCatalog();
-const CATEGORIES = ['Cones', 'Barricades', 'Signs', 'Equipment'];
+const CATEGORIES = ['Vehicles', 'Cones', 'Barricades', 'Signs', 'Equipment', 'Props'];
 
 // ============================================================
 // Menu UI flow
@@ -1017,6 +1317,82 @@ const TERRAIN_STYLE = {
   coast:    { ground: '#cfc08a', sky: '#8fd0f7', fog: '#cfe4ee', fogFar: 800 },
 };
 
+// ============================================================
+// Time of day
+// ============================================================
+const TIME_NAMES = ['Day', 'Dusk', 'Night'];
+
+function skyTexture(top, mid, horizon, stars = false) {
+  const c = makeCanvas(64, 256);
+  const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, top);
+  grad.addColorStop(0.55, mid);
+  grad.addColorStop(1, horizon);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 64, 256);
+  if (stars) {
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 90; i++) {
+      const y = Math.random() * 150;
+      ctx.globalAlpha = 0.4 + Math.random() * 0.6;
+      ctx.fillRect(Math.random() * 64, y, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+}
+
+function timePreset(style) {
+  return [
+    { // day
+      sky: [lightenHex(style.sky, 0.25), style.sky, style.fog], stars: false,
+      fog: style.fog, fogFar: style.fogFar,
+      sunColor: '#fff4de', sunInt: 2.4, hemiInt: 1.05, ambInt: 0.25,
+      lights: 0.5, towers: 0, windows: 0, sunY: 90,
+    },
+    { // dusk
+      sky: ['#2c3e6b', '#b95f3c', '#f2a65e'], stars: false,
+      fog: '#c98d63', fogFar: style.fogFar * 0.85,
+      sunColor: '#ffb066', sunInt: 1.1, hemiInt: 0.45, ambInt: 0.18,
+      lights: 2.2, towers: 300, windows: 0.5, sunY: 35,
+    },
+    { // night
+      sky: ['#05070f', '#0b1122', '#1a2340'], stars: true,
+      fog: '#0d1220', fogFar: style.fogFar * 0.7,
+      sunColor: '#8fa8d8', sunInt: 0.35, hemiInt: 0.14, ambInt: 0.08,
+      lights: 3.2, towers: 600, windows: 0.85, sunY: 70,
+    },
+  ];
+}
+
+function lightenHex(hex, amt) {
+  const col = new THREE.Color(hex);
+  col.lerp(new THREE.Color('#ffffff'), amt);
+  return '#' + col.getHexString();
+}
+
+function applyTime() {
+  const style = TERRAIN_STYLE[sel.highway.terrain];
+  const p = timePreset(style)[timeIdx];
+  skyDome.material.map = skyTexture(...p.sky, p.stars);
+  skyDome.material.needsUpdate = true;
+  scene.fog.color.set(p.fog);
+  scene.fog.far = p.fogFar;
+  scene.fog.near = timeIdx === 2 ? 60 : 120;
+  sun.color.set(p.sunColor);
+  sun.intensity = p.sunInt;
+  hemiLight.intensity = p.hemiInt;
+  ambLight.intensity = p.ambInt;
+  HEADLIGHT_MAT.emissiveIntensity = p.lights;
+  TAILLIGHT_MAT.emissiveIntensity = p.lights * 0.7;
+  for (const s of towerSpots) { s.intensity = p.towers; s.visible = p.towers > 0; }
+  for (const m of buildingMats) m.emissiveIntensity = p.windows;
+  sunHeight = p.sunY;
+}
+let sunHeight = 90;
+
 function laneCenterX(side, lane) {
   // side 'A' = +x, traffic moves -z ; side 'B' = -x, traffic moves +z
   // lane 0 is the inside (median) lane
@@ -1029,12 +1405,23 @@ function buildWorld() {
   const style = TERRAIN_STYLE[hw.terrain];
   const lanes = hw.lanes;
 
+  buildingMats = [];
+  towerSpots = [];
   scene.background = new THREE.Color(style.sky);
   scene.fog = new THREE.Fog(style.fog, 120, style.fogFar);
 
+  // ---- sky dome (gradient + stars at night) ----
+  skyDome = new THREE.Mesh(
+    new THREE.SphereGeometry(1200, 24, 14),
+    new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false })
+  );
+  skyDome.renderOrder = -10;
+  scene.add(skyDome);
+
   // ---- lighting ----
-  scene.add(new THREE.HemisphereLight(style.sky, style.ground, 1.05));
-  scene.add(new THREE.AmbientLight('#ffffff', 0.25));
+  hemiLight = new THREE.HemisphereLight(style.sky, style.ground, 1.05);
+  ambLight = new THREE.AmbientLight('#ffffff', 0.25);
+  scene.add(hemiLight, ambLight);
   sun = new THREE.DirectionalLight('#fff4de', 2.4);
   sun.position.set(60, 90, 40);
   sun.castShadow = true;
@@ -1127,9 +1514,13 @@ function buildWorld() {
     clouds.push(cl);
   }
 
-  // placed-item root
+  // placed-item root + drivable vehicle root
   placedRoot = new THREE.Group();
-  scene.add(placedRoot);
+  vehiclesRoot = new THREE.Group();
+  scene.add(placedRoot, vehiclesRoot);
+
+  timeIdx = 0;
+  applyTime();
 }
 
 function buildMarkings() {
@@ -1406,7 +1797,11 @@ function makeBuilding() {
   const tex = windowTexture().clone();
   tex.needsUpdate = true;
   tex.repeat.set(Math.round(w / 5), Math.round(h / 5));
-  const mat = new THREE.MeshStandardMaterial({ map: tex });
+  const mat = new THREE.MeshStandardMaterial({
+    map: tex,
+    emissive: '#ffe9a3', emissiveMap: tex, emissiveIntensity: 0,   // windows glow at night
+  });
+  buildingMats.push(mat);
   const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   b.position.y = h / 2;
   return b;
@@ -1630,12 +2025,16 @@ function spawnPlayer() {
 const glassMat = () => new THREE.MeshStandardMaterial({
   color: '#7fb9dd', roughness: 0.18, metalness: 0.35,
 });
-const headlightMat = () => new THREE.MeshStandardMaterial({
-  color: '#fffbe8', emissive: '#fff6c9', emissiveIntensity: 0.9,
+// shared materials so the time-of-day system can flip every light at once
+const HEADLIGHT_MAT = new THREE.MeshStandardMaterial({
+  color: '#fffbe8', emissive: '#fff6c9', emissiveIntensity: 0.5,
 });
-const taillightMat = () => new THREE.MeshStandardMaterial({
-  color: '#8f1414', emissive: '#ff2020', emissiveIntensity: 0.7,
+const TAILLIGHT_MAT = new THREE.MeshStandardMaterial({
+  color: '#8f1414', emissive: '#ff2020', emissiveIntensity: 0.5,
 });
+const headlightMat = () => HEADLIGHT_MAT;
+const taillightMat = () => TAILLIGHT_MAT;
+const DOT_YELLOW = '#f2cb1d';   // Liberty-style safety yellow fleet paint
 
 function makeWheel(r = 0.36, w = 0.26) {
   const g = new THREE.Group();
@@ -1764,26 +2163,358 @@ function makePickup(col = null, dot = false) {
   return { mesh: g, len: 5.2 };
 }
 
-function dotDoorDecal(x, y, z) {
-  const dotName = STATES[sel.state] ? STATES[sel.state].dot : 'DOT';
-  const c = makeCanvas(128, 64);
+// Liberty-style door emblem: blue triangle road logo + agency text,
+// painted straight onto the panel color
+function dotDoorDecal(x, y, z, paint = '#ff8c1a') {
+  const stateName = sel.state || 'STATE';
+  const c = makeCanvas(160, 80);
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  roundRect(ctx, 4, 4, 120, 56, 10); ctx.fill();
-  ctx.fillStyle = '#1a1a1a';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  let fs = 22;
-  ctx.font = `900 ${fs}px Arial`;
-  while (ctx.measureText(dotName).width > 108 && fs > 9) { fs--; ctx.font = `900 ${fs}px Arial`; }
-  ctx.fillText(dotName, 64, 26);
-  ctx.font = '700 13px Arial';
-  ctx.fillText('HIGHWAY CREW', 64, 47);
+  ctx.fillStyle = paint;
+  ctx.fillRect(0, 0, 160, 80);
+  // triangle emblem with road swoosh
+  ctx.fillStyle = '#1d5fbf';
+  ctx.beginPath();
+  ctx.moveTo(30, 12); ctx.lineTo(52, 62); ctx.lineTo(8, 62);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(18, 62);
+  ctx.quadraticCurveTo(34, 44, 30, 24);
+  ctx.stroke();
+  ctx.strokeStyle = '#7fd0f0'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(26, 62);
+  ctx.quadraticCurveTo(42, 46, 36, 30);
+  ctx.stroke();
+  // agency text
+  ctx.fillStyle = '#111';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  let fs = 13;
+  ctx.font = `800 ${fs}px Arial`;
+  while (ctx.measureText(stateName.toUpperCase()).width > 96 && fs > 8) { fs--; ctx.font = `800 ${fs}px Arial`; }
+  ctx.fillText(stateName.toUpperCase(), 58, 24);
+  ctx.font = '800 11px Arial';
+  ctx.fillText('DEPARTMENT OF', 58, 41);
+  ctx.fillText('TRANSPORTATION', 58, 56);
   const decal = new THREE.Mesh(
-    new THREE.BoxGeometry(0.02, 0.34, 0.68),
+    new THREE.BoxGeometry(0.02, 0.42, 0.84),
     new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(c) })
   );
   decal.position.set(x, y, z);
   return decal;
+}
+
+// blue reflective dash striping on fleet yellow (photo-style)
+function dashStripeTex() {
+  const c = makeCanvas(256, 24);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = DOT_YELLOW;
+  ctx.fillRect(0, 0, 256, 24);
+  ctx.fillStyle = '#1d5fbf';
+  for (let x = 4; x < 256; x += 26) ctx.fillRect(x, 6, 16, 12);
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+}
+
+function textDecal(text, w, h, { bg = DOT_YELLOW, fg = '#1d5fbf', size = 26 } = {}) {
+  const c = makeCanvas(256, Math.round(256 * (h / w)));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.fillStyle = fg;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  let fs = size;
+  ctx.font = `900 ${fs}px Arial`;
+  while (ctx.measureText(text).width > c.width - 20 && fs > 8) { fs--; ctx.font = `900 ${fs}px Arial`; }
+  ctx.fillText(text, c.width / 2, c.height / 2);
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(0.02, h, w),
+    new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(c) })
+  );
+  return m;
+}
+
+// service-body compartment doors (photo-style utility bed sides)
+function compartmentTex() {
+  const c = makeCanvas(256, 96);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = DOT_YELLOW; ctx.fillRect(0, 0, 256, 96);
+  ctx.strokeStyle = 'rgba(0,0,0,.75)'; ctx.lineWidth = 3;
+  const doors = [[8, 8, 70, 80], [86, 8, 84, 38], [86, 52, 84, 36], [178, 8, 70, 80]];
+  for (const [x, y, w, h] of doors) {
+    ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(0,0,0,.85)';
+    ctx.fillRect(x + w / 2 - 8, y + h - 10, 16, 4);   // latch
+    ctx.fillStyle = DOT_YELLOW;
+  }
+  return new THREE.CanvasTexture(c);
+}
+
+// red/white DOT conspicuity striping for truck rears
+function conspicuityTex() {
+  const c = makeCanvas(128, 16);
+  const ctx = c.getContext('2d');
+  for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = i % 2 ? '#ffffff' : '#d21f1f';
+    ctx.fillRect(i * 16, 0, 16, 16);
+  }
+  return new THREE.CanvasTexture(c);
+}
+
+function fleetLightBar(x, y, z) {
+  const g = new THREE.Group();
+  g.add(box(1.0, 0.09, 0.28, '#e8eaec', 0, 0.05, 0));
+  for (const bx of [-0.3, 0.3]) {
+    const lamp = box(0.22, 0.1, 0.2, '#ffb400', bx, 0.13, 0);
+    addBlinker(lamp, bx * 6, 4);
+    g.add(lamp);
+  }
+  g.position.set(x, y, z);
+  return g;
+}
+
+function addDashStripes(g, halfW, y, z, len) {
+  const mat = new THREE.MeshStandardMaterial({ map: dashStripeTex() });
+  for (const sx of [-halfW, halfW]) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.14, len), mat);
+    band.position.set(sx, y, z);
+    g.add(band);
+  }
+}
+
+// ---- DOT Crew Pickup (crew cab, photo 1) ----
+function makeFleetPickup() {
+  const paint = shiny(DOT_YELLOW);
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.62, 5.5), paint);
+  body.position.y = 0.78;
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.2, 1.3), paint);
+  hood.position.set(0, 1.14, 2.0);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(1.88, 0.74, 2.5), paint);
+  cab.position.set(0, 1.44, 0.35);
+  const windows = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.4, 2.3), glassMat());
+  windows.position.set(0, 1.52, 0.35);
+  const bPillar = new THREE.Mesh(new THREE.BoxGeometry(1.93, 0.42, 0.1), paint);
+  bPillar.position.set(0, 1.52, 0.35);   // splits glass into crew-cab windows
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.52, 0.08), glassMat());
+  windshield.position.set(0, 1.42, 1.68);
+  windshield.rotation.x = -0.35;
+  g.add(body, hood, cab, windows, bPillar, windshield);
+  // bed
+  g.add(box(1.88, 0.4, 0.1, DOT_YELLOW, 0, 1.28, -0.95));
+  g.add(box(1.88, 0.4, 0.1, DOT_YELLOW, 0, 1.28, -2.7));
+  g.add(box(0.1, 0.4, 1.85, DOT_YELLOW, -0.9, 1.28, -1.82));
+  g.add(box(0.1, 0.4, 1.85, DOT_YELLOW, 0.9, 1.28, -1.82));
+  addDashStripes(g, 0.985, 1.02, 0.2, 4.9);
+  g.add(dotDoorDecal(-0.99, 1.42, 0.85, DOT_YELLOW), dotDoorDecal(0.99, 1.42, 0.85, DOT_YELLOW));
+  const dialL = textDecal('DIAL 511', 1.1, 0.24); dialL.position.set(-0.955, 1.32, -1.85);
+  const dialR = textDecal('DIAL 511', 1.1, 0.24); dialR.position.set(0.955, 1.32, -1.85);
+  g.add(dialL, dialR);
+  g.add(fleetLightBar(0, 1.86, 0.35));
+  addCarFace(g, { w: 1.95, frontZ: 2.75, backZ: -2.75, lightY: 0.82, bumperY: 0.44 });
+  addMirrors(g, 1.04, 1.34, 1.35);
+  addWheels(g, 0.44, [[-0.92, 1.85], [0.92, 1.85], [-0.92, -1.8], [0.92, -1.8]]);
+  return { mesh: g, len: 5.5 };
+}
+
+// ---- Utility Service Truck (service body + ladder rack, photos 2-3) ----
+function makeUtilityTruck() {
+  const paint = shiny(DOT_YELLOW);
+  const g = new THREE.Group();
+  g.add(box(2.05, 0.4, 6.2, '#26282c', 0, 0.62, 0.1));
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.85, 1.5), paint);
+  hood.position.set(0, 1.25, 2.55); hood.castShadow = true;
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.15, 1.5), paint);
+  cab.position.set(0, 1.55, 1.3); cab.castShadow = true;
+  const windows = new THREE.Mesh(new THREE.BoxGeometry(2.04, 0.48, 1.3), glassMat());
+  windows.position.set(0, 1.86, 1.3);
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.55, 0.08), glassMat());
+  windshield.position.set(0, 1.78, 2.1);
+  windshield.rotation.x = -0.3;
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.6, 0.08), shiny('#c8ced6', { metalness: 0.7, roughness: 0.2 }));
+  grille.position.set(0, 1.15, 3.32);
+  g.add(hood, cab, windows, windshield, grille);
+  // black grille guard
+  g.add(box(1.9, 0.12, 0.08, '#1c1e22', 0, 1.55, 3.5));
+  g.add(box(1.9, 0.12, 0.08, '#1c1e22', 0, 1.1, 3.5));
+  for (const gx of [-0.75, -0.25, 0.25, 0.75]) g.add(box(0.08, 0.85, 0.08, '#1c1e22', gx, 1.3, 3.5));
+  g.add(box(2.1, 0.35, 0.25, '#26282c', 0, 0.55, 3.45));
+  // service body with compartment doors
+  const compTex = new THREE.MeshStandardMaterial({ map: compartmentTex() });
+  const plainY = shiny(DOT_YELLOW);
+  const bodyBox = new THREE.Mesh(
+    new THREE.BoxGeometry(2.3, 1.25, 3.6),
+    [compTex, compTex, plainY, plainY, plainY, plainY]
+  );
+  bodyBox.position.set(0, 1.35, -1.6);
+  bodyBox.castShadow = true;
+  g.add(bodyBox);
+  const consp = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 0.16, 0.03),
+    new THREE.MeshStandardMaterial({ map: conspicuityTex() })
+  );
+  consp.position.set(0, 0.8, -3.42);
+  g.add(consp);
+  // overhead ladder rack + ladder
+  const rackM = shiny('#dfe3e8');
+  for (const rx of [-1.05, 1.05]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 4.6), rackM);
+    rail.position.set(rx, 2.35, -1.2);
+    g.add(rail);
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.4, 0.08), rackM);
+    post.position.set(rx, 2.1, -3.2);
+    g.add(post);
+  }
+  const rackBar = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 0.08), rackM);
+  rackBar.position.set(0, 2.35, -3.2);
+  g.add(rackBar);
+  // white ladder up top, hanging over the cab like the photo
+  for (const lx of [-0.35, 0.35]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 4.4), shiny('#f2f3f5'));
+    rail.position.set(lx, 2.46, -0.4);
+    g.add(rail);
+  }
+  for (let i = 0; i < 9; i++) {
+    const rung = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.05, 0.08), shiny('#f2f3f5'));
+    rung.position.set(0, 2.46, -2.4 + i * 0.48);
+    g.add(rung);
+  }
+  g.add(dotDoorDecal(-1.03, 1.5, 1.35, DOT_YELLOW), dotDoorDecal(1.03, 1.5, 1.35, DOT_YELLOW));
+  const beacon = cyl(0.09, 0.11, 0.14, '#ffb400', 0, 2.2, 1.3);
+  addBlinker(beacon, 1, 4.5);
+  g.add(beacon);
+  for (const sx of [-0.68, 0.68]) {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.16, 0.06), headlightMat());
+    hl.position.set(sx, 1.1, 3.34);
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.18, 0.06), taillightMat());
+    tl.position.set(sx, 1.0, -3.43);
+    g.add(hl, tl);
+  }
+  addWheels(g, 0.46, [[-0.95, 2.3], [0.95, 2.3], [-0.95, -1.9], [0.95, -1.9]]);
+  return { mesh: g, len: 6.8 };
+}
+
+// ---- Stake Bed Truck (long-hood cab, photo 4) ----
+function makeStakeTruck() {
+  const paint = shiny(DOT_YELLOW);
+  const g = new THREE.Group();
+  g.add(box(2.1, 0.45, 7.6, '#26282c', 0, 0.66, -0.2));
+  // long hood with chrome grille
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.95, 2.3), paint);
+  hood.position.set(0, 1.35, 2.9); hood.castShadow = true;
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 0.08), shiny('#d5dae0', { metalness: 0.75, roughness: 0.18 }));
+  grille.position.set(0, 1.25, 4.08);
+  const bumper = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.4, 0.2), shiny('#c8ced6', { metalness: 0.6, roughness: 0.25 }));
+  bumper.position.set(0, 0.6, 4.1);
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(2.15, 1.55, 1.7), paint);
+  cab.position.set(0, 1.75, 1.0); cab.castShadow = true;
+  const windows = new THREE.Mesh(new THREE.BoxGeometry(2.19, 0.62, 1.5), glassMat());
+  windows.position.set(0, 2.15, 1.0);
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.62, 0.08), glassMat());
+  windshield.position.set(0, 2.05, 1.9);
+  windshield.rotation.x = -0.25;
+  g.add(hood, grille, bumper, cab, windows, windshield);
+  for (const sx of [-0.7, 0.7]) {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.06), headlightMat());
+    hl.position.set(sx, 1.15, 4.1);
+    g.add(hl);
+  }
+  // stake bed
+  const bedFloor = box(2.4, 0.22, 4.6, '#8a9099', 0, 1.15, -2.2);
+  g.add(bedFloor);
+  const slatM = shiny(DOT_YELLOW);
+  for (const sx of [-1.15, 1.15]) {
+    for (let i = 0; i < 6; i++) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.15, 0.1), slatM);
+      post.position.set(sx, 1.85, -4.3 + i * 0.85);
+      g.add(post);
+    }
+    for (const ry of [1.5, 1.95, 2.35]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 4.5), slatM);
+      rail.position.set(sx, ry, -2.2);
+      g.add(rail);
+    }
+  }
+  for (const rz of [-4.45, 0.05]) {
+    for (const ry of [1.5, 1.95, 2.35]) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(2.34, 0.14, 0.06), slatM);
+      rail.position.set(0, ry, rz);
+      g.add(rail);
+    }
+  }
+  const consp = new THREE.Mesh(
+    new THREE.BoxGeometry(2.3, 0.16, 0.03),
+    new THREE.MeshStandardMaterial({ map: conspicuityTex() })
+  );
+  consp.position.set(0, 1.0, -4.52);
+  g.add(consp);
+  for (const sx of [-0.75, 0.75]) {
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.06), taillightMat());
+    tl.position.set(sx, 0.85, -4.53);
+    g.add(tl);
+  }
+  g.add(dotDoorDecal(-1.09, 1.7, 1.05, DOT_YELLOW), dotDoorDecal(1.09, 1.7, 1.05, DOT_YELLOW));
+  g.add(fleetLightBar(0, 2.6, 1.0));
+  addMirrors(g, 1.15, 2.0, 1.9);
+  addWheels(g, 0.5, [[-0.98, 2.9], [0.98, 2.9], [-0.98, -1.6], [0.98, -1.6], [-0.98, -2.7], [0.98, -2.7]]);
+  return { mesh: g, len: 8.6 };
+}
+
+// ---- Custom Sign Truck (flatbed with a programmable board) ----
+let signTruckText = 'SLOW DOWN\nWORK ZONE';
+
+function signBoardTexture(text) {
+  const c = makeCanvas(512, 288);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0c0d10'; ctx.fillRect(0, 0, 512, 288);
+  ctx.strokeStyle = '#3a3d42'; ctx.lineWidth = 8;
+  ctx.strokeRect(6, 6, 500, 276);
+  const lines = text.toUpperCase().split(/\n|\//).map((l) => l.trim()).filter(Boolean).slice(0, 3);
+  ctx.fillStyle = '#ffb400';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const lh = 288 / (lines.length + 1);
+  lines.forEach((ln, i) => {
+    let fs = 64;
+    ctx.font = `900 ${fs}px monospace`;
+    while (ctx.measureText(ln).width > 470 && fs > 18) { fs -= 2; ctx.font = `900 ${fs}px monospace`; }
+    ctx.fillText(ln, 256, lh * (i + 1));
+  });
+  return new THREE.CanvasTexture(c);
+}
+
+function makeSignTruck(text) {
+  const paint = shiny(DOT_YELLOW);
+  const g = new THREE.Group();
+  g.add(box(2.05, 0.4, 6.0, '#26282c', 0, 0.62, 0.2));
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(2.0, 1.25, 1.7), paint);
+  cab.position.set(0, 1.5, 2.2); cab.castShadow = true;
+  const windows = new THREE.Mesh(new THREE.BoxGeometry(2.04, 0.5, 1.5), glassMat());
+  windows.position.set(0, 1.86, 2.2);
+  g.add(cab, windows);
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.2, 3.6), paint);
+  bed.position.set(0, 1.05, -1.1); bed.castShadow = true;
+  g.add(bed);
+  // big message board on posts
+  g.add(box(0.14, 2.2, 0.14, '#33373d', -1.0, 2.2, -1.4));
+  g.add(box(0.14, 2.2, 0.14, '#33373d', 1.0, 2.2, -1.4));
+  const boardTex = new THREE.MeshBasicMaterial({ map: signBoardTexture(text) });
+  const dark = lamb('#141518');
+  const board = new THREE.Mesh(
+    new THREE.BoxGeometry(3.1, 1.9, 0.14),
+    [dark, dark, dark, dark, dark, boardTex]   // reads from behind (-z), toward following traffic
+  );
+  board.position.set(0, 4.2, -1.4);
+  board.castShadow = true;
+  g.add(board);
+  for (const [bx, by] of [[-1.4, 3.4], [1.4, 3.4], [-1.4, 5.0], [1.4, 5.0]]) {
+    const lamp = cyl(0.08, 0.08, 0.08, '#ffb400', bx, by, -1.42);
+    lamp.rotation.x = Math.PI / 2;
+    addBlinker(lamp, (bx + by) * 2, 3);
+    g.add(lamp);
+  }
+  g.add(dotDoorDecal(-1.03, 1.45, 2.25, DOT_YELLOW), dotDoorDecal(1.03, 1.45, 2.25, DOT_YELLOW));
+  addCarFace(g, { w: 2.05, frontZ: 3.05, backZ: -2.9, lightY: 0.75, bumperY: 0.42 });
+  addWheels(g, 0.46, [[-0.95, 2.2], [0.95, 2.2], [-0.95, -1.7], [0.95, -1.7]]);
+  return { mesh: g, len: 6.4 };
 }
 
 function makeSemi() {
@@ -2011,11 +2742,42 @@ function renderBuildItems() {
     const el = document.createElement('div');
     el.className = 'build-item' + (ghostDef && ghostDef.id === def.id ? ' selected' : '');
     el.innerHTML = `<div class="bi-icon">${def.icon}</div>
-      <div class="bi-name">${def.name}</div>
+      <div class="bi-name">${def.name}${def.drivable ? ' <span class="bi-tag">DRIVE</span>' : ''}</div>
       <div class="bi-desc">${def.desc}</div>`;
-    el.onclick = () => { selectItem(def); closeBuildMenu(); };
+    el.onclick = () => {
+      if (def.customText) { openSignModal(def); return; }
+      selectItem(def); closeBuildMenu();
+    };
     wrap.appendChild(el);
   }
+}
+
+function openSignModal(def) {
+  const modal = $('sign-modal');
+  const input = $('sign-modal-input');
+  input.value = signTruckText;
+  show(modal);
+  input.focus();
+  input.select();
+  const done = (ok) => {
+    hide(modal);
+    if (ok) {
+      const txt = input.value.trim();
+      if (txt) signTruckText = txt;
+      selectItem(def);
+      closeBuildMenu();
+    }
+    $('sign-modal-ok').onclick = null;
+    $('sign-modal-cancel').onclick = null;
+    input.onkeydown = null;
+  };
+  $('sign-modal-ok').onclick = () => done(true);
+  $('sign-modal-cancel').onclick = () => done(false);
+  input.onkeydown = (e) => {
+    e.stopPropagation();   // don't trigger game keybinds while typing
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); done(true); }
+    if (e.key === 'Escape') done(false);
+  };
 }
 
 function selectItem(def) {
@@ -2023,6 +2785,7 @@ function selectItem(def) {
   ghostDef = def;
   ghost = def.build();
   ghost.traverse((o) => {
+    if (o.isLight) { o.visible = false; o.intensity = 0; }
     if (o.isMesh) {
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       o.material = mats.length === 1 ? mats[0].clone() : mats.map((m) => m.clone());
@@ -2033,8 +2796,17 @@ function selectItem(def) {
   });
   ghost.visible = false;
   scene.add(ghost);
+  buildStretch = 1;
   $('current-item-name').textContent = def.name;
-  $('current-item-hint').textContent = 'Left-click to place • R rotate • Q deselect';
+  $('current-item-hint').textContent = def.stretch
+    ? 'Left-click to place • R rotate • [ ] stretch • Q deselect'
+    : 'Left-click to place • R rotate • Q deselect';
+}
+
+function applyStretch(obj, axis, amount) {
+  if (axis === 'x') obj.scale.x = amount;
+  else if (axis === 'y') obj.scale.y = amount;
+  else obj.scale.z = amount;
 }
 
 function clearGhost() {
@@ -2052,6 +2824,7 @@ function updateGhost() {
     const p = hits[0].point;
     ghost.position.set(p.x, Math.max(0, p.y), p.z);
     ghost.rotation.y = buildYaw;
+    if (ghostDef.stretch) applyStretch(ghost, ghostDef.stretch, buildStretch);
     ghost.visible = true;
     ghostOk = true;
   } else {
@@ -2065,24 +2838,50 @@ function placeItem() {
   const item = ghostDef.build();
   item.position.copy(ghost.position);
   item.rotation.y = buildYaw;
-  placedRoot.add(item);
-  placed.push({ group: item, def: ghostDef });
-  computeLaneBlockers();
+  if (ghostDef.stretch) applyStretch(item, ghostDef.stretch, buildStretch);
+  if (ghostDef.drivable) {
+    vehiclesRoot.add(item);
+    vehicles.push({ group: item, def: ghostDef, heading: buildYaw, speed: 0, steer: 0 });
+    toast('Vehicle spawned — walk up and press E to drive');
+  } else {
+    placedRoot.add(item);
+    placed.push({ group: item, def: ghostDef });
+    item.traverse((o) => { if (o.isSpotLight) { towerSpots.push(o); } });
+    applyTime();   // switch new lights to the current time of day
+    computeLaneBlockers();
+  }
+}
+
+function dropBlinkersOf(obj) {
+  const mats = new Set();
+  obj.traverse((o) => { if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => mats.add(m)); });
+  blinkers = blinkers.filter((b) => !mats.has(b.mat));
 }
 
 function deleteAimed() {
   raycaster.setFromCamera(CENTER, camera);
-  const hits = raycaster.intersectObjects(placedRoot.children, true);
+  const hits = raycaster.intersectObjects([...placedRoot.children, ...vehiclesRoot.children], true);
   if (!hits.length || hits[0].distance > 55) return;
   let obj = hits[0].object;
-  while (obj && obj.parent !== placedRoot) obj = obj.parent;
+  while (obj && obj.parent !== placedRoot && obj.parent !== vehiclesRoot) obj = obj.parent;
   if (!obj) return;
+  if (obj.parent === vehiclesRoot) {
+    const idx = vehicles.findIndex((v) => v.group === obj);
+    if (idx >= 0) {
+      if (driving === vehicles[idx]) return;   // can't delete the one you're in
+      dropBlinkersOf(obj);
+      vehiclesRoot.remove(obj);
+      vehicles.splice(idx, 1);
+      toast('Vehicle removed');
+    }
+    return;
+  }
   const idx = placed.findIndex((p) => p.group === obj);
   if (idx >= 0) {
-    // drop any blinkers belonging to this item
-    const mats = new Set();
-    obj.traverse((o) => { if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => mats.add(m)); });
-    blinkers = blinkers.filter((b) => !mats.has(b.mat));
+    dropBlinkersOf(obj);
+    const gone = new Set();
+    obj.traverse((o) => { if (o.isSpotLight) gone.add(o); });
+    if (gone.size) towerSpots = towerSpots.filter((s) => !gone.has(s));
     placedRoot.remove(obj);
     placed.splice(idx, 1);
     computeLaneBlockers();
@@ -2093,7 +2892,11 @@ function deleteAimed() {
 function clearPlaced() {
   for (const p of placed) placedRoot.remove(p.group);
   placed = [];
+  if (driving) exitVehicle();
+  for (const v of vehicles) vehiclesRoot.remove(v.group);
+  vehicles = [];
   blinkers = [];
+  towerSpots = [];
   computeLaneBlockers();
   toast('Cleared all placed items');
 }
@@ -2177,6 +2980,21 @@ function initInput() {
     if (e.code === 'KeyG') toggleFreeCam();
     if (e.code === 'KeyP') takePhoto();
     if (e.code === 'KeyX') deleteAimed();
+    if (e.code === 'KeyT') {
+      timeIdx = (timeIdx + 1) % 3;
+      applyTime();
+      toast('🕐 ' + TIME_NAMES[timeIdx]);
+    }
+    if (e.code === 'KeyE' && !freeCam) {
+      if (driving) exitVehicle();
+      else enterVehicleNearby();
+    }
+    if (e.code === 'BracketLeft' && ghostDef?.stretch) {
+      buildStretch = Math.max(0.4, buildStretch / 1.15);
+    }
+    if (e.code === 'BracketRight' && ghostDef?.stretch) {
+      buildStretch = Math.min(4, buildStretch * 1.15);
+    }
   });
   document.addEventListener('keyup', (e) => { keys[e.code] = false; });
 }
@@ -2213,6 +3031,79 @@ function takePhoto() {
   show($('photo-thumb'));
   clearTimeout(takePhoto._t);
   takePhoto._t = setTimeout(() => hide($('photo-thumb')), 2600);
+}
+
+// ============================================================
+// Driving
+// ============================================================
+function enterVehicleNearby() {
+  let best = null, bd = 5.5;
+  for (const v of vehicles) {
+    const d = v.group.position.distanceTo(player.position);
+    if (d < bd) { bd = d; best = v; }
+  }
+  if (!best) return;
+  driving = best;
+  player.visible = false;
+  yaw = best.heading;
+  $('current-item-name').textContent = '🚗 Driving: ' + best.def.name;
+  $('current-item-hint').textContent = 'W/S gas & brake • A/D steer • Space handbrake • E get out';
+  toast('Driving the ' + best.def.name);
+}
+
+function exitVehicle() {
+  const v = driving;
+  if (!v) return;
+  driving = null;
+  player.visible = true;
+  const h = v.heading;
+  player.position.set(
+    v.group.position.x + Math.sin(h + Math.PI / 2) * 2.4,
+    0,
+    v.group.position.z + Math.cos(h + Math.PI / 2) * 2.4
+  );
+  player.rotation.y = h;
+  yaw = h;
+  vel.y = 0; onGround = true;
+  $('current-item-name').textContent = ghostDef ? ghostDef.name : 'No item selected';
+  $('current-item-hint').textContent = ghostDef ? 'Left-click to place • R rotate • Q deselect' : 'Press B for the build menu';
+}
+
+function updateDriving(dt) {
+  const v = driving;
+  // throttle / brake / reverse
+  if (keys['KeyW']) v.speed += 9 * dt;
+  else if (keys['KeyS']) v.speed -= 11 * dt;
+  else v.speed *= Math.max(0, 1 - dt * 0.7);          // coasting drag
+  if (keys['Space']) v.speed *= Math.max(0, 1 - dt * 3.2);
+  v.speed = THREE.MathUtils.clamp(v.speed, -7, 24);
+  if (Math.abs(v.speed) < 0.05 && !keys['KeyW'] && !keys['KeyS']) v.speed = 0;
+
+  // steering (A = left), effectiveness scales with speed and flips in reverse
+  const steerIn = (keys['KeyA'] ? 1 : 0) - (keys['KeyD'] ? 1 : 0);
+  v.steer += (steerIn - v.steer) * Math.min(1, dt * 7);
+  v.heading += v.steer * dt * 1.9 * THREE.MathUtils.clamp(v.speed / 9, -1, 1);
+
+  v.group.position.x += Math.sin(v.heading) * v.speed * dt;
+  v.group.position.z += Math.cos(v.heading) * v.speed * dt;
+  v.group.position.x = THREE.MathUtils.clamp(v.group.position.x, -400, 400);
+  v.group.position.z = THREE.MathUtils.clamp(v.group.position.z, -ROAD_LEN / 2, ROAD_LEN / 2);
+  v.group.rotation.y = v.heading;
+
+  // keep the (hidden) player with the vehicle
+  player.position.copy(v.group.position);
+
+  // chase camera
+  const dist = 10;
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const px = v.group.position.x, pz = v.group.position.z;
+  camera.position.set(
+    px - Math.sin(yaw) * cp * dist,
+    2.9 + sp * dist,
+    pz - Math.cos(yaw) * cp * dist
+  );
+  if (camera.position.y < 0.5) camera.position.y = 0.5;
+  camera.lookAt(px, 1.9, pz);
 }
 
 // ============================================================
@@ -2284,7 +3175,8 @@ function updateFreeCam(dt) {
     Math.cos(free.yaw) * Math.cos(free.pitch)
   );
   const r = new THREE.Vector3(-d.z, 0, d.x).normalize();
-  const sp = free.speed * dt;
+  const boost = keys['Enter'] || keys['NumpadEnter'] ? 4 : 1;   // hold Enter to fly faster
+  const sp = free.speed * boost * dt;
   if (keys['KeyW']) free.pos.addScaledVector(d, sp);
   if (keys['KeyS']) free.pos.addScaledVector(d, -sp);
   if (keys['KeyA']) free.pos.addScaledVector(r, -sp);
@@ -2304,6 +3196,7 @@ function animate() {
 
   if (playing && !paused) {
     if (freeCam) updateFreeCam(dt);
+    else if (driving) updateDriving(dt);
     else updatePlayer(dt, t);
     updateTraffic(dt);
     updateGhost();
@@ -2318,9 +3211,10 @@ function animate() {
       if (cl.position.x > ROAD_LEN / 2 + 300) cl.position.x = -(ROAD_LEN / 2 + 300);
     }
     // sun shadows follow the player
-    const focus = freeCam ? free.pos : player.position;
-    sun.position.set(focus.x + 60, 90, focus.z + 40);
+    const focus = freeCam ? free.pos : (driving ? driving.group.position : player.position);
+    sun.position.set(focus.x + 60, sunHeight, focus.z + 40);
     sun.target.position.set(focus.x, 0, focus.z);
+    skyDome.position.set(focus.x, 0, focus.z);
   }
 
   if (renderer && scene && camera) renderer.render(scene, camera);
@@ -2347,6 +3241,15 @@ window.CHS = {
       player: player ? player.position.toArray() : null,
     };
   },
+  get vehicles() { return vehicles; },
+  get driving() { return driving; },
+  get timeIdx() { return timeIdx; },
+  setTime(i) { timeIdx = ((i % 3) + 3) % 3; applyTime(); },
+  teleport(x, z, ry) {
+    if (!player) return;
+    player.position.set(x, 0, z);
+    if (ry !== undefined) { player.rotation.y = ry; yaw = ry; }
+  },
   // scripted helpers for automated tests / screenshots
   place(id, x, z, ry = 0) {
     const def = CATALOG.find((d) => d.id === id);
@@ -2354,9 +3257,16 @@ window.CHS = {
     const item = def.build();
     item.position.set(x, 0, z);
     item.rotation.y = ry;
-    placedRoot.add(item);
-    placed.push({ group: item, def });
-    computeLaneBlockers();
+    if (def.drivable) {
+      vehiclesRoot.add(item);
+      vehicles.push({ group: item, def, heading: ry, speed: 0, steer: 0 });
+    } else {
+      placedRoot.add(item);
+      placed.push({ group: item, def });
+      item.traverse((o) => { if (o.isSpotLight) towerSpots.push(o); });
+      applyTime();
+      computeLaneBlockers();
+    }
     return true;
   },
   setCam(x, y, z, cyaw, cpitch) {

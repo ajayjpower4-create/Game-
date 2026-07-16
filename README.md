@@ -37,11 +37,37 @@ Then open **http://localhost:3000**.
 | `B` | Open / close the build menu |
 | Left-click | Place selected item |
 | `R` / `Shift+R` | Rotate item before placing |
+| `[` / `]` | Stretch stretchable props (beams, pipes, ladders, fencing...) |
 | `Q` | Deselect item |
 | Right-click (or `X`) | Remove the item you're aiming at |
-| `G` | Toggle free cam (fly with `WASD`, `Space`/`Shift` up/down, scroll = speed) |
+| `E` | Enter / exit a spawned vehicle |
+| `W/S` `A/D` `Space` | Drive: gas & brake, steer, handbrake |
+| `T` | Change time of day — day / dusk / night |
+| `G` | Toggle free cam (fly with `WASD`, `Space`/`Shift` up/down, scroll = speed, hold `Enter` for turbo) |
 | `P` | Take a picture — saves a PNG screenshot |
 | `Esc` | Pause menu |
+
+## Drivable DOT fleet
+
+The **Vehicles** tab spawns drivable trucks in classic safety-yellow DOT
+livery — blue reflective dash striping, your state's Department of
+Transportation door emblem, DIAL 511 decals, beacons and light bars. Walk up
+and press `E` to drive:
+
+- **DOT Crew Pickup** — crew cab fleet pickup
+- **Utility Service Truck** — service body with compartment doors and an
+  overhead ladder rack
+- **Stake Bed Truck** — long-hood cab, chrome grille, stake bed with
+  red/white conspicuity striping
+- **Custom Sign Truck** — flatbed with a big lit message board; you type
+  what it says when you spawn it
+- **DOT Dump Truck** and the **Crash Truck (TMA)** are drivable too
+
+## Time of day
+
+Press `T` to cycle day → dusk → night. At night the stars come out, every
+car's headlights and taillights turn on, building windows glow, and any
+light towers you've placed actually light up the job site.
 
 ## What you can build
 
@@ -59,6 +85,11 @@ Then open **http://localhost:3000**.
   decals, tandem dump truck loaded with gravel, crash attenuator (TMA) truck
   with a raised flashing arrow board, and a supervisor SUV with an amber
   light bar
+- **Props** — toolboxes, job-site gang boxes, step and extension ladders,
+  asphalt buckets and bucket pallets, steel I-beams and columns, rebar
+  bundles, concrete pipe, scaffold towers, dirt and gravel piles, water
+  cooler, wheelbarrow, cable reels — and beams/pipes/ladders/fencing can be
+  stretched with `[` `]` before placing
 
 The highway is 2 km of true American right-hand traffic, lined with billboards
 running fake ads (BIG TEX BURGERS, BLOCKY & SONS LAW, SLEEPY PINES MOTEL...).

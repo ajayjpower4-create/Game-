@@ -69,7 +69,9 @@
       </div>
       <div id="key-hints">
         <span><b>WASD</b> move</span>
-        <span><b>B</b> build menu</span>
+        <span><b>B</b> build</span>
+        <span><b>E</b> drive</span>
+        <span><b>T</b> time</span>
         <span><b>R</b> rotate</span>
         <span><b>Right-click</b> remove</span>
         <span><b>G</b> free cam</span>
@@ -89,6 +91,19 @@
     </div>
   </div>
 
+  <!-- ===================== CUSTOM SIGN TRUCK TEXT ===================== -->
+  <div id="sign-modal" class="hidden">
+    <div class="sign-modal-box">
+      <h3>&#128668; CUSTOM SIGN TRUCK</h3>
+      <p>What should the big board say? Use / or a new line to split lines (max 3).</p>
+      <textarea id="sign-modal-input" rows="3" maxlength="60">SLOW DOWN / WORK ZONE</textarea>
+      <div class="sign-modal-btns">
+        <button id="sign-modal-ok" class="big-btn small">SPAWN TRUCK</button>
+        <button id="sign-modal-cancel" class="med-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===================== PAUSE ===================== -->
   <div id="pause-overlay" class="hidden">
     <div class="pause-box">
@@ -99,9 +114,10 @@
       <div class="pause-controls">
         <h4>CONTROLS</h4>
         <p><b>WASD</b> move &bull; <b>Space</b> jump &bull; <b>Mouse</b> look</p>
-        <p><b>B</b> build menu &bull; <b>Left-click</b> place &bull; <b>R</b> rotate &bull; <b>Q</b> deselect</p>
-        <p><b>Right-click</b> remove item &bull; <b>G</b> free cam &bull; <b>P</b> take picture</p>
-        <p>In free cam: <b>WASD</b> fly, <b>Space/Shift</b> up/down, <b>Scroll</b> speed</p>
+        <p><b>B</b> build menu &bull; <b>Left-click</b> place &bull; <b>R</b> rotate &bull; <b>[ ]</b> stretch &bull; <b>Q</b> deselect</p>
+        <p><b>E</b> enter/exit vehicles &bull; <b>W/S</b> gas &amp; brake &bull; <b>A/D</b> steer &bull; <b>Space</b> handbrake</p>
+        <p><b>T</b> change time of day &bull; <b>Right-click</b> remove item</p>
+        <p><b>G</b> free cam &bull; hold <b>Enter</b> to fly faster &bull; <b>P</b> take picture</p>
       </div>
     </div>
   </div>
