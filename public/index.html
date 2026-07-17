@@ -1,64 +1,135 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-GB">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Harford Secondary School</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏫</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
-        </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
-      </div>
-    </header>
+  <canvas id="renderCanvas"></canvas>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
-        </div>
+  <!-- ======================= Start / Role select ======================= -->
+  <div id="startScreen" class="screen">
+    <div class="startInner">
+      <h1>Harford Secondary School</h1>
+      <p class="tagline">A London secondary school. 986 students. One school day. You run the world.</p>
+      <div id="roleSelect">
+        <input id="roleSearch" type="text" placeholder="Search 90+ staff roles — name, role, or department…">
+        <div id="roleList"></div>
       </div>
-      <div class="messages" id="messages"></div>
-    </main>
-
-    <footer class="input-area">
-      <div class="input-container">
-        <textarea
-          id="messageInput"
-          class="message-input"
-          placeholder="Message Swerve..."
-          rows="1"
-          maxlength="10000"
-        ></textarea>
-        <button class="send-btn" id="sendBtn" disabled>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-        </button>
-      </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
-    </footer>
+      <p class="hint" id="aiStatus"></p>
+    </div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- ======================= Character creator ======================= -->
+  <div id="creatorScreen" class="screen hidden">
+    <div class="creatorPanel">
+      <h2>Create your character</h2>
+      <p id="creatorRoleLine"></p>
+      <div class="creatorRow"><label>Skin tone</label><div class="swatches" id="skinSwatches"></div></div>
+      <div class="creatorRow"><label>Hair style</label><div class="chips" id="hairStyles"></div></div>
+      <div class="creatorRow"><label>Hair colour</label><div class="swatches" id="hairSwatches"></div></div>
+      <div class="creatorRow"><label>Outfit colour</label><div class="swatches" id="outfitSwatches"></div></div>
+      <div class="creatorRow"><label>Height</label><input type="range" id="heightSlider" min="0.9" max="1.08" step="0.01" value="1"></div>
+      <button id="startDayBtn" class="bigBtn">Start the school day</button>
+    </div>
+  </div>
+
+  <!-- ======================= HUD ======================= -->
+  <div id="hud" class="hidden">
+    <div id="clockBox"><span id="clockTime">08:25</span><span id="clockPeriod">Before school</span></div>
+    <div id="playerBox"></div>
+    <div id="crosshair">·</div>
+    <div id="interactPrompt" class="hidden"></div>
+    <div id="toastLog"></div>
+    <div id="controlsHint">WASD move · E interact / sit · T talk · G actions · V camera · [ ] time speed · Esc release mouse</div>
+  </div>
+
+  <!-- ======================= Dialogue (T) ======================= -->
+  <div id="dialogueBox" class="panel hidden">
+    <div class="panelHead"><span id="dialogueTargetLabel">Talking to…</span><button class="closeX" data-close="dialogueBox">×</button></div>
+    <div id="dialogueTargets"></div>
+    <div id="dialogueHistory"></div>
+    <div class="dialogueInputRow">
+      <input id="dialogueInput" type="text" maxlength="500" placeholder="Say something… (Enter to send)">
+      <button id="dialogueSend">Send</button>
+    </div>
+  </div>
+
+  <!-- ======================= Action menu (G) ======================= -->
+  <div id="actionMenu" class="panel hidden">
+    <div class="panelHead"><span>Actions</span><button class="closeX" data-close="actionMenu">×</button></div>
+    <div id="actionList"></div>
+  </div>
+
+  <!-- ======================= Teacher computer ======================= -->
+  <div id="teacherPC" class="panel wide hidden">
+    <div class="panelHead"><span>🖥 HarfordNet — Teacher Portal</span><button class="closeX" data-close="teacherPC">×</button></div>
+    <div class="tabRow">
+      <button class="tabBtn active" data-tab="pcAttendance">Attendance</button>
+      <button class="tabBtn" data-tab="pcHomework">Homework</button>
+      <button class="tabBtn" data-tab="pcQuiz">Quiz / Test</button>
+    </div>
+    <div id="pcAttendance" class="tabPage"></div>
+    <div id="pcHomework" class="tabPage hidden">
+      <h3>Create &amp; assign homework</h3>
+      <input id="hwTitle" type="text" placeholder="Homework title">
+      <textarea id="hwDesc" placeholder="Task description…"></textarea>
+      <button id="hwAssign" class="bigBtn">Assign to class</button>
+    </div>
+    <div id="pcQuiz" class="tabPage hidden">
+      <h3>Create &amp; assign a quiz / test</h3>
+      <input id="quizTitle" type="text" placeholder="Quiz title">
+      <textarea id="quizQs" placeholder="Questions (one per line)…"></textarea>
+      <button id="quizAssign" class="bigBtn">Hand out quiz</button>
+    </div>
+  </div>
+
+  <!-- ======================= Administrator panel ======================= -->
+  <div id="adminPanel" class="panel wide hidden">
+    <div class="panelHead"><span>🗄 HarfordNet — Administrator</span><button class="closeX" data-close="adminPanel">×</button></div>
+    <div class="tabRow">
+      <button class="tabBtn active" data-tab="adStudents">Students</button>
+      <button class="tabBtn" data-tab="adEmail">Email staff</button>
+      <button class="tabBtn" data-tab="adParents">Contact parents</button>
+    </div>
+    <div id="adStudents" class="tabPage">
+      <input id="adSearch" type="text" placeholder="Search any of the 986 students by name…">
+      <div id="adResults"></div>
+      <div id="adDetail" class="hidden"></div>
+    </div>
+    <div id="adEmail" class="tabPage hidden">
+      <select id="emailStaff"></select>
+      <input id="emailSubject" type="text" placeholder="Subject">
+      <textarea id="emailBody" placeholder="Message…"></textarea>
+      <button id="emailSend" class="bigBtn">Send email</button>
+      <div id="emailReply"></div>
+    </div>
+    <div id="adParents" class="tabPage hidden">
+      <input id="parentSearch" type="text" placeholder="Find student…">
+      <div id="parentResults"></div>
+      <textarea id="parentMsg" class="hidden" placeholder="Message to parent/carer…"></textarea>
+      <button id="parentSend" class="bigBtn hidden">Contact parent</button>
+      <div id="parentReply"></div>
+    </div>
+  </div>
+
+  <!-- ======================= Cutscene overlay ======================= -->
+  <div id="cutsceneBars" class="hidden"><div class="barTop"></div><div class="barBottom"></div><div id="cutsceneText"></div></div>
+
+  <!-- Speech bubbles get appended here -->
+  <div id="bubbleLayer"></div>
+
+  <script src="vendor/babylon.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/materials.js"></script>
+  <script src="js/campus.js"></script>
+  <script src="js/characters.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: harford-secondary-school
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false   # set this in the Render dashboard — never commit it
+      - key: NODE_VERSION
+        value: "20"
