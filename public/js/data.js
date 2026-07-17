@@ -301,7 +301,31 @@ export function vestsForState(stateName) {
     {
       id: "night", name: "Night Crew Reflective",
       desc: "Black night-shift vest with high-contrast reflective bands",
-      base: "#23252b", stripe: "#f5f542", trim: s.c2, text: "NIGHT CREW",
+      base: "#23252b", stripe: "#f5f542", trim: s.c2, text: "NIGHT CREW", hat: "#f5f542",
+    },
+    {
+      id: "flagger", name: "Flagger Chevron",
+      desc: "Orange flagger vest with red/silver chevrons on the back",
+      base: "#ff5e00", stripe: "#e6e6e6", trim: "#d21f1f", text: "FLAGGER",
+      pattern: "chevron", hat: "#ff5e00",
+    },
+    {
+      id: "super", name: "Supervisor White",
+      desc: "White supervisor jacket, sleeved, with hi-vis bands",
+      base: "#eef0f2", stripe: "#ff6a00", trim: "#1d5fbf", text: "SUPERVISOR",
+      sleeves: "#eef0f2", hat: "#ffffff",
+    },
+    {
+      id: "surveyor", name: "Survey Crew Blue",
+      desc: "Navy survey vest with hi-vis yellow reflective bands",
+      base: "#16345e", stripe: "#f5f542", trim: "#c6f500", text: "SURVEY CREW",
+      hat: "#f5f542",
+    },
+    {
+      id: "jacket", name: "Winter Hi-Vis Jacket",
+      desc: "Sleeved Class 3 winter jacket — full coverage & reflectors",
+      base: "#ff8c1a", stripe: "#e6e6e6", trim: s.c1, text: s.dot,
+      sleeves: "#ff8c1a", hat: "#ff6a00",
     },
   ];
 }

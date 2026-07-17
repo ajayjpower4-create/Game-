@@ -41,18 +41,50 @@ Then open **http://localhost:3000**.
 | `Q` | Deselect item |
 | Right-click (or `X`) | Remove the item you're aiming at |
 | `E` | Enter / exit a spawned vehicle |
-| `W/S` `A/D` `Space` | Drive: gas & brake, steer, handbrake |
+| `W/S` `A/D` `Space` `Shift` | Drive: gas & brake, steer, handbrake, boost |
+| `L` | Change the livery of the vehicle you're driving |
 | `T` | Change time of day — day / dusk / night |
 | `G` | Toggle free cam (fly with `WASD`, `Space`/`Shift` up/down, scroll = speed, hold `Enter` for turbo) |
 | `P` | Take a picture — saves a PNG screenshot |
 | `Esc` | Pause menu |
 
+## Graphics
+
+Rendering uses an image-based lighting environment (PMREM) so paint, glass and
+chrome show real reflections that shift with the time of day, plus ACES tone
+mapping and soft shadows. Vehicles are built from rounded, clearcoat-painted
+panels with alloy wheels whose tyres spin with travel and whose front wheels
+steer. It's still a deliberately blocky, low-poly style — but a much glossier,
+more three-dimensional one than pure boxes.
+
+## Driving & physics
+
+Every vehicle in the **Vehicles** tab is drivable (press `E` when close):
+
+- Wheels visibly **spin** with speed and the front wheels **steer**
+- A **speedometer** gauge appears while driving
+- **Collision** — you can't drive through other vehicles or solid props;
+  hitting something bleeds your speed
+- Press `L` to change the **livery** — Factory, your uniform colors, hi-vis,
+  pearl white or blackout
+
+## Road Breaker & surface tools
+
+The **Tools** tab has rectangle tools — pick one, then click two corners of a
+lane and the whole region is transformed:
+
+- **Road Breaker** — demolishes the pavement into exposed dirt, broken asphalt
+  chunks, bent rebar and loose gravel
+- **Dig Trench** — opens a recessed dirt trench with spoil piles and conduit
+- **Fresh Asphalt Patch** — lays new blacktop
+- **Gravel Pad** — a compacted gravel work pad
+
 ## Drivable DOT fleet
 
 The **Vehicles** tab spawns drivable trucks in classic safety-yellow DOT
-livery — blue reflective dash striping, your state's Department of
-Transportation door emblem, DIAL 511 decals, beacons and light bars. Walk up
-and press `E` to drive:
+livery (inspired by real DOT fleet trucks) — blue reflective dash striping,
+your state's Department of Transportation door emblem, DIAL 511 decals,
+beacons and light bars. Walk up and press `E` to drive:
 
 - **DOT Crew Pickup** — crew cab fleet pickup
 - **Utility Service Truck** — service body with compartment doors and an
@@ -87,15 +119,35 @@ light towers you've placed actually light up the job site.
   light bar
 - **Props** — toolboxes, job-site gang boxes, step and extension ladders,
   asphalt buckets and bucket pallets, steel I-beams and columns, rebar
-  bundles, concrete pipe, scaffold towers, dirt and gravel piles, water
-  cooler, wheelbarrow, cable reels — and beams/pipes/ladders/fencing can be
-  stretched with `[` `]` before placing
+  bundles, concrete pipe, scaffold towers, dirt/gravel/debris piles, water
+  cooler, wheelbarrow, cable reels, portable traffic signal, air compressor,
+  jackhammer, cut-off saw, survey tripod, flashing beacon stand, PVC pipe
+  stacks, concrete-bag pallets, water tank, open manhole, and a rolling tool
+  cart — and beams/pipes/ladders/fencing can be stretched with `[` `]`.
+
+## Uniforms
+
+Eight vest designs per state, each rendered with reflective bands, chest
+pockets, an ID badge and radio clip, and a domed hard hat: the official DOT
+crew orange, hi-vis green, your **State Pride** colors, a black night-crew
+vest, a **Flagger** vest with red/silver chevrons across the back, a white
+**Supervisor** jacket, a navy **Survey Crew** vest, and a sleeved **Winter
+Hi-Vis Jacket**. Sleeved uniforms put the coat color on the arms with a
+reflective cuff.
+
+## The world
 
 The highway is 2 km of true American right-hand traffic, lined with billboards
-running fake ads (BIG TEX BURGERS, BLOCKY & SONS LAW, SLEEPY PINES MOTEL...).
-Traffic is simulated — close a lane with cones or barricades and cars merge out
-of it (or stop if you close the whole road) — and DOT trucks roll by in the
-flow.
+running fake ads (BIG TEX BURGERS, BLOCKY & SONS LAW, SLEEPY PINES MOTEL...),
+mile markers set back on the roadside past the guardrail, work-zone speed
+limit / exit / distance signs, and reflective delineator posts along the
+shoulder. Traffic is simulated — close a lane with cones or barricades and
+cars merge out of it (or stop if you close the whole road) — and DOT trucks
+roll by in the flow.
+
+> Note: highways are modeled from real-world map knowledge (accurate route
+> shields, lane counts, control cities and terrain), not a live Google Maps
+> feed — the game runs fully offline with no API keys.
 
 ## Tech
 

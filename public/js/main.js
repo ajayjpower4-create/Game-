@@ -281,35 +281,62 @@ function vestTextures(vest) {
   const mk = (isBack) => {
     const c = makeCanvas(128, 128);
     const ctx = c.getContext('2d');
+    // base with subtle fabric weave
     ctx.fillStyle = vest.base; ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = 'rgba(255,255,255,.05)';
+    for (let y = 0; y < 128; y += 3) ctx.fillRect(0, y, 128, 1);
+    ctx.fillStyle = 'rgba(0,0,0,.04)';
+    for (let x = 0; x < 128; x += 3) ctx.fillRect(x, 0, 1, 128);
+
+    if (isBack && vest.pattern === 'chevron') {
+      // diagonal safety chevrons (flagger / TMA style)
+      for (let i = -128; i < 200; i += 26) {
+        ctx.fillStyle = ((i / 26) & 1) ? vest.stripe : (vest.trim || '#d21f1f');
+        ctx.beginPath();
+        ctx.moveTo(i, 128); ctx.lineTo(i + 13, 128);
+        ctx.lineTo(i + 13 + 64, 0); ctx.lineTo(i + 64, 0);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+
     // shoulder trim
-    ctx.fillStyle = vest.trim; ctx.fillRect(0, 0, 128, 14);
-    // vertical reflective stripes
-    ctx.fillStyle = vest.stripe;
-    ctx.fillRect(26, 0, 16, 128);
-    ctx.fillRect(86, 0, 16, 128);
-    ctx.fillStyle = 'rgba(255,255,255,.7)';
-    ctx.fillRect(31, 0, 6, 128);
-    ctx.fillRect(91, 0, 6, 128);
-    // horizontal band
-    ctx.fillStyle = vest.stripe; ctx.fillRect(0, 88, 128, 14);
+    ctx.fillStyle = vest.trim || '#333'; ctx.fillRect(0, 0, 128, 12);
+    // two vertical reflective bands (dark piping + silver + white glint)
+    for (const bx of [28, 84]) {
+      ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.fillRect(bx - 2, 12, 20, 116);
+      ctx.fillStyle = vest.stripe; ctx.fillRect(bx, 12, 16, 116);
+      ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.fillRect(bx + 4, 12, 5, 116);
+    }
+    // horizontal waist band
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(0, 84, 128, 20);
+    ctx.fillStyle = vest.stripe; ctx.fillRect(0, 86, 128, 16);
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(0, 90, 128, 5);
+
     if (isBack) {
-      ctx.fillStyle = 'rgba(0,0,0,.55)';
-      roundRect(ctx, 14, 46, 100, 26, 6); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,.6)';
+      roundRect(ctx, 12, 40, 104, 30, 6); ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       let fs = 15;
       ctx.font = `800 ${fs}px Arial`;
-      while (ctx.measureText(vest.text).width > 92 && fs > 7) {
-        fs--; ctx.font = `800 ${fs}px Arial`;
-      }
-      ctx.fillText(vest.text, 64, 59);
+      while (ctx.measureText(vest.text).width > 96 && fs > 7) { fs--; ctx.font = `800 ${fs}px Arial`; }
+      ctx.fillText(vest.text, 64, 55);
     } else {
       // zipper
-      ctx.fillStyle = 'rgba(0,0,0,.35)';
-      ctx.fillRect(62, 14, 4, 114);
+      ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(62, 12, 4, 116);
+      // chest pockets with flaps
+      ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 2;
+      ctx.strokeRect(48, 34, 14, 16); ctx.strokeRect(66, 34, 14, 16);
+      // ID badge on a clip
+      ctx.fillStyle = '#f2f3f5'; roundRect(ctx, 48, 54, 20, 26, 3); ctx.fill();
+      ctx.fillStyle = '#1d5fbf'; ctx.fillRect(48, 54, 20, 7);
+      ctx.fillStyle = '#c8ccd4'; ctx.fillRect(51, 66, 14, 3); ctx.fillRect(51, 71, 10, 3);
+      // radio clip
+      ctx.fillStyle = '#26282c'; roundRect(ctx, 70, 56, 9, 18, 2); ctx.fill();
+      ctx.fillStyle = '#4a4f57'; ctx.fillRect(73, 52, 3, 6);
     }
     const t = new THREE.CanvasTexture(c);
+    t.anisotropy = 4;
     return t;
   };
   return { front: mk(false), back: mk(true) };
@@ -1219,6 +1246,170 @@ function buildCatalog() {
         const core = cyl(0.32, 0.32, 0.62, '#2a2c30', 0, 0.7, 0, 14);
         core.rotation.x = Math.PI / 2;
         g.add(side1, side2, core);
+        return g;
+      } },
+    { cat: 'Props', id: 'portable_signal', icon: '🚦', name: 'Portable Traffic Signal',
+      desc: 'Temporary work-zone signal on a trailer mast', blocks: true, build: () => {
+        const g = new THREE.Group();
+        g.add(box(1.0, 0.14, 1.4, '#ff8c1a', 0, 0.4, 0));
+        const w1 = cyl(0.24, 0.24, 0.14, '#222', 0, 0.24, 0.5, 10); w1.rotation.x = Math.PI / 2;
+        const w2 = cyl(0.24, 0.24, 0.14, '#222', 0, 0.24, -0.5, 10); w2.rotation.x = Math.PI / 2;
+        g.add(w1, w2);
+        g.add(cyl(0.07, 0.08, 3.6, '#3a3d42', 0, 2.3, 0, 8));
+        const head = box(0.34, 1.0, 0.28, '#1a1c20', 0, 4.0, 0);
+        g.add(head);
+        const rl = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), new THREE.MeshStandardMaterial({ color: '#7a1414', emissive: '#ff2020', emissiveIntensity: 1.2 }));
+        rl.position.set(0, 4.28, 0.15); g.add(rl);
+        g.add(cyl(0.11, 0.11, 0.05, '#3a2a00', 0, 4.0, 0.15, 8));
+        const grn = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshStandardMaterial({ color: '#0a3d0a', emissive: '#111', emissiveIntensity: 0 }));
+        grn.position.set(0, 3.72, 0.15); g.add(grn);
+        return g;
+      } },
+    { cat: 'Props', id: 'concrete_bags', icon: '🧱', name: 'Concrete Bag Pallet',
+      desc: 'Shrink-wrapped pallet of concrete mix', blocks: true, build: () => {
+        const g = palletMesh(1);
+        for (let row = 0; row < 3; row++) for (let i = 0; i < 4; i++) {
+          const bag = box(0.5, 0.16, 0.34, i % 2 ? '#c9c3b4' : '#bdb7a6', -0.55 + (i % 2) * 0.55, 0.22 + row * 0.17, -0.2 + (i > 1 ? 0.4 : 0));
+          bag.rotation.y = (i > 1 ? 0.05 : -0.05);
+          g.add(bag);
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'compressor', icon: '⚙️', name: 'Air Compressor',
+      desc: 'Towable air compressor unit', blocks: true, build: () => {
+        const g = new THREE.Group();
+        g.add(rbox(1.5, 0.9, 0.9, lamb('#d21f1f'), 0.1, 0, 0.75, 0));
+        g.add(box(1.52, 0.1, 0.92, '#26282c', 0, 1.25, 0));
+        g.add(cyl(0.06, 0.06, 1.0, '#8a9099', 1.0, 0.4, 0, 8));
+        const w1 = cyl(0.2, 0.2, 0.12, '#222', 0, 0.2, 0.46, 10); w1.rotation.x = Math.PI / 2;
+        const w2 = cyl(0.2, 0.2, 0.12, '#222', 0, 0.2, -0.46, 10); w2.rotation.x = Math.PI / 2;
+        g.add(w1, w2);
+        g.add(cyl(0.05, 0.05, 0.6, '#1a1c20', -0.6, 0.9, 0.3, 6));
+        return g;
+      } },
+    { cat: 'Props', id: 'jackhammer', icon: '🔨', name: 'Jackhammer',
+      desc: 'Pneumatic breaker leaning on the deck', blocks: false, build: () => {
+        const g = new THREE.Group();
+        const jh = new THREE.Group();
+        jh.add(box(0.16, 0.4, 0.16, '#d8a713', 0, 1.0, 0));
+        jh.add(box(0.4, 0.1, 0.1, '#26282c', 0, 1.2, 0));
+        jh.add(cyl(0.04, 0.03, 0.9, '#8a9099', 0, 0.45, 0, 8));
+        jh.rotation.z = 0.35;
+        g.add(jh);
+        return g;
+      } },
+    { cat: 'Props', id: 'saw_stand', icon: '🪚', name: 'Cut-Off Saw',
+      desc: 'Concrete cut-off saw on a stand', blocks: false, build: () => {
+        const g = new THREE.Group();
+        for (const dx of [-0.3, 0.3]) { const l = box(0.05, 0.7, 0.05, '#3a3d42', dx, 0.35, -0.2); l.rotation.x = 0.2; g.add(l); }
+        g.add(box(0.7, 0.12, 0.4, '#d21f1f', 0, 0.72, 0));
+        g.add(cyl(0.28, 0.28, 0.03, '#c8ccd4', 0.4, 0.85, 0, 18));
+        g.add(box(0.4, 0.2, 0.24, '#e8a200', -0.1, 0.85, 0));
+        return g;
+      } },
+    { cat: 'Props', id: 'survey_tripod', icon: '📐', name: 'Survey Tripod',
+      desc: 'Total station on a survey tripod', blocks: false, build: () => {
+        const g = new THREE.Group();
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI * 2;
+          const leg = cyl(0.03, 0.03, 1.6, '#e8b923', Math.cos(a) * 0.35, 0.8, Math.sin(a) * 0.35, 6);
+          leg.rotation.x = Math.cos(a) * 0.22; leg.rotation.z = -Math.sin(a) * 0.22;
+          g.add(leg);
+        }
+        g.add(box(0.22, 0.2, 0.16, '#1a1c20', 0, 1.6, 0));
+        g.add(cyl(0.05, 0.05, 0.18, '#3a3d42', 0.14, 1.62, 0, 8));
+        return g;
+      } },
+    { cat: 'Props', id: 'beacon_stand', icon: '🚨', name: 'Flashing Beacon Stand',
+      desc: 'Amber warning beacon on a tripod', blocks: false, build: () => {
+        const g = new THREE.Group();
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI * 2;
+          const leg = cyl(0.03, 0.03, 1.5, '#3a3d42', Math.cos(a) * 0.28, 0.75, Math.sin(a) * 0.28, 6);
+          leg.rotation.x = Math.cos(a) * 0.2; leg.rotation.z = -Math.sin(a) * 0.2;
+          g.add(leg);
+        }
+        const lens = cyl(0.14, 0.14, 0.16, '#ffb400', 0, 1.55, 0, 12);
+        addBlinker(lens, 0, 3.5);
+        g.add(lens);
+        g.add(cyl(0.15, 0.15, 0.04, '#1a1c20', 0, 1.45, 0, 12));
+        return g;
+      } },
+    { cat: 'Props', id: 'pipe_stack', icon: '🧻', name: 'PVC Pipe Stack',
+      desc: 'Stacked white PVC pipes — stretch with [ ]', blocks: true, stretch: 'z', build: () => {
+        const g = new THREE.Group();
+        g.add(box(0.3, 0.15, 0.3, '#7a5a34', 0, 0.075, -1.4));
+        g.add(box(0.3, 0.15, 0.3, '#7a5a34', 0, 0.075, 1.4));
+        let row = 0;
+        for (let r = 0; r < 3; r++) {
+          for (let k = 0; k <= 3 - r; k++) {
+            const p = cyl(0.11, 0.11, 3.6, '#e8eaec', (k - (3 - r) / 2) * 0.24, 0.28 + r * 0.2, 0, 12);
+            p.rotation.x = Math.PI / 2;
+            g.add(p); row++;
+          }
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'safety_net_roll', icon: '🧶', name: 'Safety Netting Roll',
+      desc: 'Roll of orange construction fencing', blocks: false, build: () => {
+        const g = new THREE.Group();
+        const roll = cyl(0.35, 0.35, 1.0, '#ff6a00', 0, 0.35, 0, 14);
+        roll.rotation.z = Math.PI / 2;
+        g.add(roll);
+        g.add(cyl(0.36, 0.36, 0.05, '#e05e0d', 0.5, 0.35, 0, 14));
+        g.add(cyl(0.36, 0.36, 0.05, '#e05e0d', -0.5, 0.35, 0, 14));
+        return g;
+      } },
+    { cat: 'Props', id: 'water_tank', icon: '🛢️', name: 'Water Tank',
+      desc: 'Poly water tank on a skid', blocks: true, build: () => {
+        const g = new THREE.Group();
+        g.add(box(1.6, 0.12, 1.2, '#3a3d42', 0, 0.06, 0));
+        const tank = cyl(0.55, 0.6, 1.4, '#2f7fb0', 0, 0.82, 0, 16);
+        tank.rotation.z = Math.PI / 2;
+        g.add(tank);
+        g.add(cyl(0.12, 0.12, 0.1, '#1a1c20', 0, 1.4, 0, 10));
+        g.add(cyl(0.05, 0.05, 0.4, '#8a9099', 0.75, 0.6, 0, 8));
+        return g;
+      } },
+    { cat: 'Props', id: 'manhole', icon: '⚫', name: 'Open Manhole',
+      desc: 'Open manhole ringed with mini cones', blocks: true, build: () => {
+        const g = new THREE.Group();
+        g.add(cyl(0.55, 0.55, 0.06, '#3a3d42', 0, 0.03, 0, 18));
+        g.add(cyl(0.42, 0.42, 0.4, '#0a0a0c', 0, -0.2, 0, 16));
+        const lid = cyl(0.5, 0.5, 0.05, '#5a5f66', 0.8, 0.025, 0.3, 18);
+        g.add(lid);
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          const cone = cyl(0.05, 0.12, 0.35, '#ff6a00', Math.cos(a) * 0.7, 0.17, Math.sin(a) * 0.7, 8);
+          g.add(cone);
+          g.add(cyl(0.09, 0.1, 0.06, '#f5f5f5', Math.cos(a) * 0.7, 0.22, Math.sin(a) * 0.7, 8));
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'tool_cart', icon: '🛒', name: 'Tool Cart',
+      desc: 'Rolling tool cart with drawers', blocks: true, build: () => {
+        const g = new THREE.Group();
+        g.add(rbox(0.9, 0.9, 0.55, lamb('#1668b3'), 0.05, 0, 0.6, 0));
+        for (const y of [0.4, 0.62, 0.84]) {
+          g.add(box(0.82, 0.02, 0.5, '#0e4a80', 0, y, 0.02));
+          g.add(box(0.24, 0.04, 0.06, '#c8ccd4', 0, y, 0.3));
+        }
+        g.add(box(0.92, 0.06, 0.57, '#e8eaec', 0, 1.08, 0));
+        for (const [x, z] of [[-0.38, 0.2], [0.38, 0.2], [-0.38, -0.2], [0.38, -0.2]]) {
+          const w = cyl(0.08, 0.08, 0.05, '#1a1c20', x, 0.1, z, 8); w.rotation.x = Math.PI / 2; g.add(w);
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'debris_pile', icon: '🗑️', name: 'Debris Pile',
+      desc: 'Pile of busted concrete and rubble', blocks: true, build: () => {
+        const g = new THREE.Group();
+        for (let i = 0; i < 14; i++) {
+          const c = box(0.2 + Math.random() * 0.3, 0.1 + Math.random() * 0.15, 0.2 + Math.random() * 0.3, i % 3 ? '#9a958c' : '#3a3d42');
+          const a = Math.random() * Math.PI * 2, r = Math.random() * 0.7;
+          c.position.set(Math.cos(a) * r, 0.08 + Math.random() * 0.35, Math.sin(a) * r);
+          c.rotation.set(Math.random(), Math.random() * Math.PI, Math.random());
+          g.add(c);
+        }
         return g;
       } },
   ];
@@ -2202,8 +2393,17 @@ function spawnPlayer() {
     const boot = box(0.36, 0.18, 0.4, '#5e4423', 0, -0.73, 0.03);
     p.add(boot);
   }
-  const lArm = mkLimb(0.28, 0.78, 0.28, skin, 1.6, -0.54);
-  const rArm = mkLimb(0.28, 0.78, 0.28, skin, 1.6, 0.54);
+  // arms: bare skin, or sleeved (jacket) in the vest color with a reflective cuff
+  const armColor = vest.sleeves || skin;
+  const lArm = mkLimb(0.28, 0.78, 0.28, armColor, 1.6, -0.54);
+  const rArm = mkLimb(0.28, 0.78, 0.28, armColor, 1.6, 0.54);
+  if (vest.sleeves) {
+    for (const a of [lArm, rArm]) {
+      // reflective cuff band + skin hand at the wrist
+      a.add(box(0.3, 0.08, 0.3, vest.stripe, 0, -0.5, 0));
+      a.add(box(0.26, 0.14, 0.26, skin, 0, -0.72, 0));
+    }
+  }
 
   // torso with vest textures: [+x,-x,+y,-y,+z(front),-z(back)]
   const torsoMats = [
@@ -2228,11 +2428,17 @@ function spawnPlayer() {
   head.castShadow = true;
   player.add(head);
 
-  // hard hat in vest trim color
-  const hatColor = vest.id === 'green' ? '#ffd23f' : vest.id === 'night' ? '#f5f542' : '#ff6a00';
-  const hat = cyl(0.3, 0.33, 0.2, hatColor, 0, 2.3, 0, 12);
-  const brim = cyl(0.44, 0.44, 0.05, hatColor, 0, 2.22, 0, 12);
-  player.add(hat, brim);
+  // hard hat (vest-specific color) with a ratchet band and brim
+  const hatColor = vest.hat || (vest.id === 'green' ? '#ffd23f' : '#ff6a00');
+  const hat = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5),
+    lamb(hatColor, { roughness: 0.5 }));
+  hat.position.y = 2.24; hat.castShadow = true;
+  const brim = cyl(0.42, 0.42, 0.04, hatColor, 0, 2.23, 0.08, 16);
+  brim.scale.z = 1.15;
+  const band = cyl(0.325, 0.325, 0.05, '#2a2c30', 0, 2.28, 0, 14);
+  // little ridge on top of the hard hat
+  const ridge = box(0.06, 0.14, 0.5, hatColor, 0, 2.4, 0);
+  player.add(hat, brim, band, ridge);
 
   limbs = { lArm, rArm, lLeg, rLeg };
 
