@@ -14,6 +14,7 @@
       <div class="title-cone">&#9650;</div>
       <h1>CONSTRUCTION<br/>HIGHWAY SIMULATOR</h1>
       <p class="tagline">Build real work zones on real US highways</p>
+      <button id="btn-continue" class="big-btn hidden" style="margin-bottom:10px;"></button>
       <button id="btn-start" class="big-btn">START BUILDING</button>
       <p class="footnote">Highways modeled from real-world map data &bull; Blocky low-poly graphics</p>
     </div>
@@ -113,8 +114,10 @@
     <div class="pause-box">
       <h2>PAUSED</h2>
       <button id="btn-resume" class="big-btn">RESUME</button>
+      <button id="btn-save" class="med-btn">&#128190; Save game</button>
       <button id="btn-clear" class="med-btn">Clear all placed items</button>
       <button id="btn-menu" class="med-btn">Back to main menu</button>
+      <p id="save-status" class="save-status hidden"></p>
       <div class="pause-controls">
         <h4>CONTROLS</h4>
         <p><b>WASD</b> move &bull; <b>Space</b> jump &bull; <b>Mouse</b> look</p>

@@ -83,6 +83,15 @@ body {
 }
 .med-btn:hover { background: #343947; }
 
+.save-status {
+  text-align: center; font-size: 12.5px; color: var(--yellow);
+  margin-top: 10px; font-weight: 600;
+}
+.continue-sub {
+  display: block; font-size: 11px; font-weight: 500;
+  letter-spacing: 0; color: rgba(26,26,26,.7); margin-top: 3px;
+}
+
 .menu-panel {
   background: var(--panel);
   border: 1px solid #343947;

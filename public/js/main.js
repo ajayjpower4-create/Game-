@@ -1439,9 +1439,32 @@ function initMenus() {
   $('btn-back-state').onclick = () => { hide($('screen-highway')); show($('screen-state')); };
   $('btn-back-highway').onclick = () => { hide($('screen-vest')); show($('screen-highway')); };
   $('btn-resume').onclick = resumeGame;
+  $('btn-save').onclick = saveGame;
   $('btn-clear').onclick = () => { clearPlaced(); resumeGame(); };
   $('btn-menu').onclick = () => location.reload();
   $('build-close').onclick = closeBuildMenu;
+  initContinueButton();
+}
+
+function initContinueButton() {
+  const meta = loadSavedGameMeta();
+  const btn = $('btn-continue');
+  if (!meta) { hide(btn); return; }
+  const when = meta.savedAt ? new Date(meta.savedAt).toLocaleString() : '';
+  btn.innerHTML = `&#9654; CONTINUE<span class="continue-sub">${meta.highwayLabel} &mdash; ${meta.state} &bull; saved ${when}</span>`;
+  show(btn);
+  btn.onclick = () => {
+    const s = STATES[meta.state];
+    if (!s) { toast('⚠️ Saved state no longer exists'); return; }
+    const hw = s.highways.find((h) => h.sign === meta.highway.sign && h.num === meta.highway.num);
+    if (!hw) { toast('⚠️ Saved highway no longer exists'); return; }
+    const vest = vestsForState(meta.state).find((v) => v.id === meta.vestId) || vestsForState(meta.state)[0];
+    sel.state = meta.state;
+    sel.highway = hw;
+    sel.vest = vest;
+    hide($('screen-title'));
+    startGame(meta);
+  };
 }
 
 function showStatePicker() {
@@ -1515,14 +1538,133 @@ function showVestPicker() {
 }
 
 // ============================================================
+// Save / Load
+// ============================================================
+const SAVE_KEY = 'chs_save_v1';
+
+function highwayLabel(s, hw) {
+  return hw.sign === 'I' ? `I-${hw.num}` : hw.sign === 'US' ? `US-${hw.num}` : `${s.abbr}-${hw.num}`;
+}
+
+function collectSaveData() {
+  const s = STATES[sel.state];
+  const hw = sel.highway;
+  const items = placed.map((p) => {
+    if (p.corners) {
+      return { tool: p.def.tool, ax: p.corners.ax, az: p.corners.az, bx: p.corners.bx, bz: p.corners.bz };
+    }
+    return {
+      id: p.def.id,
+      x: p.group.position.x, z: p.group.position.z, ry: p.group.rotation.y,
+      sx: p.group.scale.x, sy: p.group.scale.y, sz: p.group.scale.z,
+    };
+  });
+  const vehiclesOut = vehicles.map((v) => ({
+    id: v.def.id,
+    x: v.group.position.x, z: v.group.position.z, heading: v.heading,
+    liveryIdx: v.liveryIdx || 0,
+    text: v.def.customText ? v.text : undefined,
+  }));
+  return {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    state: sel.state,
+    highway: { sign: hw.sign, num: hw.num },
+    highwayLabel: highwayLabel(s, hw),
+    vestId: sel.vest.id,
+    timeIdx,
+    player: { x: player.position.x, z: player.position.z, yaw },
+    items,
+    vehicles: vehiclesOut,
+  };
+}
+
+function saveGame() {
+  try {
+    const data = collectSaveData();
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    const el = $('save-status');
+    el.textContent = `Saved — ${data.highwayLabel} (${data.state}) at ${new Date().toLocaleTimeString()}`;
+    show(el);
+    toast('💾 Game saved!');
+  } catch (err) {
+    toast('⚠️ Could not save — ' + err.message, 3500);
+  }
+}
+
+function loadSavedGameMeta() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+// Rebuild every saved item into the freshly-built world. Called once,
+// right after buildWorld()/spawnPlayer() finish setting up the scene.
+function applySaveData(data) {
+  timeIdx = THREE.MathUtils.clamp(data.timeIdx ?? 0, 0, 2);
+  applyTime();
+
+  for (const it of data.items || []) {
+    if (it.tool) {
+      const toolDef = CATALOG.find((d) => d.tool === it.tool);
+      const patch = makeSurfacePatch(it.tool, { x: it.ax, z: it.az }, { x: it.bx, z: it.bz });
+      if (!patch || !toolDef) continue;
+      placedRoot.add(patch);
+      placed.push({ group: patch, def: toolDef, corners: { ax: it.ax, az: it.az, bx: it.bx, bz: it.bz } });
+      continue;
+    }
+    const def = CATALOG.find((d) => d.id === it.id);
+    if (!def) continue;   // saved with an item that no longer exists — skip gracefully
+    const prevText = signTruckText;
+    if (def.customText && it.text) signTruckText = it.text;
+    const item = def.build();
+    if (def.customText && it.text) signTruckText = prevText;
+    item.position.set(it.x, 0, it.z);
+    item.rotation.y = it.ry || 0;
+    if (it.sx !== undefined) item.scale.set(it.sx, it.sy, it.sz);
+    placedRoot.add(item);
+    placed.push({ group: item, def });
+    item.traverse((o) => { if (o.isSpotLight) towerSpots.push(o); });
+  }
+
+  for (const vd of data.vehicles || []) {
+    const def = CATALOG.find((d) => d.id === vd.id);
+    if (!def) continue;
+    const prevText = signTruckText;
+    if (def.customText && vd.text) signTruckText = vd.text;
+    const item = def.build();
+    if (def.customText && vd.text) signTruckText = prevText;
+    item.position.set(vd.x, 0, vd.z);
+    item.rotation.y = vd.heading || 0;
+    vehiclesRoot.add(item);
+    const v = { group: item, def, heading: vd.heading || 0, speed: 0, steer: 0, liveryIdx: 0 };
+    if (vd.text) v.text = vd.text;
+    if (vd.liveryIdx) setLivery(v, vd.liveryIdx);
+    vehicles.push(v);
+  }
+
+  applyTime();               // sync any newly-loaded light towers / lit windows
+  computeLaneBlockers();
+
+  if (data.player) {
+    player.position.set(data.player.x, 0, data.player.z);
+    player.rotation.y = data.player.yaw || 0;
+    yaw = data.player.yaw || 0;
+  }
+}
+
+// ============================================================
 // Game start
 // ============================================================
-function startGame() {
+function startGame(saveData = null) {
   hide($('screen-vest'));
   const s = STATES[sel.state];
   const hw = sel.highway;
-  const label = hw.sign === 'I' ? `I-${hw.num}` : hw.sign === 'US' ? `US-${hw.num}` : `${s.abbr}-${hw.num}`;
-  $('loading-text').textContent = `Building ${label} from map data...`;
+  const label = highwayLabel(s, hw);
+  $('loading-text').textContent = saveData
+    ? `Loading ${label} from your save...`
+    : `Building ${label} from map data...`;
   show($('screen-loading'));
 
   setTimeout(() => {
@@ -1531,6 +1673,7 @@ function startGame() {
     spawnPlayer();
     spawnTraffic();
     initBuildUI();
+    if (saveData) applySaveData(saveData);
     hide($('screen-loading'));
     show($('hud'));
     $('location-tag').innerHTML =
@@ -1538,7 +1681,7 @@ function startGame() {
       `${hw.lanes} lanes each way &bull; to ${hw.city}`;
     playing = true;
     requestLock();
-    toast('Click to lock the mouse. Press B to open the build menu!', 4200);
+    toast(saveData ? 'Save loaded! Press B to keep building.' : 'Click to lock the mouse. Press B to open the build menu!', 4200);
   }, 450);
 }
 
@@ -3782,7 +3925,7 @@ function placeItem() {
     const patch = makeSurfacePatch(ghostDef.tool, breakerA, p);
     if (patch) {
       placedRoot.add(patch);
-      placed.push({ group: patch, def: ghostDef });
+      placed.push({ group: patch, def: ghostDef, corners: { ax: breakerA.x, az: breakerA.z, bx: p.x, bz: p.z } });
       const kind = { breaker: 'Pavement demolished', trench: 'Trench dug', repave: 'Fresh asphalt laid', gravel: 'Gravel pad laid' }[ghostDef.tool];
       toast('🧨 ' + kind);
     }
@@ -3796,7 +3939,9 @@ function placeItem() {
   if (ghostDef.stretch) applyStretch(item, ghostDef.stretch, buildStretch);
   if (ghostDef.drivable) {
     vehiclesRoot.add(item);
-    vehicles.push({ group: item, def: ghostDef, heading: buildYaw, speed: 0, steer: 0 });
+    const v = { group: item, def: ghostDef, heading: buildYaw, speed: 0, steer: 0 };
+    if (ghostDef.customText) v.text = signTruckText;   // snapshot so save/load reproduces this exact truck's message
+    vehicles.push(v);
     toast('Vehicle spawned — walk up and press E to drive');
   } else {
     placedRoot.add(item);
@@ -4010,18 +4155,21 @@ function enterVehicleNearby() {
   toast('Driving the ' + best.def.name);
 }
 
-function cycleLivery() {
-  const v = driving;
-  if (!v) { toast('Get in a vehicle first (E), then L to change livery'); return; }
+function liveryList() {
   const vest = sel.vest;
-  const liveries = [
+  return [
     { name: 'Factory', color: null },
     { name: vest.name + ' livery', color: vest.base },
     { name: 'Hi-Vis Yellow', color: '#f2cb1d' },
     { name: 'Pearl White', color: '#eef0f2' },
     { name: 'Blackout', color: '#1a1c20' },
   ];
-  v.liveryIdx = ((v.liveryIdx ?? 0) + 1) % liveries.length;
+}
+
+// apply a specific livery index to a vehicle (used by both the L key and save/load)
+function setLivery(v, idx) {
+  const liveries = liveryList();
+  v.liveryIdx = ((idx % liveries.length) + liveries.length) % liveries.length;
   const L = liveries[v.liveryIdx];
   v.group.traverse((o) => {
     if (!o.isMesh) return;
@@ -4033,6 +4181,13 @@ function cycleLivery() {
       }
     }
   });
+  return L;
+}
+
+function cycleLivery() {
+  const v = driving;
+  if (!v) { toast('Get in a vehicle first (E), then L to change livery'); return; }
+  const L = setLivery(v, (v.liveryIdx ?? 0) + 1);
   toast('🎨 Livery: ' + L.name);
 }
 

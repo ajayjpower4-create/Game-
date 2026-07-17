@@ -27,6 +27,22 @@ Then open **http://localhost:3000**.
 4. **Spawn in** as a blocky construction worker and set up your scene while
    live traffic merges around your lane closures.
 
+## Saving your work
+
+Open the pause menu (`Esc`) and click **💾 Save game** any time. It saves
+everything — every placed prop, sign, and barricade; every drivable vehicle
+(with its position, livery, and custom sign-truck text); the road-breaker
+patches you've cut into the pavement; and the time of day — to your browser's
+local storage.
+
+Next time you open the game, a **▶ CONTINUE** button appears on the title
+screen showing which highway and state you left off on. Click it to load
+straight back into your scene exactly as you left it — no rebuilding from
+scratch. There's one save slot, and saving again overwrites it.
+
+(The save lives in your browser's local storage, not a file, so it's tied to
+this browser on this device — clearing site data will erase it.)
+
 ## Controls
 
 | Key | Action |
