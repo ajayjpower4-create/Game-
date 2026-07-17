@@ -37,6 +37,7 @@ let groundMeshes = [];       // raycast targets for placement
 let placedRoot, placed = [];
 let ghost = null, ghostDef = null, buildYaw = 0, ghostOk = false;
 let buildStretch = 1;        // [ and ] stretch props that support it
+let breakerA = null, breakerPreview = null;   // road-breaker rectangle tool
 let blinkers = [];           // {mat, phase, speed} flashing lights
 let cars = [];
 let laneBlockers = { A: [], B: [] };  // per-lane sorted arrays of z positions
@@ -566,6 +567,16 @@ function buildCatalog() {
     { cat: 'Vehicles', id: 'drive_tma', icon: '🚛', name: 'Crash Truck (TMA)', drivable: true,
       desc: 'Drive the attenuator truck into position',
       blocks: false, build: () => CATALOG.find((d) => d.id === 'tma_truck').build() },
+
+    // ---------- TOOLS (rectangle: click two corners) ----------
+    { cat: 'Tools', id: 'road_breaker', icon: '🧨', name: 'Road Breaker', tool: 'breaker',
+      desc: 'Click two corners of the lane to demolish pavement into dirt & rubble', blocks: false },
+    { cat: 'Tools', id: 'trench', icon: '🕳️', name: 'Dig Trench', tool: 'trench',
+      desc: 'Click two corners to open a dirt trench in the road', blocks: false },
+    { cat: 'Tools', id: 'repave', icon: '⬛', name: 'Fresh Asphalt Patch', tool: 'repave',
+      desc: 'Click two corners to lay fresh new blacktop', blocks: false },
+    { cat: 'Tools', id: 'gravelpad', icon: '🟫', name: 'Gravel Pad', tool: 'gravel',
+      desc: 'Click two corners to lay a compacted gravel work pad', blocks: false },
 
     // ---------- CONES ----------
     { cat: 'Cones', id: 'cone_skinny', icon: '🔶', name: 'Skinny Cone',
@@ -1227,7 +1238,7 @@ function palletMesh(count) {
 }
 
 const CATALOG = buildCatalog();
-const CATEGORIES = ['Vehicles', 'Cones', 'Barricades', 'Signs', 'Equipment', 'Props'];
+const CATEGORIES = ['Vehicles', 'Tools', 'Cones', 'Barricades', 'Signs', 'Equipment', 'Props'];
 
 // ============================================================
 // Menu UI flow
@@ -1607,6 +1618,8 @@ function buildWorld() {
   buildGantry(hw, 320, 'B');
   buildGantry(hw, -ROAD_LEN * 0.38, 'A');
   buildMileMarkers(hw);
+  buildRoadsideSigns(hw);
+  buildDelineators(hw);
   buildBillboards(hw);
 
   // ---- scenery ----
@@ -1823,28 +1836,127 @@ function buildBillboards() {
 function buildMileMarkers(hw) {
   const { outerEdge } = roadInfo;
   let mile = 100 + Math.floor(Math.random() * 80);
-  for (let z = -ROAD_LEN / 2 + 40; z < ROAD_LEN / 2; z += 160) {
-    const c = makeCanvas(64, 128);
+  // small green mile markers, placed on the ROADSIDE beyond the guardrail
+  // (never on the shoulder / breakdown lane), every 0.2 mi, both carriageways
+  const off = outerEdge + (hw.terrain === 'urban' ? 1.1 : 2.2);
+  for (let z = -ROAD_LEN / 2 + 40; z < ROAD_LEN / 2; z += 90) {
+    const label = (mile + z / 1600).toFixed(1);
+    mile = 100 + Math.floor(Math.random() * 80); // keep whole-mile numbers varied
+    const c = makeCanvas(48, 120);
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, 64, 128);
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(3, 3, 58, 122);
+    ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, 48, 120);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.strokeRect(2.5, 2.5, 43, 115);
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-    ctx.font = '700 18px Arial';
-    ctx.fillText('MILE', 32, 40);
-    ctx.font = '800 34px Arial';
-    ctx.fillText(String(mile++), 32, 88);
+    ctx.font = '700 13px Arial';
+    ctx.fillText('MILE', 24, 30);
+    ctx.font = '800 30px Arial';
+    ctx.fillText(String(100 + ((z + ROAD_LEN / 2) / 90 | 0)), 24, 74);
     const tex = new THREE.CanvasTexture(c);
+    const back = lamb('#3a4048');
+    const face = new THREE.MeshStandardMaterial({ map: tex });
+    for (const dir of [1, -1]) {
+      const g = new THREE.Group();
+      g.add(box(0.05, 1.3, 0.05, '#8a8f98', 0, 0.65, 0));
+      // side A (dir +1) faces +z traffic; side B faces -z
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.72, 0.03),
+        dir > 0 ? [back, back, back, back, face, back] : [back, back, back, back, back, face]);
+      p.position.y = 1.35;
+      g.add(p);
+      g.position.set(dir * off, 0, z + (dir < 0 ? 45 : 0));
+      scene.add(g);
+    }
+  }
+}
+
+// reflective delineator posts along the shoulder edge (instanced for perf)
+function buildDelineators(hw) {
+  const { medianHalf, shoulderIn, sideW, outerEdge } = roadInfo;
+  const shoulderEdge = medianHalf + sideW - roadInfo.shoulderOut + 0.4;
+  const n = Math.floor(ROAD_LEN / 24) * 4;
+  const postGeo = new THREE.CylinderGeometry(0.04, 0.05, 1.05, 6);
+  const posts = new THREE.InstancedMesh(postGeo, lamb('#e8e8e8'), n);
+  const refl = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.09, 0.14, 0.02),
+    new THREE.MeshStandardMaterial({ color: '#ffb400', emissive: '#ffb400', emissiveIntensity: 0.35 }),
+    n
+  );
+  const m4 = new THREE.Matrix4();
+  let i = 0;
+  for (const dir of [1, -1]) {
+    for (const xEdge of [shoulderEdge, outerEdge - 0.3]) {
+      for (let z = -ROAD_LEN / 2 + 12; z < ROAD_LEN / 2 && i < n; z += 24) {
+        const x = dir * xEdge;
+        m4.setPosition(x, 0.52, z);
+        posts.setMatrixAt(i, m4);
+        m4.setPosition(x, 0.9, z + 0.05);
+        refl.setMatrixAt(i, m4);
+        i++;
+      }
+    }
+  }
+  posts.count = i; refl.count = i;
+  posts.instanceMatrix.needsUpdate = true; refl.instanceMatrix.needsUpdate = true;
+  scene.add(posts, refl);
+}
+
+// realistic roadside signage: speed limit, exit gore, distance guide signs
+function buildRoadsideSigns(hw) {
+  const s = STATES[sel.state];
+  const { outerEdge } = roadInfo;
+  const off = outerEdge + (hw.terrain === 'urban' ? 0.9 : 2.0);
+
+  const postSign = (canvasDraw, w, h, z, side, postH = 2.4) => {
+    const c = makeCanvas(128, Math.round(128 * h / w));
+    canvasDraw(c.getContext('2d'), c.width, c.height);
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 4;
+    const back = lamb('#5b626b');
+    const face = new THREE.MeshStandardMaterial({ map: tex });
     const g = new THREE.Group();
-    g.add(box(0.06, 1.5, 0.06, '#8a8f98', 0, 0.75, 0));
-    const p = new THREE.Mesh(
-      new THREE.BoxGeometry(0.4, 0.8, 0.03),
-      [lamb('#556'), lamb('#556'), lamb('#556'), lamb('#556'),
-       new THREE.MeshStandardMaterial({ map: tex }), lamb('#556')]
-    );
-    p.position.y = 1.6; // faces +z, toward side-A traffic
+    g.add(box(0.07, postH, 0.07, '#8a8f98', -w * 0.28, postH / 2, 0));
+    g.add(box(0.07, postH, 0.07, '#8a8f98', w * 0.28, postH / 2, 0));
+    const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.05),
+      side > 0 ? [back, back, back, back, face, back] : [back, back, back, back, back, face]);
+    p.position.y = postH + h / 2 - 0.1;
     g.add(p);
-    g.position.set(outerEdge - 0.8, 0, z);
+    g.position.set(side * off, 0, z);
     scene.add(g);
+  };
+
+  const speedDraw = (ctx, w, h) => {
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 4; ctx.strokeRect(5, 5, w - 10, h - 10);
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center';
+    ctx.font = '800 20px Arial'; ctx.fillText('SPEED', w / 2, h * 0.24);
+    ctx.fillText('LIMIT', w / 2, h * 0.44);
+    ctx.font = '900 56px Arial'; ctx.fillText(String(hw.speed), w / 2, h * 0.82);
+  };
+  const exitDraw = (ctx, w, h) => {
+    ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.strokeRect(5, 5, w - 10, h - 10);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    ctx.font = '800 22px Arial'; ctx.fillText('EXIT', w / 2, h * 0.34);
+    ctx.font = '900 40px Arial'; ctx.fillText(String(20 + Math.floor(Math.random() * 200)), w / 2, h * 0.78);
+  };
+  const distDraw = (ctx, w, h) => {
+    ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(4, 4, w - 8, h - 8);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
+    ctx.font = '800 18px Arial';
+    ctx.fillText(s.abbr === hw.city ? hw.city : hw.city, 14, h * 0.32);
+    ctx.textAlign = 'right'; ctx.fillText(String(8 + Math.floor(Math.random() * 40)), w - 14, h * 0.32);
+    ctx.textAlign = 'left'; ctx.fillText(sel.state.slice(0, 10), 14, h * 0.68);
+    ctx.textAlign = 'right'; ctx.fillText(String(40 + Math.floor(Math.random() * 120)), w - 14, h * 0.68);
+  };
+
+  // scatter signs down both sides of the highway
+  for (let z = -ROAD_LEN / 2 + 120; z < ROAD_LEN / 2 - 60; z += 260) {
+    postSign(speedDraw, 0.9, 1.2, z, 1);
+    postSign(speedDraw, 0.9, 1.2, z + 130, -1);
+  }
+  for (let z = -ROAD_LEN / 2 + 220; z < ROAD_LEN / 2 - 60; z += 320) {
+    postSign(exitDraw, 1.0, 1.0, z, 1, 3.0);
+    postSign(distDraw, 1.8, 1.0, z - 160, -1, 3.2);
   }
 }
 
@@ -2960,9 +3072,123 @@ function openSignModal(def) {
   };
 }
 
+// Rectangle surface tool: demolish, trench, repave, or gravel a region.
+function makeSurfacePatch(kind, A, B) {
+  const w = THREE.MathUtils.clamp(Math.abs(B.x - A.x), 0.6, 80);
+  const d = THREE.MathUtils.clamp(Math.abs(B.z - A.z), 0.6, 80);
+  const cx = (A.x + B.x) / 2, cz = (A.z + B.z) / 2;
+  const g = new THREE.Group();
+  g.position.set(cx, 0, cz);
+  const area = w * d;
+
+  if (kind === 'repave') {
+    const tex = noiseTexture('#2b2e33', 6);
+    tex.repeat.set(Math.max(1, w / 4), Math.max(1, d / 4));
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), lamb('#ffffff', { map: tex, roughness: 0.85 }));
+    slab.position.y = 0.06; slab.receiveShadow = true;
+    g.add(slab);
+    // fresh seams / lane paint dashes optional edge
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(w + 0.06, 0.02, d + 0.06), lamb('#1c1e21'));
+    edge.position.y = 0.02; g.add(edge);
+    return g;
+  }
+  if (kind === 'gravel') {
+    const tex = noiseTexture('#8f8b82', 20);
+    tex.repeat.set(Math.max(1, w / 2), Math.max(1, d / 2));
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), lamb('#ffffff', { map: tex, roughness: 1.0 }));
+    slab.position.y = 0.06; slab.receiveShadow = true;
+    g.add(slab);
+    for (let i = 0; i < Math.min(120, area * 1.2); i++) {
+      const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.04 + Math.random() * 0.07, 0), lamb('#7d7a72'));
+      r.position.set((Math.random() - 0.5) * w, 0.11, (Math.random() - 0.5) * d);
+      g.add(r);
+    }
+    return g;
+  }
+
+  // breaker / trench both expose dirt with broken asphalt around the edge
+  const dirtTex = noiseTexture('#6e532f', 16);
+  dirtTex.repeat.set(Math.max(1, w / 2), Math.max(1, d / 2));
+  const depth = kind === 'trench' ? 0.9 : 0.12;
+  const floorY = kind === 'trench' ? -depth + 0.05 : 0.05;
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), lamb('#ffffff', { map: dirtTex, roughness: 1.0 }));
+  floor.position.y = floorY; floor.receiveShadow = true;
+  g.add(floor);
+
+  if (kind === 'trench') {
+    // dirt walls
+    const wallMat = lamb('#5c4526', { roughness: 1.0 });
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(w, depth, 0.15), wallMat)).position.set(0, floorY + depth / 2, d / 2);
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(w, depth, 0.15), wallMat)).position.set(0, floorY + depth / 2, -d / 2);
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.15, depth, d), wallMat)).position.set(w / 2, floorY + depth / 2, 0);
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.15, depth, d), wallMat)).position.set(-w / 2, floorY + depth / 2, 0);
+    // spoil piles along the long edge
+    for (let i = 0; i < Math.min(30, w); i++) {
+      const pile = new THREE.Mesh(new THREE.ConeGeometry(0.35 + Math.random() * 0.3, 0.5, 7), lamb('#6e532f'));
+      pile.position.set((Math.random() - 0.5) * w, 0.2, (Math.random() < 0.5 ? 1 : -1) * (d / 2 + 0.5));
+      g.add(pile);
+    }
+    // exposed conduit pipe at the bottom
+    const pipe = cyl(0.18, 0.18, w * 0.9, '#5a5f66', 0, floorY + 0.2, 0, 10);
+    pipe.rotation.z = Math.PI / 2;
+    g.add(pipe);
+  }
+
+  // broken asphalt chunks ringing / littering the demolished area
+  const chunkMat = lamb('#3a3d42', { roughness: 0.95 });
+  const nChunks = Math.min(90, Math.max(8, area * 0.9));
+  for (let i = 0; i < nChunks; i++) {
+    const cw = 0.25 + Math.random() * 0.5;
+    const chunk = new THREE.Mesh(
+      new THREE.BoxGeometry(cw, 0.09 + Math.random() * 0.06, cw * (0.6 + Math.random() * 0.6)),
+      chunkMat
+    );
+    // cluster chunks toward the ragged edges
+    const edge = Math.random();
+    let px, pz;
+    if (edge < 0.5) { px = (Math.random() - 0.5) * w; pz = (Math.random() < 0.5 ? -1 : 1) * (d / 2) * (0.7 + Math.random() * 0.5); }
+    else { pz = (Math.random() - 0.5) * d; px = (Math.random() < 0.5 ? -1 : 1) * (w / 2) * (0.7 + Math.random() * 0.5); }
+    chunk.position.set(px, (kind === 'trench' ? 0.06 : 0.11) + Math.random() * 0.05, pz);
+    chunk.rotation.set((Math.random() - 0.5) * 0.5, Math.random() * Math.PI, (Math.random() - 0.5) * 0.5);
+    chunk.castShadow = true;
+    g.add(chunk);
+  }
+  // a few bent rebar rods poking out of the rubble
+  for (let i = 0; i < Math.min(10, area * 0.15); i++) {
+    const rod = cyl(0.02, 0.02, 0.5 + Math.random() * 0.4, '#8a6a45', 0, 0, 0, 5);
+    rod.position.set((Math.random() - 0.5) * w * 0.8, 0.18, (Math.random() - 0.5) * d * 0.8);
+    rod.rotation.set((Math.random() - 0.5) * 0.9, 0, (Math.random() - 0.5) * 0.9);
+    g.add(rod);
+  }
+  // loose gravel/dust
+  for (let i = 0; i < Math.min(80, area); i++) {
+    const gr = new THREE.Mesh(new THREE.DodecahedronGeometry(0.03 + Math.random() * 0.05, 0), lamb('#7a6a4a'));
+    gr.position.set((Math.random() - 0.5) * w, (kind === 'trench' ? floorY + 0.06 : 0.1), (Math.random() - 0.5) * d);
+    g.add(gr);
+  }
+  return g;
+}
+
 function selectItem(def) {
   clearGhost();
   ghostDef = def;
+  if (def.tool) {
+    // rectangle tool: no prop ghost, use a two-click corner preview
+    breakerA = null;
+    breakerPreview = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({
+        color: def.tool === 'repave' ? '#2f3236' : def.tool === 'gravel' ? '#8f8b82' : '#c14a1a',
+        transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide,
+      })
+    );
+    breakerPreview.rotation.x = -Math.PI / 2;
+    breakerPreview.visible = false;
+    scene.add(breakerPreview);
+    $('current-item-name').textContent = def.name;
+    $('current-item-hint').textContent = 'Click corner 1, then corner 2 • Q cancel';
+    return;
+  }
   ghost = def.build();
   ghost.traverse((o) => {
     if (o.isLight) { o.visible = false; o.intensity = 0; }
@@ -2991,13 +3217,35 @@ function applyStretch(obj, axis, amount) {
 
 function clearGhost() {
   if (ghost) { scene.remove(ghost); ghost = null; }
+  if (breakerPreview) { scene.remove(breakerPreview); breakerPreview = null; }
+  breakerA = null;
   ghostDef = null;
   $('current-item-name').textContent = 'No item selected';
   $('current-item-hint').textContent = 'Press B for the build menu';
 }
 
+function crosshairGround() {
+  raycaster.setFromCamera(CENTER, camera);
+  const hits = raycaster.intersectObjects(groundMeshes, false);
+  if (hits.length && hits[0].distance < 90) return hits[0].point.clone();
+  return null;
+}
+
 function updateGhost() {
-  if (!ghost || buildMenuOpen || paused) { if (ghost) ghost.visible = false; return; }
+  if (buildMenuOpen || paused) { if (ghost) ghost.visible = false; if (breakerPreview) breakerPreview.visible = false; return; }
+  // rectangle tool preview
+  if (ghostDef && ghostDef.tool) {
+    const p = crosshairGround();
+    if (!p) { breakerPreview.visible = false; return; }
+    const a = breakerA || p;
+    const cx = (a.x + p.x) / 2, cz = (a.z + p.z) / 2;
+    const w = Math.max(0.4, Math.abs(p.x - a.x)), d = Math.max(0.4, Math.abs(p.z - a.z));
+    breakerPreview.position.set(cx, 0.06, cz);
+    breakerPreview.scale.set(breakerA ? w : 0.6, breakerA ? d : 0.6, 1);
+    breakerPreview.visible = true;
+    return;
+  }
+  if (!ghost) return;
   raycaster.setFromCamera(CENTER, camera);
   const hits = raycaster.intersectObjects(groundMeshes, false);
   if (hits.length && hits[0].distance < 55) {
@@ -3014,6 +3262,21 @@ function updateGhost() {
 }
 
 function placeItem() {
+  // rectangle tool: first click sets a corner, second click builds the patch
+  if (ghostDef && ghostDef.tool) {
+    const p = crosshairGround();
+    if (!p) return;
+    if (!breakerA) { breakerA = p; toast('Corner set — click the opposite corner'); return; }
+    const patch = makeSurfacePatch(ghostDef.tool, breakerA, p);
+    if (patch) {
+      placedRoot.add(patch);
+      placed.push({ group: patch, def: ghostDef });
+      const kind = { breaker: 'Pavement demolished', trench: 'Trench dug', repave: 'Fresh asphalt laid', gravel: 'Gravel pad laid' }[ghostDef.tool];
+      toast('🧨 ' + kind);
+    }
+    breakerA = null;
+    return;
+  }
   if (!ghostDef || !ghostOk || !ghost.visible) return;
   const item = ghostDef.build();
   item.position.copy(ghost.position);
