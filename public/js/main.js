@@ -46,6 +46,7 @@ let sun = null, hemiLight = null, ambLight = null, skyDome = null;
 let pmrem = null, envRT = null;
 let buildingMats = [];       // window materials that glow at night
 let towerSpots = [];         // real lights on placed light towers
+let lightGlowMats = [];      // fake-bloom glow sprites on headlights/taillights/streetlamps
 let timeIdx = 0;             // 0 day, 1 dusk, 2 night
 let photoCount = 0;
 
@@ -255,12 +256,12 @@ function octPath(ctx, cx, cy, r) {
 }
 
 // striped orange/white panel used for barricade boards
-function stripeTexture(angleRight = true) {
+function stripeTexture(angleRight = true, fg = '#ff6a00') {
   const c = makeCanvas(128, 32);
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, 128, 32);
-  ctx.fillStyle = '#ff6a00';
+  ctx.fillStyle = fg;
   for (let x = -32; x < 160; x += 32) {
     ctx.beginPath();
     if (angleRight) {
@@ -273,6 +274,7 @@ function stripeTexture(angleRight = true) {
     ctx.closePath(); ctx.fill();
   }
   const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
 }
 
@@ -373,6 +375,68 @@ function noiseTexture(base, variation = 14, size = 128) {
   return tex;
 }
 
+// Bump-mapped surface: a matching pair of {map, normalMap} generated from the
+// same smoothed random height field, so grain and aggregate actually catch
+// and shade under the sun instead of reading as flat printed color. This is
+// what makes asphalt/dirt/concrete look like real surfaces up close.
+function noiseSurface(base, variation = 14, size = 128, bumpiness = 1.4) {
+  const n = size;
+  // smoothed height field (few box-blur passes over random noise = rounded pebbles, not TV static)
+  let h = new Float32Array(n * n);
+  for (let i = 0; i < h.length; i++) h[i] = Math.random();
+  for (let pass = 0; pass < 2; pass++) {
+    const h2 = new Float32Array(n * n);
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        let sum = 0, cnt = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = (x + dx + n) % n, yy = (y + dy + n) % n;
+          sum += h[yy * n + xx]; cnt++;
+        }
+        h2[y * n + x] = sum / cnt;
+      }
+    }
+    h = h2;
+  }
+  // albedo from height field
+  const col = new THREE.Color(base);
+  const ac = makeCanvas(n, n);
+  const actx = ac.getContext('2d');
+  const aimg = actx.createImageData(n, n);
+  for (let i = 0; i < n * n; i++) {
+    const v = (h[i] - 0.5) * 2 * variation;
+    aimg.data[i * 4] = Math.max(0, Math.min(255, col.r * 255 + v));
+    aimg.data[i * 4 + 1] = Math.max(0, Math.min(255, col.g * 255 + v));
+    aimg.data[i * 4 + 2] = Math.max(0, Math.min(255, col.b * 255 + v));
+    aimg.data[i * 4 + 3] = 255;
+  }
+  actx.putImageData(aimg, 0, 0);
+  const map = new THREE.CanvasTexture(ac);
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
+
+  // normal map via finite differences on the same height field
+  const nc = makeCanvas(n, n);
+  const nctx = nc.getContext('2d');
+  const nimg = nctx.createImageData(n, n);
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const l = h[y * n + ((x - 1 + n) % n)], r = h[y * n + ((x + 1) % n)];
+      const u = h[((y - 1 + n) % n) * n + x], d = h[((y + 1) % n) * n + x];
+      const dx = (r - l) * bumpiness, dy = (d - u) * bumpiness;
+      const len = Math.sqrt(dx * dx + dy * dy + 1);
+      const i = (y * n + x) * 4;
+      nimg.data[i] = ((-dx / len) * 0.5 + 0.5) * 255;
+      nimg.data[i + 1] = ((-dy / len) * 0.5 + 0.5) * 255;
+      nimg.data[i + 2] = ((1 / len) * 0.5 + 0.5) * 255;
+      nimg.data[i + 3] = 255;
+    }
+  }
+  nctx.putImageData(nimg, 0, 0);
+  const normalMap = new THREE.CanvasTexture(nc);
+  normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+  return { map, normalMap };
+}
+
 let _windowTex = null;
 function windowTexture() {
   if (_windowTex) return _windowTex;
@@ -468,11 +532,40 @@ function rbox(w, h, d, mat, r = 0.12, x = 0, y = 0, z = 0) {
   return m;
 }
 
+// soft radial-gradient sprite used for every glow/bloom effect in the game
+// (headlights, blinkers, streetlights) — cheap fake bloom with no post-processing
+let _glowTex = null;
+function glowTexture() {
+  if (_glowTex) return _glowTex;
+  const c = makeCanvas(64, 64);
+  const ctx = c.getContext('2d');
+  const gr = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.4, 'rgba(255,255,255,0.5)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, 64, 64);
+  _glowTex = new THREE.CanvasTexture(c);
+  return _glowTex;
+}
+
+function addGlowSprite(parent, color, size, z = 0.03) {
+  const mat = new THREE.SpriteMaterial({
+    map: glowTexture(), color, transparent: true, opacity: 0,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  const sp = new THREE.Sprite(mat);
+  sp.scale.set(size, size, 1);
+  sp.position.z = z;
+  parent.add(sp);
+  return mat;
+}
+
 function addBlinker(mesh, phase = 0, speed = 3) {
   mesh.material = new THREE.MeshStandardMaterial({
     color: '#7a4a00', emissive: new THREE.Color('#ffb400'), emissiveIntensity: 0,
   });
-  blinkers.push({ mat: mesh.material, phase, speed });
+  const glow = addGlowSprite(mesh, '#ffb400', 0.5);
+  blinkers.push({ mat: mesh.material, phase, speed, glow });
   return mesh;
 }
 
@@ -604,6 +697,9 @@ function buildCatalog() {
       desc: 'Click two corners to lay fresh new blacktop', blocks: false },
     { cat: 'Tools', id: 'gravelpad', icon: '🟫', name: 'Gravel Pad', tool: 'gravel',
       desc: 'Click two corners to lay a compacted gravel work pad', blocks: false },
+    { cat: 'Tools', id: 'barrier_chain', icon: '🚧', name: 'Barrier Chain', tool: 'barrier_chain', line: true,
+      desc: 'Click the start and end point — jersey barriers auto-connect between them with red chevron reflectors',
+      blocks: true, build: () => makeJerseyBarrierSegment(3) },
 
     // ---------- CONES ----------
     { cat: 'Cones', id: 'cone_skinny', icon: '🔶', name: 'Skinny Cone',
@@ -1693,7 +1789,7 @@ function initThree() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.18;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   scene = new THREE.Scene();
@@ -1844,6 +1940,9 @@ function applyTime() {
   TAILLIGHT_MAT.emissiveIntensity = p.lights * 0.7;
   for (const s of towerSpots) { s.intensity = p.towers; s.visible = p.towers > 0; }
   for (const m of buildingMats) m.emissiveIntensity = p.windows;
+  for (const m of LAMP_EMISSIVE) m.emissiveIntensity = p.windows * 1.6;
+  const glowOp = THREE.MathUtils.clamp((p.lights - 0.5) * 0.35, 0, 0.9);
+  for (const m of lightGlowMats) m.opacity = glowOp;
   sunHeight = p.sunY;
   updateEnvironment(p);
   const tt = $('time-tag');
@@ -1865,6 +1964,8 @@ function buildWorld() {
 
   buildingMats = [];
   towerSpots = [];
+  lightGlowMats = [];
+  LAMP_EMISSIVE.length = 0;
   scene.background = new THREE.Color(style.sky);
   scene.fog = new THREE.Fog(style.fog, 120, style.fogFar);
 
@@ -1899,11 +2000,12 @@ function buildWorld() {
   };
 
   // ---- ground ----
-  const groundTex = noiseTexture(style.ground, 7);
-  groundTex.repeat.set(90, 90);
+  const groundSurf = noiseSurface(style.ground, 7, 128, 1.1);
+  groundSurf.map.repeat.set(90, 90);
+  groundSurf.normalMap.repeat.set(90, 90);
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(ROAD_LEN + 900, ROAD_LEN + 900),
-    lamb('#ffffff', { map: groundTex })   // color lives in the texture
+    lamb('#ffffff', { map: groundSurf.map, normalMap: groundSurf.normalMap, normalScale: new THREE.Vector2(1, 1) })
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -0.08;
@@ -1912,10 +2014,15 @@ function buildWorld() {
   groundMeshes.push(ground);
 
   // ---- roadway (two carriageways) ----
-  const asphaltTex = noiseTexture('#3d4045', 5);
-  asphaltTex.repeat.set(3, ROAD_LEN / 24);
-  asphaltTex.anisotropy = 8;
-  const asphalt = lamb('#ffffff', { map: asphaltTex, roughness: 0.96 });
+  const asphaltSurf = noiseSurface('#3d4045', 5, 128, 1.8);
+  asphaltSurf.map.repeat.set(3, ROAD_LEN / 24);
+  asphaltSurf.map.anisotropy = 8;
+  asphaltSurf.normalMap.repeat.set(3, ROAD_LEN / 24);
+  asphaltSurf.normalMap.anisotropy = 8;
+  const asphalt = lamb('#ffffff', {
+    map: asphaltSurf.map, normalMap: asphaltSurf.normalMap,
+    normalScale: new THREE.Vector2(0.9, 0.9), roughness: 0.96,
+  });
   for (const dir of [1, -1]) {
     const road = new THREE.Mesh(new THREE.BoxGeometry(sideW, 0.16, ROAD_LEN), asphalt);
     road.position.set(dir * (medianW / 2 + sideW / 2), -0.08, 0);
@@ -1947,6 +2054,7 @@ function buildWorld() {
 
   // ---- guardrails / walls ----
   buildRoadside(hw, style);
+  buildStreetlights(hw);
 
   // ---- overhead gantries + roadside extras ----
   buildGantry(hw, -120, 'A');
@@ -2129,6 +2237,43 @@ function buildRoadside(hw, style) {
       }
       scene.add(posts);
     }
+  }
+}
+
+// cobra-head highway lampposts down both sides — dark poles by day, warm
+// glowing lamp heads (with a fake-bloom sprite) once time-of-day flips to
+// dusk/night. This is a brand-new, easy-to-spot addition to the roadside.
+const LAMP_EMISSIVE = [];
+function buildStreetlights(hw) {
+  const { outerEdge } = roadInfo;
+  const off = outerEdge + (hw.terrain === 'urban' ? 5.5 : 3.4);
+  const poleMat = metalMat('#8f949c', { roughness: 0.55 });
+  const spacing = hw.terrain === 'urban' ? 55 : 90;
+  let side = 1;
+  for (let z = -ROAD_LEN / 2 + 30; z < ROAD_LEN / 2 - 30; z += spacing) {
+    const g = new THREE.Group();
+    const poleH = 9.5;
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.19, poleH, 8), poleMat));
+    const armLen = 3.2;
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, armLen, 8), poleMat);
+    arm.rotation.z = Math.PI / 2.15;
+    arm.position.set(-side * armLen * 0.46, poleH / 2 - 0.15, 0);
+    g.add(arm);
+    // cobra-head fixture at the arm tip
+    const headX = -side * (armLen * 0.92);
+    const headY = poleH / 2 + 0.55;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 0.5), lamb('#3a3d42', { roughness: 0.6 }));
+    head.position.set(headX, headY, 0);
+    g.add(head);
+    const lensMat = new THREE.MeshStandardMaterial({ color: '#5c5030', emissive: '#ffdf9e', emissiveIntensity: 0 });
+    LAMP_EMISSIVE.push(lensMat);
+    const lens = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.05, 0.36), lensMat);
+    lens.position.set(headX, headY - 0.15, 0);
+    g.add(lens);
+    lightGlowMats.push(addGlowSprite(lens, '#ffdf9e', 1.6, -0.02));
+    g.position.set(side * off, poleH / 2, z);
+    scene.add(g);
+    side *= -1;   // alternate sides down the highway
   }
 }
 
@@ -2909,8 +3054,10 @@ function addCarFace(g, { w, frontZ, backZ, lightY = 0.62, bumperY = 0.34 }) {
   for (const sx of [-w / 2 + 0.32, w / 2 - 0.32]) {
     const hl = new THREE.Mesh(roundedBoxGeometry(0.36, 0.16, 0.08, 0.05), headlightMat());
     hl.position.set(sx, lightY, frontZ + 0.02);
+    lightGlowMats.push(addGlowSprite(hl, '#fff6c9', 0.55, 0.16));
     const tl = new THREE.Mesh(roundedBoxGeometry(0.36, 0.16, 0.08, 0.05), taillightMat());
     tl.position.set(sx, lightY, backZ - 0.02);
+    lightGlowMats.push(addGlowSprite(tl, '#ff2020', 0.4, -0.13));
     g.add(hl, tl);
   }
   const plate = box(0.44, 0.17, 0.03, '#e8e8e8', 0, bumperY + 0.15, backZ - 0.09);
@@ -3727,6 +3874,62 @@ function openSignModal(def) {
   };
 }
 
+// One jersey-barrier segment with red/white reflective chevron panels on
+// both long faces and a small connector pin at the +z end, so a run of
+// them reads as physically interlocked.
+function makeJerseyBarrierSegment(len) {
+  const g = new THREE.Group();
+  const concrete = lamb('#b9bbb6');
+  const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.25, len), concrete);
+  b1.position.y = 0.125; b1.castShadow = true; b1.receiveShadow = true;
+  const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.45, len), concrete);
+  b2.position.y = 0.47; b2.castShadow = true;
+  const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.35, len), concrete);
+  b3.position.y = 0.85; b3.castShadow = true;
+  g.add(b1, b2, b3);
+
+  const chevTex = stripeTexture(true, '#d21f1f');
+  chevTex.repeat.set(Math.max(1, len / 1.1), 1);
+  const chevMat = new THREE.MeshStandardMaterial({ map: chevTex, roughness: 0.45 });
+  for (const side of [1, -1]) {
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(0.3, len - 0.1), 0.3), chevMat);
+    panel.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
+    panel.position.set(side * 0.191, 0.47, 0);
+    g.add(panel);
+  }
+  // connector pin — visual "these are locked together" detail at the seam
+  const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.32, 8), lamb('#3a3d42', { roughness: 0.5 }));
+  pin.rotation.x = Math.PI / 2;
+  pin.position.set(0, 0.32, len / 2 - 0.03);
+  g.add(pin);
+  return g;
+}
+
+// Barrier chain tool: click a start and end point and the whole run between
+// them fills with interlocked jersey barriers — no manual lining-up needed.
+// Returns world-space transforms for each segment; the caller places each
+// one as its own independent prop so collision/lane-blocking/removal all
+// work exactly like a normal single barrier.
+function barrierChainSegments(A, B) {
+  const dx = B.x - A.x, dz = B.z - A.z;
+  const totalLen = THREE.MathUtils.clamp(Math.hypot(dx, dz), 1.5, 200);
+  const heading = Math.atan2(dx, dz);
+  const n = Math.max(1, Math.round(totalLen / 3.0));
+  const actualLen = totalLen / n;
+  const cx = (A.x + B.x) / 2, cz = (A.z + B.z) / 2;
+  const segs = [];
+  for (let i = 0; i < n; i++) {
+    const d = -totalLen / 2 + actualLen * (i + 0.5);   // offset along the chain from its center
+    segs.push({
+      len: actualLen - 0.02,   // tiny gap between segments reads as a real seam
+      x: cx + Math.sin(heading) * d,
+      z: cz + Math.cos(heading) * d,
+      ry: heading,
+    });
+  }
+  return segs;
+}
+
 // Rectangle surface tool: demolish, trench, repave, or gravel a region.
 function makeSurfacePatch(kind, A, B) {
   const w = THREE.MathUtils.clamp(Math.abs(B.x - A.x), 0.6, 80);
@@ -3737,9 +3940,11 @@ function makeSurfacePatch(kind, A, B) {
   const area = w * d;
 
   if (kind === 'repave') {
-    const tex = noiseTexture('#2b2e33', 6);
-    tex.repeat.set(Math.max(1, w / 4), Math.max(1, d / 4));
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), lamb('#ffffff', { map: tex, roughness: 0.85 }));
+    const surf = noiseSurface('#2b2e33', 6, 128, 1.5);
+    surf.map.repeat.set(Math.max(1, w / 4), Math.max(1, d / 4));
+    surf.normalMap.repeat.copy(surf.map.repeat);
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d),
+      lamb('#ffffff', { map: surf.map, normalMap: surf.normalMap, normalScale: new THREE.Vector2(0.8, 0.8), roughness: 0.85 }));
     slab.position.y = 0.06; slab.receiveShadow = true;
     g.add(slab);
     // fresh seams / lane paint dashes optional edge
@@ -3748,9 +3953,11 @@ function makeSurfacePatch(kind, A, B) {
     return g;
   }
   if (kind === 'gravel') {
-    const tex = noiseTexture('#8f8b82', 20);
-    tex.repeat.set(Math.max(1, w / 2), Math.max(1, d / 2));
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), lamb('#ffffff', { map: tex, roughness: 1.0 }));
+    const surf = noiseSurface('#8f8b82', 20, 128, 2.2);
+    surf.map.repeat.set(Math.max(1, w / 2), Math.max(1, d / 2));
+    surf.normalMap.repeat.copy(surf.map.repeat);
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d),
+      lamb('#ffffff', { map: surf.map, normalMap: surf.normalMap, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 1.0 }));
     slab.position.y = 0.06; slab.receiveShadow = true;
     g.add(slab);
     for (let i = 0; i < Math.min(120, area * 1.2); i++) {
@@ -3762,11 +3969,13 @@ function makeSurfacePatch(kind, A, B) {
   }
 
   // breaker / trench both expose dirt with broken asphalt around the edge
-  const dirtTex = noiseTexture('#6e532f', 16);
-  dirtTex.repeat.set(Math.max(1, w / 2), Math.max(1, d / 2));
+  const dirtSurf = noiseSurface('#6e532f', 16, 128, 2.0);
+  dirtSurf.map.repeat.set(Math.max(1, w / 2), Math.max(1, d / 2));
+  dirtSurf.normalMap.repeat.copy(dirtSurf.map.repeat);
   const depth = kind === 'trench' ? 0.9 : 0.12;
   const floorY = kind === 'trench' ? -depth + 0.05 : 0.05;
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), lamb('#ffffff', { map: dirtTex, roughness: 1.0 }));
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d),
+    lamb('#ffffff', { map: dirtSurf.map, normalMap: dirtSurf.normalMap, normalScale: new THREE.Vector2(1.2, 1.2), roughness: 1.0 }));
   floor.position.y = floorY; floor.receiveShadow = true;
   g.add(floor);
 
@@ -3828,20 +4037,30 @@ function selectItem(def) {
   clearGhost();
   ghostDef = def;
   if (def.tool) {
-    // rectangle tool: no prop ghost, use a two-click corner preview
+    // rectangle/line tool: no prop ghost, use a two-click corner preview
     breakerA = null;
-    breakerPreview = new THREE.Mesh(
-      new THREE.PlaneGeometry(1, 1),
-      new THREE.MeshBasicMaterial({
-        color: def.tool === 'repave' ? '#2f3236' : def.tool === 'gravel' ? '#8f8b82' : '#c14a1a',
-        transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide,
-      })
-    );
-    breakerPreview.rotation.x = -Math.PI / 2;
+    if (def.line) {
+      // thin strip that stretches + rotates to follow the two click points
+      breakerPreview = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 0.9, 0.5),
+        new THREE.MeshBasicMaterial({ color: '#c1121f', transparent: true, opacity: 0.5, depthWrite: false })
+      );
+    } else {
+      breakerPreview = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+          color: def.tool === 'repave' ? '#2f3236' : def.tool === 'gravel' ? '#8f8b82' : '#c14a1a',
+          transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide,
+        })
+      );
+      breakerPreview.rotation.x = -Math.PI / 2;
+    }
     breakerPreview.visible = false;
     scene.add(breakerPreview);
     $('current-item-name').textContent = def.name;
-    $('current-item-hint').textContent = 'Click corner 1, then corner 2 • Q cancel';
+    $('current-item-hint').textContent = def.line
+      ? 'Click the start point, then the end point • Q cancel'
+      : 'Click corner 1, then corner 2 • Q cancel';
     return;
   }
   ghost = def.build();
@@ -3888,11 +4107,19 @@ function crosshairGround() {
 
 function updateGhost() {
   if (buildMenuOpen || paused) { if (ghost) ghost.visible = false; if (breakerPreview) breakerPreview.visible = false; return; }
-  // rectangle tool preview
+  // rectangle/line tool preview
   if (ghostDef && ghostDef.tool) {
     const p = crosshairGround();
     if (!p) { breakerPreview.visible = false; return; }
     const a = breakerA || p;
+    if (ghostDef.line) {
+      const len = Math.max(0.6, Math.hypot(p.x - a.x, p.z - a.z));
+      breakerPreview.position.set((a.x + p.x) / 2, 0.5, (a.z + p.z) / 2);
+      breakerPreview.rotation.y = Math.atan2(p.x - a.x, p.z - a.z);
+      breakerPreview.scale.set(0.7, 1, breakerA ? len : 0.6);
+      breakerPreview.visible = true;
+      return;
+    }
     const cx = (a.x + p.x) / 2, cz = (a.z + p.z) / 2;
     const w = Math.max(0.4, Math.abs(p.x - a.x)), d = Math.max(0.4, Math.abs(p.z - a.z));
     breakerPreview.position.set(cx, 0.06, cz);
@@ -3917,17 +4144,32 @@ function updateGhost() {
 }
 
 function placeItem() {
-  // rectangle tool: first click sets a corner, second click builds the patch
+  // rectangle/line tool: first click sets a corner, second click builds it
   if (ghostDef && ghostDef.tool) {
     const p = crosshairGround();
     if (!p) return;
-    if (!breakerA) { breakerA = p; toast('Corner set — click the opposite corner'); return; }
-    const patch = makeSurfacePatch(ghostDef.tool, breakerA, p);
-    if (patch) {
-      placedRoot.add(patch);
-      placed.push({ group: patch, def: ghostDef, corners: { ax: breakerA.x, az: breakerA.z, bx: p.x, bz: p.z } });
-      const kind = { breaker: 'Pavement demolished', trench: 'Trench dug', repave: 'Fresh asphalt laid', gravel: 'Gravel pad laid' }[ghostDef.tool];
-      toast('🧨 ' + kind);
+    if (!breakerA) { breakerA = p; toast(ghostDef.line ? 'Start set — click the end point' : 'Corner set — click the opposite corner'); return; }
+    if (ghostDef.tool === 'barrier_chain') {
+      // each segment is placed as its own independent prop — real collision,
+      // real lane-blocking, and each one is individually right-click removable
+      for (const seg of barrierChainSegments(breakerA, p)) {
+        const item = ghostDef.build();
+        item.position.set(seg.x, 0, seg.z);
+        item.rotation.y = seg.ry;
+        item.scale.z = seg.len / 3;
+        placedRoot.add(item);
+        placed.push({ group: item, def: ghostDef });
+      }
+      computeLaneBlockers();
+      toast('🚧 Barriers connected');
+    } else {
+      const patch = makeSurfacePatch(ghostDef.tool, breakerA, p);
+      if (patch) {
+        placedRoot.add(patch);
+        placed.push({ group: patch, def: ghostDef, corners: { ax: breakerA.x, az: breakerA.z, bx: p.x, bz: p.z } });
+        const kind = { breaker: 'Pavement demolished', trench: 'Trench dug', repave: 'Fresh asphalt laid', gravel: 'Gravel pad laid' }[ghostDef.tool];
+        toast('🧨 ' + kind);
+      }
     }
     breakerA = null;
     return;
@@ -4444,7 +4686,9 @@ function animate() {
 
     // blinking lights
     for (const b of blinkers) {
-      b.mat.emissiveIntensity = Math.sin(t * b.speed * Math.PI + b.phase) > 0 ? 1.4 : 0.05;
+      const on = Math.sin(t * b.speed * Math.PI + b.phase) > 0;
+      b.mat.emissiveIntensity = on ? 1.4 : 0.05;
+      if (b.glow) b.glow.opacity = on ? 0.85 : 0;
     }
     // drifting clouds
     for (const cl of clouds) {
@@ -4476,7 +4720,8 @@ window.CHS = {
   get playing() { return playing; },
   get debug() {
     return {
-      yaw, pitch, ghostOk,
+      yaw, pitch, ghostOk, paused, freeCam, buildMenuOpen,
+      freePos: free.pos.toArray(), freeYaw: free.yaw, freePitch: free.pitch,
       ghost: ghost ? ghost.position.toArray() : null,
       cam: camera ? camera.position.toArray() : null,
       player: player ? player.position.toArray() : null,
