@@ -1508,7 +1508,237 @@ function buildCatalog() {
         }
         return g;
       } },
+    { cat: 'Props', id: 'solar_tower_yellow', icon: '📡', name: 'Solar Surveillance Tower',
+      desc: 'Trailer-mounted solar array with a twin camera/light mast', blocks: true,
+      build: () => makeSolarTowerTrailer('#f2cb1d', 'tilted') },
+    { cat: 'Props', id: 'solar_tower_black', icon: '📡', name: 'Compact Solar Light Tower',
+      desc: 'Smaller solar trailer, single panel, telescoping mast', blocks: true,
+      build: () => makeSolarTowerTrailer('#2a2c30', 'single') },
+    { cat: 'Props', id: 's_speedphoto', icon: '📷', name: 'SPEED PHOTO ENFORCED',
+      desc: 'Work zone photo-enforcement notice sign', blocks: true,
+      build: () => makeSpeedPhotoSign() },
+    { cat: 'Props', id: 'radar_trailer', icon: '🚨', name: 'Radar Speed Trailer',
+      desc: 'Portable driver feedback radar sign on its own trailer', blocks: true,
+      build: () => makeRadarTrailer() },
+    { cat: 'Props', id: 'job_trailer', icon: '🏠', name: 'Job Site Office Trailer',
+      desc: 'Site office trailer — stretch its length with [ ]', blocks: true, stretch: 'z',
+      build: () => makeJobTrailer() },
   ];
+}
+
+// ---- Solar surveillance / light tower trailer (two styles) ----
+function trailerChassis(len = 2.2) {
+  const g = new THREE.Group();
+  const frameMat = metalMat('#3a3d42', { roughness: 0.55 });
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.08, len), frameMat).translateY(0.42));
+  // A-frame tongue reaching forward
+  const tongueL = 1.1;
+  for (const sx of [-0.18, 0.18]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, tongueL), frameMat);
+    bar.position.set(sx * (0.5), 0.42, len / 2 + tongueL / 2 - 0.1);
+    g.add(bar);
+  }
+  const coupler = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.14, 10), lamb('#1a1c20'));
+  coupler.rotation.x = Math.PI / 2;
+  coupler.position.set(0, 0.42, len / 2 + tongueL - 0.15);
+  g.add(coupler);
+  // jockey wheel under the tongue
+  const jack = cyl(0.03, 0.03, 0.35, '#26282c', 0, 0.24, len / 2 + tongueL * 0.55, 6);
+  g.add(jack);
+  g.add(cyl(0.09, 0.09, 0.06, '#111', 0, 0.06, len / 2 + tongueL * 0.55, 10));
+  // stabilizer legs at the rear corners
+  for (const sx of [-0.6, 0.6]) {
+    const leg = cyl(0.025, 0.025, 0.55, '#8a8f98', sx, 0.15, -len / 2 + 0.15, 6);
+    g.add(leg);
+    g.add(box(0.14, 0.02, 0.14, '#3a3d42', sx, -0.13, -len / 2 + 0.15));
+  }
+  // single axle, two wheels
+  addWheels(g, 0.32, [[-0.72, -len * 0.12], [0.72, -len * 0.12]], 0.18);
+  return g;
+}
+
+function makeSolarTowerTrailer(bodyColor, style) {
+  const g = trailerChassis(2.2);
+  const paint = lamb(bodyColor, { roughness: 0.5 });
+  g.add(rbox(1.2, 0.55, 1.6, paint, 0.06, 0, 0.72, -0.15));
+  const panelMat = new THREE.MeshStandardMaterial({ color: '#1c2530', roughness: 0.25, metalness: 0.4 });
+  const gridTex = (() => {
+    const c = makeCanvas(64, 64);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#1c2530'; ctx.fillRect(0, 0, 64, 64);
+    ctx.strokeStyle = '#33404f'; ctx.lineWidth = 2;
+    for (let i = 8; i < 64; i += 16) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 64); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(64, i); ctx.stroke(); }
+    return new THREE.CanvasTexture(c);
+  })();
+  panelMat.map = gridTex;
+
+  if (style === 'tilted') {
+    // 3-segment tilted array, hinged up like the reference photo
+    const arrayGroup = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.04, 0.85), panelMat);
+      seg.position.set(0, 0, -0.85 + i * 0.86);
+      arrayGroup.add(seg);
+    }
+    arrayGroup.rotation.x = -0.55;
+    arrayGroup.position.set(0, 1.05, 0.35);
+    g.add(arrayGroup);
+    // mast at the rear, straight up with a jointed elbow near the head
+    const mast = cyl(0.05, 0.06, 2.6, '#c8ccd4', 0, 2.05, -0.75, 8);
+    g.add(mast);
+    addTowerHead(g, 0, 3.4, -0.75);
+  } else {
+    // single big panel + a folding telescoping mast, more compact
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.04, 1.7), panelMat);
+    panel.rotation.x = -0.5;
+    panel.position.set(0, 1.15, 0.1);
+    g.add(panel);
+    const mast = cyl(0.045, 0.055, 2.9, '#8f949c', 0, 2.2, -0.55, 8);
+    g.add(mast);
+    addTowerHead(g, 0, 3.7, -0.55);
+  }
+  // battery/control box on the bed
+  g.add(rbox(0.4, 0.32, 0.5, lamb('#1a1c20'), 0.04, 0.45, 0.62, -0.75));
+  return g;
+}
+
+function addTowerHead(g, x, y, z) {
+  const headMat = lamb('#e8eaec', { roughness: 0.4 });
+  const yoke = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.16), headMat);
+  yoke.position.set(x, y, z);
+  g.add(yoke);
+  for (const sx of [-0.22, 0.22]) {
+    const cam = cyl(0.07, 0.07, 0.22, '#26282c', x + sx, y - 0.05, z + 0.08, 10);
+    cam.rotation.x = Math.PI / 2;
+    g.add(cam);
+    const lens = cyl(0.045, 0.045, 0.04, '#9fd8ff', x + sx, y - 0.05, z + 0.2, 10);
+    lens.rotation.x = Math.PI / 2;
+    g.add(lens);
+  }
+  const antenna = cyl(0.01, 0.015, 0.4, '#8a8f98', x, y + 0.3, z, 6);
+  g.add(antenna);
+}
+
+// ---- SPEED PHOTO ENFORCED work-zone notice sign ----
+function speedPhotoSignTexture() {
+  const c = makeCanvas(256, 300);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 256, 300);
+  ctx.fillStyle = '#ff8200'; ctx.fillRect(4, 4, 248, 54);
+  ctx.fillStyle = '#111'; ctx.font = '900 32px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('NOTICE', 128, 32);
+  ctx.fillStyle = '#fff'; ctx.fillRect(4, 60, 248, 172);
+  // camera glyph
+  ctx.fillStyle = '#111';
+  roundRect(ctx, 98, 78, 60, 42, 8); ctx.fill();
+  ctx.beginPath(); ctx.arc(128, 100, 15, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(128, 100, 8, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  for (let i = -2; i <= 2; i++) {
+    const a = -Math.PI / 2 + i * 0.28;
+    ctx.beginPath();
+    ctx.moveTo(128 + Math.cos(a) * 22, 82 + Math.sin(a) * 22);
+    ctx.lineTo(128 + Math.cos(a) * 32, 82 + Math.sin(a) * 32);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#111'; ctx.font = '800 30px Arial';
+  ctx.fillText('SPEED', 128, 172);
+  ctx.font = '800 22px Arial';
+  ctx.fillText('PHOTO ENFORCED', 128, 205);
+  ctx.fillStyle = '#ff8200'; ctx.fillRect(4, 238, 248, 58);
+  ctx.fillStyle = '#111'; ctx.font = '900 28px Arial';
+  ctx.fillText('WORK ZONE', 128, 267);
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function makeSpeedPhotoSign() {
+  const g = new THREE.Group();
+  const postH = 2.3;
+  for (const px of [-0.32, 0.32]) g.add(box(0.06, postH, 0.06, '#8a8f98', px, postH / 2, 0));
+  const tex = speedPhotoSignTexture();
+  const mats = [lamb('#5b626b'), lamb('#5b626b'), lamb('#5b626b'), lamb('#5b626b'),
+    new THREE.MeshStandardMaterial({ map: tex }), lamb('#5b626b')];
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.17, 0.04), mats);
+  panel.position.y = postH + 0.4;
+  panel.castShadow = true;
+  g.add(panel);
+  return g;
+}
+
+// ---- portable driver-feedback radar trailer ----
+function makeRadarTrailer() {
+  const g = trailerChassis(1.6);
+  const frameMat = metalMat('#ff8200', { roughness: 0.6, metalness: 0.1 });
+  g.add(rbox(1.15, 0.1, 1.4, frameMat, 0.03, 0, 0.48, 0));
+  // hazard-striped A-frame stand rising from the bed
+  const standMat = new THREE.MeshStandardMaterial({ map: stripeTexture(true, '#ffb400') });
+  for (const sx of [-0.35, 0.35]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.9, 0.09), standMat);
+    post.position.set(sx, 1.4, -0.2);
+    g.add(post);
+  }
+  // main speed-limit + radar panel
+  const c = makeCanvas(200, 260);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ff8200'; ctx.fillRect(0, 0, 200, 40);
+  ctx.fillStyle = '#111'; ctx.font = '800 22px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('WORK AREA', 100, 22);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 40, 200, 180);
+  ctx.fillStyle = '#111'; ctx.font = '800 26px Arial';
+  ctx.fillText('SPEED', 100, 75);
+  ctx.fillText('LIMIT', 100, 108);
+  ctx.fillStyle = '#0a0a0a'; roundRect(ctx, 30, 130, 140, 70, 4); ctx.fill();
+  ctx.fillStyle = '#ff3b30'; ctx.font = '900 46px monospace';
+  ctx.fillText('45', 100, 168);
+  ctx.fillStyle = '#ff8200'; ctx.fillRect(0, 220, 200, 40);
+  ctx.fillStyle = '#111'; ctx.font = '800 20px Arial';
+  ctx.fillText('PHOTO ENFORCED', 100, 240);
+  const tex = new THREE.CanvasTexture(c);
+  const dark = lamb('#33373d');
+  const face = new THREE.MeshStandardMaterial({ map: tex });
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.3, 0.1), [dark, dark, dark, dark, face, dark]);
+  panel.position.set(0, 1.75, -0.2);
+  panel.castShadow = true;
+  g.add(panel);
+  // amber warning beacon on top
+  const beacon = cyl(0.07, 0.07, 0.12, '#ffb400', 0, 2.48, -0.2, 10);
+  addBlinker(beacon, 0, 4);
+  g.add(beacon);
+  return g;
+}
+
+// ---- job site office trailer (stretchable length) ----
+function makeJobTrailer() {
+  const g = new THREE.Group();
+  const wall = lamb('#e8d99a', { roughness: 0.7 });
+  const trim = lamb('#5a5f45', { roughness: 0.6 });
+  const body = rbox(2.4, 1.9, 5.0, wall, 0.05, 0, 1.35, 0);
+  g.add(body);
+  g.add(box(2.44, 0.12, 5.04, trim, 0, 2.31, 0));   // roof cap
+  g.add(box(2.44, 0.1, 0.1, trim, 0, 0.45, 2.5));    // skirting front
+  g.add(box(2.44, 0.1, 0.1, trim, 0, 0.45, -2.5));   // skirting back
+  // windows down both sides
+  const winMat = glassMat();
+  for (const sx of [-1.21, 1.21]) {
+    for (let z = -1.7; z <= 1.7; z += 1.7) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.7, 0.9), winMat);
+      win.position.set(sx, 1.55, z);
+      g.add(win);
+      g.add(box(0.02, 0.76, 0.96, trim, sx * 1.01, 1.55, z));
+    }
+  }
+  // door + small step
+  const door = box(0.03, 1.5, 0.75, lamb('#3a4a3a'), -1.21, 1.05, -0.05);
+  g.add(door);
+  g.add(box(0.6, 0.08, 0.5, '#8a8f98', -1.5, 0.35, -0.05));
+  // steel skids underneath
+  for (const sx of [-0.9, 0.9]) g.add(box(0.14, 0.2, 4.9, '#3a3d42', sx, 0.15, 0));
+  // AC unit + a small satellite/vent on the roof
+  g.add(box(0.6, 0.35, 0.6, '#c8ccd4', -0.6, 2.55, 1.2));
+  g.add(cyl(0.15, 0.15, 0.25, '#8a8f98', 0.6, 2.5, -1.2, 10));
+  return g;
 }
 
 function palletMesh(count) {
