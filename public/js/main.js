@@ -560,11 +560,12 @@ function addGlowSprite(parent, color, size, z = 0.03) {
   return mat;
 }
 
-function addBlinker(mesh, phase = 0, speed = 3) {
+function addBlinker(mesh, phase = 0, speed = 3, color = '#ffb400') {
+  const dark = new THREE.Color(color).multiplyScalar(0.4);
   mesh.material = new THREE.MeshStandardMaterial({
-    color: '#7a4a00', emissive: new THREE.Color('#ffb400'), emissiveIntensity: 0,
+    color: dark, emissive: new THREE.Color(color), emissiveIntensity: 0,
   });
-  const glow = addGlowSprite(mesh, '#ffb400', 0.5);
+  const glow = addGlowSprite(mesh, color, 0.5);
   blinkers.push({ mat: mesh.material, phase, speed, glow });
   return mesh;
 }
@@ -2053,7 +2054,7 @@ function initThree() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.18;
+  renderer.toneMappingExposure = 1.1;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   scene = new THREE.Scene();
@@ -2122,14 +2123,15 @@ function updateEnvironment(preset) {
 // ============================================================
 // World building
 // ============================================================
+// skies are real blues now — the old values fogged everything into gray milk
 const TERRAIN_STYLE = {
-  desert:   { ground: '#d9b26a', sky: '#a7ccec', fog: '#e3cda4', fogFar: 750 },
-  urban:    { ground: '#8f9294', sky: '#a9c6e4', fog: '#b9c3cb', fogFar: 650 },
-  forest:   { ground: '#4e7a3a', sky: '#9ed0f5', fog: '#bcd4c4', fogFar: 700 },
-  plains:   { ground: '#7da84e', sky: '#a5d3f7', fog: '#d6e3c5', fogFar: 800 },
-  mountain: { ground: '#6f7d6a', sky: '#9cc4ef', fog: '#c3cdd6', fogFar: 700 },
-  swamp:    { ground: '#52683f', sky: '#c2cfae', fog: '#c9d6b8', fogFar: 550 },
-  coast:    { ground: '#cfc08a', sky: '#8fd0f7', fog: '#cfe4ee', fogFar: 800 },
+  desert:   { ground: '#d9b26a', sky: '#5fa8ee', fog: '#e6d5b0', fogFar: 950 },
+  urban:    { ground: '#8f9294', sky: '#5a9ce8', fog: '#c4d4e6', fogFar: 850 },
+  forest:   { ground: '#4e7a3a', sky: '#549fec', fog: '#c8ddd0', fogFar: 900 },
+  plains:   { ground: '#7da84e', sky: '#57a4ee', fog: '#d8e6cc', fogFar: 1000 },
+  mountain: { ground: '#6f7d6a', sky: '#4f97e6', fog: '#c9d7e6', fogFar: 900 },
+  swamp:    { ground: '#52683f', sky: '#79aed6', fog: '#cdd8c0', fogFar: 700 },
+  coast:    { ground: '#cfc08a', sky: '#3f97ea', fog: '#d4e9f6', fogFar: 1000 },
 };
 
 // ============================================================
@@ -2161,10 +2163,10 @@ function skyTexture(top, mid, horizon, stars = false) {
 
 function timePreset(style) {
   return [
-    { // day
-      sky: [lightenHex(style.sky, 0.25), style.sky, style.fog], stars: false,
+    { // day — deep blue zenith fading to a bright warm horizon
+      sky: [lightenHex(style.sky, -0.25), style.sky, lightenHex(style.fog, 0.45)], stars: false,
       fog: style.fog, fogFar: style.fogFar,
-      sunColor: '#fff4de', sunInt: 2.4, hemiInt: 1.05, ambInt: 0.25,
+      sunColor: '#fff1d6', sunInt: 3.0, hemiInt: 0.8, ambInt: 0.15,
       lights: 0.5, towers: 0, windows: 0, sunY: 90,
     },
     { // dusk
@@ -2195,7 +2197,7 @@ function applyTime() {
   skyDome.material.needsUpdate = true;
   scene.fog.color.set(p.fog);
   scene.fog.far = p.fogFar;
-  scene.fog.near = timeIdx === 2 ? 60 : 120;
+  scene.fog.near = timeIdx === 2 ? 60 : 220;   // day/dusk: keep the foreground crisp
   sun.color.set(p.sunColor);
   sun.intensity = p.sunInt;
   hemiLight.intensity = p.hemiInt;
@@ -3367,17 +3369,13 @@ function profileBody(pts, width, mat, bevel = 0.06) {
 
 // dark fender arches so the wheels sit *inside* the body instead of under it
 function addWheelArches(g, r, positions, bodyHalfW) {
-  const archMat = lamb('#17181a', { roughness: 0.95 });
+  // slim trim ring hugging the tire — an accent line, not a black donut
+  const archMat = lamb('#1c1e21', { roughness: 0.9 });
   for (const [x, z] of positions) {
-    const arch = new THREE.Mesh(new THREE.TorusGeometry(r + 0.1, 0.055, 6, 14, Math.PI), archMat);
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(r + 0.04, 0.032, 6, 14, Math.PI), archMat);
     arch.rotation.y = Math.PI / 2;
-    arch.position.set(Math.sign(x) * (bodyHalfW - 0.01), r, z);
+    arch.position.set(Math.sign(x) * (bodyHalfW - 0.02), r, z);
     g.add(arch);
-    // shadowed inner well
-    const well = new THREE.Mesh(new THREE.CircleGeometry(r + 0.08, 14, 0, Math.PI), lamb('#0a0b0c'));
-    well.rotation.y = Math.sign(x) > 0 ? -Math.PI / 2 : Math.PI / 2;
-    well.position.set(Math.sign(x) * (bodyHalfW - 0.03), r, z);
-    g.add(well);
   }
 }
 
@@ -3515,58 +3513,108 @@ function makePickup(col = null, dot = false) {
 // F-150-style crew-cab work truck: taller upright nose, wider slotted
 // grille, full 4-door greenhouse with a B-pillar, running boards, short
 // bed — a closer real-truck silhouette than the standard makePickup().
+// Real pickup massing: three separate volumes — high flat hood with a
+// near-vertical grille, a crew cab whose glass sits over the CAB ONLY,
+// and an actual open bed with tall side walls, a visible cab/bed seam,
+// and a tailgate. High ground clearance on 0.44 m wheels.
 function makeCountyF150(col, livery) {
   const paint = carPaint(col);
   const g = new THREE.Group();
-  const body = profileBody([
-    [2.85, 0.46], [2.9, 0.85, 2.82, 1.12],       // tall upright nose
-    [1.9, 1.16],                                  // hood
-    [-2.0, 1.16],                                 // crew-cab roofline base -> bed rail
-    [-2.85, 1.02], [-2.85, 0.5], [-2.4, 0.36], [2.4, 0.36],
-  ], 2.05, paint);
-  g.add(body);
-  // full crew-cab greenhouse spanning front + rear doors
+  const halfW = 1.0;
+
+  // ---- front clip: tall flat hood, upright nose ----
+  const hood = profileBody([
+    [1.1, 0.52], [2.6, 0.52], [2.92, 0.58],
+    [2.97, 0.92, 2.9, 1.16],                     // near-vertical nose
+    [2.25, 1.25], [1.1, 1.25],                   // high flat hood line
+  ], 2.0, paint);
+  g.add(hood);
+
+  // ---- crew cab (doors) from behind the hood to the bed seam ----
+  g.add(rbox(2.0, 0.85, 2.0, paint, 0.09, 0, 0.945, 0.18));
+  // greenhouse over the cab only: raked windshield, flat roof, vertical rear
   const glass = profileBody([
-    [1.75, 1.15], [1.4, 1.78, 1.0, 1.82],
-    [-1.55, 1.8],
-    [-1.85, 1.16],
-  ], 1.84, carGlass(), 0.04);
+    [1.14, 1.34], [0.78, 1.92, 0.42, 1.97],
+    [-0.52, 1.96],
+    [-0.72, 1.35],
+  ], 1.86, carGlass(), 0.04);
   g.add(glass);
-  g.add(rbox(1.8, 0.07, 3.1, paint, 0.03, 0, 1.82, -0.05));
-  g.add(box(1.86, 0.5, 0.06, '#101215', 0, 1.45, 0.15));   // B-pillar between the two door bays
-  for (const sx of [-1.05, 1.05]) g.add(rbox(0.12, 0.06, 3.0, lamb('#26282c'), 0.02, sx, 0.32, -0.3));
-  // short 5-ft bed
-  g.add(box(1.7, 0.06, 1.5, '#3a3d42', 0, 1.08, -2.0));
-  g.add(box(1.7, 0.55, 0.08, '#26282c', 0, 0.9, -1.28));
-  g.add(rbox(1.98, 0.16, 0.14, paint, 0.05, 0, 1.06, -2.85));
-  const positions = [[-0.97, 1.85], [0.97, 1.85], [-0.97, -1.85], [0.97, -1.85]];
-  addWheelArches(g, 0.47, positions, 1.03);
-  addCarFace(g, { w: 2.05, frontZ: 2.86, backZ: -2.86, lightY: 0.9, bumperY: 0.48 });
-  addMirrors(g, 1.1, 1.42, 1.45);
-  addCarExtras(g, { halfW: 1.03, handleY: 1.2, handleZs: [1.0, -0.1], exhaustZ: -2.86 });
-  addWheels(g, 0.47, positions);
-  // wide slotted chrome grille (the tall F-150-style nose)
-  const grilleMat = metalMat('#c8ced6', { roughness: 0.3 });
-  for (let i = 0; i < 4; i++) g.add(box(1.05, 0.07, 0.04, '#c8ced6', 0, 0.72 + i * 0.14, 2.9)).material = grilleMat;
+  g.add(rbox(1.82, 0.06, 1.15, paint, 0.03, 0, 1.985, -0.08));   // painted roof cap
+  g.add(box(1.88, 0.56, 0.06, '#101215', 0, 1.6, 0.28));         // B-pillar
+  g.add(box(1.88, 0.1, 0.05, '#101215', 0, 1.38, 0.28));
+
+  // ---- visible dark seam between cab and bed ----
+  g.add(box(1.96, 0.86, 0.07, '#0d0e10', 0, 0.95, -0.86));
+
+  // ---- open bed: shell with recessed dark floor + tailgate ----
+  const bed = rbox(2.0, 0.94, 2.05, paint, 0.09, 0, 0.95, -1.9);
+  g.add(bed);
+  g.add(box(1.72, 0.03, 1.82, '#26282c', 0, 1.43, -1.9));        // dark bed opening framed by the rails
+  g.add(rbox(1.84, 0.1, 0.12, lamb('#26282c'), 0.03, 0, 1.44, -2.9)); // tailgate cap rail
+  // bed rail caps
+  for (const sx of [-0.94, 0.94]) g.add(rbox(0.14, 0.06, 2.0, lamb('#26282c'), 0.02, sx, 1.44, -1.9));
+
+  // ---- frame band + running boards (ground clearance look) ----
+  g.add(rbox(1.86, 0.2, 4.6, lamb('#17181a'), 0.05, 0, 0.42, -0.1));
+  for (const sx of [-1.04, 1.04]) g.add(rbox(0.16, 0.06, 2.0, lamb('#26282c'), 0.02, sx, 0.55, 0.2));
+
+  // ---- face: chrome two-bar grille, high wide headlights, bumpers ----
+  const chrome = metalMat('#c8ced6', { roughness: 0.25 });
+  const grilleBack = new THREE.Mesh(roundedBoxGeometry(1.5, 0.62, 0.06, 0.04), lamb('#2a2d31'));
+  grilleBack.position.set(0, 0.94, 2.94);
+  g.add(grilleBack);
+  for (const gy of [0.82, 1.06]) {
+    const bar = new THREE.Mesh(roundedBoxGeometry(1.46, 0.09, 0.05, 0.02), chrome);
+    bar.position.set(0, gy, 2.97);
+    g.add(bar);
+  }
+  for (const sx of [-0.78, 0.78]) {
+    const hl = new THREE.Mesh(roundedBoxGeometry(0.4, 0.18, 0.07, 0.04), headlightMat());
+    hl.position.set(sx, 1.06, 2.93);
+    lightGlowMats.push(addGlowSprite(hl, '#fff6c9', 0.55, 0.16));
+    g.add(hl);
+    // vertical taillight bars — the F-150 signature rear look
+    const tl = new THREE.Mesh(roundedBoxGeometry(0.16, 0.6, 0.07, 0.04), taillightMat());
+    tl.position.set(sx + Math.sign(sx) * 0.1, 1.05, -2.95);
+    lightGlowMats.push(addGlowSprite(tl, '#ff2020', 0.4, -0.13));
+    g.add(tl);
+  }
+  g.add(rbox(2.0, 0.26, 0.18, lamb('#26282c'), 0.07, 0, 0.52, 2.98));   // front bumper
+  g.add(rbox(2.0, 0.26, 0.18, lamb('#26282c'), 0.07, 0, 0.52, -2.98));  // rear bumper
+  g.add(box(0.44, 0.17, 0.03, '#e8e8e8', 0, 0.72, -3.0));               // plate
+  g.add(box(0.1, 0.12, 0.22, '#3a3d42', 0, 0.4, -3.02));                // tow hitch
+
+  const positions = [[-0.93, 1.82], [0.93, 1.82], [-0.93, -1.75], [0.93, -1.75]];
+  addWheelArches(g, 0.44, positions, halfW);
+  addMirrors(g, 1.06, 1.52, 1.1);
+  addCarExtras(g, { halfW, handleY: 1.18, handleZs: [0.85, -0.25], exhaustZ: -2.95 });
+  addWheels(g, 0.44, positions);
 
   if (livery === 'county') {
-    addDashStripes(g, 1.03, 0.6, -0.3, 5.6);
-    g.add(fleetLightBar(0, 1.92, 0.15));
-    g.add(dotDoorDecal(-1.035, 0.85, 0.4, DOT_YELLOW), dotDoorDecal(1.035, 0.85, 0.4, DOT_YELLOW));
+    addDashStripes(g, halfW + 0.005, 0.78, -0.35, 5.4);
+    g.add(fleetLightBar(0, 2.03, -0.08));   // flush on the cab roof
+    g.add(dotDoorDecal(-(halfW + 0.015), 0.95, 0.6, DOT_YELLOW), dotDoorDecal(halfW + 0.015, 0.95, 0.6, DOT_YELLOW));
+    const chev = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.4, 0.04),
+      new THREE.MeshStandardMaterial({ map: stripeTexture(true) }));
+    chev.position.set(0, 0.95, -2.96);
+    g.add(chev);
   } else if (livery === 'emergency') {
-    const accent = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.22, 5.4), new THREE.MeshStandardMaterial({ map: stripeTexture(true, '#1d5fbf') }));
-    for (const sx of [-1.03, 1.03]) { const a = accent.clone(); a.position.set(sx, 0.62, -0.3); g.add(a); }
-    const bar = box(1.15, 0.11, 0.36, '#111', 0, 1.95, 0.15);
+    const accent = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.2, 5.2),
+      new THREE.MeshStandardMaterial({ map: stripeTexture(true, '#1d5fbf') }));
+    for (const sx of [-(halfW + 0.005), halfW + 0.005]) {
+      const a = accent.clone(); a.position.set(sx, 0.68, -0.2); g.add(a);
+    }
+    // roof-mounted red/blue light bar, flush on the cab roof
+    const bar = rbox(1.2, 0.1, 0.34, lamb('#111'), 0.03, 0, 2.06, -0.08);
     g.add(bar);
-    for (const [bx, bc] of [[-0.32, '#ff2020'], [0.32, '#2050ff']]) {
-      const lamp = cyl(0.1, 0.1, 0.13, bc, bx, 2.04, 0.15, 8);
-      lamp.rotation.x = Math.PI / 2;
-      addBlinker(lamp, bx * 8, 6);
+    for (const [bx, bc] of [[-0.35, '#ff2020'], [0, '#ffffff'], [0.35, '#2050ff']]) {
+      const lamp = box(0.28, 0.09, 0.26, bc, bx, 2.15, -0.08);
+      addBlinker(lamp, bx * 9, 6, bc);
       g.add(lamp);
     }
-    g.add(dotDoorDecal(-1.035, 0.85, 0.4, '#f4f5f7'), dotDoorDecal(1.035, 0.85, 0.4, '#f4f5f7'));
+    g.add(dotDoorDecal(-(halfW + 0.015), 0.95, 0.6, '#f4f5f7'), dotDoorDecal(halfW + 0.015, 0.95, 0.6, '#f4f5f7'));
   }
-  return { mesh: g, len: 5.9 };
+  return { mesh: g, len: 6.0 };
 }
 
 // Generic flatbed equipment trailer — tie-down rails + a couple of crates
