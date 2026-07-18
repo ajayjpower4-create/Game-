@@ -687,6 +687,27 @@ function buildCatalog() {
     { cat: 'Vehicles', id: 'drive_tma', icon: '🚛', name: 'Crash Truck (TMA)', drivable: true,
       desc: 'Drive the attenuator truck into position',
       blocks: false, build: () => CATALOG.find((d) => d.id === 'tma_truck').build() },
+    { cat: 'Vehicles', id: 'f150_county', icon: '🛻', name: 'County Fleet F-150', drivable: true,
+      desc: 'Crew-cab F-150-style truck, county DOT livery with light bar',
+      blocks: false, build: drivableWrap(() => makeCountyF150(DOT_YELLOW, 'county')) },
+    { cat: 'Vehicles', id: 'f150_emergency', icon: '🚓', name: 'Emergency Response F-150', drivable: true,
+      desc: 'Crew-cab F-150-style truck, white with red/blue light bar',
+      blocks: false, build: drivableWrap(() => makeCountyF150('#f4f5f7', 'emergency')) },
+    { cat: 'Vehicles', id: 'f150_trailer', icon: '🚛', name: 'County F-150 + Equipment Trailer', drivable: true, combo: true,
+      desc: 'Tows a flatbed equipment trailer that trails behind through turns',
+      blocks: false, build: drivableWrap(() => makeCountyF150(DOT_YELLOW, 'county')),
+      trailerBuild: () => { const t = makeEquipmentTrailer(); t.traverse((o) => { if (o.isMesh) o.castShadow = true; }); return t; },
+      hitchOffset: 3.35 },
+    { cat: 'Vehicles', id: 'utility_trailer_combo', icon: '🚐', name: 'Utility Truck + Job Trailer', drivable: true, combo: true,
+      desc: 'Utility service truck towing the job site office trailer',
+      blocks: false, build: drivableWrap(makeUtilityTruck),
+      trailerBuild: () => {
+        const t = makeJobTrailer();
+        t.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+        addWheels(t, 0.34, [[-0.95, -1.9], [0.95, -1.9]]);   // give the towed version rolling wheels
+        return t;
+      },
+      hitchOffset: 4.4 },
 
     // ---------- TOOLS (rectangle: click two corners) ----------
     { cat: 'Tools', id: 'road_breaker', icon: '🧨', name: 'Road Breaker', tool: 'breaker',
@@ -1890,6 +1911,9 @@ function collectSaveData() {
     x: v.group.position.x, z: v.group.position.z, heading: v.heading,
     liveryIdx: v.liveryIdx || 0,
     text: v.def.customText ? v.text : undefined,
+    trailer: v.trailerGroup
+      ? { x: v.trailerGroup.position.x, z: v.trailerGroup.position.z, heading: v.trailerHeading }
+      : undefined,
   }));
   return {
     version: 1,
@@ -1967,6 +1991,16 @@ function applySaveData(data) {
     const v = { group: item, def, heading: vd.heading || 0, speed: 0, steer: 0, liveryIdx: 0 };
     if (vd.text) v.text = vd.text;
     if (vd.liveryIdx) setLivery(v, vd.liveryIdx);
+    if (def.combo && vd.trailer) {
+      const trailer = def.trailerBuild();
+      trailer.position.set(vd.trailer.x, 0, vd.trailer.z);
+      trailer.rotation.y = vd.trailer.heading || 0;
+      vehiclesRoot.add(trailer);
+      v.trailerGroup = trailer;
+      v.trailerHeading = vd.trailer.heading || 0;
+    } else if (def.combo) {
+      attachTrailer(v, def, vd.x, vd.z, vd.heading || 0);
+    }
     vehicles.push(v);
   }
 
@@ -3478,6 +3512,84 @@ function makePickup(col = null, dot = false) {
   return { mesh: g, len: 5.4 };
 }
 
+// F-150-style crew-cab work truck: taller upright nose, wider slotted
+// grille, full 4-door greenhouse with a B-pillar, running boards, short
+// bed — a closer real-truck silhouette than the standard makePickup().
+function makeCountyF150(col, livery) {
+  const paint = carPaint(col);
+  const g = new THREE.Group();
+  const body = profileBody([
+    [2.85, 0.46], [2.9, 0.85, 2.82, 1.12],       // tall upright nose
+    [1.9, 1.16],                                  // hood
+    [-2.0, 1.16],                                 // crew-cab roofline base -> bed rail
+    [-2.85, 1.02], [-2.85, 0.5], [-2.4, 0.36], [2.4, 0.36],
+  ], 2.05, paint);
+  g.add(body);
+  // full crew-cab greenhouse spanning front + rear doors
+  const glass = profileBody([
+    [1.75, 1.15], [1.4, 1.78, 1.0, 1.82],
+    [-1.55, 1.8],
+    [-1.85, 1.16],
+  ], 1.84, carGlass(), 0.04);
+  g.add(glass);
+  g.add(rbox(1.8, 0.07, 3.1, paint, 0.03, 0, 1.82, -0.05));
+  g.add(box(1.86, 0.5, 0.06, '#101215', 0, 1.45, 0.15));   // B-pillar between the two door bays
+  for (const sx of [-1.05, 1.05]) g.add(rbox(0.12, 0.06, 3.0, lamb('#26282c'), 0.02, sx, 0.32, -0.3));
+  // short 5-ft bed
+  g.add(box(1.7, 0.06, 1.5, '#3a3d42', 0, 1.08, -2.0));
+  g.add(box(1.7, 0.55, 0.08, '#26282c', 0, 0.9, -1.28));
+  g.add(rbox(1.98, 0.16, 0.14, paint, 0.05, 0, 1.06, -2.85));
+  const positions = [[-0.97, 1.85], [0.97, 1.85], [-0.97, -1.85], [0.97, -1.85]];
+  addWheelArches(g, 0.47, positions, 1.03);
+  addCarFace(g, { w: 2.05, frontZ: 2.86, backZ: -2.86, lightY: 0.9, bumperY: 0.48 });
+  addMirrors(g, 1.1, 1.42, 1.45);
+  addCarExtras(g, { halfW: 1.03, handleY: 1.2, handleZs: [1.0, -0.1], exhaustZ: -2.86 });
+  addWheels(g, 0.47, positions);
+  // wide slotted chrome grille (the tall F-150-style nose)
+  const grilleMat = metalMat('#c8ced6', { roughness: 0.3 });
+  for (let i = 0; i < 4; i++) g.add(box(1.05, 0.07, 0.04, '#c8ced6', 0, 0.72 + i * 0.14, 2.9)).material = grilleMat;
+
+  if (livery === 'county') {
+    addDashStripes(g, 1.03, 0.6, -0.3, 5.6);
+    g.add(fleetLightBar(0, 1.92, 0.15));
+    g.add(dotDoorDecal(-1.035, 0.85, 0.4, DOT_YELLOW), dotDoorDecal(1.035, 0.85, 0.4, DOT_YELLOW));
+  } else if (livery === 'emergency') {
+    const accent = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.22, 5.4), new THREE.MeshStandardMaterial({ map: stripeTexture(true, '#1d5fbf') }));
+    for (const sx of [-1.03, 1.03]) { const a = accent.clone(); a.position.set(sx, 0.62, -0.3); g.add(a); }
+    const bar = box(1.15, 0.11, 0.36, '#111', 0, 1.95, 0.15);
+    g.add(bar);
+    for (const [bx, bc] of [[-0.32, '#ff2020'], [0.32, '#2050ff']]) {
+      const lamp = cyl(0.1, 0.1, 0.13, bc, bx, 2.04, 0.15, 8);
+      lamp.rotation.x = Math.PI / 2;
+      addBlinker(lamp, bx * 8, 6);
+      g.add(lamp);
+    }
+    g.add(dotDoorDecal(-1.035, 0.85, 0.4, '#f4f5f7'), dotDoorDecal(1.035, 0.85, 0.4, '#f4f5f7'));
+  }
+  return { mesh: g, len: 5.9 };
+}
+
+// Generic flatbed equipment trailer — tie-down rails + a couple of crates
+// for flavor. Reuses the same chassis (A-frame tongue, coupler, jockey
+// wheel, stabilizer legs) as the solar tower / radar trailers.
+function makeEquipmentTrailer() {
+  const g = trailerChassis(3.2);
+  const deckMat = lamb('#8a6a45', { roughness: 0.85 });
+  g.add(rbox(1.6, 0.1, 3.1, deckMat, 0.03, 0, 0.46, 0));
+  const railMat = metalMat('#ffb400', { roughness: 0.5 });
+  for (const sx of [-0.82, 0.82]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 3.1), railMat);
+    rail.position.set(sx, 0.65, 0);
+    g.add(rail);
+  }
+  for (let i = 0; i < 2; i++) {
+    const crate = box(0.6, 0.55, 0.6, i ? '#3a3d42' : '#7a5a34', -0.3 + i * 0.6, 0.79, -0.7 + i * 1.0);
+    g.add(crate);
+  }
+  g.add(box(1.3, 0.08, 0.5, '#2a2c30', 0, 0.52, 1.1));   // strapped bundle up front
+  return g;
+}
+
 // Liberty-style door emblem: blue triangle road logo + agency text,
 // painted straight onto the panel color
 function dotDoorDecal(x, y, z, paint = '#ff8c1a') {
@@ -4413,8 +4525,9 @@ function placeItem() {
     vehiclesRoot.add(item);
     const v = { group: item, def: ghostDef, heading: buildYaw, speed: 0, steer: 0 };
     if (ghostDef.customText) v.text = signTruckText;   // snapshot so save/load reproduces this exact truck's message
+    if (ghostDef.combo) attachTrailer(v, ghostDef, item.position.x, item.position.z, buildYaw);
     vehicles.push(v);
-    toast('Vehicle spawned — walk up and press E to drive');
+    toast(ghostDef.combo ? 'Truck + trailer spawned — walk up and press E to drive' : 'Vehicle spawned — walk up and press E to drive');
   } else {
     placedRoot.add(item);
     placed.push({ group: item, def: ghostDef });
@@ -4438,13 +4551,16 @@ function deleteAimed() {
   while (obj && obj.parent !== placedRoot && obj.parent !== vehiclesRoot) obj = obj.parent;
   if (!obj) return;
   if (obj.parent === vehiclesRoot) {
-    const idx = vehicles.findIndex((v) => v.group === obj);
+    // aiming at either the truck or its towed trailer removes the whole combo
+    const idx = vehicles.findIndex((v) => v.group === obj || v.trailerGroup === obj);
     if (idx >= 0) {
       if (driving === vehicles[idx]) return;   // can't delete the one you're in
-      dropBlinkersOf(obj);
-      vehiclesRoot.remove(obj);
+      const v = vehicles[idx];
+      dropBlinkersOf(v.group);
+      vehiclesRoot.remove(v.group);
+      if (v.trailerGroup) { dropBlinkersOf(v.trailerGroup); vehiclesRoot.remove(v.trailerGroup); }
       vehicles.splice(idx, 1);
-      toast('Vehicle removed');
+      toast(v.trailerGroup ? 'Truck + trailer removed' : 'Vehicle removed');
     }
     return;
   }
@@ -4465,7 +4581,10 @@ function clearPlaced() {
   for (const p of placed) placedRoot.remove(p.group);
   placed = [];
   if (driving) exitVehicle();
-  for (const v of vehicles) vehiclesRoot.remove(v.group);
+  for (const v of vehicles) {
+    vehiclesRoot.remove(v.group);
+    if (v.trailerGroup) vehiclesRoot.remove(v.trailerGroup);
+  }
   vehicles = [];
   blinkers = [];
   towerSpots = [];
@@ -4733,6 +4852,48 @@ function vehicleRadius(v) {
   return v._radius || (v._radius = Math.max(1.4, v.def && v.len ? v.len * 0.42 : (v.len || 5) * 0.42));
 }
 
+// Spawns the trailer for a truck+trailer combo, positioned in a straight
+// line behind the truck at its hitch point.
+function attachTrailer(v, def, truckX, truckZ, heading) {
+  const trailer = def.trailerBuild();
+  const off = def.hitchOffset || 3.5;
+  trailer.position.set(truckX + Math.sin(heading) * -off, 0, truckZ + Math.cos(heading) * -off);
+  trailer.rotation.y = heading;
+  vehiclesRoot.add(trailer);
+  v.trailerGroup = trailer;
+  v.trailerHeading = heading;
+}
+
+// Not rigidly attached: each frame the trailer re-aims at the truck's
+// current hitch point and eases its heading toward it, so it swings
+// through turns and lags on acceleration instead of teleporting along
+// like a single rigid body.
+function updateTrailer(v, dt) {
+  const off = v.def.hitchOffset || 3.5;
+  const hitchX = v.group.position.x + Math.sin(v.heading) * -off;
+  const hitchZ = v.group.position.z + Math.cos(v.heading) * -off;
+  const dx = hitchX - v.trailerGroup.position.x;
+  const dz = hitchZ - v.trailerGroup.position.z;
+  const dist = Math.hypot(dx, dz);
+  let moveDist = 0;
+  if (dist > 0.001) {
+    const desiredHeading = Math.atan2(dx, dz);
+    let diff = desiredHeading - v.trailerHeading;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    v.trailerHeading += diff * Math.min(1, dt * 4);
+    moveDist = Math.min(dist, Math.abs(v.speed) * dt + 2 * dt);
+    v.trailerGroup.position.x += Math.sin(desiredHeading) * moveDist;
+    v.trailerGroup.position.z += Math.cos(desiredHeading) * moveDist;
+  }
+  v.trailerGroup.rotation.y = v.trailerHeading;
+  const tw = v.trailerGroup.userData.wheels;
+  if (tw) {
+    const roll = moveDist * Math.sign(v.speed || 1);
+    for (const wl of tw) wl.spinner.rotation.x -= roll / wl.radius;
+  }
+}
+
 function updateDriving(dt) {
   const v = driving;
   const boost = (keys['ShiftLeft'] || keys['ShiftRight']) ? 1.5 : 1;   // hold Shift to floor it
@@ -4785,6 +4946,8 @@ function updateDriving(dt) {
   v.group.position.x = THREE.MathUtils.clamp(nx, -400, 400);
   v.group.position.z = THREE.MathUtils.clamp(nz, -ROAD_LEN / 2, ROAD_LEN / 2);
   v.group.rotation.y = v.heading;
+
+  if (v.trailerGroup) updateTrailer(v, dt);
 
   // ---- spin & steer the wheels ----
   const wheels = v.group.userData.wheels;
@@ -4975,7 +5138,9 @@ window.CHS = {
     item.rotation.y = ry;
     if (def.drivable) {
       vehiclesRoot.add(item);
-      vehicles.push({ group: item, def, heading: ry, speed: 0, steer: 0 });
+      const v = { group: item, def, heading: ry, speed: 0, steer: 0 };
+      if (def.combo) attachTrailer(v, def, x, z, ry);
+      vehicles.push(v);
     } else {
       placedRoot.add(item);
       placed.push({ group: item, def });
