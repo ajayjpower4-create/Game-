@@ -84,13 +84,39 @@ HSS.buildPed = function (scene, appearance, name) {
     hand.material = skin; hand.parent = sh; hand.position.y = -0.52;
     parts[side === -1 ? 'shoulderL' : 'shoulderR'] = sh;
   }
-  // legs (hip pivots)
+  // legs (hip pivots) + shoes
+  const shoeMat = new BABYLON.PBRMaterial(`shoe_${name}`, scene);
+  shoeMat.albedoColor = BABYLON.Color3.FromHexString('#23201c');
+  shoeMat.roughness = 0.5; shoeMat.metallic = 0;
   for (const side of [-1, 1]) {
     const hp = new BABYLON.TransformNode(`hp${side}_${name}`, scene);
     hp.parent = hips; hp.position.set(side * 0.1, 0.02, 0);
     const leg = BABYLON.MeshBuilder.CreateCapsule(`leg${side}_${name}`, { height: 0.9, radius: 0.075, tessellation: 8 }, scene);
     leg.material = botMat; leg.parent = hp; leg.position.y = -0.45; leg.isPickable = true;
+    const shoe = BABYLON.MeshBuilder.CreateBox(`shoe${side}_${name}`, { width: 0.11, height: 0.07, depth: 0.22 }, scene);
+    shoe.material = shoeMat; shoe.parent = hp; shoe.position.set(0, -0.92, 0.04);
     parts[side === -1 ? 'hipL' : 'hipR'] = hp;
+  }
+
+  // simple face: eyes + brows (huge readability win at trivial cost)
+  const eyeMat = new BABYLON.StandardMaterial(`eye_${name}`, scene);
+  eyeMat.diffuseColor = BABYLON.Color3.FromHexString('#1a1512');
+  eyeMat.specularColor = BABYLON.Color3.Black();
+  for (const side of [-1, 1]) {
+    const eye = BABYLON.MeshBuilder.CreateSphere(`eye${side}_${name}`, { diameter: 0.032, segments: 6 }, scene);
+    eye.material = eyeMat; eye.parent = neck; eye.position.set(side * 0.05, 0.16, 0.108);
+    const brow = BABYLON.MeshBuilder.CreateBox(`brow${side}_${name}`, { width: 0.05, height: 0.012, depth: 0.01 }, scene);
+    brow.material = hairMat; brow.parent = neck; brow.position.set(side * 0.05, 0.195, 0.112);
+  }
+
+  // soft blob shadow so characters sit visually on the ground
+  if (HSS.materials && HSS.materials.blobShadow) {
+    const blob = BABYLON.MeshBuilder.CreateDisc(`blob_${name}`, { radius: 0.34, tessellation: 14 }, scene);
+    blob.rotation.x = Math.PI / 2;
+    blob.position.y = 0.035;
+    blob.material = HSS.materials.blobShadow;
+    blob.parent = root;
+    blob.isPickable = false;
   }
 
   // tag every mesh with the root for picking
@@ -130,6 +156,7 @@ HSS.NPC = class {
     this.handRaised = false;
     this.currentSeat = null;
     this.mood = 'neutral';
+    this.home = null; // {minX,maxX,minZ,maxZ,y} — indoor NPCs never leave their room
     this._wanderTimer = 0;
   }
 
@@ -201,13 +228,24 @@ HSS.NPC = class {
   wander(dt, waypoints) {
     if (this.state === 'sit') return;
     this._wanderTimer -= dt;
-    if (this.state === 'idle' && this._wanderTimer <= 0) {
-      this._wanderTimer = 4 + Math.random() * 10;
-      if (Math.random() < 0.6 && waypoints.length) {
-        const wp = waypoints[Math.floor(Math.random() * waypoints.length)];
-        const jitter = () => (Math.random() - 0.5) * 6;
-        this.walkTo(new BABYLON.Vector3(wp.x + jitter(), wp.y, wp.z + jitter()));
-      }
+    if (this.state !== 'idle' || this._wanderTimer > 0) return;
+    this._wanderTimer = 4 + Math.random() * 10;
+    if (Math.random() > 0.6) return;
+    if (this.home) {
+      // pace within the room only — never walk out through a wall or off a floor
+      const h = this.home;
+      this.walkTo(new BABYLON.Vector3(
+        h.minX + Math.random() * (h.maxX - h.minX), h.y,
+        h.minZ + Math.random() * (h.maxZ - h.minZ)));
+    } else if (waypoints && waypoints.length) {
+      // outdoors: only nearby waypoints on the same level, so nobody strides
+      // across (or through) a building to reach a distant pitch
+      const p = this.root.position;
+      const near = waypoints.filter(w => Math.abs(w.y - p.y) < 1 && BABYLON.Vector3.Distance(w, p) < 38);
+      if (!near.length) return;
+      const wp = near[Math.floor(Math.random() * near.length)];
+      const jitter = () => (Math.random() - 0.5) * 6;
+      this.walkTo(new BABYLON.Vector3(wp.x + jitter(), wp.y, wp.z + jitter()));
     }
   }
 

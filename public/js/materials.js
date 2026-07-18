@@ -54,15 +54,18 @@ HSS.buildMaterials = function (scene) {
     ctx.strokeStyle = 'rgba(60,50,42,0.55)'; ctx.lineWidth = 2;
     for (let y = 0; y < s; y += bh) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(s, y); ctx.stroke(); }
     noise(ctx, s, 90, 60, 500);
-  }, { uv: [4, 2] });
+  });
   M.brick = pbr('brick', { tex: brickTex, rough: 0.95 });
+  M.brick.metadata = { tile: [1.9, 1.6] }; // world-space metres per texture repeat
 
   const plasterTex = canvasTex('plasterTex', 256, (ctx, s) => {
     ctx.fillStyle = '#e9e6dd'; ctx.fillRect(0, 0, s, s);
     noise(ctx, s, 210, 30, 700);
-  }, { uv: [3, 2] });
+  });
   M.plaster = pbr('plaster', { tex: plasterTex, rough: 0.9 });
+  M.plaster.metadata = { tile: [3, 3] };
   M.plasterAccent = pbr('plasterAccent', { albedo: '#37598f', tex: plasterTex, rough: 0.9 });
+  M.plasterAccent.metadata = { tile: [3, 3] };
 
   const linoTex = canvasTex('linoTex', 512, (ctx, s) => {
     ctx.fillStyle = '#b9b4a6'; ctx.fillRect(0, 0, s, s);
@@ -73,8 +76,9 @@ HSS.buildMaterials = function (scene) {
       ctx.fillRect(x + 1, y + 1, t - 2, t - 2);
     }
     noise(ctx, s, 140, 50, 900);
-  }, { uv: [8, 8] });
+  });
   M.lino = pbr('lino', { tex: linoTex, rough: 0.55 });
+  M.lino.metadata = { tile: [4, 4] };
 
   const woodTex = canvasTex('woodTex', 256, (ctx, s) => {
     ctx.fillStyle = '#9a713f'; ctx.fillRect(0, 0, s, s);
@@ -96,13 +100,13 @@ HSS.buildMaterials = function (scene) {
       ctx.fillStyle = `rgba(${40 + Math.random() * 60},${105 + Math.random() * 60},${30 + Math.random() * 30},0.5)`;
       ctx.fillRect(Math.random() * s, Math.random() * s, 2, 4);
     }
-  }, { uv: [30, 30] });
+  }, { uv: [80, 80] });
   M.grass = pbr('grass', { tex: grassTex, rough: 1.0 });
 
   const tarmacTex = canvasTex('tarmacTex', 512, (ctx, s) => {
     ctx.fillStyle = '#4d4f52'; ctx.fillRect(0, 0, s, s);
     noise(ctx, s, 60, 60, 3000);
-  }, { uv: [18, 18] });
+  }, { uv: [45, 45] });
   M.tarmac = pbr('tarmac', { tex: tarmacTex, rough: 0.95 });
 
   M.courtGreen = pbr('courtGreen', { albedo: '#2e6b4f', rough: 0.9 });
@@ -118,6 +122,39 @@ HSS.buildMaterials = function (scene) {
     g.alpha = 0.35; g.roughness = 0.08; g.metallic = 0.1;
     g.environmentIntensity = 1.2;
     return g;
+  })();
+
+  // exterior glazing that reads as reflected sky (no env-map dependency)
+  M.windowPane = (() => {
+    const tex = new BABYLON.DynamicTexture('paneTex', { width: 64, height: 128 }, scene, true);
+    const c = tex.getContext();
+    const grad = c.createLinearGradient(0, 0, 0, 128);
+    grad.addColorStop(0, '#a9c4de'); grad.addColorStop(0.6, '#6d8cae'); grad.addColorStop(1, '#3f5877');
+    c.fillStyle = grad; c.fillRect(0, 0, 64, 128);
+    const m = new BABYLON.StandardMaterial('windowPane', scene);
+    m.emissiveTexture = tex;
+    m.disableLighting = true;
+    m.alpha = 0.94;
+    return m;
+  })();
+
+  M.stoneBand = pbr('stoneBand', { albedo: '#cfc8b8', rough: 0.8 });
+  M.plinth = pbr('plinth', { albedo: '#4a423c', tex: brickTex, rough: 0.95 });
+  M.plinth.metadata = { tile: [1.9, 1.6] };
+  M.concretePath = pbr('concretePath', { albedo: '#9a9b96', tex: tarmacTex, rough: 0.9 });
+  M.lightPanel = (() => {
+    const m = new BABYLON.StandardMaterial('lightPanel', scene);
+    m.emissiveColor = BABYLON.Color3.FromHexString('#f4f7ff');
+    m.disableLighting = true;
+    return m;
+  })();
+  M.blobShadow = (() => {
+    const m = new BABYLON.StandardMaterial('blobShadow', scene);
+    m.diffuseColor = BABYLON.Color3.Black();
+    m.emissiveColor = BABYLON.Color3.Black();
+    m.specularColor = BABYLON.Color3.Black();
+    m.alpha = 0.32;
+    return m;
   })();
 
   M.metal = pbr('metal', { albedo: '#8d949c', rough: 0.35, metal: 0.85 });

@@ -18,9 +18,9 @@ window.HSS = window.HSS || {};
   // ---- lighting: low London sun + sky ambience + post pipeline ----------
   const sun = new BABYLON.DirectionalLight('sun', new BABYLON.Vector3(-0.45, -0.85, 0.35), scene);
   sun.position = new BABYLON.Vector3(60, 90, -50);
-  sun.intensity = 2.6;
+  sun.intensity = 3.0;
   const hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0), scene);
-  hemi.intensity = 0.85;
+  hemi.intensity = 0.7;
   hemi.groundColor = BABYLON.Color3.FromHexString('#5a6a55');
   scene.environmentIntensity = 1.0;
   // procedural gradient sky (no external assets)
@@ -48,6 +48,7 @@ window.HSS = window.HSS || {};
   const shadow = new BABYLON.ShadowGenerator(2048, sun);
   shadow.useBlurExponentialShadowMap = true;
   shadow.blurKernel = 16;
+  shadow.bias = 0.001;
 
   const pipeline = new BABYLON.DefaultRenderingPipeline('pipe', true, scene, [/* cameras added later */]);
   pipeline.fxaaEnabled = true;
@@ -55,11 +56,41 @@ window.HSS = window.HSS || {};
   pipeline.bloomThreshold = 0.9; pipeline.bloomWeight = 0.18;
   pipeline.imageProcessing.toneMappingEnabled = true;
   pipeline.imageProcessing.toneMappingType = BABYLON.ImageProcessingConfiguration.TONEMAPPING_ACES;
-  pipeline.imageProcessing.contrast = 1.12;
+  pipeline.imageProcessing.contrast = 1.15;
   pipeline.imageProcessing.exposure = 1.05;
+
+  // screen-space ambient occlusion — opt-in via ?ssao=1 (renders badly on some
+  // software/older GPUs, so it defaults off)
+  let ssao = null;
+  try {
+    const wantSSAO = new URLSearchParams(location.search).get('ssao') === '1';
+    if (wantSSAO && BABYLON.SSAO2RenderingPipeline && BABYLON.SSAO2RenderingPipeline.IsSupported) {
+      ssao = new BABYLON.SSAO2RenderingPipeline('ssao', scene, { ssaoRatio: 0.75, blurRatio: 1 }, []);
+      ssao.radius = 1.4;
+      ssao.totalStrength = 1.0;
+      ssao.samples = 12;
+      ssao.expensiveBlur = false;
+    }
+  } catch { ssao = null; }
+  // the post pipeline follows the single active camera — attaching several
+  // cameras at once smears the frame
+  let fxCam = null;
+  const attachFX = (cam) => {
+    if (fxCam === cam) return;
+    if (fxCam) {
+      try {
+        pipeline.removeCamera(fxCam);
+        if (ssao) scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline('ssao', fxCam);
+      } catch { /* previous camera may already be disposed */ }
+    }
+    fxCam = cam;
+    pipeline.addCamera(cam);
+    if (ssao) scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline('ssao', cam);
+  };
 
   // ---- world --------------------------------------------------------------
   const M = HSS.buildMaterials(scene);
+  HSS.materials = M;
   HSS.buildCampus(scene, M, shadow);
   const students = HSS.generateStudents();
 
@@ -269,7 +300,7 @@ window.HSS = window.HSS || {};
       skin: creator.skin, hairStyle: creator.hairStyle, hairColor: creator.hairColor,
       top: creator.outfit, bottom: cat().bottom, height: creator.height,
     });
-    pipeline.addCamera(G.player.camera);
+    attachFX(G.player.camera);
     G.player.camera.position.set(0, 1.75, 5);
     G.started = true;
     document.getElementById('playerBox').textContent = `${G.playerName} — ${G.playerStaff.role}`;
@@ -398,6 +429,13 @@ window.HSS = window.HSS || {};
         },
       }));
       if (room) {
+        // indoor staff are confined to their own room — no wandering out
+        // through walls or off upper floors
+        npc.home = {
+          minX: room.bounds.minX + 0.7, maxX: room.bounds.maxX - 0.7,
+          minZ: room.bounds.minZ + 0.7, maxZ: room.bounds.maxZ - 0.7,
+          y: room.floorY,
+        };
         const sSeat = room.seats.find(x => !x.taken);
         if (sSeat && rng() < 0.6) { sSeat.taken = true; npc.sit(sSeat); }
         else npc.setPosition(room.center.x + (rng() - 0.5) * 2, room.floorY, room.center.z + (rng() - 0.5) * 2, rng() * Math.PI * 2);
@@ -432,6 +470,11 @@ window.HSS = window.HSS || {};
       room.side === 'N' ? room.bounds.minZ + 0.6 : room.bounds.maxZ - 0.6);
     const npc = spawnNpc(Object.assign({ kind: 'staff' }, enforcerProfile));
     npc.setPosition(doorPos.x, doorPos.y, doorPos.z);
+    npc.home = {
+      minX: room.bounds.minX + 0.7, maxX: room.bounds.maxX - 0.7,
+      minZ: room.bounds.minZ + 0.7, maxZ: room.bounds.maxZ - 0.7,
+      y: room.floorY,
+    };
     const pp = G.player.camera.position;
     npc.walkTo(new BABYLON.Vector3(pp.x + 0.8, room.floorY, pp.z + 0.8));
     HSS.UI.toast(`⚠ ${enforcerProfile.name} has walked in about the missing register.`, 'warn');

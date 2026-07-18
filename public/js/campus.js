@@ -15,8 +15,18 @@ HSS.buildCampus = function (scene, M, shadow) {
   const masters = {}; // instanced furniture masters
   let uid = 0;
 
+  // world-space texture tiling: materials tagged metadata.tile = [uMetres, vMetres]
+  // get per-face UVs so a 40 m wall shows 20 brick repeats, not one stretched one
+  function tiledFaceUV(mat, w, h, d) {
+    const t = mat && mat.metadata && mat.metadata.tile;
+    if (!t) return undefined;
+    const f = (a, b) => new BABYLON.Vector4(0, 0, Math.max(0.05, a / t[0]), Math.max(0.05, b / t[1]));
+    return [f(w, h), f(w, h), f(d, h), f(d, h), f(w, d), f(w, d)];
+  }
+
   function box(name, w, h, d, x, y, z, mat, { collide = true, parent = null, rotY = 0, shadows = false } = {}) {
-    const b = BABYLON.MeshBuilder.CreateBox(`${name}_${uid++}`, { width: w, height: h, depth: d }, scene);
+    const b = BABYLON.MeshBuilder.CreateBox(`${name}_${uid++}`,
+      { width: w, height: h, depth: d, faceUV: tiledFaceUV(mat, w, h, d) }, scene);
     b.position.set(x, y, z);
     b.rotation.y = rotY;
     b.material = mat;
@@ -25,6 +35,22 @@ HSS.buildCampus = function (scene, M, shadow) {
     if (shadows && shadow) shadow.addShadowCaster(b);
     b.freezeWorldMatrix();
     return b;
+  }
+
+  // painted sign board with the building name
+  function sign(text, x, y, z, rotY, w = 9) {
+    const tex = new BABYLON.DynamicTexture(`signTex_${uid++}`, { width: 1024, height: 128 }, scene, true);
+    const c = tex.getContext();
+    c.fillStyle = '#1d2b3f'; c.fillRect(0, 0, 1024, 128);
+    c.strokeStyle = '#c9a951'; c.lineWidth = 6; c.strokeRect(8, 8, 1008, 112);
+    c.font = 'bold 58px Georgia, serif'; c.fillStyle = '#f0ead8'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(text, 512, 68);
+    tex.update();
+    const m = new BABYLON.StandardMaterial(`signMat_${uid++}`, scene);
+    m.emissiveTexture = tex; m.disableLighting = true; m.backFaceCulling = false;
+    const p = BABYLON.MeshBuilder.CreatePlane(`sign_${uid++}`, { width: w, height: w / 8, sideOrientation: BABYLON.Mesh.DOUBLESIDE }, scene);
+    p.position.set(x, y, z); p.rotation.y = rotY; p.material = m; p.isPickable = false;
+    p.freezeWorldMatrix();
   }
 
   // ---- instanced furniture masters ---------------------------------------
@@ -86,7 +112,7 @@ HSS.buildCampus = function (scene, M, shadow) {
 
   // ---- wall runs with gaps ------------------------------------------------
   // Build a wall along X at fixed z (or along Z at fixed x), leaving door gaps.
-  function wallRun(axis, fixed, a0, a1, y, h, mat, gaps = []) {
+  function wallRun(axis, fixed, a0, a1, y, h, mat, gaps = [], cast = false) {
     const segs = [];
     let cur = a0;
     const sorted = [...gaps].sort((p, q) => p[0] - q[0]);
@@ -95,8 +121,8 @@ HSS.buildCampus = function (scene, M, shadow) {
     for (const [s0, s1] of segs) {
       const len = s1 - s0, mid = (s0 + s1) / 2;
       if (len < 0.05) continue;
-      if (axis === 'x') box('wall', len, h, WALL_T, mid, y + h / 2, fixed, mat);
-      else box('wall', WALL_T, h, len, fixed, y + h / 2, mid, mat);
+      if (axis === 'x') box('wall', len, h, WALL_T, mid, y + h / 2, fixed, mat, { shadows: cast });
+      else box('wall', WALL_T, h, len, fixed, y + h / 2, mid, mat, { shadows: cast });
     }
     // lintels above door gaps
     for (const [g0, g1] of sorted) {
@@ -113,11 +139,15 @@ HSS.buildCampus = function (scene, M, shadow) {
       const w = Math.min(2.2, span / count - 0.8);
       if (w < 0.6) continue;
       if (axis === 'x') {
-        box('winFrame', w + 0.12, 1.52, 0.1, c, y + 1.75, fixed, M.blackTrim, { collide: false });
-        box('winGlass', w, 1.4, 0.06, c, y + 1.75, fixed, M.glass, { collide: false });
+        box('winFrame', w + 0.16, 1.56, 0.1, c, y + 1.75, fixed, M.blackTrim, { collide: false });
+        box('winGlass', w, 1.4, 0.06, c, y + 1.75, fixed, M.windowPane, { collide: false });
+        box('winMull', 0.06, 1.4, 0.08, c, y + 1.75, fixed, M.blackTrim, { collide: false });
+        box('winSill', w + 0.3, 0.09, 0.22, c, y + 1.0, fixed, M.stoneBand, { collide: false });
       } else {
-        box('winFrame', 0.1, 1.52, w + 0.12, fixed, y + 1.75, c, M.blackTrim, { collide: false });
-        box('winGlass', 0.06, 1.4, w, fixed, y + 1.75, c, M.glass, { collide: false });
+        box('winFrame', 0.1, 1.56, w + 0.16, fixed, y + 1.75, c, M.blackTrim, { collide: false });
+        box('winGlass', 0.06, 1.4, w, fixed, y + 1.75, c, M.windowPane, { collide: false });
+        box('winMull', 0.08, 1.4, 0.06, fixed, y + 1.75, c, M.blackTrim, { collide: false });
+        box('winSill', 0.22, 0.09, w + 0.3, fixed, y + 1.0, c, M.stoneBand, { collide: false });
       }
     }
   }
@@ -130,6 +160,14 @@ HSS.buildCampus = function (scene, M, shadow) {
     const w = maxX - minX, d = maxZ - minZ;
     const facing = room.side === 'N' ? Math.PI : 0; // students face corridor wall (front)
     const frontZ = room.side === 'N' ? minZ : maxZ;
+
+    // ceiling light panels (reads as a lit interior at zero light-source cost)
+    if (room.type !== 'mechanical' && room.type !== 'stair') {
+      const nP = Math.min(4, Math.max(1, Math.floor((w * d) / 28)));
+      for (let i = 0; i < nP; i++) {
+        box('lightPanel', 1.3, 0.04, 0.6, minX + (w / (nP + 1)) * (i + 1), y + (room.wallH || 3.3) - 0.14, cz, M.lightPanel, { collide: false });
+      }
+    }
 
     switch (room.type) {
       case 'classroom': case 'senclass': {
@@ -294,17 +332,36 @@ HSS.buildCampus = function (scene, M, shadow) {
       const northRooms = fl.rooms.filter(r => r.side === 'N');
       const southRooms = fl.rooms.filter(r => r.side === 'S');
 
-      // exterior walls (with entrance gaps on ground floor)
+      // exterior walls (with entrance gaps on ground floor) — these cast shadows
       const extGapsS = f === 0 ? (spec.entrances || [[cx - 1.1, cx + 1.1]]) : [];
       const extGapsN = f === 0 ? (spec.entrancesN || []) : [];
       // corridor-end doors on the gable walls (ground floor)
       const endGaps = f === 0 ? [[cz - 0.9, cz + 0.9]] : [];
-      wallRun('x', maxZ, minX, maxX, y, wallH, M.brick, extGapsN);
-      wallRun('x', minZ, minX, maxX, y, wallH, M.brick, extGapsS);
-      wallRun('z', minX, minZ, maxZ, y, wallH, M.brick, endGaps);
-      wallRun('z', maxX, minZ, maxZ, y, wallH, M.brick, endGaps);
+      wallRun('x', maxZ, minX, maxX, y, wallH, M.brick, extGapsN, true);
+      wallRun('x', minZ, minX, maxX, y, wallH, M.brick, extGapsS, true);
+      wallRun('z', minX, minZ, maxZ, y, wallH, M.brick, endGaps, true);
+      wallRun('z', maxX, minZ, maxZ, y, wallH, M.brick, endGaps, true);
       windowsOnWall('x', maxZ + 0.06, minX, maxX, y, Math.floor(w / 4));
       windowsOnWall('x', minZ - 0.06, minX, maxX, y, Math.floor(w / 5));
+
+      if (f === 0) {
+        // plinth course around the base
+        for (const [px, pz, pw, pd] of [[cx, maxZ + 0.08, w + 0.5, 0.12], [cx, minZ - 0.08, w + 0.5, 0.12], [minX - 0.08, cz, 0.12, d + 0.5], [maxX + 0.08, cz, 0.12, d + 0.5]]) {
+          box('plinth', pw, 0.55, pd, px, y + 0.27, pz, M.plinth, { collide: false });
+        }
+        // entrance canopies + door surrounds
+        for (const [gaps, zz, dir] of [[extGapsS, minZ, -1], [extGapsN, maxZ, 1]]) {
+          for (const [g0, g1] of gaps) {
+            const len = g1 - g0, mid = (g0 + g1) / 2;
+            box('canopy', len + 1.4, 0.14, 1.7, mid, y + 2.55, zz + dir * 0.85, M.blackTrim, { collide: false, shadows: true });
+            box('canopyPost', 0.1, 2.55, 0.1, mid - len / 2 - 0.5, y + 1.27, zz + dir * 1.5, M.metal);
+            box('canopyPost', 0.1, 2.55, 0.1, mid + len / 2 + 0.5, y + 1.27, zz + dir * 1.5, M.metal);
+            box('surround', len + 0.7, 2.75, 0.14, mid, y + 1.37, zz, M.stoneBand, { collide: false });
+          }
+        }
+      }
+      // stone band at each floor line
+      box('band', w + 0.4, 0.28, d + 0.4, cx, y + wallH - 0.02, cz, M.stoneBand, { collide: false });
 
       // corridor walls with a door gap per room
       const buildSideRooms = (rooms, side) => {
@@ -329,7 +386,7 @@ HSS.buildCampus = function (scene, M, shadow) {
             : { minX: rx0, maxX: rx1, minZ: minZ, maxZ: cz - corrHalf };
           const room = {
             id: `${key}-f${f}-${r.id}`, label: r.label, type: r.type, building: key, floor: f,
-            side, bounds, floorY: y,
+            side, bounds, floorY: y, wallH,
             center: new BABYLON.Vector3((bounds.minX + bounds.maxX) / 2, y, (bounds.minZ + bounds.maxZ) / 2),
             seats: [], teacherSeat: null,
           };
@@ -392,9 +449,10 @@ HSS.buildCampus = function (scene, M, shadow) {
   const rng = HSS.makeRng(42);
   for (let i = 0; i < 26; i++) {
     const tx = -160 + rng() * 320, tz = 95 + rng() * 38 * (rng() < 0.5 ? 1 : -1) + (rng() < 0.5 ? 20 : -115);
-    const trunk = box('trunk', 0.35, 2.6, 0.35, tx, 1.3, tz, M.woodDark);
+    const trunk = box('trunk', 0.35, 2.6, 0.35, tx, 1.3, tz, M.woodDark, { shadows: true });
     const crown = BABYLON.MeshBuilder.CreateSphere(`crown_${uid++}`, { diameter: 3.2 + rng() * 2, segments: 6 }, scene);
     crown.position.set(tx, 3.6, tz); crown.material = M.hedge; crown.freezeWorldMatrix();
+    if (shadow) shadow.addShadowCaster(crown);
   }
 
   // ======================= MAIN BUILDING ==================================
@@ -499,6 +557,16 @@ HSS.buildCampus = function (scene, M, shadow) {
       ] },
     ],
   });
+
+  // building name boards above the entrances
+  sign('HARFORD SECONDARY SCHOOL', 0, 3.0, 43.72, 0, 12);
+  sign('STAFF & ADMINISTRATION', -78, 3.0, -16.28, 0, 8);
+  sign('SEN & INCLUSION CENTRE', 76, 3.0, -15.78, 0, 8);
+  sign('SPORTS HALL & DINING', 0, 3.95, -56.72, 0, 10);
+
+  // concrete paths from the yard down to the sports/dining block
+  box('path', 4.5, 0.06, 13, -22, 0.03, -51, M.concretePath, { collide: false });
+  box('path', 4.5, 0.06, 13, 18, 0.03, -51, M.concretePath, { collide: false });
 
   // ======================= OUTDOOR SPORTS =================================
   function courtTexture(name, painter) {
