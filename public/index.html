@@ -15,7 +15,7 @@
         <div class="brand">
           <span class="brand-icon">🛋️</span>
           <h1>Therapy Session<br>Simulator</h1>
-          <p class="tagline">Run a session. Pick your seat. The AI plays the rest — unfiltered.</p>
+          <p class="tagline">Run a session. Build the cast. Play anyone. The AI plays the rest — unfiltered.</p>
         </div>
 
         <div class="setup-block saved-block hidden" id="savedBlock">
@@ -24,23 +24,28 @@
         </div>
 
         <div class="setup-block">
-          <h2>1. Who are you?</h2>
-          <div class="role-grid">
-            <button class="role-card" data-role="therapist">
-              <span class="role-emoji">📝</span>
-              <span class="role-name">The Therapist</span>
-              <span class="role-sub">You run the session. AI is the client.</span>
+          <h2>1. Session type</h2>
+          <div class="type-grid">
+            <button class="type-card" data-mode="solo">
+              <span class="type-emoji">🧑‍⚕️</span>
+              <span class="type-name">1-on-1</span>
+              <span class="type-sub">You + one other. 2 in the room.</span>
             </button>
-            <button class="role-card" data-role="client">
-              <span class="role-emoji">😮‍💨</span>
-              <span class="role-name">The Client</span>
-              <span class="role-sub">You're on the couch. AI is the therapist.</span>
+            <button class="type-card" data-mode="couples">
+              <span class="type-emoji">💑</span>
+              <span class="type-name">Couples</span>
+              <span class="type-sub">Therapist + 2 partners. 3 in the room.</span>
+            </button>
+            <button class="type-card" data-mode="friends">
+              <span class="type-emoji">👥</span>
+              <span class="type-name">Friend group</span>
+              <span class="type-sub">Therapist + up to 6 friends.</span>
             </button>
           </div>
         </div>
 
         <div class="setup-block">
-          <h2>2. Pick the focus <span class="hint">(one or more)</span></h2>
+          <h2>2. Focus <span class="hint">(one or more)</span></h2>
           <div class="therapy-grid" id="therapyGrid">
             <button class="therapy-chip" data-therapy="depression">Depression</button>
             <button class="therapy-chip" data-therapy="anger">Anger issues</button>
@@ -49,21 +54,17 @@
             <button class="therapy-chip" data-therapy="vaping">Vaping</button>
             <button class="therapy-chip" data-therapy="speech">Speech</button>
             <button class="therapy-chip" data-therapy="autism">Autism</button>
+            <button class="therapy-chip" data-therapy="relationship">Relationship</button>
+            <button class="therapy-chip" data-therapy="grief">Grief</button>
+            <button class="therapy-chip" data-therapy="trust">Trust</button>
           </div>
         </div>
 
-        <div class="setup-block">
-          <h2 id="personalityHeading">3. Their personality</h2>
-          <p class="preset-label hidden" id="presetLabel">Quick picks — tap one, then tweak it:</p>
-          <div class="preset-grid" id="presetGrid"></div>
-          <textarea
-            id="personalityInput"
-            class="personality-input"
-            rows="3"
-            maxlength="600"
-            placeholder="Describe them in your own words — e.g. &quot;a cocky frat bro who thinks therapy is a scam but his girlfriend made him come&quot;"
-          ></textarea>
-          <p class="char-count"><span id="charCount">0</span>/600</p>
+        <div class="setup-block" id="castBlock">
+          <h2 id="castHeading">3. The people in the room</h2>
+          <p class="hint" id="castHint">Pick a session type above first.</p>
+          <div id="castContainer"></div>
+          <button class="add-person-btn hidden" id="addPersonBtn">+ Add friend</button>
         </div>
 
         <button class="start-btn" id="startBtn" disabled>Start session</button>
@@ -86,6 +87,7 @@
             <span class="header-sub" id="headerSub"></span>
           </div>
           <span class="save-status" id="saveStatus"></span>
+          <button class="switch-btn" id="switchBtn" title="Switch character">🎭</button>
         </div>
       </header>
 
@@ -111,6 +113,17 @@
         </div>
       </footer>
     </section>
+
+    <!-- CHARACTER SWITCH SHEET -->
+    <div class="switch-sheet hidden" id="switchSheet">
+      <div class="sheet-backdrop" id="sheetBackdrop"></div>
+      <div class="sheet-inner">
+        <h3>Cast &amp; characters</h3>
+        <p class="sheet-note">Tap <strong>Play</strong> to speak as a character. Toggle who the AI voices. Switch back and forth anytime.</p>
+        <div class="switch-list" id="switchList"></div>
+        <button class="sheet-done" id="closeSheet">Done</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

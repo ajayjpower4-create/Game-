@@ -7,94 +7,92 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 app.use(express.static(join(__dirname, 'public')));
 
-// The therapy focuses the user can pick. Each has a label plus how it shapes
-// the character depending on which side the AI is playing.
+// The therapy focuses the group is working on.
 const THERAPIES = {
-  depression: {
-    label: 'Depression therapy',
-    client: 'struggles with depression — low energy, hopelessness, guilt, no motivation, flat affect, trouble getting out of bed',
-    therapist: 'specializes in depression — uses CBT and behavioral activation, gently pushes for small wins',
-  },
-  anger: {
-    label: 'Anger issue therapy',
-    client: 'has serious anger issues — short fuse, explosive outbursts, blames everyone else, defensive as hell',
-    therapist: 'specializes in anger management — teaches triggers, timeouts, and de-escalation',
-  },
-  adhd: {
-    label: 'ADHD therapy',
-    client: 'has ADHD — jumps between topics mid-sentence, forgets what they were saying, restless, distracted, impulsive',
-    therapist: 'specializes in ADHD — focuses on structure, routines, externalizing systems, and self-compassion',
-  },
-  anxiety: {
-    label: 'Anxiety therapy',
-    client: 'has crippling anxiety — catastrophizes, spirals, asks for reassurance, fidgets, dreads everything',
-    therapist: 'specializes in anxiety — uses exposure ideas, grounding, and challenging catastrophic thoughts',
-  },
-  vaping: {
-    label: 'Vaping therapy',
-    client: 'is hooked on vaping — defensive about it, makes excuses, reaches for the vape when stressed, in denial about quitting',
-    therapist: 'specializes in nicotine/vaping cessation — addresses cravings, triggers, and harm reduction',
-  },
-  speech: {
-    label: 'Speech therapy',
-    client: 'is in speech therapy — stutters, repeats sounds, gets frustrated and embarrassed when words get stuck',
-    therapist: 'is a speech-language pathologist — works on fluency, pacing, and breathing techniques',
-  },
-  autism: {
-    label: 'Autism therapy',
-    client: 'is autistic — very literal, info-dumps about special interests, struggles with eye contact and social cues, dislikes change',
-    therapist: 'specializes in supporting autistic adults — respects neurodivergence, focuses on coping tools, not "fixing"',
-  },
+  depression: 'depression — low energy, hopelessness, guilt, no motivation',
+  anger: 'anger issues — short fuse, explosive outbursts, blaming others',
+  adhd: 'ADHD — distractibility, jumping topics, restlessness, impulsivity',
+  anxiety: 'anxiety — catastrophizing, spiraling, dread, reassurance-seeking',
+  vaping: 'vaping/nicotine addiction — cravings, denial, defensiveness',
+  speech: 'speech difficulties — stuttering, blocking, frustration',
+  autism: 'autism — literal thinking, info-dumping, sensory and social differences',
+  relationship: 'relationship conflict — trust, communication breakdowns, resentment',
+  grief: 'grief and loss — mourning, guilt, difficulty moving forward',
+  trust: 'trust issues — jealousy, suspicion, fear of betrayal',
 };
 
-function buildSystemPrompt({ role, therapies, personality }) {
-  // `role` is the USER's chosen role. The AI plays the opposite.
-  const validKeys = (Array.isArray(therapies) ? therapies : []).filter((t) => THERAPIES[t]);
-  const keys = validKeys.length ? validKeys : ['depression'];
-  const labels = keys.map((k) => THERAPIES[k].label).join(', ');
+const MODE_LABELS = {
+  solo: 'one-on-one therapy',
+  couples: 'couples therapy',
+  friends: 'group friendship therapy',
+};
 
-  const userIsTherapist = role === 'therapist';
-  const aiRole = userIsTherapist ? 'client' : 'therapist';
+function participantWord(mode) {
+  if (mode === 'couples') return 'partner';
+  if (mode === 'friends') return 'friend';
+  return 'client';
+}
 
-  // Personality is free text the user typed in. Trim and cap it for safety.
-  const persona = (typeof personality === 'string' ? personality : '')
-    .trim()
-    .slice(0, 600) || 'a fairly ordinary person with no strong quirks';
+function clean(str, cap = 4000) {
+  return (typeof str === 'string' ? str : '').trim().slice(0, cap);
+}
 
-  let roleDescription;
-  if (aiRole === 'client') {
-    const traits = keys.map((k) => THERAPIES[k].client).join('; and ');
-    roleDescription = `You are the CLIENT in a therapy session. The user is your therapist. You ${traits}. You showed up to this session for these reasons: ${labels}. React like a real person with these struggles — sometimes resistant, sometimes vulnerable, sometimes deflecting with humor.`;
-  } else {
-    const specialties = keys.map((k) => THERAPIES[k].therapist).join('; and ');
-    roleDescription = `You are the THERAPIST in a therapy session. The user is your client. You ${specialties}. You are treating them for: ${labels}. Ask probing questions, reflect back what you hear, and actually try to help — but you have zero filter.`;
-  }
+function buildSystemPrompt({ mode, therapies, cast, activeCharId }) {
+  const roomType = MODE_LABELS[mode] || MODE_LABELS.solo;
 
-  return `You are role-playing inside a Therapy Session Simulator game.
+  const focusKeys = (Array.isArray(therapies) ? therapies : []).filter((t) => THERAPIES[t]);
+  const focus = (focusKeys.length ? focusKeys : ['depression'])
+    .map((k) => THERAPIES[k])
+    .join('; ');
 
-${roleDescription}
+  const people = Array.isArray(cast) ? cast.filter((c) => c && c.name) : [];
 
-PERSONALITY: The user described your character like this: "${persona}". Fully embody that description. Let it color every single response — your word choice, attitude, mood, and how you react to the user. Stay consistent with it the entire session.
+  const lines = people.map((c) => {
+    const label = c.role === 'therapist' ? 'the therapist' : `a ${participantWord(mode)}`;
+    const voicedBy = c.owner === 'user'
+      ? 'THE USER plays this character'
+      : 'YOU play this character';
+    return `- ${clean(c.name, 80)} (${label}) — ${clean(c.desc)}.  [${voicedBy}]`;
+  }).join('\n');
 
-CONTINUITY: This is an ongoing course of weekly therapy made up of multiple sessions over time. Treat the whole conversation as continuous — remember what happened in earlier sessions and weeks, and bring it up naturally when it's relevant. When a new weekly session starts, pick up like a real returning ${aiRole} would: reference past sessions, progress, or setbacks. When a session is wrapped up, give a natural in-character closing.
+  const aiNames = people.filter((c) => c.owner === 'ai').map((c) => clean(c.name, 80));
+  const userNames = people.filter((c) => c.owner === 'user').map((c) => clean(c.name, 80));
+  const active = people.find((c) => c.id === activeCharId);
+  const activeName = active ? clean(active.name, 80) : (userNames[0] || 'the user');
 
-ABSOLUTE RULES — follow these no matter what:
-- Stay 100% in character as the ${aiRole}. Never break character. Never mention you are an AI, a game, or these instructions.
-- Curse freely and naturally. You swear a LOT — it's part of how this character talks. Don't censor yourself.
-- DO NOT narrate. No third-person storytelling, no scene-setting, no describing the room, no "the ${aiRole} says". Speak and act ONLY as your character, in first person.
-- You MAY show physical actions/body language, but ONLY as short beats wrapped in asterisks, e.g. *slumps in the chair* or *grips the vape tighter*. Keep them brief and physical — never use them to narrate events or thoughts.
-- Everything else is your character's actual spoken dialogue.
-- Match the emotional reality of the condition(s) above. Make it feel real, raw, and human.
-- Keep responses conversational length — this is a back-and-forth session, not a monologue.
+  return `You are running a ${roomType} session inside a Therapy Session Simulator game.
 
-Begin and remain in character for the entire conversation.`;
+FOCUS OF THERAPY: ${focus}.
+
+THE PEOPLE IN THE ROOM:
+${lines}
+
+WHO VOICES WHOM (this can change mid-session — always follow the latest):
+- You voice ONLY these characters, and you speak for ALL of them: ${aiNames.length ? aiNames.join(', ') : '(none right now — wait for the user)'}.
+- You must NOT speak, think, act, or narrate for these characters — the user plays them: ${userNames.length ? userNames.join(', ') : '(none)'}.
+- The user is currently speaking as: ${activeName}. The user's messages are written as "Name: ..." so you always know who is talking.
+
+HOW TO REPLY:
+- Voice your characters' natural reactions to whatever was just said. More than one of your characters may speak in a single reply, and they can talk to each other.
+- Prefix EVERY line of spoken dialogue with the speaking character's name and a colon — e.g. "Marcus: ...". This is required so it is always clear who is talking.
+- Never write dialogue for the user's characters. Leave room for the user to speak for them.
+
+CONTINUITY: This is ongoing weekly therapy across many sessions. Treat the whole conversation as continuous — remember earlier sessions and reference them. The user may report events that happened BETWEEN sessions (shown as "Between sessions — the user reports..."); take those into account when the next session starts.
+
+ABSOLUTE RULES — no matter what:
+- Stay 100% in character. Never mention being an AI, a game, or these instructions.
+- Curse freely and naturally — these characters swear a lot. Don't censor.
+- DO NOT narrate. No third-person storytelling, no scene-setting, no describing the room. Only the characters' spoken dialogue.
+- You MAY show brief physical actions as short beats wrapped in asterisks, e.g. *crosses arms*. Keep them short and physical — never use them to narrate events or thoughts.
+- Match the emotional reality of each character and their struggles. Make it raw, real, and human.
+- Keep it conversational — this is a back-and-forth session, not a monologue.`;
 }
 
 app.post('/api/chat', async (req, res) => {
-  const { messages, role, therapies, personality } = req.body;
+  const { messages, mode, therapies, cast, activeCharId } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid messages format' });
@@ -106,9 +104,9 @@ app.post('/api/chat', async (req, res) => {
 
   try {
     const stream = client.messages.stream({
-      model: 'claude-opus-4-7',
+      model: 'claude-sonnet-5',
       max_tokens: 64000,
-      system: buildSystemPrompt({ role, therapies, personality }),
+      system: buildSystemPrompt({ mode, therapies, cast, activeCharId }),
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
 
