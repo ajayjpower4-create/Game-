@@ -135,6 +135,14 @@
             <span>Starting budget</span>
             <input type="text" id="bizBudget" maxlength="60" placeholder="e.g. $25,000">
           </label>
+          <div class="field">
+            <span>Your layout (optional) — import pictures and the game will read them</span>
+            <input type="file" id="layoutFiles" accept="image/*" multiple class="visually-hidden">
+            <button class="btn btn-secondary" id="layoutPickBtn" type="button">📷 Import layout pictures</button>
+            <div class="layout-thumbs" id="layoutThumbs"></div>
+            <p class="layout-status hidden" id="layoutStatus"></p>
+            <textarea id="bizLayout" rows="4" maxlength="2500" placeholder="...or type your layout here (floors, rooms, where everything is)"></textarea>
+          </div>
           <label class="field">
             <span>Anything else about your business? (optional)</span>
             <textarea id="bizExtra" rows="3" maxlength="600" placeholder="Vibe, decor, goals, rivals, family drama..."></textarea>

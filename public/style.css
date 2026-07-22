@@ -283,6 +283,32 @@ html, body {
 .staff-meta { color: var(--text-muted); font-size: 13px; margin-left: 6px; }
 .staff-card p { color: var(--text-muted); font-size: 13px; margin-top: 3px; }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+#layoutPickBtn { width: 100%; margin-bottom: 10px; }
+.layout-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.layout-thumb {
+  width: 74px;
+  height: 74px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.layout-status {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
 .setup-error {
   color: var(--red);
   font-size: 14px;

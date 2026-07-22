@@ -124,8 +124,12 @@ function startSetup() {
   };
   // reset inputs
   ['charName', 'charAge', 'charDetails', 'bizName', 'bizType', 'staffRoles',
-   'staffNotes', 'staffManualText', 'bizHours', 'bizBudget', 'bizExtra']
+   'staffNotes', 'staffManualText', 'bizHours', 'bizBudget', 'bizExtra', 'bizLayout']
     .forEach(id => { $(id).value = ''; });
+  layoutImages = [];
+  layoutAnalyzing = false;
+  $('layoutThumbs').innerHTML = '';
+  setLayoutStatus('');
   $('staffCount').value = 4;
   $('staffVibe').selectedIndex = 0;
   $('staffExp').selectedIndex = 0;
@@ -236,6 +240,93 @@ function renderStaffRoster(staff) {
   }
 }
 
+// ---------- Layout picture import ----------
+
+let layoutImages = [];       // [{ media_type, data }]
+let layoutAnalyzing = false;
+
+$('layoutPickBtn').addEventListener('click', () => $('layoutFiles').click());
+
+$('layoutFiles').addEventListener('change', async e => {
+  const files = Array.from(e.target.files || []).slice(0, 6);
+  if (!files.length) return;
+  hideSetupError();
+  setLayoutStatus('Preparing pictures...');
+
+  layoutImages = [];
+  const thumbs = $('layoutThumbs');
+  thumbs.innerHTML = '';
+  for (const file of files) {
+    try {
+      const img = await downscaleImage(file);
+      layoutImages.push(img);
+      const t = document.createElement('img');
+      t.className = 'layout-thumb';
+      t.src = `data:${img.media_type};base64,${img.data}`;
+      thumbs.appendChild(t);
+    } catch {
+      showSetupError(`Couldn't read "${file.name}" — try a JPG, PNG, or screenshot.`);
+    }
+  }
+  e.target.value = '';
+  if (layoutImages.length) analyzeLayout();
+  else setLayoutStatus('');
+});
+
+async function analyzeLayout() {
+  layoutAnalyzing = true;
+  $('setupNextBtn').disabled = true;
+  setLayoutStatus('🔍 Reading your layout pictures...');
+  try {
+    const res = await fetch('/api/analyze-layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        business: {
+          name: $('bizName').value.trim(),
+          type: $('bizType').value.trim(),
+        },
+        images: layoutImages,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || `Server error ${res.status}`);
+    $('bizLayout').value = data.layout;
+    setLayoutStatus('✅ Got it! Check the notes below — fix anything I misread.');
+  } catch (err) {
+    setLayoutStatus('');
+    showSetupError(`Couldn't read the layout pictures: ${err.message}`);
+  }
+  layoutAnalyzing = false;
+  $('setupNextBtn').disabled = false;
+}
+
+function setLayoutStatus(msg) {
+  const el = $('layoutStatus');
+  el.textContent = msg;
+  el.classList.toggle('hidden', !msg);
+}
+
+// Shrink a photo so iPhone pictures don't blow up the request
+function downscaleImage(file, maxDim = 1400) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      resolve({ media_type: 'image/jpeg', data: dataUrl.split(',')[1] });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')); };
+    img.src = url;
+  });
+}
+
 // Next / finish
 $('setupNextBtn').addEventListener('click', () => {
   if (!validateStep(setupStep)) return;
@@ -277,12 +368,14 @@ function validateStep(step) {
     }
   }
   if (step === 4) {
+    if (layoutAnalyzing) return showSetupError('Hold on — still reading your layout pictures.'), false;
     const hours = $('bizHours').value.trim();
     const budget = $('bizBudget').value.trim();
     if (!hours) return showSetupError('Set your opening hours.'), false;
     if (!budget) return showSetupError('Set your starting budget.'), false;
     setupData.business.hours = hours;
     setupData.business.budget = budget;
+    setupData.business.layout = $('bizLayout').value.trim();
     setupData.business.extra = $('bizExtra').value.trim();
   }
   return true;

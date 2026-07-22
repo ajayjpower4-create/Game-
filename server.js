@@ -9,7 +9,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const MODEL = 'claude-sonnet-5';
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '30mb' }));
 app.use(express.static(join(__dirname, 'public')));
 
 function buildSystemPrompt(profile) {
@@ -51,6 +51,9 @@ THE BUSINESS:
 - Hours: ${b.hours || 'Not specified'}
 - Starting budget: ${b.budget || 'Not specified'}
 - Other details: ${b.extra || 'None'}
+
+THE LAYOUT of the place:
+${b.layout ? b.layout + '\n\nCharacters know this layout by heart — they refer to these exact rooms and areas naturally ("meet me in the...", "it\'s next to the...") and never invent rooms that aren\'t in it.' : '(No layout given — keep the space simple and consistent.)'}
 
 THE STAFF:
 ${staffSection}
@@ -198,6 +201,54 @@ Make them feel like real, distinct, colorful people with rough edges, strong opi
     const message = err instanceof Anthropic.APIError
       ? `API error ${err.status}: ${err.message}`
       : 'Failed to generate staff';
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/analyze-layout', async (req, res) => {
+  const { business, images } = req.body || {};
+  if (!Array.isArray(images) || images.length === 0) {
+    return res.status(400).json({ error: 'No pictures received' });
+  }
+  const b = business || {};
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+  const content = images.slice(0, 6)
+    .filter(img => img && allowedTypes.includes(img.media_type) && typeof img.data === 'string')
+    .map(img => ({
+      type: 'image',
+      source: { type: 'base64', media_type: img.media_type, data: img.data },
+    }));
+
+  if (content.length === 0) {
+    return res.status(400).json({ error: 'Pictures were in a format I could not read' });
+  }
+
+  content.push({
+    type: 'text',
+    text: `These are pictures of the layout of ${b.name || 'a business'} (${b.type || 'business'}). They might be floor-plan screenshots from a layout builder, hand-drawn maps, or photos — and there may be MULTIPLE FLOORS, often labeled with drawn-on markings like "F1", "F2", "F4".
+
+Read them carefully and write compact layout notes for a roleplay game:
+- Go floor by floor if there are floor labels.
+- List every room/area using its EXACT label as written (fix obvious typos like "Elvateor" -> "Elevator" but keep the intended name).
+- Say roughly where each room sits relative to the others (front/back, left/right, next to the stairwell, etc.).
+- Include stairwells, elevators, bathrooms, closets, entrances if shown.
+Keep it under 300 words. Output ONLY the notes, nothing else.`,
+  });
+
+  try {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      thinking: { type: 'disabled' },
+      messages: [{ role: 'user', content }],
+    });
+    const textBlock = response.content.find(blk => blk.type === 'text');
+    res.json({ layout: (textBlock && textBlock.text || '').trim() });
+  } catch (err) {
+    const message = err instanceof Anthropic.APIError
+      ? `API error ${err.status}: ${err.message}`
+      : 'Failed to read the layout pictures';
     res.status(500).json({ error: message });
   }
 });
