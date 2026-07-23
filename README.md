@@ -91,9 +91,17 @@ lane and the whole region is transformed:
 
 - **Road Breaker** — demolishes the pavement into exposed dirt, broken asphalt
   chunks, bent rebar and loose gravel
-- **Dig Trench** — opens a recessed dirt trench with spoil piles and conduit
+- **Dig Trench** — cuts a real hole in the road: a recessed dirt pit with
+  earth walls, an exposed conduit pipe at the bottom, spoil piles and rubble
 - **Fresh Asphalt Patch** — lays new blacktop
 - **Gravel Pad** — a compacted gravel work pad
+
+Two **line tools** work the same way with a start and end point instead:
+
+- **Barrier Chain** — jersey barriers auto-connect between your two clicks,
+  with red chevron reflectors and connector pins
+- **Fence Line** — orange safety mesh fencing strings itself post-to-post
+  along the whole run, so you don't place panels one at a time
 
 ## Drivable DOT fleet
 
@@ -128,7 +136,10 @@ light towers you've placed actually light up the job site.
   ROAD, a two-sided STOP/SLOW flagger paddle, and more
 - **Equipment** — steel pole bundles, pallets and pallet stacks, sandbags,
   steel road plates, light towers, generators, flashing arrow boards, message
-  boards, a mini excavator, and the all-important porta-john
+  boards, a mini excavator, and the all-important porta-john — plus a full
+  machine yard: skid steer loader, vibratory drum roller, backhoe loader,
+  asphalt paver, telehandler, mobile crane on outriggers, towable concrete
+  mixer, forklift, articulated boom lift, and a walk-behind trencher
 - **DOT fleet** — work truck with beacons, chevrons and your state DOT's door
   decals, tandem dump truck loaded with gravel, crash attenuator (TMA) truck
   with a raised flashing arrow board, and a supervisor SUV with an amber
@@ -138,8 +149,15 @@ light towers you've placed actually light up the job site.
   bundles, concrete pipe, scaffold towers, dirt/gravel/debris piles, water
   cooler, wheelbarrow, cable reels, portable traffic signal, air compressor,
   jackhammer, cut-off saw, survey tripod, flashing beacon stand, PVC pipe
-  stacks, concrete-bag pallets, water tank, open manhole, and a rolling tool
-  cart — and beams/pipes/ladders/fencing can be stretched with `[` `]`.
+  stacks, shrink-wrapped concrete-bag pallets, water tank, open manhole, and a
+  rolling tool cart — plus staged material: cone stacks and cone pallets, a
+  loaded flatbed trailer (lumber, pipe and concrete strapped down), lumber and
+  plywood stacks, cinder block and brick pallets, crash barrel arrays,
+  water-filled barriers, a diesel fuel tank, wire mesh rolls, manhole riser
+  rings, precast catch basins, wheel stops, concrete formwork, hot asphalt
+  piles, jersey barrier stacks, sign bundle racks, equipment tire stacks and
+  wire spool pallets — and beams/pipes/ladders/fencing can be stretched with
+  `[` `]`.
 
 ## Uniforms
 
