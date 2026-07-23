@@ -344,15 +344,42 @@ function vestTextures(vest) {
   return { front: mk(false), back: mk(true) };
 }
 
-function faceTexture() {
+// human face: whites + pupils, brows, nose shading, neutral mouth
+function faceTexture(skin = '#e8b48c') {
   const c = makeCanvas(128, 128);
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#f0c040'; ctx.fillRect(0, 0, 128, 128);
-  ctx.fillStyle = '#1a1a1a';
-  ctx.beginPath(); ctx.arc(44, 52, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(84, 52, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 6; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.arc(64, 72, 22, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+  const grad = ctx.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, lightenHex(skin, 0.06));
+  grad.addColorStop(1, lightenHex(skin, -0.08));
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, 128, 128);
+  // eyes
+  for (const ex of [46, 82]) {
+    ctx.fillStyle = '#f4f0e8';
+    ctx.beginPath(); ctx.ellipse(ex, 58, 9, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4a3320';
+    ctx.beginPath(); ctx.arc(ex, 58, 3.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(ex, 58, 1.7, 0, Math.PI * 2); ctx.fill();
+    // brow
+    ctx.strokeStyle = '#5a3d22'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(ex - 9, 47); ctx.quadraticCurveTo(ex, 43, ex + 9, 47); ctx.stroke();
+  }
+  // nose shading + nostrils
+  ctx.strokeStyle = 'rgba(0,0,0,.12)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(64, 62); ctx.lineTo(64, 80); ctx.stroke();
+  ctx.fillStyle = 'rgba(0,0,0,.28)';
+  ctx.beginPath(); ctx.ellipse(59, 82, 2.4, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(69, 82, 2.4, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+  // mouth — neutral, slight shadow under the lip
+  ctx.strokeStyle = '#8a5540'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(52, 98); ctx.quadraticCurveTo(64, 102, 76, 98); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.08)'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(54, 104); ctx.quadraticCurveTo(64, 107, 74, 104); ctx.stroke();
+  // cheek/jaw shading at edges so the head reads rounded
+  const side = ctx.createLinearGradient(0, 0, 128, 0);
+  side.addColorStop(0, 'rgba(0,0,0,.14)'); side.addColorStop(0.12, 'rgba(0,0,0,0)');
+  side.addColorStop(0.88, 'rgba(0,0,0,0)'); side.addColorStop(1, 'rgba(0,0,0,.14)');
+  ctx.fillStyle = side; ctx.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(c);
 }
 
@@ -765,12 +792,11 @@ function buildCatalog() {
     { cat: 'Barricades', id: 'aframe', icon: '🅰️', name: 'A-Frame Board',
       desc: 'Small folding barricade', blocks: true, build: barricadeBuilder(1, 0.65, false) },
     { cat: 'Barricades', id: 'jersey', icon: '🧱', name: 'Jersey Barrier',
-      desc: 'Concrete safety barrier, 3 m', blocks: true, build: () => {
+      desc: 'Concrete safety barrier, 3 m — real sloped profile', blocks: true, build: () => {
         const g = new THREE.Group();
-        const b1 = box(0.6, 0.25, 3, '#b9bbb6', 0, 0.125, 0);
-        const b2 = box(0.38, 0.45, 3, '#b9bbb6', 0, 0.47, 0);
-        const b3 = box(0.2, 0.35, 3, '#b9bbb6', 0, 0.85, 0);
-        g.add(b1, b2, b3);
+        const b = new THREE.Mesh(jerseyGeometry(3), concreteMat());
+        b.castShadow = true; b.receiveShadow = true;
+        g.add(b);
         return g;
       } },
     { cat: 'Barricades', id: 'water_barrier', icon: '🟧', name: 'Water Barrier',
@@ -2299,12 +2325,9 @@ function buildWorld() {
 
   // ---- median ----
   if (hw.terrain === 'urban') {
-    const jb = new THREE.Group();
-    const b1 = box(0.62, 0.25, ROAD_LEN, '#b9bbb6', 0, 0.125, 0);
-    const b2 = box(0.4, 0.5, ROAD_LEN, '#b9bbb6', 0, 0.45, 0);
-    const b3 = box(0.22, 0.35, ROAD_LEN, '#b9bbb6', 0, 0.85, 0);
-    b1.receiveShadow = b2.receiveShadow = true;
-    jb.add(b1, b2, b3);
+    // continuous concrete median with the real jersey cross-section
+    const jb = new THREE.Mesh(jerseyGeometry(ROAD_LEN), concreteMat());
+    jb.castShadow = true; jb.receiveShadow = true;
     scene.add(jb);
   } else {
     const grass = new THREE.Mesh(new THREE.BoxGeometry(medianW, 0.1, ROAD_LEN), lamb(style.ground));
@@ -2475,12 +2498,61 @@ function buildMarkings() {
   }
 }
 
+// corrugated W-beam guardrail cross-section (the real double-wave profile),
+// extruded down the full highway
+function wbeamGeometry(len) {
+  const t = 0.025;  // steel thickness
+  // outer face of the W profile: two bumps toward the road
+  const pts = [
+    [0, 0], [0.055, 0.045], [0.01, 0.09], [0.01, 0.14],
+    [0.055, 0.185], [0.055, 0.24], [0, 0.31],
+  ];
+  const s = new THREE.Shape();
+  s.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
+  for (let i = pts.length - 1; i >= 0; i--) s.lineTo(pts[i][0] - t, pts[i][1]);
+  s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: len, bevelEnabled: false });
+  geo.translate(0, 0, -len / 2);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// precast concrete sound-wall panels with visible seams and a cap course
+function soundWallTexture() {
+  const c = makeCanvas(256, 128);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#c9b8a0'; ctx.fillRect(0, 0, 256, 128);
+  // panel field with subtle tone variation
+  for (let i = 0; i < 500; i++) {
+    ctx.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},${0.02 + Math.random() * 0.03})`;
+    ctx.fillRect(Math.random() * 256, Math.random() * 128, 3 + Math.random() * 6, 3 + Math.random() * 6);
+  }
+  // vertical panel seams + horizontal joint lines
+  ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 3;
+  for (let x = 0; x <= 256; x += 64) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 128); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 2;
+  for (const y of [42, 84]) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke(); }
+  // cap course along the top
+  ctx.fillStyle = '#b3a28b'; ctx.fillRect(0, 0, 256, 12);
+  ctx.strokeStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(256, 12); ctx.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 function buildRoadside(hw, style) {
   const { outerEdge } = roadInfo;
   if (hw.terrain === 'urban') {
-    // sound walls
+    // precast sound walls with panel seams
+    const tex = soundWallTexture();
+    tex.repeat.set(ROAD_LEN / 12, 1);
+    const wallMat = lamb('#ffffff', { map: tex, roughness: 0.92 });
     for (const dir of [1, -1]) {
-      const wall = box(0.5, 4.5, ROAD_LEN, '#c9b8a0', dir * (outerEdge + 4), 2.25, 0);
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4.5, ROAD_LEN),
+        [wallMat, wallMat, lamb('#b3a28b'), lamb('#b3a28b'), wallMat, wallMat]);
+      wall.position.set(dir * (outerEdge + 4), 2.25, 0);
       wall.receiveShadow = true;
       scene.add(wall);
       for (let z = -ROAD_LEN / 2; z < ROAD_LEN / 2; z += 24) {
@@ -2488,20 +2560,27 @@ function buildRoadside(hw, style) {
       }
     }
   } else {
-    // guardrail: rail + instanced posts
-    const railMat = lamb('#adb3ba');
+    // W-beam guardrail: corrugated galvanized rail + instanced posts/blockouts
+    const railMat = metalMat('#aeb4bb', { roughness: 0.55, metalness: 0.7 });
     for (const dir of [1, -1]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, ROAD_LEN), railMat);
-      rail.position.set(dir * (outerEdge + 0.6), 0.6, 0);
+      const rail = new THREE.Mesh(wbeamGeometry(ROAD_LEN), railMat);
+      // bumps face the roadway on both sides
+      rail.position.set(dir * (outerEdge + 0.58), 0.45, 0);
+      if (dir > 0) rail.rotation.y = Math.PI;
+      rail.castShadow = true;
       scene.add(rail);
       const n = Math.floor(ROAD_LEN / 4);
-      const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.14, 0.75, 0.14), lamb('#7d838c'), n);
+      const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.14, 0.78, 0.16), lamb('#7d838c'), n);
+      const blocks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 0.3, 0.16), lamb('#8f959c'), n);
       const m4 = new THREE.Matrix4();
       for (let i = 0; i < n; i++) {
-        m4.setPosition(dir * (outerEdge + 0.62), 0.37, -ROAD_LEN / 2 + i * 4 + 2);
+        const z = -ROAD_LEN / 2 + i * 4 + 2;
+        m4.setPosition(dir * (outerEdge + 0.68), 0.39, z);
         posts.setMatrixAt(i, m4);
+        m4.setPosition(dir * (outerEdge + 0.63), 0.6, z);
+        blocks.setMatrixAt(i, m4);
       }
-      scene.add(posts);
+      scene.add(posts, blocks);
     }
   }
 }
@@ -3153,74 +3232,98 @@ function spawnPlayer() {
   player = new THREE.Group();
   const vest = sel.vest;
   const { front, back } = vestTextures(vest);
-  const skin = '#f0c040';
+  const skin = '#e8b48c';           // human skin tone, not toy-figure yellow
+  const skinMat = lamb(skin, { roughness: 0.65 });
+  const glove = '#c9a86a';          // tan work gloves
 
-  // legs (pivot at hip)
-  const mkLimb = (w, h, d, color, hipY, x, isArm = false, texMats = null) => {
+  // rounded capsule limb, pivoted at the joint so the walk swing still works
+  const mkLimb = (r, len, mat, jointY, x) => {
     const pivot = new THREE.Group();
-    pivot.position.set(x, hipY, 0);
-    const mesh = texMats
-      ? new THREE.Mesh(new THREE.BoxGeometry(w, h, d), texMats)
-      : box(w, h, d, color);
-    mesh.position.y = -h / 2;
+    pivot.position.set(x, jointY, 0);
+    const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), mat);
+    mesh.position.y = -(len / 2 + r * 0.4);
     mesh.castShadow = true;
     pivot.add(mesh);
     player.add(pivot);
     return pivot;
   };
 
-  const lLeg = mkLimb(0.34, 0.8, 0.34, '#3b4a6b', 0.8, -0.19);
-  const rLeg = mkLimb(0.34, 0.8, 0.34, '#3b4a6b', 0.8, 0.19);
-  // boots
+  // legs: work pants with knee pads, real boots with soles
+  const pantsMat = lamb('#3b4a6b', { roughness: 0.85 });
+  const lLeg = mkLimb(0.135, 0.5, pantsMat, 0.88, -0.17);
+  const rLeg = mkLimb(0.135, 0.5, pantsMat, 0.88, 0.17);
   for (const p of [lLeg, rLeg]) {
-    const boot = box(0.36, 0.18, 0.4, '#5e4423', 0, -0.73, 0.03);
+    p.add(rbox(0.2, 0.16, 0.1, lamb('#2a2c30'), 0.04, 0, -0.36, 0.11));   // knee pad
+    const boot = rbox(0.24, 0.17, 0.38, lamb('#4a3520', { roughness: 0.8 }), 0.06, 0, -0.79, 0.05);
     p.add(boot);
-  }
-  // arms: bare skin, or sleeved (jacket) in the vest color with a reflective cuff
-  const armColor = vest.sleeves || skin;
-  const lArm = mkLimb(0.28, 0.78, 0.28, armColor, 1.6, -0.54);
-  const rArm = mkLimb(0.28, 0.78, 0.28, armColor, 1.6, 0.54);
-  if (vest.sleeves) {
-    for (const a of [lArm, rArm]) {
-      // reflective cuff band + skin hand at the wrist
-      a.add(box(0.3, 0.08, 0.3, vest.stripe, 0, -0.5, 0));
-      a.add(box(0.26, 0.14, 0.26, skin, 0, -0.72, 0));
-    }
+    p.add(box(0.25, 0.05, 0.4, '#1c1a17', 0, -0.88, 0.05));               // sole
   }
 
-  // torso with vest textures: [+x,-x,+y,-y,+z(front),-z(back)]
+  // arms: bare skin or jacket sleeves, gloved hands
+  const armMat = vest.sleeves ? lamb(vest.sleeves, { roughness: 0.8 }) : skinMat;
+  const lArm = mkLimb(0.105, 0.48, armMat, 1.56, -0.48);
+  const rArm = mkLimb(0.105, 0.48, armMat, 1.56, 0.48);
+  for (const a of [lArm, rArm]) {
+    if (vest.sleeves) {
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.115, 0.07, 10), lamb(vest.stripe));
+      cuff.position.y = -0.6;
+      a.add(cuff);
+    }
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), lamb(glove, { roughness: 0.75 }));
+    hand.position.y = -0.76;
+    hand.scale.set(0.85, 1.1, 0.85);
+    hand.castShadow = true;
+    a.add(hand);
+  }
+
+  // torso: rounded, with the vest texture front/back; capsule shoulders
   const torsoMats = [
     lamb(vest.base), lamb(vest.base), lamb(vest.trim), lamb(vest.base),
     new THREE.MeshStandardMaterial({ map: front }),
     new THREE.MeshStandardMaterial({ map: back }),
   ];
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.85, 0.42), torsoMats);
+  const torso = new THREE.Mesh(roundedBoxGeometry(0.72, 0.85, 0.4, 0.13), torsoMats);
   torso.position.y = 1.22;
   torso.castShadow = true;
   player.add(torso);
+  for (const sx of [-0.33, 0.33]) {
+    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), lamb(vest.sleeves || vest.base));
+    shoulder.position.set(sx, 1.58, 0);
+    shoulder.castShadow = true;
+    player.add(shoulder);
+  }
 
-  // head with face on +z
-  const faceTex = faceTexture();
+  // neck + rounded head with a human face
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.14, 10), skinMat);
+  neck.position.y = 1.7;
+  player.add(neck);
+  const faceTex = faceTexture(skin);
   const headMats = [
-    lamb(skin), lamb(skin), lamb(skin), lamb(skin),
-    new THREE.MeshStandardMaterial({ map: faceTex }),
-    lamb(skin),
+    skinMat, skinMat, skinMat, skinMat,
+    new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.65 }),
+    skinMat,
   ];
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), headMats);
-  head.position.y = 1.95;
+  const head = new THREE.Mesh(roundedBoxGeometry(0.44, 0.5, 0.46, 0.16), headMats);
+  head.position.y = 2.0;
   head.castShadow = true;
   player.add(head);
+  // ears
+  for (const sx of [-0.23, 0.23]) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), skinMat);
+    ear.position.set(sx, 2.0, 0);
+    ear.scale.set(0.5, 1, 0.8);
+    player.add(ear);
+  }
 
-  // hard hat (vest-specific color) with a ratchet band and brim
+  // hard hat (vest-specific color) with brim, ratchet band and top ridge
   const hatColor = vest.hat || (vest.id === 'green' ? '#ffd23f' : '#ff6a00');
-  const hat = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5),
-    lamb(hatColor, { roughness: 0.5 }));
-  hat.position.y = 2.24; hat.castShadow = true;
-  const brim = cyl(0.42, 0.42, 0.04, hatColor, 0, 2.23, 0.08, 16);
-  brim.scale.z = 1.15;
-  const band = cyl(0.325, 0.325, 0.05, '#2a2c30', 0, 2.28, 0, 14);
-  // little ridge on top of the hard hat
-  const ridge = box(0.06, 0.14, 0.5, hatColor, 0, 2.4, 0);
+  const hat = new THREE.Mesh(new THREE.SphereGeometry(0.29, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5),
+    lamb(hatColor, { roughness: 0.45 }));
+  hat.position.y = 2.2; hat.castShadow = true;
+  const brim = cyl(0.38, 0.38, 0.04, hatColor, 0, 2.19, 0.07, 16);
+  brim.scale.z = 1.18;
+  const band = cyl(0.295, 0.295, 0.05, '#2a2c30', 0, 2.23, 0, 14);
+  const ridge = box(0.055, 0.12, 0.44, hatColor, 0, 2.36, 0);
   player.add(hat, brim, band, ridge);
 
   limbs = { lArm, rArm, lLeg, rLeg };
@@ -3397,6 +3500,30 @@ function addCarExtras(g, { halfW, handleY, handleZs, exhaustZ }) {
   }
 }
 
+// visible cabin interior: seat rows with headrests, dashboard, steering
+// wheel — the thing that makes glass read as a real cabin instead of a
+// painted-on window
+function addInterior(g, { w = 1.5, floorY = 0.78, dashZ, rows = [0.3, -0.7], wheelX = -0.38 }) {
+  const dark = lamb('#22252b', { roughness: 0.92 });
+  const darker = lamb('#17191d', { roughness: 0.95 });
+  for (const rz of rows) {
+    const back = rbox(w * 0.86, 0.5, 0.14, dark, 0.05, 0, floorY + 0.42, rz - 0.18);
+    back.rotation.x = 0.12;
+    g.add(back);
+    g.add(rbox(w * 0.86, 0.13, 0.48, dark, 0.05, 0, floorY + 0.12, rz + 0.05));
+    for (const hx of [-w * 0.24, w * 0.24]) {
+      g.add(rbox(0.2, 0.16, 0.1, darker, 0.04, hx, floorY + 0.76, rz - 0.2));
+    }
+  }
+  if (dashZ !== undefined) {
+    g.add(rbox(w * 0.92, 0.16, 0.32, darker, 0.05, 0, floorY + 0.42, dashZ));
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.025, 8, 16), darker);
+    wheel.position.set(wheelX, floorY + 0.5, dashZ - 0.22);
+    wheel.rotation.x = -0.9;
+    g.add(wheel);
+  }
+}
+
 function makeSedan() {
   const col = CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)];
   const paint = carPaint(col);
@@ -3422,6 +3549,7 @@ function makeSedan() {
   g.add(box(1.62, 0.42, 0.06, '#101215', 0, 1.1, -0.28));
   const positions = [[-0.86, 1.42], [0.86, 1.42], [-0.86, -1.42], [0.86, -1.42]];
   addWheelArches(g, 0.36, positions, 0.91);
+  addInterior(g, { w: 1.55, floorY: 0.72, dashZ: 0.82, rows: [0.3, -0.7] });
   addCarFace(g, { w: 1.82, frontZ: 2.26, backZ: -2.26, lightY: 0.68 });
   addMirrors(g, 0.96, 1.06, 0.82);
   addCarExtras(g, { halfW: 0.91, handleY: 0.98, handleZs: [0.45, -0.55], exhaustZ: -2.28 });
@@ -3453,6 +3581,7 @@ function makeSUV() {
   for (const rx of [-0.62, 0.62]) g.add(rbox(0.09, 0.08, 2.4, metalMat('#2a2d33'), 0.03, rx, 1.72, -0.7));
   const positions = [[-0.9, 1.52], [0.9, 1.52], [-0.9, -1.52], [0.9, -1.52]];
   addWheelArches(g, 0.42, positions, 0.96);
+  addInterior(g, { w: 1.6, floorY: 0.84, dashZ: 1.1, rows: [0.5, -0.55, -1.35] });
   addCarFace(g, { w: 1.92, frontZ: 2.4, backZ: -2.4, lightY: 0.78, bumperY: 0.42 });
   addMirrors(g, 1.02, 1.24, 0.95);
   addCarExtras(g, { halfW: 0.96, handleY: 1.1, handleZs: [0.55, -0.5], exhaustZ: -2.4 });
@@ -3486,6 +3615,7 @@ function makePickup(col = null, dot = false) {
   g.add(rbox(1.9, 0.16, 0.14, paint, 0.05, 0, 1.0, -2.6));        // tailgate cap
   const positions = [[-0.92, 1.7], [0.92, 1.7], [-0.92, -1.7], [0.92, -1.7]];
   addWheelArches(g, 0.44, positions, 0.98);
+  addInterior(g, { w: 1.6, floorY: 0.92, dashZ: 1.42, rows: [0.72], wheelX: -0.4 });
   addCarFace(g, { w: 1.96, frontZ: 2.7, backZ: -2.7, lightY: 0.82, bumperY: 0.44 });
   addMirrors(g, 1.04, 1.32, 1.3);
   addCarExtras(g, { halfW: 0.98, handleY: 1.12, handleZs: [0.9], exhaustZ: -2.7 });
@@ -3584,6 +3714,7 @@ function makeCountyF150(col, livery) {
   g.add(box(0.44, 0.17, 0.03, '#e8e8e8', 0, 0.72, -3.0));               // plate
   g.add(box(0.1, 0.12, 0.22, '#3a3d42', 0, 0.4, -3.02));                // tow hitch
 
+  addInterior(g, { w: 1.66, floorY: 0.98, dashZ: 1.02, rows: [0.68, -0.35], wheelX: -0.42 });
   const positions = [[-0.93, 1.82], [0.93, 1.82], [-0.93, -1.75], [0.93, -1.75]];
   addWheelArches(g, 0.44, positions, halfW);
   addMirrors(g, 1.06, 1.52, 1.1);
@@ -3788,6 +3919,7 @@ function makeFleetPickup() {
   const dialR = textDecal('DIAL 511', 1.1, 0.24); dialR.position.set(0.955, 1.32, -1.85);
   g.add(dialL, dialR);
   g.add(fleetLightBar(0, 1.86, 0.35));
+  addInterior(g, { w: 1.62, floorY: 0.95, dashZ: 1.35, rows: [0.75, -0.15], wheelX: -0.4 });
   addCarFace(g, { w: 1.95, frontZ: 2.75, backZ: -2.75, lightY: 0.82, bumperY: 0.44 });
   addMirrors(g, 1.04, 1.34, 1.35);
   addWheels(g, 0.44, [[-0.92, 1.85], [0.92, 1.85], [-0.92, -1.8], [0.92, -1.8]]);
@@ -4267,24 +4399,54 @@ function openSignModal(def) {
 // One jersey-barrier segment with red/white reflective chevron panels on
 // both long faces and a small connector pin at the +z end, so a run of
 // them reads as physically interlocked.
+// the real jersey-barrier cross-section: 61cm base, curb kick, steep upper
+// slope to a 20cm crown at 81cm — extruded along the segment length
+function jerseyGeometry(len) {
+  const s = new THREE.Shape();
+  s.moveTo(-0.305, 0);
+  s.lineTo(0.305, 0);
+  s.lineTo(0.305, 0.08);
+  s.lineTo(0.17, 0.31);
+  s.lineTo(0.1, 0.81);
+  s.lineTo(-0.1, 0.81);
+  s.lineTo(-0.17, 0.31);
+  s.lineTo(-0.305, 0.08);
+  s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: len, bevelEnabled: false });
+  geo.translate(0, 0, -len / 2);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+let _concreteMat = null;
+function concreteMat() {
+  if (_concreteMat) return _concreteMat;
+  const surf = noiseSurface('#b6b8b3', 8, 64, 1.2);
+  surf.map.repeat.set(2, 2);
+  surf.normalMap.repeat.set(2, 2);
+  _concreteMat = lamb('#ffffff', {
+    map: surf.map, normalMap: surf.normalMap,
+    normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.95,
+  });
+  return _concreteMat;
+}
+
 function makeJerseyBarrierSegment(len) {
   const g = new THREE.Group();
-  const concrete = lamb('#b9bbb6');
-  const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.25, len), concrete);
-  b1.position.y = 0.125; b1.castShadow = true; b1.receiveShadow = true;
-  const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.45, len), concrete);
-  b2.position.y = 0.47; b2.castShadow = true;
-  const b3 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.35, len), concrete);
-  b3.position.y = 0.85; b3.castShadow = true;
-  g.add(b1, b2, b3);
+  const barrier = new THREE.Mesh(jerseyGeometry(len), concreteMat());
+  barrier.castShadow = true;
+  barrier.receiveShadow = true;
+  g.add(barrier);
 
   const chevTex = stripeTexture(true, '#d21f1f');
   chevTex.repeat.set(Math.max(1, len / 1.1), 1);
   const chevMat = new THREE.MeshStandardMaterial({ map: chevTex, roughness: 0.45 });
   for (const side of [1, -1]) {
-    const panel = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(0.3, len - 0.1), 0.3), chevMat);
+    // chevron panel laid onto the sloped upper face of the barrier
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(Math.max(0.3, len - 0.1), 0.28), chevMat);
     panel.rotation.y = side > 0 ? Math.PI / 2 : -Math.PI / 2;
-    panel.position.set(side * 0.191, 0.47, 0);
+    panel.rotation.x = side > 0 ? -0.14 : 0.14;   // match the barrier's slope
+    panel.position.set(side * 0.148, 0.5, 0);
     g.add(panel);
   }
   // connector pin — visual "these are locked together" detail at the seam
