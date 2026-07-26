@@ -1,0 +1,14 @@
+# Render Blueprint — deploy Harford Secondary as a WEB SERVICE (runs Node),
+# NOT a Static Site. A static site only serves the files in public/ and cannot
+# run server.js, so /api/chat and /api/student would return 404.
+services:
+  - type: web
+    name: harford-secondary
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      # Set this in the Render dashboard (Environment tab). Do not commit a key.
+      - key: ANTHROPIC_API_KEY
+        sync: false

@@ -4,6 +4,9 @@
   "description": "Harford Secondary — a UK East London secondary school roleplay chatbot",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"
