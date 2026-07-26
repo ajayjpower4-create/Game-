@@ -367,6 +367,88 @@ html, body {
   margin: 10px 0;
 }
 
+/* School information system (/computerstudent) */
+.message.computer .avatar {
+  background: #0d1a14;
+  border-color: #22402f;
+}
+
+.sis-bubble {
+  background: #0c1512 !important;
+  border: 1px solid #22402f !important;
+  font-family: 'SF Mono', 'Fira Code', ui-monospace, monospace;
+  font-size: 13px;
+  max-width: calc(100% - 52px);
+}
+
+.sis-title {
+  color: #6bd39c;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  border-bottom: 1px solid #22402f;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.sis-record { padding: 6px 0; }
+.sis-record + .sis-record { border-top: 1px dashed #22402f; margin-top: 10px; padding-top: 12px; }
+
+.sis-name {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+}
+
+.sis-flags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.sis-flag {
+  background: rgba(201, 162, 75, 0.12);
+  border: 1px solid rgba(201, 162, 75, 0.35);
+  color: #e0c37a;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.sis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  margin: 8px 0;
+}
+.sis-field { display: flex; flex-direction: column; padding: 3px 0; }
+.sis-k {
+  color: var(--text-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sis-v { color: var(--text); }
+
+.sis-notes {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #1a2b22;
+  color: var(--text-muted);
+  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+}
+.sis-notes .sis-k { display: block; margin-bottom: 4px; }
+
+.sis-empty { color: var(--text-muted); }
+.sis-empty code {
+  background: var(--surface-3);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #9fd8b8;
+}
+
+@media (max-width: 640px) {
+  .sis-grid { grid-template-columns: 1fr; }
+}
+
 /* Typing cursor */
 .typing-cursor {
   display: inline-block;

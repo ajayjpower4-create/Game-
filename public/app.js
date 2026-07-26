@@ -14,10 +14,62 @@ const statusEl = document.getElementById('status');
 const statusRole = document.getElementById('statusRole');
 const statusDay = document.getElementById('statusDay');
 
+const STORAGE_KEY = 'harford-save-v1';
+
 let history = [];
 let isStreaming = false;
 let day = 1;
 let profile = { rank: '', name: '' };
+
+// Detect touch/phone devices: on these, the on-screen "return" key should NOT
+// send the message (it inserts a newline instead — you send with the button).
+const IS_MOBILE = (() => {
+  const ua = navigator.userAgent || '';
+  const iOS = /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  return iOS || /Android|Mobile/i.test(ua) || coarse;
+})();
+
+// ---- Persistence ----------------------------------------------------------
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ profile, day, history }));
+  } catch {}
+}
+
+function clearState() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !data.profile || !data.profile.name || !Array.isArray(data.history)) return null;
+    return data;
+  } catch { return null; }
+}
+
+function restoreSavedGame(data) {
+  profile = data.profile;
+  day = data.day || 1;
+  history = data.history;
+
+  setup.style.display = 'none';
+  chatArea.hidden = false;
+  inputArea.hidden = false;
+  statusEl.hidden = false;
+  statusRole.textContent = `${profile.name} · ${profile.rank}`;
+  statusDay.textContent = `Day ${day}`;
+
+  messagesEl.innerHTML = '';
+  for (const m of history) {
+    if (m.role === 'user' || m.role === 'assistant') appendMessage(m.role, m.content);
+  }
+  scrollToBottom();
+}
 
 // ---- Setup / game start ---------------------------------------------------
 setupBtn.addEventListener('click', startGame);
@@ -54,6 +106,7 @@ function startGame() {
 
   history.push({ role: 'user', content: opener });
   appendMessage('user', opener);
+  saveState();
   streamAssistant();
   input.focus();
 }
@@ -66,6 +119,8 @@ input.addEventListener('input', () => {
 });
 
 input.addEventListener('keydown', (e) => {
+  // On phones/tablets the return key must never send — let it add a newline.
+  if (IS_MOBILE) return;
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     if (!sendBtn.disabled) sendMessage();
@@ -80,11 +135,17 @@ document.querySelectorAll('.quick').forEach(btn => {
     if (isStreaming) return;
     input.value = btn.dataset.text;
     input.dispatchEvent(new Event('input'));
+    if (btn.dataset.text === '/computerstudent') {
+      // Leave it in the box so the user can type a name after the command.
+      input.focus();
+      return;
+    }
     sendMessage();
   });
 });
 
 function resetToSetup() {
+  clearState();
   history = [];
   messagesEl.innerHTML = '';
   input.value = '';
@@ -104,6 +165,16 @@ async function sendMessage() {
   let text = input.value.trim();
   if (!text || isStreaming) return;
 
+  // /computerstudent — school information system lookup (not sent to the AI).
+  const lookup = text.match(/^\/computerstudent\b\s*(.*)$/i);
+  if (lookup) {
+    input.value = '';
+    input.style.height = 'auto';
+    sendBtn.disabled = true;
+    await doStudentLookup(lookup[1].trim());
+    return;
+  }
+
   // /nextday advances the school day and injects a clear day marker.
   if (/^\/nextday\b/i.test(text)) {
     day += 1;
@@ -121,7 +192,93 @@ async function sendMessage() {
   input.value = '';
   input.style.height = 'auto';
 
+  saveState();
   streamAssistant();
+}
+
+// ---- /computerstudent lookup ---------------------------------------------
+async function doStudentLookup(query) {
+  if (!query) {
+    appendComputerCard(
+      'HARFORD SIS',
+      '<p class="sis-empty">Type a name or ID after the command, e.g. <code>/computerstudent Danny Boyle</code> or <code>/computerstudent HAR1003</code>.</p>'
+    );
+    scrollToBottom();
+    return;
+  }
+
+  const card = appendComputerCard('HARFORD SIS', '<p class="sis-empty">Searching the system…</p>');
+  try {
+    const res = await fetch(`/api/student?q=${encodeURIComponent(query)}`);
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const data = await res.json();
+    if (!data.results || !data.results.length) {
+      card.innerHTML = `<p class="sis-empty">No student found matching “${escapeHtml(query)}”.</p>`;
+    } else {
+      card.innerHTML = data.results.map(renderStudentRecord).join('');
+      if (data.count === 12) {
+        card.innerHTML += `<p class="sis-empty">Showing first 12 matches — narrow your search for more.</p>`;
+      }
+    }
+  } catch (err) {
+    card.innerHTML = `<div class="error-msg">Lookup failed: ${escapeHtml(err.message)}</div>`;
+  }
+  scrollToBottom();
+}
+
+function field(label, value) {
+  if (value === undefined || value === null || value === '' || value === 'None') return '';
+  return `<div class="sis-field"><span class="sis-k">${label}</span><span class="sis-v">${escapeHtml(String(value))}</span></div>`;
+}
+
+function renderStudentRecord(s) {
+  const flags = [];
+  if (s.pupil_premium === 'Yes') flags.push('Pupil Premium');
+  if (s.eal && s.eal !== 'No') flags.push(`EAL (${s.eal})`);
+  if (s.attendance_concern === 'True') flags.push('Attendance concern');
+  if (s.emotionally_based_school_avoidance === 'True') flags.push('EBSA');
+
+  const grid = [
+    field('ID', s.id),
+    field('Year / Form', `Year ${s.year} · ${s.form}`),
+    field('House', s.house),
+    field('Tutor', s.tutor),
+    field('Sex', s.sex),
+    field('DOB', `${s.dob} (age ${s.age_sept})`),
+    field('Heritage', s.heritage),
+    field('Home language', s.home_language),
+    field('Avg working grade', s.avg_working_grade),
+    field('Reading age', s.reading_age),
+    field('Best subject', s.best_subject),
+    field('Weakest subject', s.weakest_subject),
+    field('Attendance', `${s.attendance_pct}% · ${s.lates_this_term} lates`),
+    field('Behaviour', `${s.behaviour_points} pts · ${s.detentions} detentions · ${s.suspensions} susp. (${s.behaviour_tier})`),
+    field('SEN', s.sen_status && s.sen_status !== 'None' ? `${s.sen_status}${s.sen_primary_need ? ' — ' + s.sen_primary_need : ''}` : ''),
+  ].filter(Boolean).join('');
+
+  return `
+    <div class="sis-record">
+      <div class="sis-name">${escapeHtml(s.name)}</div>
+      ${flags.length ? `<div class="sis-flags">${flags.map(f => `<span class="sis-flag">${escapeHtml(f)}</span>`).join('')}</div>` : ''}
+      <div class="sis-grid">${grid}</div>
+      ${s.description ? `<div class="sis-notes"><span class="sis-k">Notes</span>${escapeHtml(s.description)}</div>` : ''}
+    </div>`;
+}
+
+function appendComputerCard(title, innerHtml) {
+  const div = document.createElement('div');
+  div.className = 'message computer';
+  const avatar = document.createElement('div');
+  avatar.className = 'avatar';
+  avatar.textContent = '💻';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble sis-bubble';
+  bubble.innerHTML = `<div class="sis-title">${escapeHtml(title)}</div>${innerHtml}`;
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  messagesEl.appendChild(div);
+  scrollToBottom();
+  return bubble;
 }
 
 async function streamAssistant() {
@@ -180,6 +337,7 @@ async function streamAssistant() {
     if (assistantText) {
       history.push({ role: 'assistant', content: assistantText });
       bubble.innerHTML = renderMarkdown(assistantText);
+      saveState();
     }
   } catch (err) {
     cursor.remove();
@@ -290,3 +448,9 @@ function renderMarkdown(text) {
 
   return html;
 }
+
+// ---- Boot: restore a saved game if one exists -----------------------------
+(function init() {
+  const saved = loadState();
+  if (saved) restoreSavedGame(saved);
+})();

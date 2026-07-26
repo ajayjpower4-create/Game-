@@ -34,52 +34,71 @@ function parseCsvLine(line) {
   return out;
 }
 
-function buildRoster() {
-  const raw = readFileSync(join(__dirname, 'data', 'harford_students.csv'), 'utf8');
-  const lines = raw.split(/\r?\n/).filter(l => l.trim().length);
-  const header = parseCsvLine(lines[0]);
-  const idx = Object.fromEntries(header.map((h, i) => [h.trim(), i]));
-
-  const rows = lines.slice(1).map(line => {
-    const c = parseCsvLine(line);
-    const g = k => (c[idx[k]] ?? '').trim();
-    const sen = g('sen_status') && g('sen_status') !== 'None'
-      ? `${g('sen_status')}${g('sen_primary_need') ? '/' + g('sen_primary_need') : ''}`
-      : '';
-    const flags = [];
-    if (g('pupil_premium') === 'Yes') flags.push('PP');
-    if (g('eal') && g('eal') !== 'No') flags.push('EAL');
-    if (g('attendance_concern') === 'True') flags.push('AttConcern');
-    if (g('emotionally_based_school_avoidance') === 'True') flags.push('EBSA');
-    // Dense, pipe-delimited line. Keep it human-readable for the model.
-    return [
-      g('id'),
-      g('name'),
-      g('sex'),
-      `Y${g('year')}`,
-      g('form'),
-      `House:${g('house')}`,
-      `Tutor:${g('tutor')}`,
-      `AWG:${g('avg_working_grade')}`,
-      `Att:${g('attendance_pct')}%`,
-      `Beh:${g('behaviour_points')}pts`,
-      `Tier:${g('behaviour_tier')}`,
-      g('sen_status') === 'None' || !g('sen_status') ? '' : `SEN:${sen}`,
-      `Best:${g('best_subject')}`,
-      `Weak:${g('weakest_subject')}`,
-      flags.length ? flags.join(',') : '',
-    ].filter(Boolean).join(' | ');
-  });
-
-  return { count: rows.length, text: rows.join('\n') };
+function compactLine(r) {
+  const sen = r.sen_status && r.sen_status !== 'None'
+    ? `${r.sen_status}${r.sen_primary_need ? '/' + r.sen_primary_need : ''}`
+    : '';
+  const flags = [];
+  if (r.pupil_premium === 'Yes') flags.push('PP');
+  if (r.eal && r.eal !== 'No') flags.push('EAL');
+  if (r.attendance_concern === 'True') flags.push('AttConcern');
+  if (r.emotionally_based_school_avoidance === 'True') flags.push('EBSA');
+  // Dense, pipe-delimited line. Keep it human-readable for the model.
+  return [
+    r.id,
+    r.name,
+    r.sex,
+    `Y${r.year}`,
+    r.form,
+    `House:${r.house}`,
+    `Tutor:${r.tutor}`,
+    `AWG:${r.avg_working_grade}`,
+    `Att:${r.attendance_pct}%`,
+    `Beh:${r.behaviour_points}pts`,
+    `Tier:${r.behaviour_tier}`,
+    sen ? `SEN:${sen}` : '',
+    `Best:${r.best_subject}`,
+    `Weak:${r.weakest_subject}`,
+    flags.length ? flags.join(',') : '',
+  ].filter(Boolean).join(' | ');
 }
 
+function loadStudents() {
+  const raw = readFileSync(join(__dirname, 'data', 'harford_students.csv'), 'utf8');
+  const lines = raw.split(/\r?\n/).filter(l => l.trim().length);
+  const header = parseCsvLine(lines[0]).map(h => h.trim());
+  const records = lines.slice(1).map(line => {
+    const c = parseCsvLine(line);
+    const rec = {};
+    header.forEach((h, i) => { rec[h] = (c[i] ?? '').trim(); });
+    return rec;
+  });
+  return records;
+}
+
+let STUDENTS = [];
 let ROSTER = { count: 0, text: '' };
 try {
-  ROSTER = buildRoster();
+  STUDENTS = loadStudents();
+  ROSTER = { count: STUDENTS.length, text: STUDENTS.map(compactLine).join('\n') };
   console.log(`Loaded roster: ${ROSTER.count} students`);
 } catch (err) {
   console.error('Failed to load student roster:', err.message);
+}
+
+// Look up students by id, exact name, or partial name/token match.
+function findStudents(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const byId = STUDENTS.filter(s => s.id.toLowerCase() === q);
+  if (byId.length) return byId;
+  const exact = STUDENTS.filter(s => s.name.toLowerCase() === q);
+  if (exact.length) return exact;
+  const terms = q.split(/\s+/).filter(Boolean);
+  return STUDENTS.filter(s => {
+    const hay = `${s.name} ${s.id} ${s.form}`.toLowerCase();
+    return terms.every(t => hay.includes(t));
+  });
 }
 
 // --- System prompt ---------------------------------------------------------
@@ -164,6 +183,15 @@ function systemPrompt() {
 
 app.use(express.json());
 app.use(express.static(join(__dirname, 'public')));
+
+// School "computer" — look up a student's full record. Not routed through the
+// AI; this is the staff information system (/computerstudent in the UI).
+app.get('/api/student', (req, res) => {
+  const q = (req.query.q || '').toString();
+  if (!q.trim()) return res.json({ query: q, results: [] });
+  const matches = findStudents(q).slice(0, 12);
+  res.json({ query: q, count: matches.length, results: matches });
+});
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
