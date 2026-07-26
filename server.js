@@ -184,6 +184,22 @@ function systemPrompt() {
 app.use(express.json());
 app.use(express.static(join(__dirname, 'public')));
 
+// Health/diagnostics. Open this URL in a browser to confirm server.js is the
+// process actually handling requests. If this returns JSON, the backend is
+// live; if it 404s, the site is being served as static files only.
+const BUILD = 'harford-2024-06-2';
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    service: 'harford-secondary-simulator',
+    build: BUILD,
+    model: MODEL,
+    students: ROSTER.count,
+    apiKeyConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+    time: new Date().toISOString(),
+  });
+});
+
 // School "computer" — look up a student's full record. Not routed through the
 // AI; this is the staff information system (/computerstudent in the UI).
 app.get('/api/student', (req, res) => {
@@ -229,7 +245,13 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+// Any /api/* route that wasn't matched above — return JSON so a 404 here is
+// clearly Express (backend is running) rather than a static host.
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `No API route: ${req.method} ${req.path}`, build: BUILD });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Harford Secondary Simulator running at http://localhost:${PORT}`);
+  console.log(`Harford Secondary Simulator (${BUILD}) running at http://localhost:${PORT}`);
 });
