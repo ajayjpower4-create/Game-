@@ -1,21 +1,70 @@
 const chatArea = document.getElementById('chatArea');
 const messagesEl = document.getElementById('messages');
-const welcome = document.getElementById('welcome');
 const input = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
 const newChatBtn = document.getElementById('newChatBtn');
+const inputArea = document.getElementById('inputArea');
+
+const setup = document.getElementById('setup');
+const rankInput = document.getElementById('rankInput');
+const nameInput = document.getElementById('nameInput');
+const setupBtn = document.getElementById('setupBtn');
+
+const statusEl = document.getElementById('status');
+const statusRole = document.getElementById('statusRole');
+const statusDay = document.getElementById('statusDay');
 
 let history = [];
 let isStreaming = false;
+let day = 1;
+let profile = { rank: '', name: '' };
 
-// Auto-resize textarea
+// ---- Setup / game start ---------------------------------------------------
+setupBtn.addEventListener('click', startGame);
+[rankInput, nameInput].forEach(el => {
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); startGame(); }
+  });
+});
+
+function startGame() {
+  const rank = rankInput.value.trim();
+  const name = nameInput.value.trim();
+  if (!rank) { rankInput.focus(); return; }
+  if (!name) { nameInput.focus(); return; }
+
+  profile = { rank, name };
+  day = 1;
+  history = [];
+  messagesEl.innerHTML = '';
+
+  setup.style.display = 'none';
+  chatArea.hidden = false;
+  inputArea.hidden = false;
+  statusEl.hidden = false;
+  statusRole.textContent = `${name} · ${rank}`;
+  statusDay.textContent = 'Day 1';
+
+  // Seed the roleplay. This user turn establishes who the player is and asks
+  // the world to kick off the school day in-character (no narration).
+  const opener =
+    `(I am ${name}, and my rank at Harford Secondary is ${rank}. ` +
+    `It is Day 1, the very start of the school day — students arriving / tutor time.) ` +
+    `*I walk into the building to start my day.*`;
+
+  history.push({ role: 'user', content: opener });
+  appendMessage('user', opener);
+  streamAssistant();
+  input.focus();
+}
+
+// ---- Input handling -------------------------------------------------------
 input.addEventListener('input', () => {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 200) + 'px';
   sendBtn.disabled = !input.value.trim() || isStreaming;
 });
 
-// Send on Enter (Shift+Enter for newline)
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -24,46 +73,62 @@ input.addEventListener('keydown', (e) => {
 });
 
 sendBtn.addEventListener('click', sendMessage);
-newChatBtn.addEventListener('click', resetChat);
+newChatBtn.addEventListener('click', resetToSetup);
 
-// Suggestion chips
-document.querySelectorAll('.suggestion').forEach(btn => {
+document.querySelectorAll('.quick').forEach(btn => {
   btn.addEventListener('click', () => {
+    if (isStreaming) return;
     input.value = btn.dataset.text;
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-    sendBtn.disabled = false;
+    input.dispatchEvent(new Event('input'));
     sendMessage();
   });
 });
 
-function resetChat() {
+function resetToSetup() {
   history = [];
   messagesEl.innerHTML = '';
-  welcome.style.display = 'flex';
   input.value = '';
   input.style.height = 'auto';
   sendBtn.disabled = true;
   isStreaming = false;
+  chatArea.hidden = true;
+  inputArea.hidden = true;
+  statusEl.hidden = true;
+  setup.style.display = 'flex';
+  rankInput.value = profile.rank || '';
+  nameInput.value = profile.name || '';
+  rankInput.focus();
 }
 
 async function sendMessage() {
-  const text = input.value.trim();
+  let text = input.value.trim();
   if (!text || isStreaming) return;
 
-  welcome.style.display = 'none';
-  isStreaming = true;
-  sendBtn.disabled = true;
-  sendBtn.classList.add('loading');
+  // /nextday advances the school day and injects a clear day marker.
+  if (/^\/nextday\b/i.test(text)) {
+    day += 1;
+    statusDay.textContent = `Day ${day}`;
+    text =
+      `(A new school day begins — this is Day ${day} at Harford Secondary. ` +
+      `It is the very start of the day: 8:20am, students arriving, then tutor ` +
+      `time and registration.) *I arrive at school to start Day ${day}.*`;
+    appendDayDivider(day);
+  }
 
-  // Add user message
   history.push({ role: 'user', content: text });
   appendMessage('user', text);
 
   input.value = '';
   input.style.height = 'auto';
 
-  // Create assistant bubble
+  streamAssistant();
+}
+
+async function streamAssistant() {
+  isStreaming = true;
+  sendBtn.disabled = true;
+  sendBtn.classList.add('loading');
+
   const { bubble, cursor } = createAssistantBubble();
   scrollToBottom();
 
@@ -127,13 +192,20 @@ async function sendMessage() {
   scrollToBottom();
 }
 
+function appendDayDivider(n) {
+  const div = document.createElement('div');
+  div.className = 'day-divider';
+  div.innerHTML = `<span>Day ${n}</span>`;
+  messagesEl.appendChild(div);
+}
+
 function appendMessage(role, content) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : '◈';
+  avatar.textContent = role === 'user' ? '🧑‍🏫' : '🏫';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -152,7 +224,7 @@ function createAssistantBubble() {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar';
-  avatar.textContent = '◈';
+  avatar.textContent = '🏫';
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -184,38 +256,29 @@ function escapeHtml(str) {
 function renderMarkdown(text) {
   let html = escapeHtml(text);
 
-  // Code blocks
   html = html.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
     return `<pre><code>${code.trim()}</code></pre>`;
   });
 
-  // Inline code
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-  // Headers
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-  // Bold & italic
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-  // Blockquote
   html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
 
-  // Unordered list
   html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
 
-  // Ordered list
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
-  // Horizontal rule
   html = html.replace(/^---$/gm, '<hr>');
 
-  // Paragraphs (double newlines)
   html = html
     .split(/\n\n+/)
     .map(block => {

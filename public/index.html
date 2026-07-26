@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Swerve — AI Chat</title>
+  <title>Harford Secondary — School Simulator</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,40 +11,73 @@
     <header class="header">
       <div class="header-inner">
         <div class="logo">
-          <span class="logo-icon">◈</span>
-          <span class="logo-text">Swerve</span>
+          <span class="logo-icon">🎓</span>
+          <span class="logo-text">Harford Secondary</span>
         </div>
-        <button class="new-chat-btn" id="newChatBtn" title="New conversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New chat
-        </button>
+        <div class="header-right">
+          <div class="status" id="status" hidden>
+            <span class="status-role" id="statusRole"></span>
+            <span class="status-day" id="statusDay">Day 1</span>
+          </div>
+          <button class="new-chat-btn" id="newChatBtn" title="Restart simulation">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="1 4 1 10 7 10"></polyline>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+            </svg>
+            Restart
+          </button>
+        </div>
       </div>
     </header>
 
-    <main class="chat-area" id="chatArea">
-      <div class="welcome" id="welcome">
-        <div class="welcome-icon">◈</div>
-        <h1>Swerve AI</h1>
-        <p>Direct. Unfiltered. Real.</p>
-        <div class="suggestions">
-          <button class="suggestion" data-text="Write a dark short story about the end of the world">Write a dark short story</button>
-          <button class="suggestion" data-text="Explain how social engineering attacks work in detail">How social engineering works</button>
-          <button class="suggestion" data-text="Give me brutally honest career advice">Brutally honest career advice</button>
-          <button class="suggestion" data-text="Write edgy humor about modern life">Write edgy humor</button>
-        </div>
+    <!-- Setup: pick rank + name before play begins -->
+    <div class="setup-overlay" id="setup">
+      <div class="setup-card">
+        <div class="setup-icon">🎓</div>
+        <h1>Harford Secondary</h1>
+        <p class="setup-tag">East London • 987 students • UK Board of Education</p>
+        <p class="setup-blurb">You're a member of staff at Harford Secondary. Pick who you are and step into the building. Everyone else — students, parents, colleagues — is played around you. Use <code>*asterisks*</code> or <code>(brackets)</code> to make anything true.</p>
+
+        <label class="setup-label" for="rankInput">Your rank</label>
+        <input class="setup-input" id="rankInput" list="rankList" placeholder="e.g. Headteacher, Head of Year 10, SENDCo, classroom teacher…" maxlength="60" autocomplete="off">
+        <datalist id="rankList">
+          <option value="Headteacher"></option>
+          <option value="Deputy Headteacher"></option>
+          <option value="Assistant Headteacher (Behaviour & Attendance)"></option>
+          <option value="Head of Year 11"></option>
+          <option value="Head of Year 10"></option>
+          <option value="Head of Year 9"></option>
+          <option value="Head of Year 8"></option>
+          <option value="Head of Year 7"></option>
+          <option value="SENDCo"></option>
+          <option value="Classroom Teacher"></option>
+          <option value="Security Officer"></option>
+          <option value="Attendance Officer"></option>
+        </datalist>
+
+        <label class="setup-label" for="nameInput">Your name</label>
+        <input class="setup-input" id="nameInput" placeholder="e.g. Mr Osei, Miss Adeyemi…" maxlength="60" autocomplete="off">
+
+        <button class="setup-btn" id="setupBtn">Start the day</button>
+        <p class="setup-hint">Type <code>/nextday</code> at any time to move to the next school day.</p>
       </div>
+    </div>
+
+    <main class="chat-area" id="chatArea" hidden>
       <div class="messages" id="messages"></div>
     </main>
 
-    <footer class="input-area">
+    <footer class="input-area" id="inputArea" hidden>
+      <div class="quick-actions" id="quickActions">
+        <button class="quick" data-text="/nextday">⏭ /nextday</button>
+        <button class="quick" data-text="*I get on the intercom*">📢 Intercom</button>
+        <button class="quick" data-text="*I call the parents of the last student mentioned*">📞 Phone home</button>
+      </div>
       <div class="input-container">
         <textarea
           id="messageInput"
           class="message-input"
-          placeholder="Message Swerve..."
+          placeholder="Do or say something…  (use *action* or (fact) to make it true)"
           rows="1"
           maxlength="10000"
         ></textarea>
@@ -55,7 +88,7 @@
           </svg>
         </button>
       </div>
-      <p class="disclaimer">Swerve may be wrong. Think for yourself.</p>
+      <p class="disclaimer">Fiction. Characters are played by AI; you're in control of the world.</p>
     </footer>
   </div>
 
