@@ -12,14 +12,24 @@
   const CELL = 24; // world pixels per grid cell (before zoom)
 
   const LOT_SIZES = [
-    { key: 'small',   name: 'Small',                     cols: 16, rows: 12 },
-    { key: 'medium',  name: 'Medium',                    cols: 24, rows: 18 },
-    { key: 'xmedium', name: 'Extra Medium',              cols: 30, rows: 22 },
-    { key: 'large',   name: 'Large',                     cols: 38, rows: 26 },
-    { key: 'xl',      name: 'Extra Large',               cols: 46, rows: 32 },
-    { key: 'xxl',     name: 'Extra Extra Large',         cols: 56, rows: 38 },
-    { key: 'xxxl',    name: 'Extra Extra Extra Large',   cols: 68, rows: 46 },
-    { key: 'xxxxl',   name: 'Extra ×4 Large',            cols: 82, rows: 56 },
+    // Standard lots
+    { key: 'small',   name: 'Small',                   cols: 16,  rows: 12,  group: 'Standard lots', note: 'A room or two' },
+    { key: 'medium',  name: 'Medium',                  cols: 24,  rows: 18,  group: 'Standard lots', note: 'Café / small shop' },
+    { key: 'xmedium', name: 'Extra Medium',            cols: 30,  rows: 22,  group: 'Standard lots', note: 'Restaurant' },
+    { key: 'large',   name: 'Large',                   cols: 38,  rows: 26,  group: 'Standard lots', note: 'House / office' },
+    { key: 'xl',      name: 'Extra Large',             cols: 46,  rows: 32,  group: 'Standard lots', note: 'Big house' },
+    { key: 'xxl',     name: 'Extra Extra Large',       cols: 56,  rows: 38,  group: 'Standard lots', note: 'Supermarket' },
+    { key: 'xxxl',    name: 'Extra Extra Extra Large', cols: 68,  rows: 46,  group: 'Standard lots', note: 'Store block' },
+    { key: 'xxxxl',   name: 'Extra ×4 Large',          cols: 82,  rows: 56,  group: 'Standard lots', note: 'Department store' },
+
+    // Big builds — business & institutional scale
+    { key: 'long-business', name: 'Long Business', cols: 104, rows: 28,  group: 'Big builds', note: 'Strip mall / long storefront' },
+    { key: 'warehouse',     name: 'Warehouse',     cols: 92,  rows: 62,  group: 'Big builds', note: 'Warehouse / distribution' },
+    { key: 'superstore',    name: 'Superstore',    cols: 116, rows: 76,  group: 'Big builds', note: 'Big-box superstore' },
+    { key: 'school',        name: 'School',        cols: 128, rows: 86,  group: 'Big builds', note: 'Elementary / middle school' },
+    { key: 'high-school',   name: 'High School',   cols: 156, rows: 106, group: 'Big builds', note: 'High school campus' },
+    { key: 'mall',          name: 'Shopping Mall', cols: 180, rows: 98,  group: 'Big builds', note: 'Mall / large complex' },
+    { key: 'campus',        name: 'Mega Campus',   cols: 212, rows: 142, group: 'Big builds', note: 'University / industrial park' },
   ];
 
   // Curated palette — successive rooms cycle through these.
@@ -67,15 +77,36 @@
 
   function buildSizeGrid() {
     sizeGrid.innerHTML = '';
+    const order = [];
+    const byGroup = new Map();
     for (const s of LOT_SIZES) {
-      const card = document.createElement('button');
-      card.className = 'size-card';
-      card.innerHTML = `
-        <div class="sc-preview"><div class="sc-fill"></div></div>
-        <div class="sc-name">${s.name}</div>
-        <div class="sc-dims">${s.cols} × ${s.rows} cells</div>`;
-      card.addEventListener('click', () => startNewProject(s));
-      sizeGrid.appendChild(card);
+      if (!byGroup.has(s.group)) { byGroup.set(s.group, []); order.push(s.group); }
+      byGroup.get(s.group).push(s);
+    }
+    for (const g of order) {
+      const title = document.createElement('h3');
+      title.className = 'size-group-title';
+      title.textContent = g;
+      sizeGrid.appendChild(title);
+
+      const row = document.createElement('div');
+      row.className = 'size-grid-row';
+      for (const s of byGroup.get(g)) {
+        const card = document.createElement('button');
+        card.className = 'size-card';
+        // preview fill proportions reflect the lot's aspect ratio
+        const big = Math.max(s.cols, s.rows);
+        const wPct = Math.round((s.cols / big) * 82);
+        const hPct = Math.round((s.rows / big) * 82);
+        card.innerHTML = `
+          <div class="sc-preview"><div class="sc-fill" style="width:${wPct}%;height:${hPct}%"></div></div>
+          <div class="sc-name">${s.name}</div>
+          <div class="sc-dims">${s.cols} × ${s.rows} cells</div>
+          ${s.note ? `<div class="sc-note">${s.note}</div>` : ''}`;
+        card.addEventListener('click', () => startNewProject(s));
+        row.appendChild(card);
+      }
+      sizeGrid.appendChild(row);
     }
   }
 
@@ -231,7 +262,7 @@
     const pad = 60;
     const sx = (rect.width - pad) / worldW();
     const sy = (rect.height - pad) / worldH();
-    view.scale = clamp(Math.min(sx, sy), 0.15, 4);
+    view.scale = clamp(Math.min(sx, sy), 0.06, 4);
     view.offX = (rect.width - worldW() * view.scale) / 2;
     view.offY = (rect.height - worldH() * view.scale) / 2;
     draw();
@@ -241,7 +272,7 @@
     const rect = canvasWrap.getBoundingClientRect();
     const cx = rect.width / 2, cy = rect.height / 2;
     const before = toWorld(cx, cy);
-    view.scale = clamp(view.scale * factor, 0.15, 6);
+    view.scale = clamp(view.scale * factor, 0.06, 6);
     view.offX = cx - before.x * view.scale;
     view.offY = cy - before.y * view.scale;
     draw();
@@ -257,17 +288,24 @@
     ctx.fillStyle = '#0f1420';
     ctx.fillRect(ox, oy, worldW() * s, worldH() * s);
 
-    // grid
+    // grid — thin out lines on big lots / low zoom so they stay legible,
+    // and only iterate over cells currently in view for performance.
+    const cellPx = CELL * s;
+    const step = cellPx >= 6 ? 1 : Math.ceil(6 / cellPx);
+    const c0 = Math.max(0, Math.floor((-ox) / cellPx / step) * step);
+    const c1 = Math.min(project.lot.cols, Math.ceil((rect.width - ox) / cellPx));
+    const r0 = Math.max(0, Math.floor((-oy) / cellPx / step) * step);
+    const r1 = Math.min(project.lot.rows, Math.ceil((rect.height - oy) / cellPx));
     ctx.strokeStyle = 'rgba(255,255,255,0.05)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let c = 0; c <= project.lot.cols; c++) {
-      const x = Math.round(ox + c * CELL * s) + 0.5;
-      ctx.moveTo(x, oy); ctx.lineTo(x, oy + worldH() * s);
+    for (let c = c0; c <= c1; c += step) {
+      const x = Math.round(ox + c * cellPx) + 0.5;
+      ctx.moveTo(x, Math.max(oy, 0)); ctx.lineTo(x, Math.min(oy + worldH() * s, rect.height));
     }
-    for (let r = 0; r <= project.lot.rows; r++) {
-      const y = Math.round(oy + r * CELL * s) + 0.5;
-      ctx.moveTo(ox, y); ctx.lineTo(ox + worldW() * s, y);
+    for (let r = r0; r <= r1; r += step) {
+      const y = Math.round(oy + r * cellPx) + 0.5;
+      ctx.moveTo(Math.max(ox, 0), y); ctx.lineTo(Math.min(ox + worldW() * s, rect.width), y);
     }
     ctx.stroke();
 
@@ -532,7 +570,7 @@
     const p = getPos(e);
     const before = toWorld(p.x, p.y);
     const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-    view.scale = clamp(view.scale * factor, 0.15, 6);
+    view.scale = clamp(view.scale * factor, 0.06, 6);
     view.offX = p.x - before.x * view.scale;
     view.offY = p.y - before.y * view.scale;
     draw();

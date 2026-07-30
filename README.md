@@ -11,9 +11,13 @@ or serve the folder with any static server).
 
 ## How it works
 
-1. **Pick your lot size.** Choose from eight sizes — Small, Medium, Extra
-   Medium, Large, Extra Large, Extra Extra Large, Extra Extra Extra Large, and
-   Extra ×4 Large. Each gives you a different grid to build on.
+1. **Pick your lot size.** Sizes are grouped into two rows:
+   - **Standard lots** — Small, Medium, Extra Medium, Large, Extra Large, Extra
+     Extra Large, Extra Extra Extra Large, and Extra ×4 Large.
+   - **Big builds** — business & institutional scale: Long Business (a wide
+     strip-mall storefront), Warehouse, Superstore, School, High School,
+     Shopping Mall, and Mega Campus. Each card notes what it's roughly sized
+     for. Each gives you a different grid to build on.
 2. **Draw the rooms.**
    - **Room tool (`R`)** — click and drag to draw a rectangular room. It snaps
      to the grid and is given its own color automatically.
