@@ -30,6 +30,14 @@
     { key: 'high-school',   name: 'High School',   cols: 156, rows: 106, group: 'Big builds', note: 'High school campus' },
     { key: 'mall',          name: 'Shopping Mall', cols: 180, rows: 98,  group: 'Big builds', note: 'Mall / large complex' },
     { key: 'campus',        name: 'Mega Campus',   cols: 212, rows: 142, group: 'Big builds', note: 'University / industrial park' },
+
+    // Estates & land — property / grounds scale
+    { key: 'mansion',    name: 'Mansion & Grounds', cols: 260, rows: 180, group: 'Estates & land', note: 'Estate house + gardens' },
+    { key: 'resort',     name: 'Resort',            cols: 340, rows: 230, group: 'Estates & land', note: 'Hotel resort + grounds' },
+    { key: 'stadium',    name: 'Stadium Complex',   cols: 300, rows: 300, group: 'Estates & land', note: 'Arena + parking' },
+    { key: 'golf',       name: 'Golf Course',       cols: 560, rows: 360, group: 'Estates & land', note: '18-hole course' },
+    { key: 'airport',    name: 'Airport',           cols: 680, rows: 440, group: 'Estates & land', note: 'Terminals + runways' },
+    { key: 'town',       name: 'Small Town',        cols: 820, rows: 560, group: 'Estates & land', note: 'Streets & blocks' },
   ];
 
   // Curated palette — successive rooms cycle through these.
@@ -262,7 +270,7 @@
     const pad = 60;
     const sx = (rect.width - pad) / worldW();
     const sy = (rect.height - pad) / worldH();
-    view.scale = clamp(Math.min(sx, sy), 0.06, 4);
+    view.scale = clamp(Math.min(sx, sy), 0.02, 4);
     view.offX = (rect.width - worldW() * view.scale) / 2;
     view.offY = (rect.height - worldH() * view.scale) / 2;
     draw();
@@ -272,7 +280,7 @@
     const rect = canvasWrap.getBoundingClientRect();
     const cx = rect.width / 2, cy = rect.height / 2;
     const before = toWorld(cx, cy);
-    view.scale = clamp(view.scale * factor, 0.06, 6);
+    view.scale = clamp(view.scale * factor, 0.02, 6);
     view.offX = cx - before.x * view.scale;
     view.offY = cy - before.y * view.scale;
     draw();
@@ -570,7 +578,7 @@
     const p = getPos(e);
     const before = toWorld(p.x, p.y);
     const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-    view.scale = clamp(view.scale * factor, 0.06, 6);
+    view.scale = clamp(view.scale * factor, 0.02, 6);
     view.offX = p.x - before.x * view.scale;
     view.offY = p.y - before.y * view.scale;
     draw();
@@ -953,9 +961,13 @@
   }
 
   function exportPNG() {
-    // render current floor to an offscreen canvas at nice resolution
+    // render current floor to an offscreen canvas at nice resolution.
+    // Cap the output so huge lots (golf course / town scale) stay within the
+    // browser's max canvas dimensions instead of failing to export.
     const pad = 40;
-    const scale = 2;
+    const MAX_SIDE = 8000;
+    const fullW = worldW() + pad * 2, fullH = worldH() + pad * 2;
+    const scale = Math.min(2, MAX_SIDE / fullW, MAX_SIDE / fullH);
     const oc = document.createElement('canvas');
     oc.width = (worldW() + pad * 2) * scale;
     oc.height = (worldH() + pad * 2) * scale;

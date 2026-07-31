@@ -16,8 +16,13 @@ or serve the folder with any static server).
      Extra Large, Extra Extra Extra Large, and Extra ×4 Large.
    - **Big builds** — business & institutional scale: Long Business (a wide
      strip-mall storefront), Warehouse, Superstore, School, High School,
-     Shopping Mall, and Mega Campus. Each card notes what it's roughly sized
-     for. Each gives you a different grid to build on.
+     Shopping Mall, and Mega Campus.
+   - **Estates & land** — property / grounds scale: Mansion & Grounds, Resort,
+     Stadium Complex, Golf Course, Airport, and Small Town (up to 820 × 560
+     cells).
+
+   Each card notes what it's roughly sized for and gives you a different grid to
+   build on.
 2. **Draw the rooms.**
    - **Room tool (`R`)** — click and drag to draw a rectangular room. It snaps
      to the grid and is given its own color automatically.
