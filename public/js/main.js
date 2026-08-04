@@ -90,6 +90,18 @@ function makeCanvas(w, h) {
   return c;
 }
 
+// pick the largest font (<= maxPx) at which `text` fits within `maxW` pixels,
+// so sign copy never gets clipped like "STAY IN" -> "TAY I"
+function fitFont(ctx, text, maxW, maxPx, weight = '800') {
+  let fs = maxPx;
+  ctx.font = `${weight} ${fs}px Arial`;
+  while (ctx.measureText(text).width > maxW && fs > 8) {
+    fs -= 1;
+    ctx.font = `${weight} ${fs}px Arial`;
+  }
+  return fs;
+}
+
 // Highway shield drawing — Interstate / US route / State route
 export function drawShield(ctx, sign, num, size) {
   const s = size;
@@ -3478,6 +3490,35 @@ function buildBridgeStructure() {
     boat.rotation.y = Math.random() * Math.PI * 2;
     scene.add(boat);
   }
+
+  // dedicated bridge lighting: short poles rising straight off the parapet
+  // with a downturned fixture over the walkway — no floating cobra-heads
+  const poleMat = metalMat('#8f949c', { roughness: 0.5 });
+  for (let z = -ROAD_LEN / 2 + 40; z < ROAD_LEN / 2; z += 60) {
+    for (const dir of [1, -1]) {
+      const g = new THREE.Group();
+      const poleH = 4.2;
+      g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, poleH, 8), poleMat).translateY(poleH / 2));
+      // short arm curving inward over the deck
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.0, 8), poleMat);
+      arm.rotation.z = Math.PI / 2.3;
+      arm.position.set(-dir * 0.4, poleH - 0.05, 0);
+      g.add(arm);
+      const headX = -dir * 0.8;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.28), lamb('#3a3d42', { roughness: 0.6 }));
+      head.position.set(headX, poleH + 0.05, 0);
+      g.add(head);
+      const lensMat = new THREE.MeshStandardMaterial({ color: '#5c5030', emissive: '#ffdf9e', emissiveIntensity: 0 });
+      LAMP_EMISSIVE.push(lensMat);
+      const lens = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.2), lensMat);
+      lens.position.set(headX, poleH - 0.05, 0);
+      g.add(lens);
+      lightGlowMats.push(addGlowSprite(lens, '#ffdf9e', 1.1, -0.02));
+      // sits on top of the parapet (parapet crown ~1.05 high at deckHalf)
+      g.position.set(dir * (deckHalf - 0.05), 1.0, z);
+      scene.add(g);
+    }
+  }
 }
 
 // LED lane-control textures (shared): green down-arrow / red X, like the
@@ -3607,10 +3648,10 @@ function buildBridgeSigns(hw) {
   const off = outerEdge + 0.62;
 
   const panelSign = (draw, w, h, z, side, postH = 2.2) => {
-    const c = makeCanvas(Math.round(160 * w), Math.round(160 * h));
+    const c = makeCanvas(Math.round(256 * w), Math.round(256 * h));
     draw(c.getContext('2d'), c.width, c.height);
     const tex = new THREE.CanvasTexture(c);
-    tex.anisotropy = 4;
+    tex.anisotropy = 8;
     const back = lamb('#5b626b');
     const face = new THREE.MeshStandardMaterial({ map: tex });
     const g = new THREE.Group();
@@ -3623,37 +3664,40 @@ function buildBridgeSigns(hw) {
     scene.add(g);
   };
 
-  const whiteReg = (lines) => (ctx, w, h) => {
-    ctx.fillStyle = '#f4f7fa'; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 5; ctx.strokeRect(5, 5, w - 10, h - 10);
-    ctx.fillStyle = '#111'; ctx.textAlign = 'center';
-    const fs = Math.floor(h / (lines.length + 1.4));
-    ctx.font = `800 ${fs}px Arial`;
-    lines.forEach((ln, i) => ctx.fillText(ln, w / 2, fs * (i + 1.25)));
+  // each line auto-fits the panel width so nothing gets clipped
+  const regSign = (bg, lines) => (ctx, w, h) => {
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = Math.max(4, w * 0.045);
+    ctx.strokeRect(w * 0.05, h * 0.05, w * 0.9, h * 0.9);
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const margin = w * 0.14;
+    const rowH = (h * 0.82) / lines.length;
+    const cap = Math.floor(rowH * 0.82);
+    lines.forEach((ln, i) => {
+      const big = String(ln).length <= 3 && lines.length > 1 && i === lines.length - 1;
+      const fs = fitFont(ctx, String(ln), w - margin, big ? cap * 1.5 : cap);
+      ctx.font = `800 ${fs}px Arial`;
+      ctx.fillText(String(ln), w / 2, h * 0.09 + rowH * (i + 0.5));
+    });
   };
-  const yellowWarn = (lines) => (ctx, w, h) => {
-    ctx.fillStyle = '#f7c531'; ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 5; ctx.strokeRect(5, 5, w - 10, h - 10);
-    ctx.fillStyle = '#111'; ctx.textAlign = 'center';
-    const fs = Math.floor(h / (lines.length + 1.4));
-    ctx.font = `800 ${fs}px Arial`;
-    lines.forEach((ln, i) => ctx.fillText(ln, w / 2, fs * (i + 1.25)));
-  };
+  const whiteReg = (lines) => regSign('#f4f7fa', lines);
+  const yellowWarn = (lines) => regSign('#f7c531', lines);
 
   // big green bridge name sign at both ends
   const nameDraw = (ctx, w, h) => {
     ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.strokeRect(7, 7, w - 14, h - 14);
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-    let fs = Math.floor(w / (hw.name.length * 0.62));
-    fs = Math.min(fs, Math.floor(h * 0.3));
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const fs = fitFont(ctx, hw.name, w * 0.9, Math.floor(h * 0.32));
     ctx.font = `800 ${fs}px Arial`;
     ctx.fillText(hw.name, w / 2, h * 0.4);
-    ctx.font = `600 ${Math.floor(fs * 0.62)}px Arial`;
-    ctx.fillText(`over ${hw.water || 'the water'}`, w / 2, h * 0.72);
+    const sub = `over ${hw.water || 'the water'}`;
+    const fs2 = fitFont(ctx, sub, w * 0.85, Math.floor(fs * 0.62), '600');
+    ctx.font = `600 ${fs2}px Arial`;
+    ctx.fillText(sub, w / 2, h * 0.72);
   };
-  panelSign(nameDraw, 4.6, 1.5, ROAD_LEN / 2 - 30, 1, 2.6);
-  panelSign(nameDraw, 4.6, 1.5, -(ROAD_LEN / 2 - 30), -1, 2.6);
+  panelSign(nameDraw, 5.4, 1.6, ROAD_LEN / 2 - 30, 1, 2.6);
+  panelSign(nameDraw, 5.4, 1.6, -(ROAD_LEN / 2 - 30), -1, 2.6);
 
   // regulatory + warning signs repeating across the span, both directions
   const seq = [
@@ -3662,12 +3706,12 @@ function buildBridgeSigns(hw) {
     yellowWarn(['HIGH WINDS', 'POSSIBLE']),
     whiteReg(['TRUCKS USE', 'RIGHT LANE']),
     whiteReg(['SPEED', 'LIMIT', String(hw.speed)]),
-    yellowWarn(['DO NOT PASS']),
+    yellowWarn(['DO NOT', 'PASS']),
   ];
   let i = 0;
   for (let z = -ROAD_LEN / 2 + 130; z < ROAD_LEN / 2 - 80; z += 165) {
-    panelSign(seq[i % seq.length], 1.1, 1.25, z, 1);
-    panelSign(seq[(i + 3) % seq.length], 1.1, 1.25, z + 82, -1);
+    panelSign(seq[i % seq.length], 1.5, 1.5, z, 1, 2.4);
+    panelSign(seq[(i + 3) % seq.length], 1.5, 1.5, z + 82, -1, 2.4);
     i++;
   }
 }
@@ -3983,10 +4027,11 @@ function buildBladeSigns(z) {
 // dusk/night. This is a brand-new, easy-to-spot addition to the roadside.
 const LAMP_EMISSIVE = [];
 function buildStreetlights(hw) {
+  if (hw.terrain === 'bridge') return;   // bridge has its own parapet-mounted lights
   const { outerEdge } = roadInfo;
-  const off = outerEdge + (hw.terrain === 'bridge' ? 0.55 : hw.terrain === 'street' ? 1.6 : hw.terrain === 'urban' ? 5.5 : 3.4);
+  const off = outerEdge + (hw.terrain === 'street' ? 1.6 : hw.terrain === 'urban' ? 5.5 : 3.4);
   const poleMat = metalMat('#8f949c', { roughness: 0.55 });
-  const spacing = hw.terrain === 'bridge' ? 70 : hw.terrain === 'street' ? 42 : hw.terrain === 'urban' ? 55 : 90;
+  const spacing = hw.terrain === 'street' ? 42 : hw.terrain === 'urban' ? 55 : 90;
   let side = 1;
   for (let z = -ROAD_LEN / 2 + 30; z < ROAD_LEN / 2 - 30; z += spacing) {
     const g = new THREE.Group();
@@ -6496,6 +6541,14 @@ function requestLock() {
   if (p && p.catch) p.catch(() => {});
 }
 
+// Release every held key. Called whenever we pause, exit pointer lock, or the
+// window loses focus — otherwise a key held at that moment never receives its
+// keyup (the browser delivers it elsewhere) and stays "pressed", which made
+// the character walk forward on its own after opening the pause menu.
+function clearKeys() {
+  for (const k in keys) keys[k] = false;
+}
+
 function resumeGame() {
   paused = false;
   hide($('pause-overlay'));
@@ -6507,6 +6560,7 @@ function initInput() {
 
   document.addEventListener('pointerlockchange', () => {
     const locked = document.pointerLockElement === renderer?.domElement;
+    if (!locked) clearKeys();   // drop any held key so nothing stays "pressed"
     if (!locked && playing && !buildMenuOpen && wantLock) {
       // user pressed Esc
       paused = true;
@@ -6514,6 +6568,10 @@ function initInput() {
     }
     if (locked) { paused = false; hide($('pause-overlay')); }
   });
+
+  // alt-tabbing or clicking away swallows keyups too — clear on blur/hide
+  window.addEventListener('blur', clearKeys);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clearKeys(); });
 
   canvas.addEventListener('click', () => {
     if (playing && !paused && !buildMenuOpen && document.pointerLockElement !== canvas) requestLock();
