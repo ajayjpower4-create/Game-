@@ -40,6 +40,15 @@ let buildStretch = 1;        // [ and ] stretch props that support it
 let breakerA = null, breakerPreview = null;   // road-breaker rectangle tool
 let blinkers = [];           // {mat, phase, speed} flashing lights
 let cars = [];
+let trafficOn = true;        // AI traffic toggle (V key / pause menu)
+
+function setTrafficOn(on, silent = false) {
+  trafficOn = on;
+  for (const c of cars) c.mesh.visible = on;
+  const btn = $('btn-traffic');
+  if (btn) btn.innerHTML = on ? '🚗 AI Traffic: ON' : '🚗 AI Traffic: OFF';
+  if (!silent) toast(on ? '🚗 AI traffic enabled' : '🚫 AI traffic disabled — road is all yours');
+}
 let laneBlockers = { A: [], B: [] };  // per-lane sorted arrays of z positions
 let clouds = [];
 let sun = null, hemiLight = null, ambLight = null, skyDome = null;
@@ -120,6 +129,21 @@ export function drawShield(ctx, sign, num, size) {
     ctx.font = `800 ${Math.floor(s * fs)}px Arial`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(num, s / 2, s * 0.52);
+  } else if (sign === 'ST') {
+    // downtown street: green street-name blade
+    ctx.fillStyle = '#0b6b3a';
+    ctx.beginPath();
+    ctx.roundRect(s * 0.04, s * 0.28, s * 0.92, s * 0.44, s * 0.06);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = Math.max(2, s * 0.025);
+    ctx.beginPath();
+    ctx.roundRect(s * 0.07, s * 0.31, s * 0.86, s * 0.38, s * 0.05);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = `800 ${Math.floor(s * 0.2)}px Arial`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('MAIN ST', s / 2, s * 0.51);
   } else {
     // state route: white circle on black square
     ctx.fillStyle = '#111';
@@ -611,7 +635,7 @@ function coneBuilder(r, h, bands) {
     g.add(base, base2);
     const c = new THREE.Mesh(
       new THREE.CylinderGeometry(r * 0.22, r, h, 18),
-      new THREE.MeshStandardMaterial({ color: '#ff5e00', roughness: 0.55 })
+      new THREE.MeshPhysicalMaterial({ color: '#ff5e00', roughness: 0.32, clearcoat: 0.5, clearcoatRoughness: 0.4, envMapIntensity: 1.1 })
     );
     c.position.y = h / 2 + 0.06;
     c.castShadow = true;
@@ -764,7 +788,11 @@ function buildCatalog() {
     { cat: 'Cones', id: 'drum', icon: '🛢️', name: 'Traffic Drum',
       desc: 'Orange channelizer barrel', blocks: true, build: () => {
         const g = new THREE.Group();
-        const d = cyl(0.26, 0.3, 0.95, '#ff5e00', 0, 0.5, 0, 18);
+        const d = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.26, 0.3, 0.95, 18),
+          new THREE.MeshPhysicalMaterial({ color: '#ff5e00', roughness: 0.34, clearcoat: 0.45, clearcoatRoughness: 0.4, envMapIntensity: 1.0 })
+        );
+        d.position.y = 0.5; d.castShadow = true;
         g.add(d);
         for (const y of [0.35, 0.62, 0.85]) {
           const band = new THREE.Mesh(
@@ -1161,7 +1189,7 @@ function buildCatalog() {
     { cat: 'Equipment', id: 'skid_steer', icon: '🚜', name: 'Skid Steer Loader',
       desc: 'Compact loader with front bucket', blocks: true, build: () => {
         const g = new THREE.Group();
-        const yellow = lamb('#e3a51c', { roughness: 0.5 });
+        const yellow = machinePaint('#e3a51c');
         g.add(rbox(1.15, 0.7, 1.4, yellow, 0.08, 0, 0.62, -0.1));
         // caged cab
         g.add(box(0.85, 0.08, 0.95, '#26282c', 0, 1.62, -0.15));
@@ -1192,7 +1220,7 @@ function buildCatalog() {
     { cat: 'Equipment', id: 'drum_roller', icon: '🛞', name: 'Vibratory Drum Roller',
       desc: 'Smooth-drum asphalt compactor', blocks: true, build: () => {
         const g = new THREE.Group();
-        const yellow = lamb('#e3a51c', { roughness: 0.5 });
+        const yellow = machinePaint('#e3a51c');
         // front drum
         const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1.25, 18), metalMat('#9aa0a8', { roughness: 0.35 }));
         drum.rotation.z = Math.PI / 2;
@@ -1219,7 +1247,7 @@ function buildCatalog() {
     { cat: 'Equipment', id: 'backhoe', icon: '🚜', name: 'Backhoe Loader',
       desc: 'Loader up front, digging arm out back', blocks: true, build: () => {
         const g = new THREE.Group();
-        const yellow = lamb('#e3a51c', { roughness: 0.5 });
+        const yellow = machinePaint('#e3a51c');
         g.add(rbox(1.05, 0.7, 1.2, yellow, 0.09, 0, 0.95, 1.0));   // engine hood
         g.add(box(0.9, 0.12, 0.5, '#26282c', 0, 0.72, 0.2));
         // cab
@@ -1255,7 +1283,7 @@ function buildCatalog() {
     { cat: 'Equipment', id: 'paver', icon: '🛣️', name: 'Asphalt Paver',
       desc: 'Tracked paver with hopper and screed', blocks: true, build: () => {
         const g = new THREE.Group();
-        const yellow = lamb('#e3a51c', { roughness: 0.5 });
+        const yellow = machinePaint('#e3a51c');
         for (const sx of [-0.72, 0.72]) {
           g.add(box(0.4, 0.42, 2.1, '#26282c', sx, 0.32, 0));      // tracks
           g.add(box(0.42, 0.1, 2.12, '#3a3d42', sx, 0.56, 0));
@@ -1284,7 +1312,7 @@ function buildCatalog() {
     { cat: 'Equipment', id: 'telehandler', icon: '🏗️', name: 'Telehandler',
       desc: 'Telescopic boom forklift', blocks: true, build: () => {
         const g = new THREE.Group();
-        const yellow = lamb('#e3a51c', { roughness: 0.5 });
+        const yellow = machinePaint('#e3a51c');
         g.add(rbox(1.5, 0.8, 2.5, yellow, 0.1, 0, 0.72, 0));
         // cab on the left side
         const cab = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.85, 1.0), carGlass());
@@ -1310,7 +1338,7 @@ function buildCatalog() {
     { cat: 'Equipment', id: 'mobile_crane', icon: '🏗️', name: 'Mobile Crane',
       desc: 'Telescopic boom crane on outriggers', blocks: true, build: () => {
         const g = new THREE.Group();
-        const yellow = lamb('#e3a51c', { roughness: 0.5 });
+        const yellow = machinePaint('#e3a51c');
         g.add(rbox(1.7, 0.7, 4.4, yellow, 0.1, 0, 0.78, 0));       // carrier
         // driving cab up front
         g.add(rbox(1.5, 0.8, 0.9, yellow, 0.1, 0, 1.5, 1.85));
@@ -1353,7 +1381,7 @@ function buildCatalog() {
       desc: 'Tow-behind drum mixer', blocks: true, build: () => {
         const g = trailerChassis(1.9);
         const drum = new THREE.Group();
-        const orange = lamb('#e8641c', { roughness: 0.5 });
+        const orange = machinePaint('#e8641c');
         const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.3, 0.7, 14), orange);
         body.castShadow = true;
         drum.add(body);
@@ -1371,7 +1399,7 @@ function buildCatalog() {
     { cat: 'Equipment', id: 'forklift', icon: '🚜', name: 'Forklift',
       desc: 'Warehouse forklift with full mast', blocks: true, build: () => {
         const g = new THREE.Group();
-        const yellow = lamb('#e3a51c', { roughness: 0.5 });
+        const yellow = machinePaint('#e3a51c');
         g.add(rbox(1.1, 0.75, 1.9, yellow, 0.1, 0, 0.6, -0.1));
         g.add(box(1.05, 0.55, 0.4, '#33363b', 0, 0.65, -1.05));    // counterweight
         // overhead guard
@@ -1399,7 +1427,7 @@ function buildCatalog() {
     { cat: 'Equipment', id: 'boom_lift', icon: '🪜', name: 'Articulated Boom Lift',
       desc: 'Man-lift with basket up high', blocks: true, build: () => {
         const g = new THREE.Group();
-        const orange = lamb('#e8641c', { roughness: 0.5 });
+        const orange = machinePaint('#e8641c');
         g.add(rbox(1.4, 0.5, 2.3, orange, 0.08, 0, 0.5, 0));
         g.add(box(0.9, 0.45, 0.9, '#33363b', 0, 0.95, -0.3));      // turret
         // riser up and jib forward
@@ -1421,7 +1449,7 @@ function buildCatalog() {
     { cat: 'Equipment', id: 'walk_trencher', icon: '⛏️', name: 'Walk-Behind Trencher',
       desc: 'Chain trencher for utility runs', blocks: true, build: () => {
         const g = new THREE.Group();
-        const red = lamb('#c1391f', { roughness: 0.5 });
+        const red = machinePaint('#c1391f');
         g.add(rbox(0.75, 0.6, 1.15, red, 0.08, 0, 0.62, 0));
         g.add(box(0.5, 0.25, 0.4, '#26282c', 0, 1.0, 0.15));       // engine top
         g.add(cyl(0.03, 0.035, 0.25, '#1a1c20', 0.2, 1.15, 0.3, 6)); // exhaust
@@ -2411,6 +2439,14 @@ function palletMesh(count) {
   return g;
 }
 
+// glossy construction-equipment paint (CAT yellow etc.) — reads as enamel,
+// not flat plastic, and picks up the sky reflection
+function machinePaint(color) {
+  return new THREE.MeshPhysicalMaterial({
+    color, roughness: 0.42, clearcoat: 0.4, clearcoatRoughness: 0.35, envMapIntensity: 1.0,
+  });
+}
+
 // chunky black machine tire + yellow hub, axle along x
 function machineTire(r, w, x, y, z) {
   const g = new THREE.Group();
@@ -2493,6 +2529,7 @@ function initMenus() {
   $('btn-back-highway').onclick = () => { hide($('screen-vest')); show($('screen-highway')); };
   $('btn-resume').onclick = resumeGame;
   $('btn-save').onclick = saveGame;
+  $('btn-traffic').onclick = () => setTrafficOn(!trafficOn);
   $('btn-clear').onclick = () => { clearPlaced(); resumeGame(); };
   $('btn-menu').onclick = () => location.reload();
   $('build-close').onclick = closeBuildMenu;
@@ -2509,7 +2546,11 @@ function initContinueButton() {
   btn.onclick = () => {
     const s = STATES[meta.state];
     if (!s) { toast('⚠️ Saved state no longer exists'); return; }
-    const hw = s.highways.find((h) => h.sign === meta.highway.sign && h.num === meta.highway.num);
+    // terrain disambiguates when a bridge shares its route number with the
+    // regular highway entry (e.g. US-50 vs the US-50 Chesapeake Bay Bridge)
+    const hw = s.highways.find((h) => h.sign === meta.highway.sign && h.num === meta.highway.num
+      && (!meta.highway.terrain || h.terrain === meta.highway.terrain))
+      || s.highways.find((h) => h.sign === meta.highway.sign && h.num === meta.highway.num);
     if (!hw) { toast('⚠️ Saved highway no longer exists'); return; }
     const vest = vestsForState(meta.state).find((v) => v.id === meta.vestId) || vestsForState(meta.state)[0];
     sel.state = meta.state;
@@ -2550,8 +2591,10 @@ function showHighwayPicker() {
     shieldWrap.appendChild(shieldCanvas(hw.sign, hw.num, 112));
     const info = document.createElement('div');
     info.className = 'highway-info';
-    const label = hw.sign === 'I' ? `I-${hw.num}` : hw.sign === 'US' ? `US-${hw.num}` : `${s.abbr}-${hw.num}`;
-    info.innerHTML = `<div class="highway-name">${label} &mdash; ${hw.name}</div>
+    const label = highwayLabel(s, hw);
+    const badge = hw.terrain === 'bridge' ? ' <span class="hw-badge">🌉 BRIDGE</span>'
+      : hw.terrain === 'street' ? ' <span class="hw-badge">🏪 DOWNTOWN</span>' : '';
+    info.innerHTML = `<div class="highway-name">${label} &mdash; ${hw.name}${badge}</div>
       <div class="highway-meta">to <b>${hw.city}</b> &bull; ${TERRAIN_NAMES[hw.terrain]} &bull; ${hw.lanes} lanes each way &bull; ${hw.speed} mph</div>`;
     card.append(shieldWrap, info);
     card.onclick = () => { sel.highway = hw; showVestPicker(); };
@@ -2596,6 +2639,7 @@ function showVestPicker() {
 const SAVE_KEY = 'chs_save_v1';
 
 function highwayLabel(s, hw) {
+  if (hw.sign === 'ST') return 'Main St';
   return hw.sign === 'I' ? `I-${hw.num}` : hw.sign === 'US' ? `US-${hw.num}` : `${s.abbr}-${hw.num}`;
 }
 
@@ -2625,10 +2669,11 @@ function collectSaveData() {
     version: 1,
     savedAt: new Date().toISOString(),
     state: sel.state,
-    highway: { sign: hw.sign, num: hw.num },
+    highway: { sign: hw.sign, num: hw.num, terrain: hw.terrain },
     highwayLabel: highwayLabel(s, hw),
     vestId: sel.vest.id,
     timeIdx,
+    trafficOn,
     player: { x: player.position.x, z: player.position.z, yaw },
     items,
     vehicles: vehiclesOut,
@@ -2660,6 +2705,7 @@ function loadSavedGameMeta() {
 function applySaveData(data) {
   timeIdx = THREE.MathUtils.clamp(data.timeIdx ?? 0, 0, 2);
   applyTime();
+  setTrafficOn(data.trafficOn !== false, true);
 
   for (const it of data.items || []) {
     if (it.tool) {
@@ -2740,6 +2786,7 @@ function startGame(saveData = null) {
     spawnTraffic();
     initBuildUI();
     if (saveData) applySaveData(saveData);
+    else setTrafficOn(true, true);   // fresh game always starts with traffic on
     hide($('screen-loading'));
     show($('hud'));
     $('location-tag').innerHTML =
@@ -2837,6 +2884,8 @@ const TERRAIN_STYLE = {
   mountain: { ground: '#6f7d6a', sky: '#4f97e6', fog: '#c9d7e6', fogFar: 900 },
   swamp:    { ground: '#52683f', sky: '#79aed6', fog: '#cdd8c0', fogFar: 700 },
   coast:    { ground: '#cfc08a', sky: '#3f97ea', fog: '#d4e9f6', fogFar: 1000 },
+  bridge:   { ground: '#3a7896', sky: '#4f9fe8', fog: '#d3e4ef', fogFar: 1100 },
+  street:   { ground: '#8b8e91', sky: '#5a9ce8', fog: '#c9d6e4', fogFar: 700 },
 };
 
 // ============================================================
@@ -2936,6 +2985,8 @@ function buildWorld() {
   buildingMats = [];
   towerSpots = [];
   lightGlowMats = [];
+  laneSignals = [];
+  _plateTexCache = new Map();   // plates show the current state's abbreviation
   LAMP_EMISSIVE.length = 0;
   scene.background = new THREE.Color(style.sky);
   scene.fog = new THREE.Fog(style.fog, 120, style.fogFar);
@@ -2962,27 +3013,42 @@ function buildWorld() {
   scene.add(sun, sun.target);
 
   // ---- geometry constants ----
-  const medianW = hw.terrain === 'urban' ? 1.2 : 9;
-  const shoulderIn = 1.5, shoulderOut = 3.0;
+  const T = hw.terrain;
+  const medianW = (T === 'urban' || T === 'bridge') ? 1.2 : T === 'street' ? 0.9 : 9;
+  const shoulderIn = T === 'bridge' ? 0.6 : T === 'street' ? 0.25 : 1.5;
+  const shoulderOut = T === 'bridge' ? 1.4 : T === 'street' ? 2.8 : 3.0;   // street: outer shoulder is the parking lane
   const sideW = shoulderIn + lanes * LANE_W + shoulderOut;
   roadInfo = {
     medianHalf: medianW / 2, shoulderIn, shoulderOut, sideW,
     outerEdge: medianW / 2 + sideW, lanes, medianW,
   };
 
-  // ---- ground ----
-  const groundSurf = noiseSurface(style.ground, 7, 128, 1.1);
-  groundSurf.map.repeat.set(90, 90);
-  groundSurf.normalMap.repeat.set(90, 90);
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(ROAD_LEN + 900, ROAD_LEN + 900),
-    lamb('#ffffff', { map: groundSurf.map, normalMap: groundSurf.normalMap, normalScale: new THREE.Vector2(1, 1) })
-  );
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.08;
-  ground.receiveShadow = true;
-  scene.add(ground);
-  groundMeshes.push(ground);
+  // ---- ground (or open water under the bridge deck) ----
+  if (T === 'bridge') {
+    const water = new THREE.Mesh(
+      new THREE.PlaneGeometry(ROAD_LEN + 1600, ROAD_LEN + 1600),
+      new THREE.MeshStandardMaterial({
+        color: '#2e6b8f', roughness: 0.18, metalness: 0.35, envMapIntensity: 1.4,
+      })
+    );
+    water.rotation.x = -Math.PI / 2;
+    water.position.y = -7;
+    water.receiveShadow = true;
+    scene.add(water);   // NOT a groundMesh — you can't place props on open water
+  } else {
+    const groundSurf = noiseSurface(style.ground, 7, 128, 1.1);
+    groundSurf.map.repeat.set(90, 90);
+    groundSurf.normalMap.repeat.set(90, 90);
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(ROAD_LEN + 900, ROAD_LEN + 900),
+      lamb('#ffffff', { map: groundSurf.map, normalMap: groundSurf.normalMap, normalScale: new THREE.Vector2(1, 1) })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.08;
+    ground.receiveShadow = true;
+    scene.add(ground);
+    groundMeshes.push(ground);
+  }
 
   // ---- roadway (two carriageways) ----
   const asphaltSurf = noiseSurface('#3d4045', 5, 128, 1.8);
@@ -3003,11 +3069,24 @@ function buildWorld() {
   }
 
   // ---- median ----
-  if (hw.terrain === 'urban') {
+  if (T === 'urban' || T === 'bridge') {
     // continuous concrete median with the real jersey cross-section
     const jb = new THREE.Mesh(jerseyGeometry(ROAD_LEN), concreteMat());
     jb.castShadow = true; jb.receiveShadow = true;
     scene.add(jb);
+  } else if (T === 'street') {
+    // downtown: no barrier — just pavement with a double yellow centerline
+    const mid = new THREE.Mesh(new THREE.BoxGeometry(medianW + 0.2, 0.15, ROAD_LEN), lamb('#3d4045'));
+    mid.position.y = -0.08;
+    mid.receiveShadow = true;
+    scene.add(mid);
+    groundMeshes.push(mid);
+    for (const sx of [-0.22, 0.22]) {
+      const yl = new THREE.Mesh(new THREE.PlaneGeometry(0.12, ROAD_LEN), lamb('#e8b31a'));
+      yl.rotation.x = -Math.PI / 2;
+      yl.position.set(sx, 0.012, 0);
+      scene.add(yl);
+    }
   } else {
     const grass = new THREE.Mesh(new THREE.BoxGeometry(medianW, 0.1, ROAD_LEN), lamb(style.ground));
     grass.position.y = -0.06;
@@ -3024,14 +3103,28 @@ function buildWorld() {
   buildRoadside(hw, style);
   buildStreetlights(hw);
 
-  // ---- overhead gantries + roadside extras ----
-  buildGantry(hw, -120, 'A');
-  buildGantry(hw, 320, 'B');
-  buildGantry(hw, -ROAD_LEN * 0.38, 'A');
-  buildMileMarkers(hw);
-  buildRoadsideSigns(hw);
-  buildDelineators(hw);
-  buildBillboards(hw);
+  // ---- overhead gantries + roadside extras (venue-specific) ----
+  if (T === 'street') {
+    buildStreetscape(hw);           // crosswalks, signals, blade signs, parked cars
+  } else if (T === 'bridge') {
+    // lattice gantries with per-lane signals, like a real bay crossing
+    for (let z = -ROAD_LEN * 0.42; z < ROAD_LEN * 0.45; z += ROAD_LEN * 0.145) {
+      buildLaneSignalGantry(z);
+    }
+    buildBridgeSigns(hw);
+    buildMileMarkers(hw);
+  } else {
+    buildGantry(hw, -120, 'A', 'exit');
+    buildGantry(hw, 320, 'B', 'cities');
+    buildGantry(hw, -ROAD_LEN * 0.38, 'A', 'exitonly');
+    buildGantry(hw, ROAD_LEN * 0.24, 'B', 'exit');
+    if (lanes >= 3) buildGantry(hw, ROAD_LEN * 0.42, 'A', 'carpool');
+    buildGantry(hw, -ROAD_LEN * 0.16, 'B', 'cities');
+    buildMileMarkers(hw);
+    buildRoadsideSigns(hw);
+    buildDelineators(hw);
+    buildBillboards(hw);
+  }
 
   // ---- scenery ----
   buildScenery(hw, style);
@@ -3223,6 +3316,14 @@ function soundWallTexture() {
 
 function buildRoadside(hw, style) {
   const { outerEdge } = roadInfo;
+  if (hw.terrain === 'bridge') {
+    buildBridgeStructure();
+    return;
+  }
+  if (hw.terrain === 'street') {
+    buildSidewalks();
+    return;
+  }
   if (hw.terrain === 'urban') {
     // precast sound walls with panel seams
     const tex = soundWallTexture();
@@ -3264,15 +3365,628 @@ function buildRoadside(hw, style) {
   }
 }
 
+// ============================================================
+// Bridge venue — deck structure, piers, parapets, lane signals
+// ============================================================
+function buildBridgeStructure() {
+  const { outerEdge } = roadInfo;
+  const deckHalf = outerEdge + 1.1;
+
+  // walkway strip between the travel lanes and the parapet
+  const walkMat = concreteMat();
+  for (const dir of [1, -1]) {
+    const walk = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.2, ROAD_LEN), walkMat);
+    walk.position.set(dir * (outerEdge + 0.55), 0.02, 0);
+    walk.receiveShadow = true;
+    scene.add(walk);
+    groundMeshes.push(walk);
+  }
+
+  // concrete parapet + twin steel railing tubes on top
+  const railMat = metalMat('#9aa0a8', { roughness: 0.4 });
+  for (const dir of [1, -1]) {
+    const parapet = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.05, ROAD_LEN), walkMat);
+    parapet.position.set(dir * deckHalf, 0.52, 0);
+    parapet.castShadow = true; parapet.receiveShadow = true;
+    scene.add(parapet);
+    for (const ry of [1.2, 1.45]) {
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, ROAD_LEN, 6), railMat);
+      tube.rotation.x = Math.PI / 2;
+      tube.position.set(dir * deckHalf, ry, 0);
+      scene.add(tube);
+    }
+    // railing posts
+    const n = Math.floor(ROAD_LEN / 8);
+    const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.55, 0.08), lamb('#7d838c'), n);
+    const m4 = new THREE.Matrix4();
+    for (let i = 0; i < n; i++) {
+      m4.setPosition(dir * deckHalf, 1.3, -ROAD_LEN / 2 + i * 8 + 4);
+      posts.setMatrixAt(i, m4);
+    }
+    scene.add(posts);
+  }
+
+  // steel girder fascia below the deck edge — what you see from the side
+  const girderMat = lamb('#3e6b53', { roughness: 0.55, metalness: 0.4 });
+  for (const dir of [1, -1]) {
+    const girder = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, ROAD_LEN), girderMat);
+    girder.position.set(dir * (deckHalf - 0.3), -0.95, 0);
+    scene.add(girder);
+  }
+  const deckSlab = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 2 + 0.6, 0.35, ROAD_LEN), walkMat);
+  deckSlab.position.y = -0.28;
+  scene.add(deckSlab);
+
+  // piers marching across the water every 45 m
+  for (let z = -ROAD_LEN / 2 + 22; z < ROAD_LEN / 2; z += 45) {
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 2 - 1, 1.1, 1.6), walkMat);
+    cap.position.set(0, -1.9, z);
+    scene.add(cap);
+    for (const px of [-deckHalf + 2.2, deckHalf - 2.2]) {
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.95, 5.2, 10), walkMat);
+      col.position.set(px, -4.9, z);
+      scene.add(col);
+    }
+  }
+
+  // expansion joints — dark steel strips across the deck
+  for (let z = -ROAD_LEN / 2 + 45; z < ROAD_LEN / 2; z += 90) {
+    const joint = new THREE.Mesh(new THREE.BoxGeometry(outerEdge * 2, 0.02, 0.32), lamb('#26282c', { roughness: 0.5, metalness: 0.5 }));
+    joint.position.set(0, 0.015, z);
+    scene.add(joint);
+  }
+
+  // steel through-arch main span at mid-bridge — the postcard part
+  const archMat = lamb('#3e6b53', { roughness: 0.5, metalness: 0.45 });
+  for (const dir of [1, -1]) {
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(85, 0.55, 8, 40, Math.PI), archMat);
+    arch.position.set(dir * (deckHalf + 0.6), 0.5, 0);
+    arch.rotation.y = Math.PI / 2;
+    arch.scale.set(1, 0.42, 1);   // half-ellipse: 170 m span, ~36 m rise
+    arch.castShadow = true;
+    scene.add(arch);
+    // hangers from arch down to the deck edge
+    for (let z = -75; z <= 75; z += 12.5) {
+      const t = z / 85;
+      const y = Math.sqrt(Math.max(0, 1 - t * t)) * 85 * 0.42 + 0.5;
+      const hanger = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, y - 1.1, 6), archMat);
+      hanger.position.set(dir * (deckHalf + 0.6), (y + 1.1) / 2, z);
+      scene.add(hanger);
+    }
+  }
+  // cross-braces between the two arches up top
+  for (const z of [-52, -26, 0, 26, 52]) {
+    const t = z / 85;
+    const y = Math.sqrt(Math.max(0, 1 - t * t)) * 85 * 0.42 + 0.5;
+    const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, (deckHalf + 0.6) * 2, 8), archMat);
+    brace.rotation.z = Math.PI / 2;
+    brace.position.set(0, y, z);
+    scene.add(brace);
+  }
+
+  // a few boats out on the water to sell the scale
+  for (let i = 0; i < 6; i++) {
+    const side = Math.random() < 0.5 ? 1 : -1;
+    const boat = new THREE.Group();
+    const hullLen = 6 + Math.random() * 9;
+    boat.add(box(2.2, 1.1, hullLen, '#f2f4f6', 0, 0.4, 0));
+    boat.add(box(1.5, 1.0, hullLen * 0.3, '#d8dde2', 0, 1.3, -hullLen * 0.12));
+    const bow = box(2.2, 1.1, 1.6, '#f2f4f6', 0, 0.4, hullLen / 2 + 0.4);
+    bow.rotation.y = Math.PI / 4;
+    boat.add(bow);
+    boat.position.set(side * (outerEdge + 40 + Math.random() * 220), -6.9, (Math.random() - 0.5) * ROAD_LEN * 0.9);
+    boat.rotation.y = Math.random() * Math.PI * 2;
+    scene.add(boat);
+  }
+}
+
+// LED lane-control textures (shared): green down-arrow / red X, like the
+// "OBEY LANE SIGNALS" gantries on a real bay bridge
+let _laneTexGreen = null, _laneTexRed = null;
+function laneSignalTexture(kind) {
+  if (kind === 'green' && _laneTexGreen) return _laneTexGreen;
+  if (kind === 'red' && _laneTexRed) return _laneTexRed;
+  const c = makeCanvas(128, 128);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0b0d10'; ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = '#2a2d31'; ctx.lineWidth = 6; ctx.strokeRect(4, 4, 120, 120);
+  if (kind === 'green') {
+    ctx.fillStyle = '#33e04a';
+    ctx.shadowColor = '#33e04a'; ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(64, 108); ctx.lineTo(30, 66); ctx.lineTo(50, 66); ctx.lineTo(50, 22);
+    ctx.lineTo(78, 22); ctx.lineTo(78, 66); ctx.lineTo(98, 66);
+    ctx.closePath(); ctx.fill();
+  } else {
+    ctx.strokeStyle = '#ff2e2e';
+    ctx.shadowColor = '#ff2e2e'; ctx.shadowBlur = 14;
+    ctx.lineWidth = 16; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(30, 28); ctx.lineTo(98, 100);
+    ctx.moveTo(98, 28); ctx.lineTo(30, 100);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  if (kind === 'green') _laneTexGreen = tex; else _laneTexRed = tex;
+  return tex;
+}
+
+// registry of {side, lane, mat} so signals flip to red X over blocked lanes
+let laneSignals = [];
+
+function buildLaneSignalGantry(z) {
+  const { outerEdge, lanes } = roadInfo;
+  const g = new THREE.Group();
+  const h = 6.8;
+  const steel = metalMat('#8f949c', { roughness: 0.5 });
+
+  // lattice towers
+  for (const dir of [1, -1]) {
+    const legX = dir * (outerEdge + 0.9);
+    for (const off of [-0.35, 0.35]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.16, h, 0.16), steel);
+      leg.position.set(legX + off * 0.6, h / 2, off);
+      g.add(leg);
+    }
+    for (let y = 1; y < h - 0.5; y += 1.2) {
+      const d1 = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.4, 0.07), steel);
+      d1.position.set(legX, y + 0.5, 0);
+      d1.rotation.x = 0.55 * (y % 2.4 < 1.2 ? 1 : -1);
+      g.add(d1);
+    }
+  }
+  // truss beam: top/bottom chords + zig-zag diagonals
+  const span = (outerEdge + 0.9) * 2;
+  for (const cy of [h - 0.55, h + 0.55]) {
+    const chord = new THREE.Mesh(new THREE.BoxGeometry(span, 0.16, 0.16), steel);
+    chord.position.y = cy;
+    g.add(chord);
+  }
+  const nDiag = Math.floor(span / 1.3);
+  for (let i = 0; i < nDiag; i++) {
+    const d = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.35, 0.08), steel);
+    d.position.set(-span / 2 + (i + 0.5) * 1.3, h, 0);
+    d.rotation.z = i % 2 ? 0.72 : -0.72;
+    g.add(d);
+  }
+
+  // one signal head per lane, both directions; placards between them
+  const placardTex = (() => {
+    const c = makeCanvas(96, 128);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#f4f7fa'; ctx.fillRect(0, 0, 96, 128);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 5; ctx.strokeRect(4, 4, 88, 120);
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center';
+    ctx.font = '800 22px Arial';
+    ctx.fillText('OBEY', 48, 40);
+    ctx.fillText('LANE', 48, 68);
+    ctx.fillText('SIGNALS', 48, 96);
+    return new THREE.CanvasTexture(c);
+  })();
+  for (const side of ['A', 'B']) {
+    for (let lane = 0; lane < lanes; lane++) {
+      const x = laneCenterX(side, lane);
+      const housing = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.78, 0.3), lamb('#1a1c20', { roughness: 0.6 }));
+      housing.position.set(x, h - 1.0, 0);
+      g.add(housing);
+      const mat = new THREE.MeshBasicMaterial({ map: laneSignalTexture('green') });
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(0.68, 0.68), mat);
+      face.position.set(x, h - 1.0, side === 'A' ? 0.16 : -0.16);
+      if (side === 'B') face.rotation.y = Math.PI;
+      g.add(face);
+      laneSignals.push({ side, lane, mat });
+      // OBEY LANE SIGNALS placard between lanes
+      if (lane < lanes - 1) {
+        const pm = new THREE.MeshStandardMaterial({ map: placardTex });
+        const placard = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.82), pm);
+        const px = (x + laneCenterX(side, lane + 1)) / 2;
+        placard.position.set(px, h - 1.0, side === 'A' ? 0.1 : -0.1);
+        if (side === 'B') placard.rotation.y = Math.PI;
+        g.add(placard);
+      }
+    }
+  }
+  g.position.z = z;
+  scene.add(g);
+}
+
+// signals flip to a red X over any lane you've blocked with cones/barriers
+function updateLaneSignals() {
+  if (!laneSignals.length) return;
+  for (const s of laneSignals) {
+    const blocked = laneBlockers[s.side] && laneBlockers[s.side][s.lane] && laneBlockers[s.side][s.lane].length > 0;
+    s.mat.map = laneSignalTexture(blocked ? 'red' : 'green');
+    s.mat.needsUpdate = true;
+  }
+}
+
+// bridge-specific roadside signs mounted at the parapet
+function buildBridgeSigns(hw) {
+  const s = STATES[sel.state];
+  const { outerEdge } = roadInfo;
+  const off = outerEdge + 0.62;
+
+  const panelSign = (draw, w, h, z, side, postH = 2.2) => {
+    const c = makeCanvas(Math.round(160 * w), Math.round(160 * h));
+    draw(c.getContext('2d'), c.width, c.height);
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 4;
+    const back = lamb('#5b626b');
+    const face = new THREE.MeshStandardMaterial({ map: tex });
+    const g = new THREE.Group();
+    g.add(box(0.07, postH, 0.07, '#8a8f98', 0, postH / 2, 0));
+    const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.05),
+      side > 0 ? [back, back, back, back, face, back] : [back, back, back, back, back, face]);
+    p.position.y = postH + h / 2 - 0.1;
+    g.add(p);
+    g.position.set(side * off, 0, z);
+    scene.add(g);
+  };
+
+  const whiteReg = (lines) => (ctx, w, h) => {
+    ctx.fillStyle = '#f4f7fa'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 5; ctx.strokeRect(5, 5, w - 10, h - 10);
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center';
+    const fs = Math.floor(h / (lines.length + 1.4));
+    ctx.font = `800 ${fs}px Arial`;
+    lines.forEach((ln, i) => ctx.fillText(ln, w / 2, fs * (i + 1.25)));
+  };
+  const yellowWarn = (lines) => (ctx, w, h) => {
+    ctx.fillStyle = '#f7c531'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 5; ctx.strokeRect(5, 5, w - 10, h - 10);
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center';
+    const fs = Math.floor(h / (lines.length + 1.4));
+    ctx.font = `800 ${fs}px Arial`;
+    lines.forEach((ln, i) => ctx.fillText(ln, w / 2, fs * (i + 1.25)));
+  };
+
+  // big green bridge name sign at both ends
+  const nameDraw = (ctx, w, h) => {
+    ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.strokeRect(7, 7, w - 14, h - 14);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    let fs = Math.floor(w / (hw.name.length * 0.62));
+    fs = Math.min(fs, Math.floor(h * 0.3));
+    ctx.font = `800 ${fs}px Arial`;
+    ctx.fillText(hw.name, w / 2, h * 0.4);
+    ctx.font = `600 ${Math.floor(fs * 0.62)}px Arial`;
+    ctx.fillText(`over ${hw.water || 'the water'}`, w / 2, h * 0.72);
+  };
+  panelSign(nameDraw, 4.6, 1.5, ROAD_LEN / 2 - 30, 1, 2.6);
+  panelSign(nameDraw, 4.6, 1.5, -(ROAD_LEN / 2 - 30), -1, 2.6);
+
+  // regulatory + warning signs repeating across the span, both directions
+  const seq = [
+    whiteReg(['STAY IN', 'LANE']),
+    whiteReg(['NO STOPPING', 'ON BRIDGE']),
+    yellowWarn(['HIGH WINDS', 'POSSIBLE']),
+    whiteReg(['TRUCKS USE', 'RIGHT LANE']),
+    whiteReg(['SPEED', 'LIMIT', String(hw.speed)]),
+    yellowWarn(['DO NOT PASS']),
+  ];
+  let i = 0;
+  for (let z = -ROAD_LEN / 2 + 130; z < ROAD_LEN / 2 - 80; z += 165) {
+    panelSign(seq[i % seq.length], 1.1, 1.25, z, 1);
+    panelSign(seq[(i + 3) % seq.length], 1.1, 1.25, z + 82, -1);
+    i++;
+  }
+}
+
+// ============================================================
+// Downtown street venue — sidewalks, shops, crosswalks, signals
+// ============================================================
+const STREET_CORE = 420;           // downtown shops span this far from center
+const STREET_BLOCK = 160;          // intersection spacing
+
+// distance from z to the nearest downtown intersection
+function distToIntersection(z) {
+  const rel = ((z + STREET_CORE) % STREET_BLOCK + STREET_BLOCK) % STREET_BLOCK;
+  return Math.min(rel, STREET_BLOCK - rel);
+}
+
+function buildSidewalks() {
+  const { outerEdge } = roadInfo;
+  const walkW = 4.6;
+  const tex = soundWallTexture();   // reuse the precast-panel seams as sidewalk joints
+  const walkTex = tex.clone();
+  walkTex.needsUpdate = true;
+  walkTex.repeat.set(ROAD_LEN / 3, 1);
+  walkTex.rotation = 0;
+  const walkMat = lamb('#ffffff', { map: walkTex, roughness: 0.95, color: '#b9bcbe' });
+  for (const dir of [1, -1]) {
+    const walk = new THREE.Mesh(new THREE.BoxGeometry(walkW, 0.22, ROAD_LEN), walkMat);
+    walk.position.set(dir * (outerEdge + walkW / 2), 0.0, 0);
+    walk.receiveShadow = true;
+    scene.add(walk);
+    groundMeshes.push(walk);
+    // granite curb face
+    const curb = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, ROAD_LEN), lamb('#9a9da0'));
+    curb.position.set(dir * (outerEdge + 0.06), 0.01, 0);
+    scene.add(curb);
+  }
+}
+
+function makeHydrant() {
+  const g = new THREE.Group();
+  g.add(cyl(0.09, 0.11, 0.55, '#c1121f', 0, 0.28, 0, 8));
+  g.add(cyl(0.11, 0.11, 0.06, '#c1121f', 0, 0.58, 0, 8));
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), lamb('#c1121f'));
+  dome.position.y = 0.64;
+  g.add(dome);
+  for (const rx of [0.13, -0.13]) {
+    const cap = cyl(0.04, 0.04, 0.09, '#e8e2d8', rx, 0.42, 0, 6);
+    cap.rotation.z = Math.PI / 2;
+    g.add(cap);
+  }
+  return g;
+}
+
+function makeBench() {
+  const g = new THREE.Group();
+  for (const dz of [-0.6, 0.6]) {
+    g.add(box(0.06, 0.42, 0.06, '#2e3134', 0.18, 0.21, dz));
+    g.add(box(0.06, 0.78, 0.06, '#2e3134', -0.18, 0.39, dz));
+  }
+  for (const sy of [0.44, 0.52]) g.add(box(0.5, 0.05, 1.5, '#8a6a3c', 0.1, sy - 0.02, 0));
+  for (const sy of [0.62, 0.78]) g.add(box(0.06, 0.05, 1.5, '#8a6a3c', -0.17, sy, 0));
+  return g;
+}
+
+function shopSignTexture(name, bg, fg) {
+  const c = makeCanvas(512, 96);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, 512, 96);
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 4; ctx.strokeRect(6, 6, 500, 84);
+  ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  let fs = 52;
+  ctx.font = `800 ${fs}px Georgia`;
+  while (ctx.measureText(name).width > 470 && fs > 20) { fs -= 2; ctx.font = `800 ${fs}px Georgia`; }
+  ctx.fillText(name, 256, 52);
+  return new THREE.CanvasTexture(c);
+}
+
+function awningTexture(color) {
+  const c = makeCanvas(128, 32);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#f4f1e8'; ctx.fillRect(0, 0, 128, 32);
+  ctx.fillStyle = color;
+  for (let x = 0; x < 128; x += 24) ctx.fillRect(x, 0, 12, 32);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  return tex;
+}
+
+const SHOP_NAMES = [
+  ["JOE'S DINER", '#a4402e'], ['MAIN ST HARDWARE', '#2e5e8c'], ['DONUT DEN', '#b3538c'],
+  ['CITY PHARMACY', '#2a7d4f'], ['CONE-E ISLAND CREAMERY', '#e07b2a'], ['BLOCKY BOOKS', '#6a4a8c'],
+  ['THE BARBER SHOP', '#8c2e2e'], ['MAIN STREET MARKET', '#3f6e35'], ['PIZZA PLANET', '#c1391f'],
+  ['COFFEE CORNER', '#5e4a33'], ['TACO CASA', '#d18a2a'], ['FLOWERS BY FRAN', '#7d3a6e'],
+  ['OLD TOWN ANTIQUES', '#6b5537'], ['BAGEL BROS', '#2a6db3'], ['LAUNDRY LAND', '#3a8ca3'],
+  ['THRIFT-O-RAMA', '#8c6e2a'], ['GUITAR GARAGE', '#333a8c'], ['PAWN & GOLD', '#8a7a1f'],
+];
+
+function makeShop(width, name, tint) {
+  const g = new THREE.Group();
+  const h = 4.5 + Math.random() * 3.5;
+  const depth = 9 + Math.random() * 4;
+  const wallCols = ['#b98a6a', '#a8552e', '#c9b8a0', '#8c8c8c', '#7a5a45', '#b3a284', '#9b6a52'];
+  const wall = jitterColor(wallCols[Math.floor(Math.random() * wallCols.length)], 0.08);
+  const body = box(width, h, depth, wall, 0, h / 2, -depth / 2);
+  body.receiveShadow = true;
+  g.add(body);
+  // cornice + roof parapet
+  g.add(box(width + 0.2, 0.3, depth + 0.2, jitterColor(wall, 0.2), 0, h + 0.1, -depth / 2));
+  // storefront display glass — glows warm at night like the building windows
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: '#1c2833', roughness: 0.15, metalness: 0.35,
+    emissive: '#ffd98e', emissiveIntensity: 0,
+  });
+  buildingMats.push(glassMat);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(width * 0.62, 1.9, 0.1), glassMat);
+  glass.position.set(-width * 0.12, 1.25, 0.03);
+  g.add(glass);
+  // glass frames
+  g.add(box(width * 0.66, 0.08, 0.12, '#2e3134', -width * 0.12, 2.24, 0.03));
+  g.add(box(width * 0.66, 0.08, 0.12, '#2e3134', -width * 0.12, 0.28, 0.03));
+  // door
+  g.add(box(width * 0.16, 2.15, 0.08, '#3a3128', width * 0.34, 1.08, 0.03));
+  g.add(cyl(0.025, 0.025, 0.18, '#c9a227', width * 0.29, 1.05, 0.09, 6));
+  // sign band over the storefront
+  const sign = new THREE.Mesh(
+    new THREE.BoxGeometry(width * 0.92, 0.72, 0.12),
+    new THREE.MeshStandardMaterial({ map: shopSignTexture(name, tint, '#f7f3e8') })
+  );
+  sign.position.set(0, 2.9, 0.08);
+  g.add(sign);
+  // striped awning
+  const awn = new THREE.Mesh(new THREE.BoxGeometry(width * 0.68, 0.06, 1.1),
+    new THREE.MeshStandardMaterial({ map: awningTexture(tint), roughness: 0.8 }));
+  awn.position.set(-width * 0.12, 2.35, 0.6);
+  awn.rotation.x = 0.28;
+  awn.castShadow = true;
+  g.add(awn);
+  // upper-story windows
+  if (h > 5.6) {
+    for (let wx = -width / 2 + 1.2; wx < width / 2 - 0.8; wx += 1.7) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.2, 0.06), glassMat);
+      win.position.set(wx, h - 1.5, 0.02);
+      g.add(win);
+      g.add(box(1.0, 0.08, 0.08, '#efeae0', wx, h - 0.86, 0.03));
+    }
+  }
+  return g;
+}
+
+function makeHouse() {
+  const g = new THREE.Group();
+  const w = 7 + Math.random() * 3, d = 8 + Math.random() * 3, h = 3 + Math.random() * 1.2;
+  const cols = ['#d8cfc0', '#b9c4cc', '#c9b8a0', '#aebfae', '#d1c2a8'];
+  const wall = cols[Math.floor(Math.random() * cols.length)];
+  g.add(box(w, h, d, wall, 0, h / 2, 0));
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.42, w * 0.42, d + 0.6, 3), lamb('#5e4a3d'));
+  roof.rotation.z = Math.PI / 2;
+  roof.rotation.y = Math.PI / 2;
+  roof.position.y = h + w * 0.16;
+  roof.scale.y = 0.62;
+  g.add(roof);
+  g.add(box(1.0, 2.0, 0.1, '#4a3a2e', -w * 0.2, 1.0, d / 2 + 0.02));
+  for (const wx of [w * 0.18, w * 0.36]) {
+    g.add(box(0.9, 1.0, 0.08, '#22303c', wx, 1.6, d / 2 + 0.02));
+  }
+  return g;
+}
+
+function buildStreetscape(hw) {
+  const { outerEdge } = roadInfo;
+
+  // intersections through the downtown core
+  for (let z = -STREET_CORE; z <= STREET_CORE; z += STREET_BLOCK) {
+    // cross-street stub cutting through the sidewalks
+    for (const dir of [1, -1]) {
+      const stub = new THREE.Mesh(new THREE.BoxGeometry(46, 0.24, 7.5), lamb('#3d4045'));
+      stub.position.set(dir * (outerEdge + 23.2), -0.005, z);
+      stub.receiveShadow = true;
+      scene.add(stub);
+      groundMeshes.push(stub);
+    }
+    // continental crosswalk bars across both carriageways
+    for (const dir of [1, -1]) {
+      const cw = roadInfo.sideW;
+      const cx = dir * (roadInfo.medianHalf + cw / 2);
+      for (let b = 0; b < Math.floor(cw / 0.9); b++) {
+        const bar = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 2.4), lamb('#e8eaec'));
+        bar.rotation.x = -Math.PI / 2;
+        bar.position.set(dir * (roadInfo.medianHalf + 0.6 + b * 0.9), 0.013, z + (dir > 0 ? 5.4 : -5.4));
+        scene.add(bar);
+      }
+      // stop line before the crosswalk (traffic direction aware)
+      const stop = new THREE.Mesh(new THREE.PlaneGeometry(cw - 1, 0.45), lamb('#e8eaec'));
+      stop.rotation.x = -Math.PI / 2;
+      stop.position.set(cx, 0.013, z + (dir > 0 ? 7.4 : -7.4));
+      scene.add(stop);
+    }
+    buildIntersectionSignals(z);
+    buildBladeSigns(z);
+  }
+
+  // parked cars along both curbs through the core
+  for (let z = -STREET_CORE + 14; z < STREET_CORE; z += 11 + Math.random() * 7) {
+    if (distToIntersection(z) < 14) continue;  // keep intersections clear
+    for (const dir of [1, -1]) {
+      if (Math.random() < 0.4) continue;
+      const { mesh } = makeCar();
+      mesh.position.set(dir * (outerEdge - 1.25), 0, z);
+      mesh.rotation.y = dir > 0 ? Math.PI : 0;
+      scene.add(mesh);
+    }
+  }
+
+  // sidewalk furniture: hydrants, benches, trash cans, planter trees
+  for (let z = -STREET_CORE; z < STREET_CORE; z += 34) {
+    for (const dir of [1, -1]) {
+      const off = outerEdge + 0.9;
+      const roll = Math.random();
+      if (roll < 0.3) {
+        const h = makeHydrant(); h.position.set(dir * off, 0.1, z + Math.random() * 10); scene.add(h);
+      } else if (roll < 0.55) {
+        const b = makeBench();
+        b.position.set(dir * (outerEdge + 2.2), 0.1, z);
+        b.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+        scene.add(b);
+      } else if (roll < 0.75) {
+        const can = cyl(0.28, 0.24, 0.75, '#2f4f3a', dir * off, 0.47, z + 4, 10);
+        scene.add(can);
+      }
+      if (Math.random() < 0.6) {
+        // street tree in a concrete planter
+        const planter = box(1.1, 0.45, 1.1, '#9a9da0', dir * (outerEdge + 3.4), 0.32, z + 17);
+        scene.add(planter);
+        const tree = makeBlobTree(0.45 + Math.random() * 0.25);
+        tree.position.set(dir * (outerEdge + 3.4), 0.5, z + 17);
+        scene.add(tree);
+      }
+    }
+  }
+}
+
+function buildIntersectionSignals(z) {
+  const { outerEdge } = roadInfo;
+  const poleMat = metalMat('#3a3d42', { roughness: 0.5 });
+  for (const dir of [1, -1]) {
+    const g = new THREE.Group();
+    const poleH = 5.6;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, poleH, 8), poleMat);
+    pole.position.y = poleH / 2;
+    g.add(pole);
+    // mast arm reaching over the near carriageway
+    const armLen = roadInfo.sideW * 0.7;
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, armLen, 8), poleMat);
+    arm.rotation.z = Math.PI / 2;
+    arm.position.set(-dir * armLen / 2, poleH - 0.25, 0);
+    g.add(arm);
+    // 3-section signal head hanging from the arm tip, facing oncoming traffic
+    const head = new THREE.Group();
+    head.add(box(0.34, 1.0, 0.22, '#26282c', 0, 0, 0));
+    const lampCols = [['#5c1616', '#ff3b30', 0], ['#5c4a12', '#ffcc00', 0], ['#164a20', '#34d158', 1]];
+    lampCols.forEach(([offc, onc, lit], i) => {
+      const lampMat = new THREE.MeshStandardMaterial({
+        color: offc, emissive: onc, emissiveIntensity: lit ? 0.9 : 0.0, roughness: 0.4,
+      });
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.06, 10), lampMat);
+      lamp.rotation.x = Math.PI / 2;
+      lamp.position.set(0, 0.32 - i * 0.32, dir > 0 ? 0.1 : -0.1);
+      head.add(lamp);
+      if (lit) lightGlowMats.push(addGlowSprite(lamp, '#34d158', 0.7, 0.04));
+    });
+    head.position.set(-dir * (armLen - 1.2), poleH - 0.75, 0);
+    g.add(head);
+    // pedestrian button pole detail
+    g.add(box(0.12, 0.18, 0.08, '#c9a227', 0, 1.15, 0.12));
+    g.position.set(dir * (outerEdge + 0.7), 0.1, z + (dir > 0 ? 9.4 : -9.4));
+    scene.add(g);
+  }
+}
+
+const CROSS_STREET_NAMES = ['1ST AVE', '2ND AVE', 'OAK ST', 'ELM ST', 'PARK AVE', 'DEPOT ST', 'MILL AVE'];
+function buildBladeSigns(z) {
+  const { outerEdge } = roadInfo;
+  const idx = Math.abs(Math.round(z / STREET_BLOCK)) % CROSS_STREET_NAMES.length;
+  const blade = (text, w) => {
+    const c = makeCanvas(256, 64);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#0b6b3a'; ctx.fillRect(0, 0, 256, 64);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.strokeRect(4, 4, 248, 56);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '800 34px Arial';
+    ctx.fillText(text, 128, 34);
+    const tex = new THREE.CanvasTexture(c);
+    return new THREE.Mesh(new THREE.BoxGeometry(w, 0.28, 0.03),
+      new THREE.MeshStandardMaterial({ map: tex }));
+  };
+  for (const dir of [1, -1]) {
+    const g = new THREE.Group();
+    g.add(cyl(0.045, 0.05, 3.0, '#4c5158', 0, 1.5, 0, 8));
+    const b1 = blade('MAIN ST', 1.15);
+    b1.position.y = 3.05;
+    g.add(b1);
+    const b2 = blade(CROSS_STREET_NAMES[idx], 1.15);
+    b2.position.y = 2.72;
+    b2.rotation.y = Math.PI / 2;
+    g.add(b2);
+    g.position.set(dir * (outerEdge + 1.1), 0.1, z + (dir > 0 ? -8.6 : 8.6));
+    scene.add(g);
+  }
+}
+
 // cobra-head highway lampposts down both sides — dark poles by day, warm
 // glowing lamp heads (with a fake-bloom sprite) once time-of-day flips to
 // dusk/night. This is a brand-new, easy-to-spot addition to the roadside.
 const LAMP_EMISSIVE = [];
 function buildStreetlights(hw) {
   const { outerEdge } = roadInfo;
-  const off = outerEdge + (hw.terrain === 'urban' ? 5.5 : 3.4);
+  const off = outerEdge + (hw.terrain === 'bridge' ? 0.55 : hw.terrain === 'street' ? 1.6 : hw.terrain === 'urban' ? 5.5 : 3.4);
   const poleMat = metalMat('#8f949c', { roughness: 0.55 });
-  const spacing = hw.terrain === 'urban' ? 55 : 90;
+  const spacing = hw.terrain === 'bridge' ? 70 : hw.terrain === 'street' ? 42 : hw.terrain === 'urban' ? 55 : 90;
   let side = 1;
   for (let z = -ROAD_LEN / 2 + 30; z < ROAD_LEN / 2 - 30; z += spacing) {
     const g = new THREE.Group();
@@ -3301,7 +4015,17 @@ function buildStreetlights(hw) {
   }
 }
 
-function buildGantry(hw, z, side = 'A') {
+// other control cities in this state, for distance boards and exit signs
+function stateCities(hw) {
+  const s = STATES[sel.state];
+  const out = [];
+  for (const h of s.highways) {
+    if (h.city !== hw.city && !out.includes(h.city)) out.push(h.city);
+  }
+  return out.length ? out : [hw.city];
+}
+
+function buildGantry(hw, z, side = 'A', variant = 'exit') {
   const { outerEdge } = roadInfo;
   const g = new THREE.Group();
   const h = 7.5;
@@ -3310,26 +4034,88 @@ function buildGantry(hw, z, side = 'A') {
   const beam = box((outerEdge + 1.5) * 2, 0.7, 0.5, '#6f7680', 0, h, 0);
   g.add(beam);
 
-  // big green guide sign
   const c = makeCanvas(512, 256);
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, 512, 256);
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 6;
-  ctx.strokeRect(8, 8, 496, 240);
-  ctx.save(); ctx.translate(40, 24); drawShield(ctx, hw.sign, hw.num, 90); ctx.restore();
-  ctx.fillStyle = '#fff';
-  ctx.font = '800 44px Arial';
-  ctx.textAlign = 'left';
-  ctx.fillText(side === 'A' ? 'NORTH' : 'SOUTH', 160, 84);
-  ctx.font = '800 56px Arial';
-  ctx.fillText(hw.city, 40, 175);
-  ctx.font = '700 36px Arial';
-  ctx.fillText('NEXT EXIT  1 MILE', 40, 226);
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.moveTo(440, 200); ctx.lineTo(440, 150); ctx.lineTo(420, 150);
-  ctx.lineTo(455, 115); ctx.lineTo(490, 150); ctx.lineTo(470, 150); ctx.lineTo(470, 200);
-  ctx.closePath(); ctx.fill();
+  const others = stateCities(hw);
+
+  if (variant === 'carpool') {
+    // CARPOOLS ONLY — black diamond panel, like the LA freeway sign
+    ctx.fillStyle = '#f4f7fa'; ctx.fillRect(0, 0, 512, 256);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 8; ctx.strokeRect(8, 8, 496, 240);
+    ctx.fillStyle = '#111';
+    ctx.fillRect(20, 20, 130, 216);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 6;
+    ctx.save();
+    ctx.translate(85, 128); ctx.rotate(Math.PI / 4);
+    ctx.strokeRect(-38, -38, 76, 76);
+    ctx.restore();
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center';
+    ctx.font = '800 44px Arial';
+    ctx.fillText('CARPOOLS ONLY', 330, 84);
+    ctx.font = '700 30px Arial';
+    ctx.fillText('2 OR MORE PERSONS', 330, 140);
+    ctx.fillText('PER VEHICLE', 330, 180);
+    // down arrow
+    ctx.beginPath();
+    ctx.moveTo(330, 232); ctx.lineTo(308, 204); ctx.lineTo(322, 204); ctx.lineTo(322, 190);
+    ctx.lineTo(338, 190); ctx.lineTo(338, 204); ctx.lineTo(352, 204);
+    ctx.closePath(); ctx.fill();
+  } else if (variant === 'cities') {
+    // two-line distance board
+    ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, 512, 256);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.strokeRect(8, 8, 496, 240);
+    ctx.fillStyle = '#fff';
+    const rows = [
+      [hw.city, 8 + Math.floor(Math.random() * 30)],
+      [others[0], 45 + Math.floor(Math.random() * 80)],
+      [others[1] || sel.state, 120 + Math.floor(Math.random() * 140)],
+    ];
+    ctx.font = '800 52px Arial';
+    rows.forEach(([city, mi], i) => {
+      ctx.textAlign = 'left';
+      ctx.fillText(String(city), 44, 86 + i * 68);
+      ctx.textAlign = 'right';
+      ctx.fillText(String(mi), 472, 86 + i * 68);
+    });
+  } else {
+    // classic exit sign — varied exit number, destination and distance
+    const exitNum = 20 + Math.floor(Math.random() * 220);
+    const dist = ['1 MILE', '3/4 MILE', '1/2 MILE', '2 MILES'][Math.floor(Math.random() * 4)];
+    const dest = Math.random() < 0.5 ? hw.city : others[Math.floor(Math.random() * others.length)];
+    ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, 512, 256);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 6;
+    ctx.strokeRect(8, 8, 496, 240);
+    // small EXIT XX tab in the corner
+    ctx.fillStyle = '#00693f';
+    ctx.fillRect(330, 0, 182, 54);
+    ctx.strokeRect(334, 4, 174, 48);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    ctx.font = '800 34px Arial';
+    ctx.fillText(`EXIT ${exitNum}`, 421, 40);
+    ctx.save(); ctx.translate(40, 34); drawShield(ctx, hw.sign, hw.num, 90); ctx.restore();
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 44px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(side === 'A' ? 'NORTH' : 'SOUTH', 160, 94);
+    ctx.font = '800 56px Arial';
+    ctx.fillText(dest, 40, 175);
+    ctx.font = '700 36px Arial';
+    ctx.fillText(variant === 'exitonly' ? 'EXIT ONLY' : dist, 40, 226);
+    if (variant === 'exitonly') {
+      // yellow EXIT ONLY banner strip
+      ctx.fillStyle = '#f7c531';
+      ctx.fillRect(240, 196, 264, 52);
+      ctx.fillStyle = '#111'; ctx.textAlign = 'center';
+      ctx.font = '800 34px Arial';
+      ctx.fillText('EXIT ONLY', 372, 233);
+    } else {
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(440, 200); ctx.lineTo(440, 150); ctx.lineTo(420, 150);
+      ctx.lineTo(455, 115); ctx.lineTo(490, 150); ctx.lineTo(470, 150); ctx.lineTo(470, 200);
+      ctx.closePath(); ctx.fill();
+    }
+  }
   const tex = new THREE.CanvasTexture(c);
   const dull = lamb('#4a5158');
   const face = new THREE.MeshStandardMaterial({ map: tex });
@@ -3422,7 +4208,7 @@ function buildMileMarkers(hw) {
   let mile = 100 + Math.floor(Math.random() * 80);
   // small green mile markers, placed on the ROADSIDE beyond the guardrail
   // (never on the shoulder / breakdown lane), every 0.2 mi, both carriageways
-  const off = outerEdge + (hw.terrain === 'urban' ? 1.1 : 2.2);
+  const off = outerEdge + (hw.terrain === 'bridge' ? 0.55 : hw.terrain === 'urban' ? 1.1 : 2.2);
   for (let z = -ROAD_LEN / 2 + 40; z < ROAD_LEN / 2; z += 90) {
     const label = (mile + z / 1600).toFixed(1);
     mile = 100 + Math.floor(Math.random() * 80); // keep whole-mile numbers varied
@@ -3523,24 +4309,59 @@ function buildRoadsideSigns(hw) {
     ctx.font = '900 40px Arial'; ctx.fillText(String(20 + Math.floor(Math.random() * 200)), w / 2, h * 0.78);
   };
   const distDraw = (ctx, w, h) => {
+    const others = stateCities(hw);
     ctx.fillStyle = '#00693f'; ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.strokeRect(4, 4, w - 8, h - 8);
     ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
     ctx.font = '800 18px Arial';
-    ctx.fillText(s.abbr === hw.city ? hw.city : hw.city, 14, h * 0.32);
+    ctx.fillText(hw.city, 14, h * 0.32);
     ctx.textAlign = 'right'; ctx.fillText(String(8 + Math.floor(Math.random() * 40)), w - 14, h * 0.32);
-    ctx.textAlign = 'left'; ctx.fillText(sel.state.slice(0, 10), 14, h * 0.68);
+    ctx.textAlign = 'left'; ctx.fillText(others[0] || sel.state.slice(0, 10), 14, h * 0.68);
     ctx.textAlign = 'right'; ctx.fillText(String(40 + Math.floor(Math.random() * 120)), w - 14, h * 0.68);
   };
+  // yellow diamond warning signs
+  const warnDraw = (lines) => (ctx, w, h) => {
+    ctx.fillStyle = '#f7c531';
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.rotate(Math.PI / 4);
+    const s2 = w * 0.62;
+    ctx.fillRect(-s2 / 2, -s2 / 2, s2, s2);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 4; ctx.strokeRect(-s2 / 2 + 4, -s2 / 2 + 4, s2 - 8, s2 - 8);
+    ctx.restore();
+    ctx.fillStyle = '#111'; ctx.textAlign = 'center';
+    const fs = Math.floor(h / (lines.length + 2.6));
+    ctx.font = `800 ${fs}px Arial`;
+    lines.forEach((ln, i) => ctx.fillText(ln, w / 2, h * 0.42 + i * (fs + 3)));
+  };
+  // blue services sign (GAS FOOD LODGING)
+  const svcDraw = (ctx, w, h) => {
+    ctx.fillStyle = '#1a4fa0'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.strokeRect(5, 5, w - 10, h - 10);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    ctx.font = '800 18px Arial';
+    ['GAS', 'FOOD', 'LODGING'].forEach((t, i) => ctx.fillText(t, w / 2, h * 0.28 + i * h * 0.24));
+  };
+  // mile-based reference / rest area
+  const restDraw = (ctx, w, h) => {
+    ctx.fillStyle = '#1a4fa0'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.strokeRect(5, 5, w - 10, h - 10);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+    ctx.font = '800 20px Arial'; ctx.fillText('REST', w / 2, h * 0.3);
+    ctx.fillText('AREA', w / 2, h * 0.52);
+    ctx.font = '700 16px Arial'; ctx.fillText((1 + Math.floor(Math.random() * 8)) + ' MI', w / 2, h * 0.8);
+  };
 
-  // scatter signs down both sides of the highway
-  for (let z = -ROAD_LEN / 2 + 120; z < ROAD_LEN / 2 - 60; z += 260) {
-    postSign(speedDraw, 0.9, 1.2, z, 1);
-    postSign(speedDraw, 0.9, 1.2, z + 130, -1);
-  }
-  for (let z = -ROAD_LEN / 2 + 220; z < ROAD_LEN / 2 - 60; z += 320) {
-    postSign(exitDraw, 1.0, 1.0, z, 1, 3.0);
-    postSign(distDraw, 1.8, 1.0, z - 160, -1, 3.2);
+  // rotate through a varied menu of signs down both sides of the highway
+  const menuRight = [speedDraw, warnDraw(['WORK', 'ZONE']), svcDraw, exitDraw, warnDraw(['MERGE']), restDraw];
+  const menuLeft = [distDraw, warnDraw(['CURVE']), speedDraw, warnDraw(['BUMP']), svcDraw, exitDraw];
+  let ri = 0;
+  for (let z = -ROAD_LEN / 2 + 130; z < ROAD_LEN / 2 - 60; z += 175) {
+    const dR = menuRight[ri % menuRight.length];
+    const dL = menuLeft[ri % menuLeft.length];
+    const isSpeed = dR === speedDraw, isSvc = dR === svcDraw || dR === restDraw;
+    postSign(dR, isSpeed ? 0.9 : 1.0, isSpeed ? 1.2 : (isSvc ? 1.3 : 1.0), z, 1, isSvc ? 3.0 : 2.5);
+    const isSpeedL = dL === speedDraw, isDist = dL === distDraw;
+    postSign(dL, isDist ? 1.8 : (isSpeedL ? 0.9 : 1.0), isSpeedL ? 1.2 : 1.0, z + 88, -1, isDist ? 3.2 : 2.5);
+    ri++;
   }
 }
 
@@ -3889,6 +4710,65 @@ function buildScenery(hw, style) {
       scene.add(w);
     }
   }
+  if (T === 'street') {
+    // ---- downtown shop rows facing the sidewalk ----
+    const shopX = roadInfo.outerEdge + 4.9;
+    for (const dir of [1, -1]) {
+      let z = -STREET_CORE + 9;
+      let i = Math.floor(Math.random() * SHOP_NAMES.length);
+      while (z < STREET_CORE - 10) {
+        const w = 8 + Math.random() * 5;
+        // hop over cross streets so shops don't sit in the intersection
+        const relStart = ((z + STREET_CORE) % STREET_BLOCK + STREET_BLOCK) % STREET_BLOCK;
+        if (relStart < 8) { z += 8 - relStart; continue; }
+        if (relStart + w > STREET_BLOCK - 8) { z += STREET_BLOCK - relStart + 9; continue; }
+        const [name, tint] = SHOP_NAMES[i % SHOP_NAMES.length];
+        i++;
+        const shop = makeShop(w, name, tint);
+        shop.position.set(dir * shopX, 0, z + w / 2);
+        shop.rotation.y = dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+        scene.add(shop);
+        z += w + 0.7;
+      }
+    }
+    // taller downtown blocks looming behind the shops
+    for (let i = 0; i < Math.round(14 * SCENERY_SCALE); i++) {
+      const side = Math.random() < 0.5 ? 1 : -1;
+      const b = makeBuilding();
+      b.position.x = side * (roadInfo.outerEdge + 30 + Math.random() * 60);
+      b.position.z = (Math.random() - 0.5) * (STREET_CORE * 2.2);
+      scene.add(b);
+    }
+    // residential edges past downtown: houses, lawns, trees
+    for (const dir of [1, -1]) {
+      for (let z = STREET_CORE + 30; z < ROAD_LEN / 2 - 20; z += 26 + Math.random() * 14) {
+        for (const zz of [z, -z]) {
+          const house = makeHouse();
+          house.position.set(dir * (roadInfo.outerEdge + 9 + Math.random() * 14), 0, zz);
+          house.rotation.y = dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+          scene.add(house);
+          if (Math.random() < 0.7) {
+            const tree = makeBlobTree(0.5 + Math.random() * 0.6);
+            tree.position.set(dir * (roadInfo.outerEdge + 4 + Math.random() * 4), 0, zz + 8);
+            scene.add(tree);
+          }
+        }
+      }
+    }
+    // town water tower on the skyline
+    const wt = new THREE.Group();
+    for (const [lx, lz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) {
+      const leg = cyl(0.18, 0.22, 16, '#8f949c', lx, 8, lz, 8);
+      wt.add(leg);
+    }
+    const tank = new THREE.Mesh(new THREE.SphereGeometry(4.5, 14, 10), lamb('#b9c4cc'));
+    tank.position.y = 19;
+    tank.scale.y = 0.85;
+    wt.add(tank);
+    wt.add(cyl(1.2, 1.2, 2.5, '#b9c4cc', 0, 23.5, 0, 10));
+    wt.position.set((Math.random() < 0.5 ? -1 : 1) * (roadInfo.outerEdge + 70), 0, STREET_CORE * 0.7);
+    scene.add(wt);
+  }
   if (T === 'coast') {
     // ocean on one side
     const ocean = new THREE.Mesh(new THREE.PlaneGeometry(900, ROAD_LEN + 900), lamb('#2e7fa8'));
@@ -4093,6 +4973,42 @@ function addWheels(g, r, positions, w = 0.26) {
   }
 }
 
+// a state license plate — the state abbreviation + a random tag number
+let _plateTexCache = new Map();
+function plateTexture() {
+  const s = STATES[sel.state];
+  const abbr = s ? s.abbr : 'US';
+  const tag = String.fromCharCode(65 + Math.floor(Math.random() * 26), 65 + Math.floor(Math.random() * 26), 65 + Math.floor(Math.random() * 26))
+    + ' ' + (100 + Math.floor(Math.random() * 900));
+  const key = abbr + tag;
+  if (_plateTexCache.has(key)) return _plateTexCache.get(key);
+  const c = makeCanvas(128, 64);
+  const ctx = c.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 64);
+  grad.addColorStop(0, '#f4f7fa'); grad.addColorStop(1, '#dfe6ec');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, 128, 64);
+  ctx.strokeStyle = '#1a4fa0'; ctx.lineWidth = 4; ctx.strokeRect(3, 3, 122, 58);
+  ctx.fillStyle = '#1a4fa0';
+  ctx.font = '700 11px Arial'; ctx.textAlign = 'center';
+  ctx.fillText(abbr, 64, 15);
+  ctx.fillStyle = '#12233f';
+  ctx.font = '800 30px Impact, Arial'; ctx.textBaseline = 'middle';
+  ctx.fillText(tag, 64, 42);
+  const tex = new THREE.CanvasTexture(c);
+  _plateTexCache.set(key, tex);
+  return tex;
+}
+
+function plateMesh(bumperY, z, faceFront) {
+  const tex = plateTexture();
+  const face = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 });
+  const back = lamb('#c8ccd0');
+  const p = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.17, 0.03),
+    faceFront ? [back, back, back, back, face, back] : [back, back, back, back, back, face]);
+  p.position.set(0, bumperY + 0.15, z);
+  return p;
+}
+
 // front/rear detail shared by all cars: rounded bumpers, grille, lights, plate
 function addCarFace(g, { w, frontZ, backZ, lightY = 0.62, bumperY = 0.34 }) {
   g.add(rbox(w, 0.24, 0.16, lamb('#26282c'), 0.07, 0, bumperY, frontZ));
@@ -4108,15 +5024,21 @@ function addCarFace(g, { w, frontZ, backZ, lightY = 0.62, bumperY = 0.34 }) {
     lightGlowMats.push(addGlowSprite(tl, '#ff2020', 0.4, -0.13));
     g.add(hl, tl);
   }
-  const plate = box(0.44, 0.17, 0.03, '#e8e8e8', 0, bumperY + 0.15, backZ - 0.09);
-  g.add(plate);
+  // real state plates front and rear
+  g.add(plateMesh(bumperY, backZ - 0.08, false));
+  g.add(plateMesh(bumperY, frontZ + 0.08, true));
 }
 
 function addMirrors(g, x, y, z) {
+  const mirrorGlass = new THREE.MeshStandardMaterial({ color: '#aeb6c0', roughness: 0.08, metalness: 1.0, envMapIntensity: 1.6 });
   for (const sx of [-x, x]) {
     const arm = box(0.14, 0.05, 0.06, '#26282c', sx, y, z);
-    const glass = rbox(0.06, 0.16, 0.22, carGlass(), 0.03, sx + Math.sign(sx) * 0.08, y + 0.02, z);
-    g.add(arm, glass);
+    // body-colored housing + a bright reflective mirror face pointing back
+    const housing = rbox(0.08, 0.15, 0.2, lamb('#26282c'), 0.04, sx + Math.sign(sx) * 0.09, y + 0.02, z);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.13, 0.17), mirrorGlass);
+    face.position.set(sx + Math.sign(sx) * 0.135, y + 0.02, z - 0.02);
+    face.rotation.y = Math.sign(sx) * (Math.PI / 2 + 0.35);
+    g.add(arm, housing, face);
   }
 }
 
@@ -4390,7 +5312,7 @@ function makeCountyF150(col, livery) {
   }
   g.add(rbox(2.0, 0.26, 0.18, lamb('#26282c'), 0.07, 0, 0.52, 2.98));   // front bumper
   g.add(rbox(2.0, 0.26, 0.18, lamb('#26282c'), 0.07, 0, 0.52, -2.98));  // rear bumper
-  g.add(box(0.44, 0.17, 0.03, '#e8e8e8', 0, 0.72, -3.0));               // plate
+  g.add(plateMesh(0.57, -3.0, false));                                  // plate
   g.add(box(0.1, 0.12, 0.22, '#3a3d42', 0, 0.4, -3.02));                // tow hitch
 
   addInterior(g, { w: 1.66, floorY: 0.98, dashZ: 1.02, rows: [0.68, -0.35], wheelX: -0.42 });
@@ -4934,6 +5856,7 @@ function computeLaneBlockers() {
     laneBlockers[side][lane].push(p.group.position.z);
   }
   for (const side of ['A', 'B']) for (const arr of laneBlockers[side]) arr.sort((a, b) => a - b);
+  updateLaneSignals();   // bridge gantries flip to red X over closed lanes
 }
 
 function nextBlockerDist(side, lane, z, dir) {
@@ -5635,6 +6558,7 @@ function initInput() {
       applyTime();
       toast('🕐 ' + TIME_NAMES[timeIdx]);
     }
+    if (e.code === 'KeyV') setTrafficOn(!trafficOn);
     if (e.code === 'KeyE' && !freeCam) {
       if (driving) exitVehicle();
       else enterVehicleNearby();
@@ -6033,7 +6957,7 @@ function animate() {
     if (freeCam) updateFreeCam(dt);
     else if (driving) updateDriving(dt);
     else updatePlayer(dt, t);
-    updateTraffic(dt);
+    if (trafficOn) updateTraffic(dt);
     updateGhost();
 
     // blinking lights

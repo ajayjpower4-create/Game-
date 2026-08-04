@@ -16,6 +16,8 @@ export const TERRAIN_NAMES = {
   mountain: "Mountains",
   swamp:    "Swamp / Bayou",
   coast:    "Coastal",
+  bridge:   "Long Bridge / Water Crossing",
+  street:   "Downtown Street",
 };
 
 // c1/c2 = state theme colors used for the "State Pride" vest
@@ -277,6 +279,75 @@ export const STATES = {
     { sign: "I",  num: "90",  name: "Interstate 90",        city: "Sheridan",     lanes: 2, terrain: "plains", speed: 80 },
   ]},
 };
+
+// ============================================================
+// Real long bridges — one per state, modeled after the state's most
+// famous water crossing. Added to every state's highway list as a
+// "Long Bridge" venue, plus a downtown "Main Street" venue.
+// water = what the bridge crosses (shown on the bridge name sign).
+// ============================================================
+const BRIDGES = {
+  "Alabama":       { sign: "I",  num: "10",  name: "Jubilee Parkway Bayway",         city: "Mobile",        lanes: 2, speed: 65, water: "Mobile Bay" },
+  "Alaska":        { sign: "SR", num: "1",   name: "Knik River Bridge",              city: "Anchorage",     lanes: 2, speed: 55, water: "Knik River" },
+  "Arizona":       { sign: "US", num: "93",  name: "Mike O'Callaghan Bridge",        city: "Kingman",       lanes: 2, speed: 55, water: "the Colorado River" },
+  "Arkansas":      { sign: "I",  num: "40",  name: "Hernando de Soto Bridge",        city: "West Memphis",  lanes: 3, speed: 55, water: "the Mississippi River" },
+  "California":    { sign: "I",  num: "80",  name: "SF–Oakland Bay Bridge",     city: "San Francisco", lanes: 5, speed: 50, water: "San Francisco Bay" },
+  "Colorado":      { sign: "US", num: "50",  name: "Blue Mesa Bridge",               city: "Gunnison",      lanes: 1, speed: 55, water: "Blue Mesa Reservoir" },
+  "Connecticut":   { sign: "I",  num: "95",  name: "Gold Star Memorial Bridge",      city: "New London",    lanes: 4, speed: 55, water: "the Thames River" },
+  "Delaware":      { sign: "I",  num: "295", name: "Delaware Memorial Bridge",       city: "Wilmington",    lanes: 4, speed: 55, water: "the Delaware River" },
+  "Florida":       { sign: "US", num: "1",   name: "Seven Mile Bridge",              city: "Key West",      lanes: 1, speed: 55, water: "the Gulf of Mexico" },
+  "Georgia":       { sign: "US", num: "17",  name: "Sidney Lanier Bridge",           city: "Brunswick",     lanes: 2, speed: 55, water: "the Brunswick River" },
+  "Hawaii":        { sign: "SR", num: "3",   name: "Windward Viaduct",               city: "Kaneohe",       lanes: 2, speed: 55, water: "Halawa Valley" },
+  "Idaho":         { sign: "US", num: "93",  name: "Perrine Bridge",                 city: "Twin Falls",    lanes: 2, speed: 55, water: "the Snake River Canyon" },
+  "Illinois":      { sign: "US", num: "67",  name: "Clark Bridge",                   city: "Alton",         lanes: 2, speed: 50, water: "the Mississippi River" },
+  "Indiana":       { sign: "I",  num: "65",  name: "Kennedy Memorial Bridge",        city: "Jeffersonville",lanes: 3, speed: 55, water: "the Ohio River" },
+  "Iowa":          { sign: "I",  num: "74",  name: "I-74 Mississippi River Bridge",  city: "Bettendorf",    lanes: 2, speed: 55, water: "the Mississippi River" },
+  "Kansas":        { sign: "US", num: "59",  name: "Amelia Earhart Memorial Bridge", city: "Atchison",      lanes: 2, speed: 55, water: "the Missouri River" },
+  "Kentucky":      { sign: "I",  num: "75",  name: "Brent Spence Bridge",            city: "Covington",     lanes: 4, speed: 55, water: "the Ohio River" },
+  "Louisiana":     { sign: "SR", num: "1",   name: "Lake Pontchartrain Causeway",    city: "Metairie",      lanes: 2, speed: 65, water: "Lake Pontchartrain" },
+  "Maine":         { sign: "US", num: "1",   name: "Penobscot Narrows Bridge",       city: "Bucksport",     lanes: 2, speed: 55, water: "the Penobscot River" },
+  "Maryland":      { sign: "US", num: "50",  name: "Chesapeake Bay Bridge",          city: "Annapolis",     lanes: 2, speed: 50, water: "the Chesapeake Bay" },
+  "Massachusetts": { sign: "I",  num: "93",  name: "Zakim Bunker Hill Bridge",       city: "Boston",        lanes: 4, speed: 55, water: "the Charles River" },
+  "Michigan":      { sign: "I",  num: "75",  name: "Mackinac Bridge",                city: "St. Ignace",    lanes: 2, speed: 45, water: "the Straits of Mackinac" },
+  "Minnesota":     { sign: "I",  num: "35",  name: "Saint Anthony Falls Bridge",     city: "Minneapolis",   lanes: 5, speed: 55, water: "the Mississippi River" },
+  "Mississippi":   { sign: "US", num: "90",  name: "Bay St. Louis Bridge",           city: "Bay St. Louis", lanes: 2, speed: 55, water: "the Bay of St. Louis" },
+  "Missouri":      { sign: "I",  num: "70",  name: "Stan Musial Veterans Bridge",    city: "St. Louis",     lanes: 4, speed: 55, water: "the Mississippi River" },
+  "Montana":       { sign: "US", num: "2",   name: "Fort Peck Missouri Bridge",      city: "Glasgow",       lanes: 2, speed: 60, water: "the Missouri River" },
+  "Nebraska":      { sign: "I",  num: "480", name: "Grenville Dodge Bridge",         city: "Omaha",         lanes: 3, speed: 55, water: "the Missouri River" },
+  "Nevada":        { sign: "US", num: "93",  name: "Pat Tillman Memorial Bridge",    city: "Boulder City",  lanes: 2, speed: 55, water: "the Colorado River" },
+  "New Hampshire": { sign: "I",  num: "95",  name: "Piscataqua River Bridge",        city: "Portsmouth",    lanes: 3, speed: 55, water: "the Piscataqua River" },
+  "New Jersey":    { sign: "SR", num: "444", name: "Driscoll Bridge",                city: "Sayreville",    lanes: 7, speed: 55, water: "the Raritan River" },
+  "New Mexico":    { sign: "US", num: "64",  name: "Rio Grande Gorge Bridge",        city: "Taos",          lanes: 1, speed: 55, water: "the Rio Grande Gorge" },
+  "New York":      { sign: "I",  num: "87",  name: "Gov. Mario M. Cuomo Bridge",     city: "Tarrytown",     lanes: 4, speed: 55, water: "the Hudson River" },
+  "North Carolina":{ sign: "US", num: "64",  name: "Virginia Dare Memorial Bridge",  city: "Manteo",        lanes: 2, speed: 55, water: "the Croatan Sound" },
+  "North Dakota":  { sign: "SR", num: "23",  name: "Four Bears Bridge",              city: "New Town",      lanes: 2, speed: 55, water: "Lake Sakakawea" },
+  "Ohio":          { sign: "I",  num: "280", name: "Veterans' Glass City Skyway",    city: "Toledo",        lanes: 3, speed: 55, water: "the Maumee River" },
+  "Oklahoma":      { sign: "US", num: "70",  name: "Roosevelt Memorial Bridge",      city: "Durant",        lanes: 2, speed: 55, water: "Lake Texoma" },
+  "Oregon":        { sign: "US", num: "101", name: "Astoria–Megler Bridge",     city: "Astoria",       lanes: 1, speed: 55, water: "the Columbia River" },
+  "Pennsylvania":  { sign: "I",  num: "676", name: "Benjamin Franklin Bridge",       city: "Philadelphia",  lanes: 3, speed: 45, water: "the Delaware River" },
+  "Rhode Island":  { sign: "SR", num: "138", name: "Claiborne Pell Newport Bridge",  city: "Newport",       lanes: 2, speed: 40, water: "Narragansett Bay" },
+  "South Carolina":{ sign: "US", num: "17",  name: "Arthur Ravenel Jr. Bridge",      city: "Charleston",    lanes: 4, speed: 55, water: "the Cooper River" },
+  "South Dakota":  { sign: "I",  num: "90",  name: "Chamberlain Missouri Bridge",    city: "Chamberlain",   lanes: 2, speed: 65, water: "the Missouri River" },
+  "Tennessee":     { sign: "I",  num: "55",  name: "Memphis–Arkansas Bridge",   city: "Memphis",       lanes: 2, speed: 55, water: "the Mississippi River" },
+  "Texas":         { sign: "SR", num: "100", name: "Queen Isabella Causeway",        city: "South Padre Island", lanes: 2, speed: 55, water: "the Laguna Madre" },
+  "Utah":          { sign: "US", num: "191", name: "Colorado River Bridge",          city: "Moab",          lanes: 2, speed: 55, water: "the Colorado River" },
+  "Vermont":       { sign: "SR", num: "17",  name: "Lake Champlain Bridge",          city: "Addison",       lanes: 1, speed: 50, water: "Lake Champlain" },
+  "Virginia":      { sign: "US", num: "13",  name: "Chesapeake Bay Bridge–Tunnel", city: "Virginia Beach", lanes: 1, speed: 55, water: "the Chesapeake Bay" },
+  "Washington":    { sign: "SR", num: "16",  name: "Tacoma Narrows Bridge",          city: "Tacoma",        lanes: 3, speed: 60, water: "the Tacoma Narrows" },
+  "West Virginia": { sign: "US", num: "19",  name: "New River Gorge Bridge",         city: "Fayetteville",  lanes: 2, speed: 55, water: "the New River Gorge" },
+  "Wisconsin":     { sign: "I",  num: "43",  name: "Leo Frigo Memorial Bridge",      city: "Green Bay",     lanes: 2, speed: 55, water: "the Fox River" },
+  "Wyoming":       { sign: "US", num: "89",  name: "Snake River Bridge",             city: "Jackson",       lanes: 2, speed: 55, water: "the Snake River" },
+};
+
+// Every state gets its bridge and a downtown Main Street work zone.
+for (const [stateName, s] of Object.entries(STATES)) {
+  const br = BRIDGES[stateName];
+  if (br) s.highways.push({ ...br, terrain: "bridge" });
+  s.highways.push({
+    sign: "ST", num: "MAIN", name: "Main Street",
+    city: s.highways[0].city, lanes: 2, terrain: "street", speed: 30,
+  });
+}
 
 // Vest designs — each state gets 4 vests; the "State Pride" and DOT vests
 // use the state's own colors and DOT branding, so every state's set is unique.

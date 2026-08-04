@@ -20,12 +20,42 @@ Then open **http://localhost:3000**.
 
 1. **Pick your state** — all 50 states.
 2. **Pick your highway** — real interstates, US routes and state highways with
-   accurate shields, lane counts and terrain.
+   accurate shields, lane counts and terrain. Every state also has two special
+   venues: its most famous **🌉 long bridge** (a real water crossing) and a
+   **🏪 downtown Main Street** lined with shops.
 3. **Pick your vest** — every state has its own designs, including the official
    state DOT crew vest (Caltrans, TxDOT, PennDOT...) and a custom State Pride
    vest in your state's colors.
 4. **Spawn in** as a blocky construction worker and set up your scene while
    live traffic merges around your lane closures.
+
+## Venues
+
+Besides the open highways, every state adds two hand-built settings to work in:
+
+- **🌉 Long bridges** — each state's real signature water crossing (the
+  Chesapeake Bay Bridge in Maryland, the Mackinac Bridge in Michigan, the
+  Seven Mile Bridge in Florida, and so on). You're out over open water on a
+  full deck with concrete parapets, steel railings, piers marching into the
+  water below, expansion joints, a steel through-arch main span with hanger
+  cables — and overhead lattice **lane-signal gantries** with green
+  down-arrows and **OBEY LANE SIGNALS** placards. Close a lane with cones or
+  barriers and the signal over that lane flips to a **red X**, just like the
+  real thing. Bridge-specific signs (STAY IN LANE, NO STOPPING ON BRIDGE,
+  HIGH WINDS) line the deck.
+- **🏪 Downtown Main Street** — a slow two-lane city street with a double-yellow
+  centerline, running past storefronts with striped awnings and lit signs
+  (Joe's Diner, the pharmacy, the hardware store...), sidewalks with curbs,
+  parked cars, hydrants, benches and planter trees, cross-street intersections
+  with continental crosswalks, working traffic signals and green street-name
+  blade signs — with the town's skyline and residential streets beyond.
+
+## Traffic
+
+Live AI traffic drives the highway and merges around your lane closures. For
+roleplay or photos where you want an empty road, press **V** (or use the
+pause-menu toggle) to turn AI traffic off; press it again to bring it back.
+The setting is saved with your scene.
 
 ## Saving your work
 
