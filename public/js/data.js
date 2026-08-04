@@ -18,6 +18,12 @@ export const TERRAIN_NAMES = {
   coast:    "Coastal",
   bridge:   "Long Bridge / Water Crossing",
   street:   "Downtown Street",
+  tunnel:   "Highway Tunnel",
+  toll:     "Toll Expressway",
+  industrial: "Industrial District",
+  airport:  "Airport Expressway",
+  parkway:  "Scenic Parkway",
+  canyon:   "Canyon Highway",
 };
 
 // c1/c2 = state theme colors used for the "State Pride" vest
@@ -339,14 +345,61 @@ const BRIDGES = {
   "Wyoming":       { sign: "US", num: "89",  name: "Snake River Bridge",             city: "Jackson",       lanes: 2, speed: 55, water: "the Snake River" },
 };
 
-// Every state gets its bridge and a downtown Main Street work zone.
+// Each bridge's real structural design — the game builds a different
+// superstructure for each: steel through-arch, suspension towers + main
+// cables, cable-stayed fan, steel through-truss, concrete box-girder, or a
+// low beam/causeway on piers.
+const BRIDGE_STYLE = {
+  "Alabama": "beam", "Alaska": "girder", "Arizona": "arch", "Arkansas": "arch",
+  "California": "suspension", "Colorado": "girder", "Connecticut": "girder",
+  "Delaware": "suspension", "Florida": "beam", "Georgia": "cablestay",
+  "Hawaii": "girder", "Idaho": "arch", "Illinois": "cablestay", "Indiana": "truss",
+  "Iowa": "arch", "Kansas": "truss", "Kentucky": "truss", "Louisiana": "beam",
+  "Maine": "cablestay", "Maryland": "suspension", "Massachusetts": "cablestay",
+  "Michigan": "suspension", "Minnesota": "girder", "Mississippi": "beam",
+  "Missouri": "cablestay", "Montana": "truss", "Nebraska": "girder", "Nevada": "arch",
+  "New Hampshire": "arch", "New Jersey": "girder", "New Mexico": "arch",
+  "New York": "cablestay", "North Carolina": "beam", "North Dakota": "truss",
+  "Ohio": "cablestay", "Oklahoma": "truss", "Oregon": "truss", "Pennsylvania": "suspension",
+  "Rhode Island": "suspension", "South Carolina": "cablestay", "South Dakota": "girder",
+  "Tennessee": "truss", "Texas": "beam", "Utah": "girder", "Vermont": "arch",
+  "Virginia": "beam", "Washington": "suspension", "West Virginia": "arch",
+  "Wisconsin": "girder", "Wyoming": "girder",
+};
+
+// Two extra wide, many-lane bridges added on top of the per-state one.
+const EXTRA_BRIDGES = {
+  "New York": { sign: "I", num: "95", name: "George Washington Bridge", city: "Fort Lee",
+    lanes: 7, speed: 45, water: "the Hudson River", style: "suspension" },
+  "Florida": { sign: "I", num: "275", name: "Howard Frankland Bridge", city: "Tampa",
+    lanes: 5, speed: 60, water: "Tampa Bay", style: "girder" },
+};
+
+// Six new road "designs" (venues) added to every state, alongside the
+// open highways, the long bridge, and downtown Main Street.
+function extraRoads(s) {
+  const city = s.highways[0].city;
+  return [
+    { sign: "SR", num: "99",  name: "Harbor Tunnel",       city, lanes: 2, terrain: "tunnel",     speed: 45 },
+    { sign: "SR", num: "130", name: "Toll Expressway",     city, lanes: 3, terrain: "toll",       speed: 70 },
+    { sign: "SR", num: "43",  name: "Industrial Parkway",  city, lanes: 2, terrain: "industrial", speed: 45 },
+    { sign: "SR", num: "170", name: "Airport Expressway",  city, lanes: 3, terrain: "airport",    speed: 55 },
+    { sign: "SR", num: "28",  name: "Scenic Parkway",      city, lanes: 2, terrain: "parkway",    speed: 50 },
+    { sign: "US", num: "191", name: "Canyon Highway",      city, lanes: 2, terrain: "canyon",     speed: 55 },
+  ];
+}
+
+// Every state gets its bridge (with a design), a downtown Main Street, and the
+// six new road designs.
 for (const [stateName, s] of Object.entries(STATES)) {
   const br = BRIDGES[stateName];
-  if (br) s.highways.push({ ...br, terrain: "bridge" });
+  if (br) s.highways.push({ ...br, terrain: "bridge", style: BRIDGE_STYLE[stateName] || "arch" });
+  if (EXTRA_BRIDGES[stateName]) s.highways.push({ ...EXTRA_BRIDGES[stateName], terrain: "bridge" });
   s.highways.push({
     sign: "ST", num: "MAIN", name: "Main Street",
     city: s.highways[0].city, lanes: 2, terrain: "street", speed: 30,
   });
+  for (const rd of extraRoads(s)) s.highways.push(rd);
 }
 
 // Vest designs — each state gets 4 vests; the "State Pride" and DOT vests

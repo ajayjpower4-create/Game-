@@ -31,18 +31,32 @@ Then open **http://localhost:3000**.
 
 ## Venues
 
-Besides the open highways, every state adds two hand-built settings to work in:
+Besides the open highways, every state adds hand-built settings to work in:
 
 - **🌉 Long bridges** — each state's real signature water crossing (the
   Chesapeake Bay Bridge in Maryland, the Mackinac Bridge in Michigan, the
-  Seven Mile Bridge in Florida, and so on). You're out over open water on a
-  full deck with concrete parapets, steel railings, piers marching into the
-  water below, expansion joints, a steel through-arch main span with hanger
-  cables — and overhead lattice **lane-signal gantries** with green
+  Seven Mile Bridge in Florida, and so on). Each is built with its **real
+  structural design** — a steel **through-arch** (New River Gorge), a
+  **suspension** bridge with towers, draped main cables and vertical
+  suspenders (Mackinac, Tacoma Narrows), a **cable-stayed** fan from a central
+  pylon (the Cuomo, the Zakim, the Ravenel), a steel **through-truss** (the
+  Astoria–Megler, the Memphis–Arkansas), a clean concrete **box-girder**
+  viaduct, or a low **beam causeway** on frequent piers. You're out over open
+  water on a full deck with concrete parapets, steel railings, piers, and
+  expansion joints — and overhead lattice **lane-signal gantries** with green
   down-arrows and **OBEY LANE SIGNALS** placards. Close a lane with cones or
   barriers and the signal over that lane flips to a **red X**, just like the
-  real thing. Bridge-specific signs (STAY IN LANE, NO STOPPING ON BRIDGE,
-  HIGH WINDS) line the deck.
+  real thing. Two extra wide, many-lane crossings — the 7-lane **George
+  Washington Bridge** (New York) and the **Howard Frankland Bridge**
+  (Florida) — are in there too.
+- **Six more road designs**, each a distinct setting: a **🚇 highway tunnel**
+  (tiled walls, vaulted ceiling, glowing light strips, jet-fans, emergency
+  doors), a **💰 toll expressway** (a plaza with a canopy, toll booths between
+  the lanes and an E-ZPass gantry), an **🏭 industrial district** (factories
+  with sawtooth roofs and smokestacks, storage tanks, perimeter fencing), an
+  **✈️ airport expressway** (control tower, terminal, parked jets, a runway),
+  a **🌳 scenic parkway** (dense tree line and stone-faced arch overpasses),
+  and a **🏜️ canyon highway** (tall red-rock walls hugging both shoulders).
 - **🏪 Downtown Main Street** — a slow two-lane city street with a double-yellow
   centerline, running past storefronts with striped awnings and lit signs
   (Joe's Diner, the pharmacy, the hardware store...), sidewalks with curbs,
@@ -180,8 +194,10 @@ light towers you've placed actually light up the job site.
   cooler, wheelbarrow, cable reels, portable traffic signal, air compressor,
   jackhammer, cut-off saw, survey tripod, flashing beacon stand, PVC pipe
   stacks, shrink-wrapped concrete-bag pallets, water tank, open manhole, and a
-  rolling tool cart — plus staged material: cone stacks and cone pallets, a
-  loaded flatbed trailer (lumber, pipe and concrete strapped down), lumber and
+  rolling tool cart — plus staged material: cone stacks and cone pallets,
+  **flatbed trailers** loaded with cone stacks, channelizer drums, spare
+  jersey barriers, culvert pipe, or a mixed supply load (lumber, pipe and
+  concrete strapped down), lumber and
   plywood stacks, cinder block and brick pallets, crash barrel arrays,
   water-filled barriers, a diesel fuel tank, wire mesh rolls, manhole riser
   rings, precast catch basins, wheel stops, concrete formwork, hot asphalt

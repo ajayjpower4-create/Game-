@@ -1972,6 +1972,70 @@ function buildCatalog() {
         }
         return g;
       } },
+    { cat: 'Props', id: 'flatbed_cones', icon: '🚛', name: 'Flatbed of Cone Stacks',
+      desc: 'Trailer loaded with rows of stacked traffic cones', blocks: true, build: () => {
+        const g = makeFlatbedDeck(5.8);
+        for (let row = -2; row <= 2; row++) {
+          for (const sx of [-0.62, 0, 0.62]) {
+            const st = makeConeStack(0.82);
+            st.position.set(sx, 0.85, row * 1.05);
+            st.rotation.y = Math.random() * Math.PI;
+            g.add(st);
+          }
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'flatbed_drums', icon: '🚛', name: 'Flatbed of Drums',
+      desc: 'Trailer loaded with orange channelizer barrels', blocks: true, build: () => {
+        const g = makeFlatbedDeck(5.8);
+        const bandMat = new THREE.MeshStandardMaterial({ color: '#fff', roughness: 0.25, emissive: '#cfd8de', emissiveIntensity: 0.2 });
+        for (let row = -2; row <= 2; row++) {
+          for (const sx of [-0.62, 0, 0.62]) {
+            const d = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.95, 16),
+              new THREE.MeshPhysicalMaterial({ color: '#ff5e00', roughness: 0.34, clearcoat: 0.4 }));
+            d.position.set(sx, 1.33, row * 1.05);
+            g.add(d);
+            for (const by of [1.2, 1.5]) {
+              const band = new THREE.Mesh(new THREE.CylinderGeometry(0.285, 0.295, 0.1, 16), bandMat);
+              band.position.set(sx, by, row * 1.05);
+              g.add(band);
+            }
+          }
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'flatbed_barrier', icon: '🚛', name: 'Flatbed of Barriers',
+      desc: 'Trailer stacked with spare jersey barriers', blocks: true, build: () => {
+        const g = makeFlatbedDeck(6.2);
+        for (const [sx, sy] of [[-0.55, 0.85], [0.55, 0.85], [0, 1.66]]) {
+          for (let i = -1; i <= 1; i++) {
+            const b = new THREE.Mesh(jerseyGeometry(1.9), concreteMat());
+            b.position.set(sx, sy, i * 2.0);
+            b.castShadow = true;
+            g.add(b);
+          }
+        }
+        return g;
+      } },
+    { cat: 'Props', id: 'flatbed_pipe', icon: '🚛', name: 'Flatbed of Pipe',
+      desc: 'Trailer loaded with large culvert pipe', blocks: true, build: () => {
+        const g = makeFlatbedDeck(5.8);
+        // pyramid stack of big concrete culvert pipes running lengthwise
+        const rows = [[-0.7, 1.25], [0, 1.25], [0.7, 1.25], [-0.35, 1.9], [0.35, 1.9]];
+        for (const [sx, sy] of rows) {
+          const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 5.0, 16), concreteMat());
+          pipe.rotation.x = Math.PI / 2;
+          pipe.position.set(sx, sy, 0);
+          g.add(pipe);
+          const hole = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 5.02, 16), lamb('#111316'));
+          hole.rotation.x = Math.PI / 2;
+          hole.position.set(sx, sy, 0);
+          g.add(hole);
+        }
+        // wheel chocks so it reads as secured
+        for (const sx of [-1.0, 1.0]) g.add(box(0.16, 0.2, 0.4, '#26282c', sx, 0.95, 2.2));
+        return g;
+      } },
     { cat: 'Props', id: 'lumber_stack', icon: '🪵', name: 'Lumber Stack',
       desc: 'Banded stack of dimensional lumber', blocks: true,
       build: () => makeLumberStack(3.4, 4) },
@@ -2529,6 +2593,30 @@ function makeLumberStack(len = 3.4, layers = 4) {
   return g;
 }
 
+// empty flatbed/drop-deck trailer (frame, wood deck, tandem axles, tongue,
+// coupler, landing jack) — deck top at y=0.85, load onto it from there
+function makeFlatbedDeck(deckL = 5.8) {
+  const g = new THREE.Group();
+  g.add(box(2.24, 0.1, deckL + 0.04, '#2e3134', 0, 0.7, 0));       // steel frame
+  g.add(box(2.2, 0.1, deckL, '#7a5a33', 0, 0.8, 0));               // wood deck
+  for (const sx of [-1.13, 1.13]) g.add(box(0.05, 0.12, deckL, '#26282c', sx, 0.78, 0));
+  for (const az of [-deckL * 0.29, -deckL * 0.43]) for (const sx of [-0.95, 0.95]) g.add(machineTire(0.34, 0.26, sx, 0.34, az));
+  g.add(box(0.5, 0.12, 1.5, '#2e3134', 0, 0.7, deckL / 2 + 0.65));
+  const coupler = cyl(0.08, 0.08, 0.14, '#1a1c20', 0, 0.7, deckL / 2 + 1.3, 10);
+  coupler.rotation.x = Math.PI / 2;
+  g.add(coupler);
+  g.add(cyl(0.045, 0.045, 0.62, '#8a9099', 0.35, 0.36, deckL / 2 + 0.5, 8));
+  g.add(box(0.14, 0.03, 0.14, '#3a3d42', 0.35, 0.05, deckL / 2 + 0.5));
+  return g;
+}
+
+// a ratchet strap across the deck at z, holding a load of height h
+function deckStrap(g, z, h) {
+  g.add(box(0.05, h, 0.03, '#d8a713', -1.11, 0.85 + h / 2, z));
+  g.add(box(0.05, h, 0.03, '#d8a713', 1.11, 0.85 + h / 2, z));
+  g.add(box(2.26, 0.03, 0.03, '#d8a713', 0, 0.85 + h, z));
+}
+
 const CATALOG = buildCatalog();
 const CATEGORIES = ['Vehicles', 'Tools', 'Cones', 'Barricades', 'Signs', 'Equipment', 'Props'];
 
@@ -2604,8 +2692,12 @@ function showHighwayPicker() {
     const info = document.createElement('div');
     info.className = 'highway-info';
     const label = highwayLabel(s, hw);
-    const badge = hw.terrain === 'bridge' ? ' <span class="hw-badge">🌉 BRIDGE</span>'
-      : hw.terrain === 'street' ? ' <span class="hw-badge">🏪 DOWNTOWN</span>' : '';
+    const BADGES = {
+      bridge: '🌉 BRIDGE', street: '🏪 DOWNTOWN', tunnel: '🚇 TUNNEL',
+      toll: '💰 TOLL', industrial: '🏭 INDUSTRIAL', airport: '✈️ AIRPORT',
+      parkway: '🌳 PARKWAY', canyon: '🏜️ CANYON',
+    };
+    const badge = BADGES[hw.terrain] ? ` <span class="hw-badge">${BADGES[hw.terrain]}</span>` : '';
     info.innerHTML = `<div class="highway-name">${label} &mdash; ${hw.name}${badge}</div>
       <div class="highway-meta">to <b>${hw.city}</b> &bull; ${TERRAIN_NAMES[hw.terrain]} &bull; ${hw.lanes} lanes each way &bull; ${hw.speed} mph</div>`;
     card.append(shieldWrap, info);
@@ -2898,6 +2990,12 @@ const TERRAIN_STYLE = {
   coast:    { ground: '#cfc08a', sky: '#3f97ea', fog: '#d4e9f6', fogFar: 1000 },
   bridge:   { ground: '#3a7896', sky: '#4f9fe8', fog: '#d3e4ef', fogFar: 1100 },
   street:   { ground: '#8b8e91', sky: '#5a9ce8', fog: '#c9d6e4', fogFar: 700 },
+  tunnel:   { ground: '#40434a', sky: '#2b2f36', fog: '#1c1f24', fogFar: 240 },
+  toll:     { ground: '#8f9294', sky: '#5a9ce8', fog: '#c4d4e6', fogFar: 850 },
+  industrial: { ground: '#8a8578', sky: '#8fa2b0', fog: '#cdd2d0', fogFar: 700 },
+  airport:  { ground: '#7d9a6a', sky: '#57a4ee', fog: '#d3e2ea', fogFar: 1000 },
+  parkway:  { ground: '#4e7a3a', sky: '#549fec', fog: '#cfe0d4', fogFar: 850 },
+  canyon:   { ground: '#c27b4a', sky: '#4f97e6', fog: '#e0cbb0', fogFar: 700 },
 };
 
 // ============================================================
@@ -3026,9 +3124,11 @@ function buildWorld() {
 
   // ---- geometry constants ----
   const T = hw.terrain;
-  const medianW = (T === 'urban' || T === 'bridge') ? 1.2 : T === 'street' ? 0.9 : 9;
-  const shoulderIn = T === 'bridge' ? 0.6 : T === 'street' ? 0.25 : 1.5;
-  const shoulderOut = T === 'bridge' ? 1.4 : T === 'street' ? 2.8 : 3.0;   // street: outer shoulder is the parking lane
+  // terrains with a narrow concrete (jersey) median instead of a grass one
+  const NARROW_MEDIAN = T === 'urban' || T === 'bridge' || T === 'tunnel' || T === 'toll' || T === 'canyon';
+  const medianW = NARROW_MEDIAN ? 1.2 : T === 'street' ? 0.9 : 9;
+  const shoulderIn = T === 'bridge' ? 0.6 : T === 'street' ? 0.25 : T === 'tunnel' ? 0.8 : 1.5;
+  const shoulderOut = T === 'bridge' ? 1.4 : T === 'street' ? 2.8 : T === 'tunnel' ? 1.0 : 3.0;   // street: outer shoulder is the parking lane
   const sideW = shoulderIn + lanes * LANE_W + shoulderOut;
   roadInfo = {
     medianHalf: medianW / 2, shoulderIn, shoulderOut, sideW,
@@ -3081,7 +3181,7 @@ function buildWorld() {
   }
 
   // ---- median ----
-  if (T === 'urban' || T === 'bridge') {
+  if (NARROW_MEDIAN) {
     // continuous concrete median with the real jersey cross-section
     const jb = new THREE.Mesh(jerseyGeometry(ROAD_LEN), concreteMat());
     jb.castShadow = true; jb.receiveShadow = true;
@@ -3135,7 +3235,9 @@ function buildWorld() {
     buildMileMarkers(hw);
     buildRoadsideSigns(hw);
     buildDelineators(hw);
-    buildBillboards(hw);
+    // enclosed/scenic venues skip the roadside billboards
+    if (T !== 'tunnel' && T !== 'canyon' && T !== 'parkway') buildBillboards(hw);
+    if (T === 'toll') buildTollPlaza(hw);
   }
 
   // ---- scenery ----
@@ -3336,6 +3438,14 @@ function buildRoadside(hw, style) {
     buildSidewalks();
     return;
   }
+  if (hw.terrain === 'tunnel') {
+    buildTunnel();
+    return;
+  }
+  if (hw.terrain === 'canyon') {
+    buildCanyonWalls();
+    return;
+  }
   if (hw.terrain === 'urban') {
     // precast sound walls with panel seams
     const tex = soundWallTexture();
@@ -3448,33 +3558,8 @@ function buildBridgeStructure() {
     scene.add(joint);
   }
 
-  // steel through-arch main span at mid-bridge — the postcard part
-  const archMat = lamb('#3e6b53', { roughness: 0.5, metalness: 0.45 });
-  for (const dir of [1, -1]) {
-    const arch = new THREE.Mesh(new THREE.TorusGeometry(85, 0.55, 8, 40, Math.PI), archMat);
-    arch.position.set(dir * (deckHalf + 0.6), 0.5, 0);
-    arch.rotation.y = Math.PI / 2;
-    arch.scale.set(1, 0.42, 1);   // half-ellipse: 170 m span, ~36 m rise
-    arch.castShadow = true;
-    scene.add(arch);
-    // hangers from arch down to the deck edge
-    for (let z = -75; z <= 75; z += 12.5) {
-      const t = z / 85;
-      const y = Math.sqrt(Math.max(0, 1 - t * t)) * 85 * 0.42 + 0.5;
-      const hanger = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, y - 1.1, 6), archMat);
-      hanger.position.set(dir * (deckHalf + 0.6), (y + 1.1) / 2, z);
-      scene.add(hanger);
-    }
-  }
-  // cross-braces between the two arches up top
-  for (const z of [-52, -26, 0, 26, 52]) {
-    const t = z / 85;
-    const y = Math.sqrt(Math.max(0, 1 - t * t)) * 85 * 0.42 + 0.5;
-    const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, (deckHalf + 0.6) * 2, 8), archMat);
-    brace.rotation.z = Math.PI / 2;
-    brace.position.set(0, y, z);
-    scene.add(brace);
-  }
+  // ---- superstructure varies by the bridge's real design ----
+  buildBridgeSuperstructure(sel.highway.style || 'arch', deckHalf);
 
   // a few boats out on the water to sell the scale
   for (let i = 0; i < 6; i++) {
@@ -3483,24 +3568,22 @@ function buildBridgeStructure() {
     const hullLen = 6 + Math.random() * 9;
     boat.add(box(2.2, 1.1, hullLen, '#f2f4f6', 0, 0.4, 0));
     boat.add(box(1.5, 1.0, hullLen * 0.3, '#d8dde2', 0, 1.3, -hullLen * 0.12));
-    const bow = box(2.2, 1.1, 1.6, '#f2f4f6', 0, 0.4, hullLen / 2 + 0.4);
-    bow.rotation.y = Math.PI / 4;
-    boat.add(bow);
+    const bow2 = box(2.2, 1.1, 1.6, '#f2f4f6', 0, 0.4, hullLen / 2 + 0.4);
+    bow2.rotation.y = Math.PI / 4;
+    boat.add(bow2);
     boat.position.set(side * (outerEdge + 40 + Math.random() * 220), -6.9, (Math.random() - 0.5) * ROAD_LEN * 0.9);
     boat.rotation.y = Math.random() * Math.PI * 2;
     scene.add(boat);
   }
 
   // dedicated bridge lighting: short poles rising straight off the parapet
-  // with a downturned fixture over the walkway — no floating cobra-heads
-  const poleMat = metalMat('#8f949c', { roughness: 0.5 });
+  const poleMat0 = metalMat('#8f949c', { roughness: 0.5 });
   for (let z = -ROAD_LEN / 2 + 40; z < ROAD_LEN / 2; z += 60) {
     for (const dir of [1, -1]) {
       const g = new THREE.Group();
       const poleH = 4.2;
-      g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, poleH, 8), poleMat).translateY(poleH / 2));
-      // short arm curving inward over the deck
-      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.0, 8), poleMat);
+      g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, poleH, 8), poleMat0).translateY(poleH / 2));
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.0, 8), poleMat0);
       arm.rotation.z = Math.PI / 2.3;
       arm.position.set(-dir * 0.4, poleH - 0.05, 0);
       g.add(arm);
@@ -3514,10 +3597,189 @@ function buildBridgeStructure() {
       lens.position.set(headX, poleH - 0.05, 0);
       g.add(lens);
       lightGlowMats.push(addGlowSprite(lens, '#ffdf9e', 1.1, -0.02));
-      // sits on top of the parapet (parapet crown ~1.05 high at deckHalf)
       g.position.set(dir * (deckHalf - 0.05), 1.0, z);
       scene.add(g);
     }
+  }
+}
+
+// Build the visible superstructure for each real bridge design. deckHalf is
+// half the deck width; the deck itself is already built at y~0.
+function buildBridgeSuperstructure(style, deckHalf) {
+  const steel = lamb('#3e6b53', { roughness: 0.5, metalness: 0.45 });
+  const grey = metalMat('#9aa0a8', { roughness: 0.4 });
+  const cableMat = lamb('#2a2d31', { roughness: 0.6 });
+  const edgeX = deckHalf + 0.6;
+
+  if (style === 'suspension') {
+    // two portal towers, draped main cables, vertical suspenders
+    const towerH = 46, towerZs = [-150, 150];
+    for (const tz of towerZs) {
+      for (const dir of [1, -1]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(1.4, towerH, 1.4), grey);
+        leg.position.set(dir * edgeX, towerH / 2, tz);
+        leg.castShadow = true;
+        scene.add(leg);
+      }
+      // cross-struts between the two legs
+      for (const cy of [towerH * 0.55, towerH - 1]) {
+        const strut = new THREE.Mesh(new THREE.BoxGeometry(edgeX * 2, 1.0, 1.0), grey);
+        strut.position.set(0, cy, tz);
+        scene.add(strut);
+      }
+    }
+    // main cable: parabolic sag between the two towers, and sweeping down to
+    // the deck beyond each tower
+    for (const dir of [1, -1]) {
+      // sample the main cable's height at a given z
+      const cableY = (z) => {
+        const H = towerH - 1;
+        if (z <= towerZs[0]) return THREE.MathUtils.lerp(3, H, (z + ROAD_LEN / 2) / (towerZs[0] + ROAD_LEN / 2));
+        if (z >= towerZs[1]) return THREE.MathUtils.lerp(H, 3, (z - towerZs[1]) / (ROAD_LEN / 2 - towerZs[1]));
+        const t = (z - towerZs[0]) / (towerZs[1] - towerZs[0]);   // 0..1 between towers
+        const sag = 22;
+        return H - Math.sin(t * Math.PI) * sag;
+      };
+      // draw the cable as short segments
+      let prevZ = -ROAD_LEN / 2, prevY = cableY(prevZ);
+      for (let z = -ROAD_LEN / 2 + 8; z <= ROAD_LEN / 2; z += 8) {
+        const y = cableY(z);
+        const midY = (prevY + y) / 2, midZ = (prevZ + z) / 2;
+        const len = Math.hypot(z - prevZ, y - prevY);
+        const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, len, 6), cableMat);
+        seg.position.set(dir * edgeX, midY, midZ);
+        seg.rotation.x = Math.atan2(z - prevZ, y - prevY);
+        scene.add(seg);
+        prevZ = z; prevY = y;
+      }
+      // vertical suspender cables between towers
+      for (let z = towerZs[0] + 10; z < towerZs[1]; z += 10) {
+        const top = cableY(z);
+        const susp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, top - 1.3, 5), cableMat);
+        susp.position.set(dir * edgeX, (top + 1.3) / 2, z);
+        scene.add(susp);
+      }
+    }
+    return;
+  }
+
+  if (style === 'cablestay') {
+    // a single tall diamond/H pylon at center with a fan of stay cables
+    const pylonH = 52;
+    for (const dir of [1, -1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(1.6, pylonH, 1.6), grey);
+      leg.position.set(dir * edgeX, pylonH / 2, 0);
+      leg.rotation.z = -dir * 0.06;   // legs lean together
+      leg.castShadow = true;
+      scene.add(leg);
+    }
+    for (const cy of [pylonH * 0.5, pylonH * 0.8, pylonH - 1]) {
+      scene.add(new THREE.Mesh(new THREE.BoxGeometry(edgeX * 2, 1.1, 1.1), grey)).position.set(0, cy, 0);
+    }
+    // fan of stays fore and aft, both sides
+    for (const dir of [1, -1]) {
+      for (let i = 1; i <= 8; i++) {
+        const anchorZ = i * 15;
+        const topY = pylonH - i * 1.2;
+        for (const zz of [anchorZ, -anchorZ]) {
+          const len = Math.hypot(zz, topY - 1.3);
+          const stay = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, len, 5), cableMat);
+          stay.position.set(dir * edgeX, (topY + 1.3) / 2, zz / 2);
+          stay.rotation.x = Math.atan2(zz, topY - 1.3);
+          scene.add(stay);
+        }
+      }
+    }
+    return;
+  }
+
+  if (style === 'truss') {
+    // continuous steel through-truss: top chord, verticals, X diagonals
+    const truH = 8, top = truH;
+    for (const dir of [1, -1]) {
+      const x = dir * edgeX;
+      // top + bottom chords
+      scene.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, ROAD_LEN), steel)).position.set(x, top, 0);
+      const n = Math.floor(ROAD_LEN / 10);
+      for (let i = 0; i <= n; i++) {
+        const z = -ROAD_LEN / 2 + i * 10;
+        // vertical post
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.24, truH, 0.24), steel);
+        post.position.set(x, top / 2 + 1.4, z);
+        scene.add(post);
+        // X diagonal in each bay
+        if (i < n) {
+          for (const s of [1, -1]) {
+            const diag = new THREE.Mesh(new THREE.BoxGeometry(0.16, Math.hypot(10, truH), 0.16), steel);
+            diag.position.set(x, top / 2 + 1.4, z + 5);
+            diag.rotation.x = s * Math.atan2(10, truH);
+            scene.add(diag);
+          }
+        }
+      }
+    }
+    // top cross-bracing (portal frames) every 40m
+    for (let z = -ROAD_LEN / 2 + 20; z < ROAD_LEN / 2; z += 40) {
+      scene.add(new THREE.Mesh(new THREE.BoxGeometry(edgeX * 2, 0.3, 0.3), steel)).position.set(0, top + 1.4, z);
+    }
+    return;
+  }
+
+  if (style === 'girder') {
+    // clean concrete box-girder viaduct — no superstructure above the deck,
+    // just a deep haunched girder underneath and slender single-column piers
+    const conc = concreteMat();
+    const girder = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 1.4, 2.4, ROAD_LEN), conc);
+    girder.position.y = -1.6;
+    scene.add(girder);
+    // trapezoid soffit hint
+    const soffit = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 0.9, 1.0, ROAD_LEN), conc);
+    soffit.position.y = -2.9;
+    scene.add(soffit);
+    return;
+  }
+
+  if (style === 'beam') {
+    // low beam causeway: simple deck on very frequent slender piers, no
+    // structure above — like the Seven Mile Bridge / a long causeway
+    const conc = concreteMat();
+    for (let z = -ROAD_LEN / 2 + 12; z < ROAD_LEN / 2; z += 20) {
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 2 - 0.5, 0.7, 1.0), conc);
+      cap.position.set(0, -1.1, z);
+      scene.add(cap);
+      for (const px of [-deckHalf + 1.6, deckHalf - 1.6]) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, 5.5, 8), conc);
+        col.position.set(px, -4.2, z);
+        scene.add(col);
+      }
+    }
+    return;
+  }
+
+  // ---- default: steel through-arch ----
+  const archMat = steel;
+  for (const dir of [1, -1]) {
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(85, 0.55, 8, 40, Math.PI), archMat);
+    arch.position.set(dir * edgeX, 0.5, 0);
+    arch.rotation.y = Math.PI / 2;
+    arch.scale.set(1, 0.42, 1);
+    arch.castShadow = true;
+    scene.add(arch);
+    for (let z = -75; z <= 75; z += 12.5) {
+      const t = z / 85;
+      const y = Math.sqrt(Math.max(0, 1 - t * t)) * 85 * 0.42 + 0.5;
+      const hanger = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, y - 1.1, 6), archMat);
+      hanger.position.set(dir * edgeX, (y + 1.1) / 2, z);
+      scene.add(hanger);
+    }
+  }
+  for (const z of [-52, -26, 0, 26, 52]) {
+    const t = z / 85;
+    const y = Math.sqrt(Math.max(0, 1 - t * t)) * 85 * 0.42 + 0.5;
+    const brace = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, edgeX * 2, 8), archMat);
+    brace.rotation.z = Math.PI / 2;
+    brace.position.set(0, y, z);
+    scene.add(brace);
   }
 }
 
@@ -4022,12 +4284,182 @@ function buildBladeSigns(z) {
   }
 }
 
+// ============================================================
+// New road designs: tunnel, toll plaza, canyon walls
+// ============================================================
+
+// enclosing highway tunnel: tiled walls hard against the shoulders, a curved
+// concrete ceiling overhead, and rows of ceiling light strips that glow.
+function buildTunnel() {
+  const { outerEdge } = roadInfo;
+  const wallH = 6.2;
+  // wall tile texture — glossy white subway tiles with grime at the base
+  const c = makeCanvas(64, 128);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#c9cdd0'; ctx.fillRect(0, 0, 64, 128);
+  ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 2;
+  for (let y = 0; y < 128; y += 12) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(64, y); ctx.stroke(); }
+  for (let x = 0; x < 64; x += 16) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 128); ctx.stroke(); }
+  const grime = ctx.createLinearGradient(0, 90, 0, 128);
+  grime.addColorStop(0, 'rgba(40,40,44,0)'); grime.addColorStop(1, 'rgba(30,30,34,0.6)');
+  ctx.fillStyle = grime; ctx.fillRect(0, 90, 64, 38);
+  const tileTex = new THREE.CanvasTexture(c);
+  tileTex.wrapS = tileTex.wrapT = THREE.RepeatWrapping;
+  tileTex.repeat.set(ROAD_LEN / 6, 1);
+  tileTex.colorSpace = THREE.SRGBColorSpace;
+  const wallMat = lamb('#ffffff', { map: tileTex, roughness: 0.5, metalness: 0.1 });
+  const ceilMat = concreteMat();
+
+  for (const dir of [1, -1]) {
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.4, wallH, ROAD_LEN), wallMat);
+    wall.position.set(dir * (outerEdge + 0.3), wallH / 2, 0);
+    wall.receiveShadow = true;
+    scene.add(wall);
+  }
+  // flat ceiling slab + a shallow vaulted underside
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry((outerEdge + 0.5) * 2, 0.6, ROAD_LEN), ceilMat);
+  ceil.position.y = wallH + 0.3;
+  scene.add(ceil);
+  const vault = new THREE.Mesh(new THREE.CylinderGeometry(outerEdge + 0.5, outerEdge + 0.5, ROAD_LEN, 20, 1, true, 0, Math.PI), ceilMat);
+  vault.rotation.z = Math.PI / 2;
+  vault.rotation.y = Math.PI / 2;
+  vault.position.y = wallH - 0.4;
+  vault.scale.y = 0.35;
+  vault.material = ceilMat;
+  scene.add(vault);
+
+  // twin continuous light strips glowing along the ceiling
+  for (const dx of [-outerEdge * 0.45, outerEdge * 0.45]) {
+    const stripMat = new THREE.MeshStandardMaterial({ color: '#cfd4d8', emissive: '#fff4d6', emissiveIntensity: 0.9 });
+    LAMP_EMISSIVE.push(stripMat);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, ROAD_LEN), stripMat);
+    strip.position.set(dx, wallH - 0.3, 0);
+    scene.add(strip);
+    // periodic glow sprites so it blooms
+    for (let z = -ROAD_LEN / 2 + 20; z < ROAD_LEN / 2; z += 30) {
+      const sp = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 5), stripMat);
+      sp.position.set(dx, wallH - 0.35, z);
+      scene.add(sp);
+    }
+  }
+  // jet-fans mounted to the ceiling every ~90m
+  for (let z = -ROAD_LEN / 2 + 60; z < ROAD_LEN / 2; z += 90) {
+    for (const dx of [-outerEdge * 0.5, outerEdge * 0.5]) {
+      const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.4, 12), metalMat('#c8ccce', { roughness: 0.5 }));
+      fan.rotation.z = Math.PI / 2;
+      fan.position.set(dx, wallH - 0.9, z);
+      scene.add(fan);
+    }
+  }
+  // emergency-exit doors set into the walls
+  for (let z = -ROAD_LEN / 2 + 120; z < ROAD_LEN / 2; z += 240) {
+    for (const dir of [1, -1]) {
+      const door = box(0.1, 2.2, 1.1, '#2f6e3a', dir * (outerEdge + 0.1), 1.1, z);
+      scene.add(door);
+      const sign = box(0.06, 0.35, 0.7, '#1f7d33', dir * (outerEdge + 0.08), 2.6, z);
+      scene.add(sign);
+    }
+  }
+}
+
+// tall rock canyon walls hugging both sides of the roadway
+function buildCanyonWalls() {
+  const { outerEdge } = roadInfo;
+  const rockMats = ['#b5673a', '#a85c33', '#c27b4a', '#9c5230'].map((c) => {
+    const s = noiseSurface(c, 12, 96, 1.8);
+    s.map.repeat.set(6, 3); s.normalMap.repeat.set(6, 3);
+    return lamb('#ffffff', { map: s.map, normalMap: s.normalMap, normalScale: new THREE.Vector2(1.6, 1.6), roughness: 1.0 });
+  });
+  // stack irregular rock slabs to form a rugged wall on each side
+  for (const dir of [1, -1]) {
+    for (let z = -ROAD_LEN / 2; z < ROAD_LEN / 2; z += 14) {
+      const h = 22 + Math.random() * 26;
+      const depth = 10 + Math.random() * 18;
+      const slab = new THREE.Mesh(
+        new THREE.BoxGeometry(depth, h, 15 + Math.random() * 6),
+        rockMats[Math.floor(Math.random() * rockMats.length)]
+      );
+      slab.position.set(dir * (outerEdge + 3 + depth / 2 + Math.random() * 2), h / 2 - 3, z + (Math.random() - 0.5) * 4);
+      slab.rotation.y = (Math.random() - 0.5) * 0.3;
+      slab.rotation.z = (Math.random() - 0.5) * 0.08;
+      slab.castShadow = true; slab.receiveShadow = true;
+      scene.add(slab);
+      // talus boulders at the base
+      if (Math.random() < 0.5) {
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8 + Math.random() * 1.6, 0),
+          rockMats[Math.floor(Math.random() * rockMats.length)]);
+        rock.position.set(dir * (outerEdge + 2 + Math.random() * 2), 0.5, z + (Math.random() - 0.5) * 8);
+        rock.rotation.set(Math.random(), Math.random(), Math.random());
+        scene.add(rock);
+      }
+    }
+  }
+}
+
+// toll plaza: a canopy spanning the road with booths between the lanes and an
+// E-ZPass gantry, set once near the center of the road
+function buildTollPlaza(hw) {
+  const { outerEdge, medianHalf, sideW, lanes } = roadInfo;
+  const plazaZ = -ROAD_LEN * 0.08;
+  const steel = metalMat('#8f949c', { roughness: 0.5 });
+  for (const side of ['A', 'B']) {
+    const sgn = side === 'A' ? 1 : -1;
+    // canopy roof over this carriageway
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(sideW + 1, 0.3, 9), lamb('#d8dbde', { roughness: 0.7 }));
+    roof.position.set(sgn * (medianHalf + sideW / 2), 5.4, plazaZ);
+    roof.castShadow = true;
+    scene.add(roof);
+    // support columns at the four corners
+    for (const cx of [-sideW / 2 + 0.6, sideW / 2 - 0.6]) {
+      for (const cz of [-3.6, 3.6]) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 5.4, 8), steel);
+        col.position.set(sgn * (medianHalf + sideW / 2) + cx, 2.7, plazaZ + cz);
+        scene.add(col);
+      }
+    }
+    // toll booths between each pair of lanes
+    for (let l = 0; l <= lanes; l++) {
+      const bx = sgn * (medianHalf + roadInfo.shoulderIn + l * LANE_W);
+      const booth = new THREE.Group();
+      booth.add(box(1.0, 2.6, 2.2, '#e8e2d0', 0, 1.3, 0));
+      booth.add(box(1.1, 0.5, 2.3, '#c94f2e', 0, 2.7, 0));    // roof band
+      // tinted booth window
+      const win = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.9, 1.2), carGlass());
+      win.position.set(0, 1.7, 0);
+      booth.add(win);
+      // red/green lane light
+      const litGreen = l % 2 === 0;
+      const lampMat = new THREE.MeshStandardMaterial({
+        color: litGreen ? '#164a20' : '#5c1616',
+        emissive: litGreen ? '#34d158' : '#ff3b30', emissiveIntensity: 0.9,
+      });
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.12), lampMat);
+      lamp.position.set(0, 3.0, sgn > 0 ? 1.2 : -1.2);
+      booth.add(lamp);
+      booth.position.set(bx, 0, plazaZ);
+      scene.add(booth);
+    }
+    // overhead E-ZPass sign band
+    const c = makeCanvas(256, 64);
+    const cx2 = c.getContext('2d');
+    cx2.fillStyle = '#4b2e83'; cx2.fillRect(0, 0, 256, 64);
+    cx2.fillStyle = '#fff'; cx2.font = '800 30px Arial'; cx2.textAlign = 'center'; cx2.textBaseline = 'middle';
+    cx2.fillText('E-ZPass', 128, 26);
+    cx2.font = '700 18px Arial'; cx2.fillText('ALL LANES', 128, 48);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(sideW, 0.9, 0.15),
+      new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(c) }));
+    band.position.set(sgn * (medianHalf + sideW / 2), 4.7, plazaZ + (sgn > 0 ? 4.6 : -4.6));
+    scene.add(band);
+  }
+}
+
 // cobra-head highway lampposts down both sides — dark poles by day, warm
 // glowing lamp heads (with a fake-bloom sprite) once time-of-day flips to
 // dusk/night. This is a brand-new, easy-to-spot addition to the roadside.
 const LAMP_EMISSIVE = [];
 function buildStreetlights(hw) {
-  if (hw.terrain === 'bridge') return;   // bridge has its own parapet-mounted lights
+  // bridge & tunnel supply their own lighting; canyon walls would swallow poles
+  if (hw.terrain === 'bridge' || hw.terrain === 'tunnel' || hw.terrain === 'canyon') return;
   const { outerEdge } = roadInfo;
   const off = outerEdge + (hw.terrain === 'street' ? 1.6 : hw.terrain === 'urban' ? 5.5 : 3.4);
   const poleMat = metalMat('#8f949c', { roughness: 0.55 });
@@ -4826,7 +5258,151 @@ function buildScenery(hw, style) {
       add(makePalm(0.7 + Math.random() * 0.9), x, (Math.random() - 0.5) * (ROAD_LEN + 200));
     }
   }
+  if (T === 'industrial') {
+    // factories, warehouses, storage tanks, smokestacks along both sides
+    for (let i = 0; i < Math.round(22 * SCENERY_SCALE); i++) {
+      const side = Math.random() < 0.5 ? 1 : -1;
+      const x = side * (roadInfo.outerEdge + 18 + Math.random() * 90);
+      const z = (Math.random() - 0.5) * (ROAD_LEN + 200);
+      add(makeFactory(), x, z, side > 0 ? -Math.PI / 2 : Math.PI / 2);
+    }
+    for (let i = 0; i < Math.round(16 * SCENERY_SCALE); i++) {
+      const { x, z } = rndRoadside(10, 90);
+      add(makeStorageTank(), x, z);
+    }
+    // chain-link perimeter fence close to the road
+    for (const dir of [1, -1]) {
+      const fence = new THREE.Mesh(new THREE.BoxGeometry(0.04, 2.2, ROAD_LEN), fenceMeshMat().clone());
+      fence.material.map = fenceMeshMat().map.clone();
+      fence.material.map.repeat.set(ROAD_LEN * 0.4, 1);
+      fence.material.map.needsUpdate = true;
+      fence.material.color = new THREE.Color('#9aa0a6');
+      fence.position.set(dir * (roadInfo.outerEdge + 5), 1.1, 0);
+      scene.add(fence);
+    }
+  }
+  if (T === 'airport') {
+    // control tower + terminal + parked jets on one side, low fence
+    const tower = makeControlTower();
+    add(tower, roadInfo.outerEdge + 70, ROAD_LEN * 0.12, 0);
+    const terminal = new THREE.Group();
+    terminal.add(box(70, 9, 26, '#c8ccd0', 0, 4.5, 0));
+    terminal.add(box(70, 1.2, 26, '#9aa0a6', 0, 9.4, 0));
+    for (let wx = -32; wx <= 32; wx += 4) terminal.add(box(1.4, 3.2, 0.4, '#22303c', wx, 4.6, 13.1));
+    add(terminal, roadInfo.outerEdge + 55, -ROAD_LEN * 0.05, 0);
+    for (let i = 0; i < 5; i++) add(makeJet(), roadInfo.outerEdge + 40 + Math.random() * 30, -ROAD_LEN * 0.2 + i * 44, Math.PI / 2);
+    // runway strip far out
+    const rwy = new THREE.Mesh(new THREE.BoxGeometry(24, 0.06, ROAD_LEN * 0.8), lamb('#3a3d42'));
+    rwy.position.set(roadInfo.outerEdge + 120, 0.02, 0);
+    scene.add(rwy);
+    for (const dir of [1, -1]) {
+      const fence = box(0.04, 2.0, ROAD_LEN, '#aeb4bb', dir * (roadInfo.outerEdge + 5), 1.0, 0);
+      scene.add(fence);
+    }
+  }
+  if (T === 'parkway') {
+    // dense tree-lined parkway, stone-faced overpass, no billboards
+    for (let i = 0; i < Math.round(120 * SCENERY_SCALE); i++) {
+      const { x, z } = rndRoadside(3, 120);
+      add(Math.random() < 0.5 ? makeBlobTree(0.7 + Math.random() * 1.3) : makePine(0.8 + Math.random() * 1.4), x, z);
+    }
+    for (const oz of [-ROAD_LEN * 0.22, ROAD_LEN * 0.28]) {
+      const op = new THREE.Group();
+      const span = roadInfo.outerEdge * 2 + 24;
+      const stone = (() => { const s = noiseSurface('#9a8f7a', 10, 64, 1.4); s.map.repeat.set(8, 2); return lamb('#ffffff', { map: s.map, roughness: 0.95 }); })();
+      op.add(new THREE.Mesh(new THREE.BoxGeometry(span, 1.6, 8), stone));
+      // stone arch abutments
+      for (const dx of [-(roadInfo.outerEdge + 6), roadInfo.outerEdge + 6]) {
+        const ab = new THREE.Mesh(new THREE.BoxGeometry(6, 7, 8), stone);
+        ab.position.set(dx, -2.7, 0);
+        op.add(ab);
+      }
+      op.position.set(0, 6.6, oz);
+      scene.add(op);
+    }
+  }
+  if (T === 'canyon') {
+    // sparse desert scrub between the road and the rock walls
+    for (let i = 0; i < Math.round(18 * SCENERY_SCALE); i++) {
+      const { x, z } = rndRoadside(2, 3);
+      add(makeCactus(0.5 + Math.random() * 0.8), x, z);
+    }
+  }
+}
 
+// ---- industrial / airport scenery pieces ----
+function makeFactory() {
+  const g = new THREE.Group();
+  const w = 24 + Math.random() * 20, d = 18 + Math.random() * 16, h = 8 + Math.random() * 6;
+  const wall = ['#8a8578', '#9b9488', '#7d766a', '#a89f8e'][Math.floor(Math.random() * 4)];
+  g.add(box(w, h, d, wall, 0, h / 2, 0));
+  // sawtooth roof
+  for (let x = -w / 2 + 3; x < w / 2; x += 5) {
+    const saw = box(4.6, 2.2, d, '#6f6a5e', x, h + 1, 0);
+    saw.rotation.x = 0;
+    g.add(saw);
+    g.add(box(4.6, 1.6, 0.3, '#22303c', x, h + 1.4, d / 2 - 0.2));   // clerestory glass
+  }
+  // smokestacks with a faint emissive top glow at night
+  for (let i = 0; i < 1 + Math.floor(Math.random() * 2); i++) {
+    const stackH = 14 + Math.random() * 12;
+    const stack = cyl(1.0, 1.3, stackH, '#b04a32', -w / 2 + 4 + i * 6, stackH / 2, -d / 2 + 3, 10);
+    g.add(stack);
+    g.add(cyl(1.1, 1.1, 0.6, '#e8e8e8', -w / 2 + 4 + i * 6, stackH - 1, -d / 2 + 3, 10));
+  }
+  return g;
+}
+
+function makeStorageTank() {
+  const g = new THREE.Group();
+  const r = 3 + Math.random() * 4, h = 6 + Math.random() * 6;
+  g.add(cyl(r, r, h, '#d8dbde', 0, h / 2, 0, 16));
+  // domed top
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), lamb('#c2c6c9'));
+  dome.position.y = h;
+  g.add(dome);
+  // spiral stair band
+  g.add(cyl(r + 0.15, r + 0.15, 0.1, '#8a8f98', 0, h * 0.6, 0, 16));
+  return g;
+}
+
+function makeControlTower() {
+  const g = new THREE.Group();
+  const shaftH = 22;
+  g.add(cyl(1.6, 2.2, shaftH, '#c8ccd0', 0, shaftH / 2, 0, 12));
+  // cab
+  g.add(cyl(3.4, 3.0, 3.2, '#3a3d42', 0, shaftH + 1.6, 0, 12));
+  const glass = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.2, 2.2, 12), carGlass());
+  glass.position.y = shaftH + 1.6;
+  g.add(glass);
+  g.add(cyl(3.6, 3.6, 0.4, '#26282c', 0, shaftH + 3.4, 0, 12));   // roof
+  g.add(cyl(0.05, 0.05, 3, '#8a8f98', 0, shaftH + 5, 0, 6));      // antenna
+  return g;
+}
+
+function makeJet() {
+  const g = new THREE.Group();
+  const body = cyl(1.6, 1.6, 34, '#eef1f4', 0, 4, 0, 14);
+  body.rotation.x = Math.PI / 2;
+  g.add(body);
+  // nose cone
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(1.6, 4, 14), lamb('#dfe3e6'));
+  nose.rotation.x = -Math.PI / 2; nose.position.set(0, 4, 19);
+  g.add(nose);
+  // tail
+  g.add(box(0.4, 5, 3.5, '#2a6db3', 0, 7.5, -15));
+  g.add(box(9, 0.4, 3, '#2a6db3', 0, 6.5, -14));
+  // wings
+  const wing = box(26, 0.5, 4.5, '#e0e4e7', 0, 3.6, 1);
+  wing.rotation.y = 0.12;
+  g.add(wing);
+  // engines
+  for (const wx of [-7, 7]) {
+    const eng = cyl(1.1, 1.1, 3.4, '#5c6168', wx, 2.6, 2.5, 10);
+    eng.rotation.x = Math.PI / 2;
+    g.add(eng);
+  }
+  return g;
 }
 
 // ============================================================
