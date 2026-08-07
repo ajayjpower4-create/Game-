@@ -1,0 +1,12 @@
+{
+  "name": "Belseco Fleet Console",
+  "author": "Belseco Fleet Services",
+  "description": "Cab console for the Belseco DOT Mega Pack: lightbar, siren, traffic advisor, arrow board, scene lighting and winter equipment.",
+  "directive": "belsecoFleetConsole",
+  "domElement": "<belseco-fleet-console></belseco-fleet-console>",
+  "types": ["vehicle"],
+  "css": {
+    "width": "380px",
+    "height": "520px"
+  }
+}

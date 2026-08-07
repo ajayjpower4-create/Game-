@@ -1,0 +1,116 @@
+// ===========================================================================
+// Belseco DOT Mega Pack - equipment prop template
+// ===========================================================================
+//
+// This file is a TEMPLATE and is deliberately NOT loaded by the game: its
+// extension is ".jbeam.template", not ".jbeam".  It is the wiring diagram for
+// the 3D side of the pack.
+//
+// The controllers already publish every value listed below as an electrics
+// value, so once you have meshes and node names, hooking them up is only a
+// matter of filling in the placeholders here and renaming the file to
+//     belseco_pickup_equipment.jbeam
+//
+// TO USE IT YOU MUST REPLACE:
+//   <MESH_*>   the mesh name inside your .dae, exported to
+//              /vehicles/pickup/belseco/<file>.dae
+//   <NODE_*>   four existing node names from the vehicle you are attaching to.
+//              Open the vehicle's own jbeam (or use the in-game node debug
+//              view: Vehicle Debug > Nodes) and copy real node names.
+//
+// PROP COLUMN FORMAT (BeamNG):
+//   func   which electrics value drives it
+//   mesh   mesh name
+//   idRef / idX / idY / idZ   four nodes defining the prop's coordinate frame
+//   baseRotation / rotation / translation   applied per unit of func value
+//   min / max / offset / multiplier         value shaping
+//
+// ---------------------------------------------------------------------------
+// Electrics published by this pack (see docs/ELECTRICS.md for the full list):
+//   belseco_lb_frontL/frontIL/frontR/frontIR/rearL/rearR/sideL/sideR
+//   belseco_ta_s1 .. belseco_ta_s8
+//   belseco_ab_l1 .. belseco_ab_l15, belseco_ab_deploy
+//   belseco_aux_sceneL/sceneR/sceneRear/takedown/alleyL/alleyR/ground/
+//              beacon/wigwagL/wigwagR/workArea
+//   belseco_sw_1 .. belseco_sw_16   (cab switch panel rockers)
+//   belseco_plow_lift/angle, belseco_spinner, belseco_hopper
+// ===========================================================================
+{
+"belseco_pickup_equipment": {
+    "information": {
+        "authors": "Belseco Fleet Services",
+        "name": "Vapid Upfit Equipment - Belseco DOT",
+        "value": 5400
+    },
+    "slotType": "belseco_equipment",
+
+    "flexbodies": [
+        ["mesh", "[group]:", "nonFlexMaterials"],
+        ["<MESH_LIGHTBAR>", ["cab"]],
+        ["<MESH_ARROWBOARD>", ["bed"]],
+        ["<MESH_SWITCHPANEL>", ["cab"]]
+    ],
+
+    "props": [
+        ["func", "mesh", "idRef:", "idX:", "idY:", "idZ:", "baseRotation", "rotation", "translation", "min", "max", "offset", "multiplier"],
+
+        // ---------------------------------------------------------------
+        // Lightbar heads. Each is a light prop: the func drives brightness,
+        // so a value of 0 is dark and 1 is full output. The controller
+        // already dims level-1 cruise mode to 0.35 for you.
+        // ---------------------------------------------------------------
+        {"lightInnerAngle": 20, "lightOuterAngle": 110, "lightRange": 18, "lightBrightness": 1.4, "lightCastShadows": false, "flareName": "vehicleFlare", "flareScale": 0.18},
+        {"lightColor": {"r": 255, "g": 130, "b": 10, "a": 255}},
+        ["belseco_lb_frontL",  "<MESH_LB_HEAD_FL>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_lb_frontIL", "<MESH_LB_HEAD_FIL>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_lb_frontIR", "<MESH_LB_HEAD_FIR>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_lb_frontR",  "<MESH_LB_HEAD_FR>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_lb_sideL",   "<MESH_LB_HEAD_SL>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_lb_sideR",   "<MESH_LB_HEAD_SR>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_lb_rearL",   "<MESH_LB_HEAD_RL>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_lb_rearR",   "<MESH_LB_HEAD_RR>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+
+        // ---------------------------------------------------------------
+        // Rear traffic advisor, 8 segments left to right
+        // ---------------------------------------------------------------
+        {"lightRange": 10, "lightBrightness": 1.0, "flareScale": 0.12},
+        ["belseco_ta_s1", "<MESH_TA_1>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_ta_s2", "<MESH_TA_2>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_ta_s3", "<MESH_TA_3>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_ta_s4", "<MESH_TA_4>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_ta_s5", "<MESH_TA_5>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_ta_s6", "<MESH_TA_6>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_ta_s7", "<MESH_TA_7>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_ta_s8", "<MESH_TA_8>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+
+        // ---------------------------------------------------------------
+        // Arrow board: 15 lamps plus the mast. The mast prop slides upward
+        // 0.55 m as belseco_ab_deploy goes 0 -> 1.
+        // ---------------------------------------------------------------
+        {"lightRange": 12, "lightBrightness": 1.2, "lightColor": {"r": 255, "g": 190, "b": 40, "a": 255}},
+        ["belseco_ab_l1",  "<MESH_AB_L1>",  "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_ab_l2",  "<MESH_AB_L2>",  "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        // ... repeat through belseco_ab_l15 ...
+
+        {"lightRange": 0, "lightBrightness": 0, "flareScale": 0},
+        ["belseco_ab_deploy", "<MESH_AB_MAST>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0.55}, 0, 1, 0, 1],
+
+        // ---------------------------------------------------------------
+        // Cab switch panel. Each rocker tilts 14 degrees when its system is
+        // on, so the panel physically reflects the truck's state and reads
+        // correctly from the driver's seat.
+        // ---------------------------------------------------------------
+        ["belseco_sw_1",  "<MESH_SWITCH_1>",  "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": -14, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        ["belseco_sw_2",  "<MESH_SWITCH_2>",  "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": -14, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1],
+        // ... repeat through belseco_sw_16, in the order listed by
+        //     console.lua's switchPanel table ...
+
+        // ---------------------------------------------------------------
+        // Winter equipment
+        // ---------------------------------------------------------------
+        ["belseco_plow_lift",  "<MESH_PLOW_BLADE>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": -22, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 0.42}, 0, 1, 0, 1],
+        ["belseco_plow_angle", "<MESH_PLOW_PIVOT>", "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 26}, {"x": 0, "y": 0, "z": 0}, -1, 1, 0, 1],
+        ["belseco_spinner",    "<MESH_SPINNER>",    "<NODE_A>", "<NODE_B>", "<NODE_C>", "<NODE_D>", {"x": 0, "y": 0, "z": 0}, {"x": 0, "y": 0, "z": 3600}, {"x": 0, "y": 0, "z": 0}, 0, 1, 0, 1]
+    ]
+}
+}

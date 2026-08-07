@@ -1,0 +1,268 @@
+<div class="bdot-console">
+  <style scoped>
+    .bdot-console {
+      font-family: 'Roboto Condensed', 'Arial Narrow', sans-serif;
+      color: #e8eaed;
+      background: linear-gradient(#1b1e24, #101215);
+      border: 1px solid #35393f;
+      border-radius: 4px;
+      height: 100%;
+      overflow-y: auto;
+      padding: 6px 8px 10px;
+      font-size: 12px;
+      user-select: none;
+    }
+    .bdot-console h1 {
+      font-size: 13px;
+      letter-spacing: 2px;
+      margin: 2px 0 6px;
+      color: #f0a03c;
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .bdot-console .unit { color: #7d848d; font-size: 10px; letter-spacing: 1px; }
+    .bdot-console .offline {
+      text-align: center;
+      padding: 24px 8px;
+      color: #7d848d;
+      line-height: 1.5;
+    }
+    .bdot-console .row { display: flex; gap: 3px; margin-bottom: 4px; flex-wrap: wrap; }
+    .bdot-console .label {
+      font-size: 10px;
+      letter-spacing: 1.4px;
+      color: #8d949d;
+      margin: 7px 0 3px;
+      text-transform: uppercase;
+      border-top: 1px solid #2a2e34;
+      padding-top: 5px;
+    }
+    .bdot-console button {
+      flex: 1 1 auto;
+      min-width: 40px;
+      background: #23262c;
+      border: 1px solid #383c43;
+      color: #c9ced5;
+      border-radius: 2px;
+      padding: 5px 2px;
+      font-size: 10px;
+      letter-spacing: 0.6px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .bdot-console button:hover { background: #2d3138; }
+    .bdot-console button.on {
+      background: #e8871c;
+      border-color: #ffae55;
+      color: #14161a;
+      font-weight: 700;
+    }
+    .bdot-console button.blue.on { background: #2b7fd4; border-color: #64acf0; color: #0b0d10; }
+    .bdot-console button.red.on { background: #cf3b3b; border-color: #ff7d7d; color: #14161a; }
+    .bdot-console button.wide { flex: 1 1 100%; }
+    .bdot-console .switches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+    .bdot-console .switches button { min-width: 0; padding: 6px 0; }
+    .bdot-console .board {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 3px;
+      background: #0a0b0d;
+      border: 1px solid #2a2e34;
+      border-radius: 3px;
+      padding: 5px;
+      margin-bottom: 5px;
+    }
+    .bdot-console .lamp {
+      aspect-ratio: 1 / 1;
+      border-radius: 50%;
+      background: #22262c;
+      border: 1px solid #2f343b;
+    }
+    .bdot-console .lamp.lit {
+      background: #ffc233;
+      border-color: #ffe08a;
+      box-shadow: 0 0 6px 1px rgba(255, 194, 51, 0.65);
+    }
+    .bdot-console .meter {
+      height: 8px;
+      background: #22262c;
+      border: 1px solid #33373e;
+      border-radius: 2px;
+      overflow: hidden;
+      margin: 3px 0 6px;
+    }
+    .bdot-console .meter i { display: block; height: 100%; background: #4fa8e0; }
+    .bdot-console .meter i.warn { background: #d8542f; }
+    .bdot-console .readout {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #98a0a9;
+      margin-bottom: 2px;
+    }
+    .bdot-console .readout b { color: #e8eaed; font-weight: 600; }
+    .bdot-console .tabs { display: flex; gap: 3px; margin-bottom: 6px; }
+    .bdot-console .tabs button { letter-spacing: 1px; }
+    .bdot-console .tabs button.sel { background: #3a4049; color: #fff; border-color: #4d545e; }
+  </style>
+
+  <h1>
+    <span>Belseco Fleet Console</span>
+    <span class="unit" ng-if="state">{{ state.master ? 'MASTER ON' : 'MASTER OFF' }}</span>
+  </h1>
+
+  <div class="offline" ng-if="!connected">
+    No Belseco upfit detected on this vehicle.<br />
+    Fit a <b>Belseco DOT</b> paint design / upfit part in the parts menu,
+    or spawn one of the pack's configurations.
+  </div>
+
+  <div ng-if="connected">
+    <div class="tabs">
+      <button ng-class="{sel: tab === 'lights'}" ng-click="tab = 'lights'">LIGHTS</button>
+      <button ng-class="{sel: tab === 'board'}" ng-click="tab = 'board'">BOARD</button>
+      <button ng-class="{sel: tab === 'winter'}" ng-click="tab = 'winter'">WINTER</button>
+      <button ng-class="{sel: tab === 'panel'}" ng-click="tab = 'panel'">PANEL</button>
+    </div>
+
+    <div class="row">
+      <button class="red" ng-class="{on: !state.master}" ng-click="act('master.toggle')">MASTER</button>
+      <button ng-click="act('all.off')">ALL OFF</button>
+    </div>
+
+    <!-- ---------------------------------------------------------------- -->
+    <div ng-if="tab === 'lights'">
+      <div class="label">Lightbar &mdash; {{ state.lightbar.patternName }}</div>
+      <div class="row">
+        <button ng-repeat="l in lightbarLevels"
+                ng-class="{on: state.lightbar.mode === l.v}"
+                ng-click="act('lightbar.mode', l.v)">{{ l.label }}</button>
+      </div>
+      <div class="row">
+        <button class="wide" ng-click="act('lightbar.patternCycle')">FLASH PATTERN &raquo;</button>
+      </div>
+
+      <div class="label">Traffic Advisor</div>
+      <div class="row">
+        <button class="blue" ng-repeat="a in advisorModes"
+                ng-class="{on: state.lightbar.advisor === a.v}"
+                ng-click="act('advisor.mode', a.v)">{{ a.label }}</button>
+      </div>
+
+      <div class="label">Siren</div>
+      <div class="row">
+        <button ng-repeat="t in sirenTones"
+                ng-class="{on: state.siren.mode === t.v}"
+                ng-click="act('siren.mode', t.v)">{{ t.label }}</button>
+      </div>
+      <div class="row">
+        <button class="wide red" ng-class="{on: state.siren.airhorn}"
+                ng-mousedown="act('siren.airhornDown')"
+                ng-mouseup="act('siren.airhornUp')">AIR HORN</button>
+      </div>
+
+      <div class="label">Response Presets</div>
+      <div class="row">
+        <button ng-repeat="p in presets" ng-click="runPreset(p.id)">{{ p.label }}</button>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------------------- -->
+    <div ng-if="tab === 'board'">
+      <div class="label">Arrow Board &mdash; {{ state.arrowboard.modeName }}</div>
+      <div class="board">
+        <div class="lamp" ng-repeat="i in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]"
+             ng-class="{lit: lamps[i] === 1}"></div>
+      </div>
+      <div class="readout">
+        <span>Mast</span><b>{{ pct(state.arrowboard.deploy) }}%</b>
+      </div>
+      <div class="meter"><i ng-style="{width: pct(state.arrowboard.deploy) + '%'}"></i></div>
+      <div class="row">
+        <button class="wide" ng-class="{on: state.arrowboard.deployTarget > 0.5}"
+                ng-click="act('arrowboard.deploy')">RAISE / STOW MAST</button>
+      </div>
+      <div class="row">
+        <button ng-repeat="b in boardModes"
+                ng-class="{on: state.arrowboard.mode === b.v}"
+                ng-click="act('arrowboard.mode', b.v)">{{ b.label }}</button>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------------------- -->
+    <div ng-if="tab === 'winter'">
+      <div ng-if="!state.plow" class="offline">This unit is not fitted with winter equipment.</div>
+      <div ng-if="state.plow">
+        <div class="label">Plow</div>
+        <div class="row">
+          <button ng-class="{on: state.plow.liftTarget < 0.5}" ng-click="act('plow.lift')">RAISE / LOWER</button>
+          <button ng-class="{on: state.plow.float}" ng-click="act('plow.float')">FLOAT</button>
+        </div>
+        <div class="row">
+          <button ng-click="act('plow.left')">&laquo; ANGLE L</button>
+          <button ng-click="act('plow.right')">ANGLE R &raquo;</button>
+        </div>
+        <div class="readout">
+          <span>Blade angle</span><b>{{ pct(state.plow.angle) }}%</b>
+        </div>
+
+        <div class="label">Spreader</div>
+        <div class="row">
+          <button ng-class="{on: state.plow.spreaderOn}" ng-click="act('plow.spreader')">SPREADER</button>
+          <button ng-class="{on: state.plow.prewet}" ng-click="act('plow.prewet')">PRE-WET</button>
+        </div>
+        <div class="row">
+          <button ng-click="act('plow.rateDown')">RATE &minus;</button>
+          <button ng-click="act('plow.rateUp')">RATE +</button>
+        </div>
+        <div class="readout">
+          <span>Rate</span><b>{{ state.plow.rate }} / {{ state.plow.rateMax }}</b>
+        </div>
+        <div class="readout">
+          <span>Hopper</span><b>{{ state.plow.hopperLb }} lb</b>
+        </div>
+        <div class="meter"><i ng-class="{warn: state.plow.hopper < 0.15}"
+                              ng-style="{width: pct(state.plow.hopper) + '%'}"></i></div>
+        <div class="row">
+          <button class="wide" ng-click="act('plow.reload')">RELOAD HOPPER</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------------------------------------------------------------- -->
+    <div ng-if="tab === 'panel'">
+      <div class="label">Switch Panel</div>
+      <div class="switches">
+        <button ng-repeat="s in state.switches"
+                ng-class="{on: s.on}"
+                ng-click="s.key === 'master' ? act('master.toggle')
+                          : s.key === 'lightbar' ? act('lightbar.cycle')
+                          : s.key === 'siren' ? act('siren.cycle')
+                          : s.key === 'advisor' ? act('advisor.cycle')
+                          : s.key === 'arrowboard' ? act('arrowboard.cycle')
+                          : s.key === 'spreader' ? act('plow.spreader')
+                          : act('aux.toggle', s.key)">{{ s.label }}</button>
+      </div>
+
+      <div class="label">Electrical</div>
+      <div class="readout">
+        <span>Aux load</span><b>{{ state.aux.load }} A</b>
+      </div>
+      <div class="readout">
+        <span>Battery {{ state.aux.charging ? '(charging)' : '(on battery)' }}</span>
+        <b>{{ pct(state.aux.charge) }}%</b>
+      </div>
+      <div class="meter"><i ng-class="{warn: state.aux.lowBattery}"
+                            ng-style="{width: pct(state.aux.charge) + '%'}"></i></div>
+
+      <div class="row">
+        <button class="wide" ng-click="act('aux.scene', true)">SCENE PACKAGE ON</button>
+      </div>
+      <div class="row">
+        <button class="wide" ng-click="act('aux.off')">AUX LIGHTING OFF</button>
+      </div>
+    </div>
+  </div>
+</div>

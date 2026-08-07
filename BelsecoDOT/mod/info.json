@@ -1,0 +1,8 @@
+{
+  "title": "Belseco DOT Mega Pack",
+  "authors": "Belseco Fleet Services",
+  "version": "1.0.0",
+  "tag_line": "Vapid-branded Belseco Department of Transportation fleet: heavy rescue, FIRST freeway service patrol, fleet pickups and winter operations.",
+  "description": "A department-of-transportation fleet pack built around a fully interactive upfit: four-level emergency lightbar with selectable flash programs, four siren tones plus air horn, an eight-segment rear traffic advisor, a sequenced 15-lamp arrow board on a raise/stow mast, scene and alley lighting on a metered electrical load, and winter equipment with a ground-speed-metered spreader. Everything is driveable from the in-cab Belseco Fleet Console UI app, from bindable keys, or from the cab switch panel.",
+  "tags": ["vehicle", "skin", "utility", "emergency", "dot"]
+}

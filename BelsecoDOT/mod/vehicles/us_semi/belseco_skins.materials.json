@@ -1,0 +1,1082 @@
+{
+  "us_semi_body.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_body.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_body.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "us_semi_body.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_body.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_body.skin.belseco_first",
+    "version": 1.5
+  },
+  "us_semi_body.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_body.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_body.skin.belseco_orange",
+    "version": 1.5
+  },
+  "us_semi_body.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_body.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_body.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "us_semi_body.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_body.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_body.skin.belseco_white",
+    "version": 1.5
+  },
+  "us_semi_bumper.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_bumper.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_bumper.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "us_semi_bumper.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_bumper.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_bumper.skin.belseco_first",
+    "version": 1.5
+  },
+  "us_semi_bumper.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_bumper.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_bumper.skin.belseco_orange",
+    "version": 1.5
+  },
+  "us_semi_bumper.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_bumper.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_bumper.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "us_semi_bumper.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_bumper.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_bumper.skin.belseco_white",
+    "version": 1.5
+  },
+  "us_semi_cab.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_cab.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_cab.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "us_semi_cab.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_cab.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_cab.skin.belseco_first",
+    "version": 1.5
+  },
+  "us_semi_cab.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_cab.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_cab.skin.belseco_orange",
+    "version": 1.5
+  },
+  "us_semi_cab.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_cab.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_cab.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "us_semi_cab.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_cab.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_cab.skin.belseco_white",
+    "version": 1.5
+  },
+  "us_semi_doors.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_doors.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_doors.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "us_semi_doors.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_doors.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_doors.skin.belseco_first",
+    "version": 1.5
+  },
+  "us_semi_doors.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_doors.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_doors.skin.belseco_orange",
+    "version": 1.5
+  },
+  "us_semi_doors.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_doors.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_doors.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "us_semi_doors.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_doors.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_doors.skin.belseco_white",
+    "version": 1.5
+  },
+  "us_semi_fenders.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fenders.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fenders.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "us_semi_fenders.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fenders.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fenders.skin.belseco_first",
+    "version": 1.5
+  },
+  "us_semi_fenders.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fenders.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fenders.skin.belseco_orange",
+    "version": 1.5
+  },
+  "us_semi_fenders.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fenders.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fenders.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "us_semi_fenders.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fenders.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fenders.skin.belseco_white",
+    "version": 1.5
+  },
+  "us_semi_fueltank.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fueltank.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fueltank.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "us_semi_fueltank.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fueltank.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fueltank.skin.belseco_first",
+    "version": 1.5
+  },
+  "us_semi_fueltank.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fueltank.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fueltank.skin.belseco_orange",
+    "version": 1.5
+  },
+  "us_semi_fueltank.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fueltank.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fueltank.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "us_semi_fueltank.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_fueltank.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_fueltank.skin.belseco_white",
+    "version": 1.5
+  },
+  "us_semi_hood.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_hood.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_hood.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "us_semi_hood.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_hood.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_hood.skin.belseco_first",
+    "version": 1.5
+  },
+  "us_semi_hood.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_hood.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_hood.skin.belseco_orange",
+    "version": 1.5
+  },
+  "us_semi_hood.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_hood.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_hood.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "us_semi_hood.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_hood.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_hood.skin.belseco_white",
+    "version": 1.5
+  },
+  "us_semi_sleeper.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_sleeper.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_sleeper.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "us_semi_sleeper.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_sleeper.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_sleeper.skin.belseco_first",
+    "version": 1.5
+  },
+  "us_semi_sleeper.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_sleeper.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_sleeper.skin.belseco_orange",
+    "version": 1.5
+  },
+  "us_semi_sleeper.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_sleeper.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_sleeper.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "us_semi_sleeper.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/us_semi/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "us_semi_sleeper.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "us_semi_sleeper.skin.belseco_white",
+    "version": 1.5
+  }
+}

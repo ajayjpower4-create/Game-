@@ -1,0 +1,46 @@
+{
+  "format": 2,
+  "model": "us_semi",
+  "parts": {
+    "paint_design": "belseco_semi_upfit_winter"
+  },
+  "vars": {},
+  "paints": [
+    {
+      "baseColor": [
+        0.85,
+        0.3,
+        0.03,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.32,
+      "clearcoat": 1.0,
+      "clearcoatRoughness": 0.05
+    },
+    {
+      "baseColor": [
+        0.85,
+        0.3,
+        0.03,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.32,
+      "clearcoat": 1.0,
+      "clearcoatRoughness": 0.05
+    },
+    {
+      "baseColor": [
+        0.85,
+        0.3,
+        0.03,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.32,
+      "clearcoat": 1.0,
+      "clearcoatRoughness": 0.05
+    }
+  ]
+}

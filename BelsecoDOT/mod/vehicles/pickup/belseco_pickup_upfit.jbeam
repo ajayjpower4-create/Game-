@@ -1,0 +1,73 @@
+{
+"belseco_pickup_upfit_first": {
+    "information": {
+        "authors": "Belseco Fleet Services",
+        "name": "Vapid FIRST Upfit - Belseco DOT",
+        "value": 4200
+    },
+    "slotType": "paint_design",
+    "globalSkin": "belseco_first",
+    "controller": [
+        ["fileName"],
+        ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 1}],
+        ["belseco/siren", {"name": "belsecoSiren", "volume": 0.9}],
+        ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],
+        ["belseco/auxlights", {"name": "belsecoAuxLights"}],
+        ["belseco/console", {"name": "belsecoConsole"}]
+    ]
+},
+
+"belseco_pickup_upfit_white": {
+    "information": {
+        "authors": "Belseco Fleet Services",
+        "name": "Vapid Fleet Upfit - Belseco DOT White",
+        "value": 3600
+    },
+    "slotType": "paint_design",
+    "globalSkin": "belseco_white",
+    "controller": [
+        ["fileName"],
+        ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 2}],
+        ["belseco/siren", {"name": "belsecoSiren", "volume": 0.8}],
+        ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],
+        ["belseco/auxlights", {"name": "belsecoAuxLights"}],
+        ["belseco/console", {"name": "belsecoConsole"}]
+    ]
+},
+
+"belseco_pickup_upfit_supervisor": {
+    "information": {
+        "authors": "Belseco Fleet Services",
+        "name": "Vapid Supervisor Upfit - Belseco DOT Plain",
+        "value": 2800
+    },
+    "slotType": "paint_design",
+    "globalSkin": "belseco_fleet_plain",
+    "controller": [
+        ["fileName"],
+        ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 2}],
+        ["belseco/siren", {"name": "belsecoSiren", "volume": 0.75}],
+        ["belseco/auxlights", {"name": "belsecoAuxLights"}],
+        ["belseco/console", {"name": "belsecoConsole"}]
+    ]
+},
+
+"belseco_pickup_upfit_winter": {
+    "information": {
+        "authors": "Belseco Fleet Services",
+        "name": "Vapid Winter Ops Upfit - Belseco DOT Orange",
+        "value": 5100
+    },
+    "slotType": "paint_design",
+    "globalSkin": "belseco_orange",
+    "controller": [
+        ["fileName"],
+        ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 3}],
+        ["belseco/siren", {"name": "belsecoSiren", "volume": 0.8}],
+        ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],
+        ["belseco/auxlights", {"name": "belsecoAuxLights"}],
+        ["belseco/plow", {"name": "belsecoPlow"}],
+        ["belseco/console", {"name": "belsecoConsole"}]
+    ]
+}
+}

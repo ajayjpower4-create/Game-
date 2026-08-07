@@ -1,0 +1,31 @@
+{
+"belseco_semi_skin_white": {
+    "information": {"authors": "Belseco Fleet Services", "name": "Belseco DOT - White Fleet (livery only)", "value": 600},
+    "slotType": "paint_design",
+    "globalSkin": "belseco_white"
+},
+
+"belseco_semi_skin_first": {
+    "information": {"authors": "Belseco Fleet Services", "name": "Belseco DOT - FIRST Yellow (livery only)", "value": 600},
+    "slotType": "paint_design",
+    "globalSkin": "belseco_first"
+},
+
+"belseco_semi_skin_orange": {
+    "information": {"authors": "Belseco Fleet Services", "name": "Belseco DOT - Winter Ops Orange (livery only)", "value": 600},
+    "slotType": "paint_design",
+    "globalSkin": "belseco_orange"
+},
+
+"belseco_semi_skin_chevron": {
+    "information": {"authors": "Belseco Fleet Services", "name": "Belseco DOT - Rear Conspicuity Chevrons", "value": 400},
+    "slotType": "paint_design",
+    "globalSkin": "belseco_chevron"
+},
+
+"belseco_semi_skin_uvguide": {
+    "information": {"authors": "Belseco Fleet Services", "name": "Belseco DOT - UV Guide Grid (livery tool)", "value": 10},
+    "slotType": "paint_design",
+    "globalSkin": "belseco_uvguide"
+}
+}

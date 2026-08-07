@@ -1,0 +1,1298 @@
+{
+  "pickup_bed.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bed.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bed.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "pickup_bed.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bed.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bed.skin.belseco_first",
+    "version": 1.5
+  },
+  "pickup_bed.skin.belseco_fleet_plain": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_fleet_plain.png",
+        "clearCoatFactor": 0.8,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.38
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bed.skin.belseco_fleet_plain",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bed.skin.belseco_fleet_plain",
+    "version": 1.5
+  },
+  "pickup_bed.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bed.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bed.skin.belseco_orange",
+    "version": 1.5
+  },
+  "pickup_bed.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bed.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bed.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "pickup_bed.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bed.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bed.skin.belseco_white",
+    "version": 1.5
+  },
+  "pickup_bedside.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bedside.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bedside.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "pickup_bedside.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bedside.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bedside.skin.belseco_first",
+    "version": 1.5
+  },
+  "pickup_bedside.skin.belseco_fleet_plain": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_fleet_plain.png",
+        "clearCoatFactor": 0.8,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.38
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bedside.skin.belseco_fleet_plain",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bedside.skin.belseco_fleet_plain",
+    "version": 1.5
+  },
+  "pickup_bedside.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bedside.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bedside.skin.belseco_orange",
+    "version": 1.5
+  },
+  "pickup_bedside.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bedside.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bedside.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "pickup_bedside.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bedside.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bedside.skin.belseco_white",
+    "version": 1.5
+  },
+  "pickup_body.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_body.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_body.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "pickup_body.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_body.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_body.skin.belseco_first",
+    "version": 1.5
+  },
+  "pickup_body.skin.belseco_fleet_plain": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_fleet_plain.png",
+        "clearCoatFactor": 0.8,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.38
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_body.skin.belseco_fleet_plain",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_body.skin.belseco_fleet_plain",
+    "version": 1.5
+  },
+  "pickup_body.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_body.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_body.skin.belseco_orange",
+    "version": 1.5
+  },
+  "pickup_body.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_body.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_body.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "pickup_body.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_body.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_body.skin.belseco_white",
+    "version": 1.5
+  },
+  "pickup_bumpers.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bumpers.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bumpers.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "pickup_bumpers.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bumpers.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bumpers.skin.belseco_first",
+    "version": 1.5
+  },
+  "pickup_bumpers.skin.belseco_fleet_plain": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_fleet_plain.png",
+        "clearCoatFactor": 0.8,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.38
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bumpers.skin.belseco_fleet_plain",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bumpers.skin.belseco_fleet_plain",
+    "version": 1.5
+  },
+  "pickup_bumpers.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bumpers.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bumpers.skin.belseco_orange",
+    "version": 1.5
+  },
+  "pickup_bumpers.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bumpers.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bumpers.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "pickup_bumpers.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_bumpers.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_bumpers.skin.belseco_white",
+    "version": 1.5
+  },
+  "pickup_cab.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_cab.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_cab.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "pickup_cab.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_cab.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_cab.skin.belseco_first",
+    "version": 1.5
+  },
+  "pickup_cab.skin.belseco_fleet_plain": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_fleet_plain.png",
+        "clearCoatFactor": 0.8,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.38
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_cab.skin.belseco_fleet_plain",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_cab.skin.belseco_fleet_plain",
+    "version": 1.5
+  },
+  "pickup_cab.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_cab.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_cab.skin.belseco_orange",
+    "version": 1.5
+  },
+  "pickup_cab.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_cab.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_cab.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "pickup_cab.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_cab.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_cab.skin.belseco_white",
+    "version": 1.5
+  },
+  "pickup_canopy.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_canopy.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_canopy.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "pickup_canopy.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_canopy.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_canopy.skin.belseco_first",
+    "version": 1.5
+  },
+  "pickup_canopy.skin.belseco_fleet_plain": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_fleet_plain.png",
+        "clearCoatFactor": 0.8,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.38
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_canopy.skin.belseco_fleet_plain",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_canopy.skin.belseco_fleet_plain",
+    "version": 1.5
+  },
+  "pickup_canopy.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_canopy.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_canopy.skin.belseco_orange",
+    "version": 1.5
+  },
+  "pickup_canopy.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_canopy.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_canopy.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "pickup_canopy.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_canopy.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_canopy.skin.belseco_white",
+    "version": 1.5
+  },
+  "pickup_doors.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_doors.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_doors.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "pickup_doors.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_doors.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_doors.skin.belseco_first",
+    "version": 1.5
+  },
+  "pickup_doors.skin.belseco_fleet_plain": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_fleet_plain.png",
+        "clearCoatFactor": 0.8,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.38
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_doors.skin.belseco_fleet_plain",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_doors.skin.belseco_fleet_plain",
+    "version": 1.5
+  },
+  "pickup_doors.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_doors.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_doors.skin.belseco_orange",
+    "version": 1.5
+  },
+  "pickup_doors.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_doors.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_doors.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "pickup_doors.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_doors.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_doors.skin.belseco_white",
+    "version": 1.5
+  },
+  "pickup_fenders.skin.belseco_chevron": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_chevron.png",
+        "clearCoatFactor": 0.2,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.55
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_fenders.skin.belseco_chevron",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_fenders.skin.belseco_chevron",
+    "version": 1.5
+  },
+  "pickup_fenders.skin.belseco_first": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_first.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.34
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_fenders.skin.belseco_first",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_fenders.skin.belseco_first",
+    "version": 1.5
+  },
+  "pickup_fenders.skin.belseco_fleet_plain": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_fleet_plain.png",
+        "clearCoatFactor": 0.8,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.38
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_fenders.skin.belseco_fleet_plain",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_fenders.skin.belseco_fleet_plain",
+    "version": 1.5
+  },
+  "pickup_fenders.skin.belseco_orange": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_orange.png",
+        "clearCoatFactor": 0.7,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.4
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_fenders.skin.belseco_orange",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_fenders.skin.belseco_orange",
+    "version": 1.5
+  },
+  "pickup_fenders.skin.belseco_uvguide": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_uvguide.png",
+        "clearCoatFactor": 0.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.9
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_fenders.skin.belseco_uvguide",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_fenders.skin.belseco_uvguide",
+    "version": 1.5
+  },
+  "pickup_fenders.skin.belseco_white": {
+    "Stages": [
+      {
+        "ambientOcclusion": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorMap": "/vehicles/pickup/belseco_white.png",
+        "clearCoatFactor": 1.0,
+        "clearCoatRoughnessFactor": 0.05,
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.32
+      },
+      {},
+      {},
+      {}
+    ],
+    "activeLayers": 1,
+    "class": "Material",
+    "mapTo": "pickup_fenders.skin.belseco_white",
+    "materialTag0": "beamng",
+    "materialTag1": "vehicle",
+    "name": "pickup_fenders.skin.belseco_white",
+    "version": 1.5
+  }
+}

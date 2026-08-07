@@ -1,0 +1,74 @@
+{
+"belseco_semi_upfit_rescue": {
+    "information": {
+        "authors": "Belseco Fleet Services",
+        "name": "Vapid Heavy Rescue Upfit - Belseco DOT",
+        "value": 12800
+    },
+    "slotType": "paint_design",
+    "globalSkin": "belseco_white",
+    "controller": [
+        ["fileName"],
+        ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 1}],
+        ["belseco/siren", {"name": "belsecoSiren", "volume": 1.0}],
+        ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],
+        ["belseco/auxlights", {"name": "belsecoAuxLights"}],
+        ["belseco/console", {"name": "belsecoConsole"}]
+    ]
+},
+
+"belseco_semi_upfit_command": {
+    "information": {
+        "authors": "Belseco Fleet Services",
+        "name": "Vapid Incident Command Upfit - Belseco DOT",
+        "value": 11400
+    },
+    "slotType": "paint_design",
+    "globalSkin": "belseco_white",
+    "controller": [
+        ["fileName"],
+        ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 3}],
+        ["belseco/siren", {"name": "belsecoSiren", "volume": 0.85}],
+        ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],
+        ["belseco/auxlights", {"name": "belsecoAuxLights"}],
+        ["belseco/console", {"name": "belsecoConsole"}]
+    ]
+},
+
+"belseco_semi_upfit_first": {
+    "information": {
+        "authors": "Belseco Fleet Services",
+        "name": "Vapid FIRST Heavy Upfit - Belseco DOT",
+        "value": 12200
+    },
+    "slotType": "paint_design",
+    "globalSkin": "belseco_first",
+    "controller": [
+        ["fileName"],
+        ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 1}],
+        ["belseco/siren", {"name": "belsecoSiren", "volume": 1.0}],
+        ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],
+        ["belseco/auxlights", {"name": "belsecoAuxLights"}],
+        ["belseco/console", {"name": "belsecoConsole"}]
+    ]
+},
+
+"belseco_semi_upfit_winter": {
+    "information": {
+        "authors": "Belseco Fleet Services",
+        "name": "Vapid Winter Ops Upfit - Belseco DOT Orange",
+        "value": 14600
+    },
+    "slotType": "paint_design",
+    "globalSkin": "belseco_orange",
+    "controller": [
+        ["fileName"],
+        ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 3}],
+        ["belseco/siren", {"name": "belsecoSiren", "volume": 0.9}],
+        ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],
+        ["belseco/auxlights", {"name": "belsecoAuxLights"}],
+        ["belseco/plow", {"name": "belsecoPlow"}],
+        ["belseco/console", {"name": "belsecoConsole"}]
+    ]
+}
+}

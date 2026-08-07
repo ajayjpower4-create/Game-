@@ -1,0 +1,46 @@
+{
+  "format": 2,
+  "model": "us_semi",
+  "parts": {
+    "paint_design": "belseco_semi_upfit_rescue"
+  },
+  "vars": {},
+  "paints": [
+    {
+      "baseColor": [
+        0.92,
+        0.92,
+        0.9,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.32,
+      "clearcoat": 1.0,
+      "clearcoatRoughness": 0.05
+    },
+    {
+      "baseColor": [
+        0.92,
+        0.92,
+        0.9,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.32,
+      "clearcoat": 1.0,
+      "clearcoatRoughness": 0.05
+    },
+    {
+      "baseColor": [
+        0.92,
+        0.92,
+        0.9,
+        1.0
+      ],
+      "metallic": 0.0,
+      "roughness": 0.32,
+      "clearcoat": 1.0,
+      "clearcoatRoughness": 0.05
+    }
+  ]
+}

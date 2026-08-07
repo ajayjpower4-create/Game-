@@ -1,0 +1,219 @@
+{
+  "belseco_master": {
+    "order": 1,
+    "title": "Belseco: Upfit Master",
+    "desc": "Master power for every Belseco upfit system. Off kills lights, siren and equipment.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('master.toggle') end"
+  },
+  "belseco_all_off": {
+    "order": 2,
+    "title": "Belseco: All Systems Off",
+    "desc": "Panic-off: lightbar, siren, advisor, arrow board and scene lighting.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('all.off') end"
+  },
+  "belseco_lightbar_cycle": {
+    "order": 10,
+    "title": "Belseco: Lightbar Level",
+    "desc": "Cycle the lightbar: off, level 1 cruise, level 2 warning, level 3 lane blocking.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('lightbar.cycle') end"
+  },
+  "belseco_lightbar_toggle": {
+    "order": 11,
+    "title": "Belseco: Lightbar On/Off",
+    "desc": "Single-press toggle straight to level 2 and back to off.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('lightbar.toggle') end"
+  },
+  "belseco_lightbar_pattern": {
+    "order": 12,
+    "title": "Belseco: Flash Pattern",
+    "desc": "Cycle the lightbar flash program.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('lightbar.patternCycle') end"
+  },
+  "belseco_advisor_cycle": {
+    "order": 13,
+    "title": "Belseco: Traffic Advisor",
+    "desc": "Cycle the rear traffic advisor: off, left, right, split, wig-wag.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('advisor.cycle') end"
+  },
+  "belseco_siren_toggle": {
+    "order": 20,
+    "title": "Belseco: Siren On/Off",
+    "desc": "Toggle the siren using the last selected tone.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('siren.toggle') end"
+  },
+  "belseco_siren_cycle": {
+    "order": 21,
+    "title": "Belseco: Siren Tone",
+    "desc": "Step through wail, yelp, phaser and hi-lo.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('siren.cycle') end"
+  },
+  "belseco_airhorn": {
+    "order": 22,
+    "title": "Belseco: Air Horn",
+    "desc": "Momentary air horn, ducks the siren tone while held.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('siren.airhornDown') end",
+    "onUp": "if belsecoAction then belsecoAction('siren.airhornUp') end"
+  },
+  "belseco_board_cycle": {
+    "order": 30,
+    "title": "Belseco: Arrow Board Display",
+    "desc": "Cycle arrow board: off, four corner, caution bar, left, right, double, flashing.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('arrowboard.cycle') end"
+  },
+  "belseco_board_deploy": {
+    "order": 31,
+    "title": "Belseco: Arrow Board Mast",
+    "desc": "Raise or stow the arrow board mast. Lamps only light once it is up.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('arrowboard.deploy') end"
+  },
+  "belseco_scene_package": {
+    "order": 40,
+    "title": "Belseco: Scene Lighting Package",
+    "desc": "All scene floods, alley lights, ground lights and beacons at once.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('aux.scene', true) end"
+  },
+  "belseco_scene_off": {
+    "order": 41,
+    "title": "Belseco: Auxiliary Lighting Off",
+    "desc": "Turn off every auxiliary fixture, leaving the lightbar running.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('aux.off') end"
+  },
+  "belseco_takedown": {
+    "order": 42,
+    "title": "Belseco: Take-Down Lights",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('aux.toggle', 'takedown') end"
+  },
+  "belseco_alley_left": {
+    "order": 43,
+    "title": "Belseco: Alley Light Left",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('aux.toggle', 'alleyL') end"
+  },
+  "belseco_alley_right": {
+    "order": 44,
+    "title": "Belseco: Alley Light Right",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('aux.toggle', 'alleyR') end"
+  },
+  "belseco_scene_rear": {
+    "order": 45,
+    "title": "Belseco: Rear Scene Flood",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('aux.toggle', 'sceneRear') end"
+  },
+  "belseco_beacon": {
+    "order": 46,
+    "title": "Belseco: Roof Beacons",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('aux.toggle', 'beacon') end"
+  },
+  "belseco_wigwag": {
+    "order": 47,
+    "title": "Belseco: Headlight Wig-Wags",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('aux.toggle', 'wigwag') end"
+  },
+  "belseco_work_area": {
+    "order": 48,
+    "title": "Belseco: Work Area Floods",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('aux.toggle', 'workArea') end"
+  },
+  "belseco_plow_lift": {
+    "order": 60,
+    "title": "Belseco: Plow Raise/Lower",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('plow.lift') end"
+  },
+  "belseco_plow_float": {
+    "order": 61,
+    "title": "Belseco: Plow Float Mode",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('plow.float') end"
+  },
+  "belseco_plow_left": {
+    "order": 62,
+    "title": "Belseco: Plow Angle Left",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('plow.left') end"
+  },
+  "belseco_plow_right": {
+    "order": 63,
+    "title": "Belseco: Plow Angle Right",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('plow.right') end"
+  },
+  "belseco_spreader": {
+    "order": 64,
+    "title": "Belseco: Spreader On/Off",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('plow.spreader') end"
+  },
+  "belseco_spreader_up": {
+    "order": 65,
+    "title": "Belseco: Spread Rate +",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('plow.rateUp') end"
+  },
+  "belseco_spreader_down": {
+    "order": 66,
+    "title": "Belseco: Spread Rate -",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('plow.rateDown') end"
+  },
+  "belseco_prewet": {
+    "order": 67,
+    "title": "Belseco: Pre-Wet System",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoAction then belsecoAction('plow.prewet') end"
+  },
+  "belseco_preset_travel": {
+    "order": 80,
+    "title": "Belseco Preset: Travel",
+    "desc": "Everything off, ready to drive.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoPreset then belsecoPreset('travel') end"
+  },
+  "belseco_preset_responding": {
+    "order": 81,
+    "title": "Belseco Preset: Responding",
+    "desc": "Level 2 lightbar, wail, wig-wags and take-downs.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoPreset then belsecoPreset('responding') end"
+  },
+  "belseco_preset_onscene": {
+    "order": 82,
+    "title": "Belseco Preset: On Scene",
+    "desc": "Level 3 lightbar, siren off, full scene lighting package.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoPreset then belsecoPreset('onScene') end"
+  },
+  "belseco_preset_block_left": {
+    "order": 83,
+    "title": "Belseco Preset: Lane Block Merge Left",
+    "desc": "Advisor and arrow board pushing traffic to the left, scene lighting up.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoPreset then belsecoPreset('blockLeft') end"
+  },
+  "belseco_preset_block_right": {
+    "order": 84,
+    "title": "Belseco Preset: Lane Block Merge Right",
+    "desc": "Advisor and arrow board pushing traffic to the right, scene lighting up.",
+    "cat": "vehicle_specific",
+    "onDown": "if belsecoPreset then belsecoPreset('blockRight') end"
+  }
+}
