@@ -142,7 +142,8 @@ export function drawShield(ctx, sign, num, size) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(num, s / 2, s * 0.52);
   } else if (sign === 'ST') {
-    // downtown street: green street-name blade
+    // downtown street: green street-name blade (num holds the blade text)
+    const blade = num || 'MAIN ST';
     ctx.fillStyle = '#0b6b3a';
     ctx.beginPath();
     ctx.roundRect(s * 0.04, s * 0.28, s * 0.92, s * 0.44, s * 0.06);
@@ -153,9 +154,11 @@ export function drawShield(ctx, sign, num, size) {
     ctx.roundRect(s * 0.07, s * 0.31, s * 0.86, s * 0.38, s * 0.05);
     ctx.stroke();
     ctx.fillStyle = '#fff';
-    ctx.font = `800 ${Math.floor(s * 0.2)}px Arial`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('MAIN ST', s / 2, s * 0.51);
+    let fs = Math.floor(s * 0.22);
+    ctx.font = `800 ${fs}px Arial`;
+    while (ctx.measureText(blade).width > s * 0.82 && fs > 6) { fs -= 1; ctx.font = `800 ${fs}px Arial`; }
+    ctx.fillText(blade, s / 2, s * 0.51);
   } else {
     // state route: white circle on black square
     ctx.fillStyle = '#111';
@@ -595,6 +598,38 @@ function rbox(w, h, d, mat, r = 0.12, x = 0, y = 0, z = 0) {
   return m;
 }
 
+// soft ground contact-shadow blob that grounds a placed prop or vehicle so it
+// doesn't look like it's floating — cheap AO-style fake with no extra passes
+let _contactTex = null;
+function contactShadowTexture() {
+  if (_contactTex) return _contactTex;
+  const c = makeCanvas(64, 64);
+  const ctx = c.getContext('2d');
+  const gr = ctx.createRadialGradient(32, 32, 3, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(0,0,0,0.5)');
+  gr.addColorStop(0.55, 'rgba(0,0,0,0.24)');
+  gr.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, 64, 64);
+  _contactTex = new THREE.CanvasTexture(c);
+  return _contactTex;
+}
+// call while `group` is still at the origin (before positioning) so the local
+// bounding box gives the footprint to size the shadow to
+function attachContactShadow(group) {
+  const bb = new THREE.Box3().setFromObject(group);
+  const sx = bb.max.x - bb.min.x, sz = bb.max.z - bb.min.z;
+  if (!isFinite(sx) || !isFinite(sz) || sx <= 0 || sz <= 0 || sx > 60) return;
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(sx * 1.3 + 0.4, sz * 1.3 + 0.4),
+    new THREE.MeshBasicMaterial({ map: contactShadowTexture(), transparent: true, depthWrite: false, opacity: 0.9 })
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set((bb.min.x + bb.max.x) / 2, 0.02, (bb.min.z + bb.max.z) / 2);
+  mesh.renderOrder = -1;
+  mesh.userData.contactShadow = true;
+  group.add(mesh);
+}
+
 // soft radial-gradient sprite used for every glow/bloom effect in the game
 // (headlights, blinkers, streetlights) — cheap fake bloom with no post-processing
 let _glowTex = null;
@@ -673,7 +708,6 @@ function barricadeBuilder(panels, width, withLight) {
   return () => {
     const g = new THREE.Group();
     const legColor = '#e8e8e8';
-    const stripeMat = new THREE.MeshStandardMaterial({ map: stripeTexture(true) });
     const h = panels === 3 ? 1.6 : 1.0;
     // legs (angled A-frames at both ends)
     for (const sx of [-width / 2 + 0.06, width / 2 - 0.06]) {
@@ -686,10 +720,19 @@ function barricadeBuilder(panels, width, withLight) {
     const n = panels;
     for (let i = 0; i < n; i++) {
       const y = n === 1 ? h - 0.18 : 0.42 + i * ((h - 0.5) / (n - 1));
-      const p = new THREE.Mesh(new THREE.BoxGeometry(width, 0.22, 0.05), stripeMat);
-      p.position.set(0, y, 0);
-      p.castShadow = true;
-      g.add(p);
+      // a fresh striped texture per board, tiled so the diagonal chevron stripes
+      // stay a constant width and 45° angle no matter how wide the barricade is.
+      // alternate the slope direction each board like real Type III barricades.
+      const tex = stripeTexture(i % 2 === 0);
+      tex.repeat.set(Math.max(1, width / 0.88), 1);   // keeps the diagonal stripes at a clean 45°
+      const board = new THREE.Mesh(new THREE.BoxGeometry(width, 0.22, 0.05), [
+        lamb('#d8d8d8'), lamb('#d8d8d8'), lamb('#d8d8d8'), lamb('#d8d8d8'),
+        new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4 }),
+        new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4 }),
+      ]);
+      board.position.set(0, y, 0);
+      board.castShadow = true;
+      g.add(board);
     }
     if (withLight) {
       g.add(box(0.05, 0.25, 0.05, '#333', 0, h + 0.1, 0));
@@ -789,6 +832,25 @@ function buildCatalog() {
       segLen: 2.6, previewColor: '#ff6a00', chainToast: '🥅 Fence line strung',
       desc: 'Click the start and end point — orange safety fencing auto-connects the whole run for you',
       blocks: true, build: () => makeFenceSegment(2.6) },
+    { cat: 'Tools', id: 'cone_line', icon: '🔶', name: 'Cone Taper', tool: 'cone_line', line: true,
+      segLen: 2.4, pointLine: true, previewColor: '#ff5e00', chainToast: '🔶 Cone taper laid',
+      desc: 'Click start and end — a line of cones is spaced out for you (perfect for lane tapers)',
+      blocks: true, build: coneBuilder(0.16, 0.72, 2) },
+    { cat: 'Tools', id: 'delin_line', icon: '📍', name: 'Delineator Line', tool: 'delin_line', line: true,
+      segLen: 4, pointLine: true, previewColor: '#ff6a00', chainToast: '📍 Delineators placed',
+      desc: 'Click start and end — flexible delineator posts are spaced evenly down the run',
+      blocks: true, build: () => {
+        const g = new THREE.Group();
+        g.add(cyl(0.35, 0.4, 0.08, '#222', 0, 0.04, 0, 12));
+        g.add(cyl(0.045, 0.05, 1.0, '#ff6a00', 0, 0.58, 0, 8));
+        g.add(cyl(0.052, 0.052, 0.1, '#ffffff', 0, 0.95, 0, 8));
+        return g;
+      } },
+    { cat: 'Tools', id: 'rumble', icon: '〰️', name: 'Rumble Strips', tool: 'rumble',
+      desc: 'Click two corners to mill temporary rumble strips into the pavement', blocks: false },
+    { cat: 'Tools', id: 'deleter', icon: '🗑️', name: 'Deleter', tool: 'delete',
+      desc: 'Aim at anything — cars, buildings, props, signs, scenery — and click to delete it',
+      blocks: false },
 
     // ---------- CONES ----------
     { cat: 'Cones', id: 'cone_skinny', icon: '🔶', name: 'Skinny Cone',
@@ -2743,7 +2805,7 @@ function showVestPicker() {
 const SAVE_KEY = 'chs_save_v1';
 
 function highwayLabel(s, hw) {
-  if (hw.sign === 'ST') return 'Main St';
+  if (hw.sign === 'ST') return hw.num;   // the blade text, e.g. "BROADWAY"
   return hw.sign === 'I' ? `I-${hw.num}` : hw.sign === 'US' ? `US-${hw.num}` : `${s.abbr}-${hw.num}`;
 }
 
@@ -2826,6 +2888,7 @@ function applySaveData(data) {
     if (def.customText && it.text) signTruckText = it.text;
     const item = def.build();
     if (def.customText && it.text) signTruckText = prevText;
+    if (!def.tool) attachContactShadow(item);
     item.position.set(it.x, 0, it.z);
     item.rotation.y = it.ry || 0;
     if (it.sx !== undefined) item.scale.set(it.sx, it.sy, it.sz);
@@ -3528,26 +3591,29 @@ function buildBridgeStructure() {
     scene.add(posts);
   }
 
-  // steel girder fascia below the deck edge — what you see from the side
-  const girderMat = lamb('#3e6b53', { roughness: 0.55, metalness: 0.4 });
-  for (const dir of [1, -1]) {
-    const girder = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, ROAD_LEN), girderMat);
-    girder.position.set(dir * (deckHalf - 0.3), -0.95, 0);
-    scene.add(girder);
-  }
+  // deck slab underside (concrete) — always present
   const deckSlab = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 2 + 0.6, 0.35, ROAD_LEN), walkMat);
   deckSlab.position.y = -0.28;
   scene.add(deckSlab);
 
-  // piers marching across the water every 45 m
-  for (let z = -ROAD_LEN / 2 + 22; z < ROAD_LEN / 2; z += 45) {
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 2 - 1, 1.1, 1.6), walkMat);
-    cap.position.set(0, -1.9, z);
-    scene.add(cap);
-    for (const px of [-deckHalf + 2.2, deckHalf - 2.2]) {
-      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.95, 5.2, 10), walkMat);
-      col.position.set(px, -4.9, z);
-      scene.add(col);
+  const style = sel.highway.style || 'arch';
+  // girder & beam carry their own substructure; the others get a concrete edge
+  // fascia beam and evenly-spaced concrete piers marching across the water.
+  if (style !== 'girder' && style !== 'beam') {
+    for (const dir of [1, -1]) {
+      const girder = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, ROAD_LEN), walkMat);
+      girder.position.set(dir * (deckHalf - 0.3), -0.95, 0);
+      scene.add(girder);
+    }
+    for (let z = -ROAD_LEN / 2 + 22; z < ROAD_LEN / 2; z += 45) {
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 2 - 1, 1.1, 1.6), walkMat);
+      cap.position.set(0, -1.9, z);
+      scene.add(cap);
+      for (const px of [-deckHalf + 2.2, deckHalf - 2.2]) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.95, 5.2, 10), walkMat);
+        col.position.set(px, -4.9, z);
+        scene.add(col);
+      }
     }
   }
 
@@ -3559,7 +3625,7 @@ function buildBridgeStructure() {
   }
 
   // ---- superstructure varies by the bridge's real design ----
-  buildBridgeSuperstructure(sel.highway.style || 'arch', deckHalf);
+  buildBridgeSuperstructure(style, deckHalf);
 
   // a few boats out on the water to sell the scale
   for (let i = 0; i < 6; i++) {
@@ -3726,16 +3792,25 @@ function buildBridgeSuperstructure(style, deckHalf) {
   }
 
   if (style === 'girder') {
-    // clean concrete box-girder viaduct — no superstructure above the deck,
-    // just a deep haunched girder underneath and slender single-column piers
+    // clean concrete box-girder viaduct — a deep girder underneath on tall
+    // single-column piers spaced well apart
     const conc = concreteMat();
-    const girder = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 1.4, 2.4, ROAD_LEN), conc);
-    girder.position.y = -1.6;
+    const girder = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 1.4, 2.2, ROAD_LEN), conc);
+    girder.position.y = -1.5;
     scene.add(girder);
-    // trapezoid soffit hint
     const soffit = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 0.9, 1.0, ROAD_LEN), conc);
-    soffit.position.y = -2.9;
+    soffit.position.y = -2.6;
     scene.add(soffit);
+    // single-column hammerhead piers every 55 m
+    for (let z = -ROAD_LEN / 2 + 27; z < ROAD_LEN / 2; z += 55) {
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(deckHalf * 1.5, 0.9, 2.0), conc);
+      cap.position.set(0, -3.3, z);
+      scene.add(cap);
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 5.0, 12), conc);
+      col.position.set(0, -6.2, z);
+      col.castShadow = true;
+      scene.add(col);
+    }
     return;
   }
 
@@ -4071,11 +4146,61 @@ const SHOP_NAMES = [
   ['THRIFT-O-RAMA', '#8c6e2a'], ['GUITAR GARAGE', '#333a8c'], ['PAWN & GOLD', '#8a7a1f'],
 ];
 
-function makeShop(width, name, tint) {
+// each downtown street design (streetStyle 0-4) has its own shop mix, cross
+// streets, storefront wall palette and tree density, so they feel different.
+function streetTheme(style) {
+  const themes = [
+    { // 0 Main Street — small-town classic
+      shops: SHOP_NAMES,
+      cross: ['1ST AVE', '2ND AVE', 'OAK ST', 'ELM ST', 'PARK AVE', 'DEPOT ST', 'MILL AVE'],
+      walls: ['#b98a6a', '#a8552e', '#c9b8a0', '#8c8c8c', '#7a5a45', '#b3a284', '#9b6a52'],
+      trees: 0.6, tall: 14,
+    },
+    { // 1 Broadway — bright city entertainment strip
+      shops: [['GRAND THEATRE', '#8a1f3a'], ['NEON DELI', '#d18a2a'], ['JAZZ CLUB', '#2a2f6b'],
+        ['STARLIGHT CINEMA', '#7d3a6e'], ['THE PLAZA HOTEL', '#5e4a33'], ['SILVER DINER', '#3a8ca3'],
+        ['CITY RECORDS', '#c1391f'], ['GALLERY 42', '#333a8c'], ['ROXY LOUNGE', '#8c2e2e'],
+        ['METRO BOOKS', '#2a6db3'], ['THE COMEDY CELLAR', '#a4402e'], ['BROADWAY BAGELS', '#2e7d4f']],
+      cross: ['5TH AVE', '6TH AVE', '7TH AVE', 'TIMES CT', 'CENTER ST', 'PARK PL'],
+      walls: ['#7a5a45', '#8c3a52', '#3a4a6b', '#6b4a8c', '#9b6a52', '#4a5a6b'],
+      trees: 0.25, tall: 34,
+    },
+    { // 2 Market Street — grocers, produce, butcher
+      shops: [['CITY FISH MARKET', '#2a6db3'], ['GREEN GROCER', '#3f6e35'], ['THE BUTCHER BLOCK', '#8c2e2e'],
+        ['CHEESE & CO', '#d1a02a'], ['FARM FRESH PRODUCE', '#4f8c35'], ['SPICE BAZAAR', '#c1391f'],
+        ['THE BAKERY', '#b3538c'], ['NUTS & MORE', '#8a6e2a'], ['FLOWER STALL', '#7d3a6e'],
+        ['DELI CORNER', '#a4402e'], ['OLIVE OIL SHOP', '#6e7d2a'], ['MARKET CAFE', '#5e4a33']],
+      cross: ['DOCK ST', 'WHARF AVE', 'TRADE ST', 'GRANARY LN', 'SPICE ST', 'FERRY RD'],
+      walls: ['#c9b8a0', '#a8552e', '#b3a284', '#9b8a6a', '#8c8c8c', '#b98a6a'],
+      trees: 0.4, tall: 18,
+    },
+    { // 3 Elm Avenue — quiet leafy neighborhood commercial
+      shops: [['ELM CAFE', '#5e4a33'], ['CORNER SALON', '#b3538c'], ['DRY CLEANERS', '#2a6db3'],
+        ['THE BOOK NOOK', '#6a4a8c'], ['SWEET TREATS', '#e07b2a'], ['YOGA STUDIO', '#3f8c7d'],
+        ['VILLAGE VET', '#2e7d4f'], ['ELM HARDWARE', '#2e5e8c'], ['THE FRAME SHOP', '#8c6e2a'],
+        ['NEIGHBORHOOD DELI', '#a4402e'], ['GARDEN CENTER', '#4f8c35'], ['ELM BAKERY', '#c1391f']],
+      cross: ['MAPLE ST', 'BIRCH LN', 'CEDAR AVE', 'WILLOW CT', 'ASH ST', 'CHESTNUT RD'],
+      walls: ['#d1c2a8', '#b9c4cc', '#aebfae', '#c9b8a0', '#d8cfc0', '#c2b39a'],
+      trees: 0.95, tall: 10,
+    },
+    { // 4 Harbor Boulevard — waterfront / marine strip
+      shops: [['HARBOR SEAFOOD', '#2a6db3'], ['THE CRAB SHACK', '#c1391f'], ['BAIT & TACKLE', '#3f6e35'],
+        ['MARINA SUPPLY', '#2e5e8c'], ['SURF SHOP', '#3a8ca3'], ['THE LIGHTHOUSE INN', '#8c2e2e'],
+        ['DOCKSIDE GRILL', '#a4402e'], ['SAILMAKERS', '#4a5a6b'], ['PIER 9 ICE CREAM', '#e07b2a'],
+        ['ANCHOR TAVERN', '#5e4a33'], ['FISHERMANS WHARF CO', '#2a7d4f'], ['THE BOATHOUSE', '#3a4a6b']],
+      cross: ['PIER ST', 'DOCK AVE', 'BAY ST', 'MARINA WAY', 'ANCHOR RD', 'TIDE ST'],
+      walls: ['#b9c4cc', '#9aa8b0', '#c9d0d4', '#8a9aa0', '#aebfae', '#7d8a90'],
+      trees: 0.35, tall: 16,
+    },
+  ];
+  return themes[style] || themes[0];
+}
+
+function makeShop(width, name, tint, wallCols) {
   const g = new THREE.Group();
   const h = 4.5 + Math.random() * 3.5;
   const depth = 9 + Math.random() * 4;
-  const wallCols = ['#b98a6a', '#a8552e', '#c9b8a0', '#8c8c8c', '#7a5a45', '#b3a284', '#9b6a52'];
+  wallCols = wallCols || ['#b98a6a', '#a8552e', '#c9b8a0', '#8c8c8c', '#7a5a45', '#b3a284', '#9b6a52'];
   const wall = jitterColor(wallCols[Math.floor(Math.random() * wallCols.length)], 0.08);
   const body = box(width, h, depth, wall, 0, h / 2, -depth / 2);
   body.receiveShadow = true;
@@ -4253,10 +4378,12 @@ function buildIntersectionSignals(z) {
   }
 }
 
-const CROSS_STREET_NAMES = ['1ST AVE', '2ND AVE', 'OAK ST', 'ELM ST', 'PARK AVE', 'DEPOT ST', 'MILL AVE'];
 function buildBladeSigns(z) {
   const { outerEdge } = roadInfo;
-  const idx = Math.abs(Math.round(z / STREET_BLOCK)) % CROSS_STREET_NAMES.length;
+  const theme = streetTheme(sel.highway.streetStyle || 0);
+  const crossNames = theme.cross;
+  const mainBlade = sel.highway.num || 'MAIN ST';
+  const idx = Math.abs(Math.round(z / STREET_BLOCK)) % crossNames.length;
   const blade = (text, w) => {
     const c = makeCanvas(256, 64);
     const ctx = c.getContext('2d');
@@ -4272,10 +4399,10 @@ function buildBladeSigns(z) {
   for (const dir of [1, -1]) {
     const g = new THREE.Group();
     g.add(cyl(0.045, 0.05, 3.0, '#4c5158', 0, 1.5, 0, 8));
-    const b1 = blade('MAIN ST', 1.15);
+    const b1 = blade(mainBlade, 1.15);
     b1.position.y = 3.05;
     g.add(b1);
-    const b2 = blade(CROSS_STREET_NAMES[idx], 1.15);
+    const b2 = blade(crossNames[idx], 1.15);
     b2.position.y = 2.72;
     b2.rotation.y = Math.PI / 2;
     g.add(b2);
@@ -5189,19 +5316,20 @@ function buildScenery(hw, style) {
   }
   if (T === 'street') {
     // ---- downtown shop rows facing the sidewalk ----
+    const theme = streetTheme(hw.streetStyle || 0);
     const shopX = roadInfo.outerEdge + 4.9;
     for (const dir of [1, -1]) {
       let z = -STREET_CORE + 9;
-      let i = Math.floor(Math.random() * SHOP_NAMES.length);
+      let i = Math.floor(Math.random() * theme.shops.length);
       while (z < STREET_CORE - 10) {
         const w = 8 + Math.random() * 5;
         // hop over cross streets so shops don't sit in the intersection
         const relStart = ((z + STREET_CORE) % STREET_BLOCK + STREET_BLOCK) % STREET_BLOCK;
         if (relStart < 8) { z += 8 - relStart; continue; }
         if (relStart + w > STREET_BLOCK - 8) { z += STREET_BLOCK - relStart + 9; continue; }
-        const [name, tint] = SHOP_NAMES[i % SHOP_NAMES.length];
+        const [name, tint] = theme.shops[i % theme.shops.length];
         i++;
-        const shop = makeShop(w, name, tint);
+        const shop = makeShop(w, name, tint, theme.walls);
         shop.position.set(dir * shopX, 0, z + w / 2);
         shop.rotation.y = dir > 0 ? -Math.PI / 2 : Math.PI / 2;
         scene.add(shop);
@@ -6788,6 +6916,49 @@ function makeSurfacePatch(kind, A, B) {
     }
     return g;
   }
+  if (kind === 'rumble') {
+    // milled rumble strips: a thin dark patch with regularly-spaced grooves
+    const base = new THREE.Mesh(new THREE.BoxGeometry(w, 0.05, d), lamb('#2c2f33', { roughness: 0.95 }));
+    base.position.y = 0.045; base.receiveShadow = true;
+    g.add(base);
+    const grooveMat = lamb('#17191c', { roughness: 1.0 });
+    // grooves run across the shorter axis, spaced along the longer axis
+    const along = d >= w;
+    const span = along ? d : w, cross = along ? w : d;
+    for (let s = -span / 2 + 0.12; s < span / 2; s += 0.24) {
+      const groove = new THREE.Mesh(new THREE.BoxGeometry(along ? cross : 0.12, 0.04, along ? 0.12 : cross), grooveMat);
+      groove.position.set(along ? 0 : s, 0.05, along ? s : 0);
+      g.add(groove);
+    }
+    return g;
+  }
+
+  // On a bridge you can't dig down to dirt — breaking/trenching the deck
+  // exposes broken concrete and a rebar grid instead of an earthen pit.
+  if (sel.highway.terrain === 'bridge' && (kind === 'breaker' || kind === 'trench')) {
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), lamb('#8f9298', { roughness: 0.95 }));
+    slab.position.y = 0.04; slab.receiveShadow = true;
+    g.add(slab);
+    // exposed rebar grid
+    const rebarMat = lamb('#9a6a45', { roughness: 0.7, metalness: 0.4 });
+    for (let x = -w / 2 + 0.3; x < w / 2; x += 0.4) {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, d, 5), rebarMat);
+      bar.rotation.x = Math.PI / 2; bar.position.set(x, 0.11, 0); g.add(bar);
+    }
+    for (let z = -d / 2 + 0.3; z < d / 2; z += 0.4) {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, w, 5), rebarMat);
+      bar.rotation.z = Math.PI / 2; bar.position.set(0, 0.13, z); g.add(bar);
+    }
+    // chunks of broken concrete
+    for (let i = 0; i < Math.min(60, area * 0.8); i++) {
+      const cw = 0.2 + Math.random() * 0.4;
+      const chunk = new THREE.Mesh(new THREE.BoxGeometry(cw, 0.08, cw * 0.8), lamb('#b6b8b3', { roughness: 0.95 }));
+      chunk.position.set((Math.random() - 0.5) * w, 0.12 + Math.random() * 0.04, (Math.random() - 0.5) * d);
+      chunk.rotation.set((Math.random() - 0.5) * 0.5, Math.random() * Math.PI, (Math.random() - 0.5) * 0.5);
+      g.add(chunk);
+    }
+    return g;
+  }
 
   // breaker / trench both expose dirt with broken asphalt around the edge
   const dirtSurf = noiseSurface('#6e532f', 16, 128, 2.0);
@@ -6880,6 +7051,12 @@ function makeSurfacePatch(kind, A, B) {
 function selectItem(def) {
   clearGhost();
   ghostDef = def;
+  if (def.tool === 'delete') {
+    // deleter: no preview, no two-click — every click removes what you aim at
+    $('current-item-name').textContent = '🗑️ Deleter';
+    $('current-item-hint').textContent = 'Aim at anything and click to delete it • Q to stop';
+    return;
+  }
   if (def.tool) {
     // rectangle/line tool: no prop ghost, use a two-click corner preview
     breakerA = null;
@@ -6951,6 +7128,7 @@ function crosshairGround() {
 
 function updateGhost() {
   if (buildMenuOpen || paused) { if (ghost) ghost.visible = false; if (breakerPreview) breakerPreview.visible = false; return; }
+  if (ghostDef && ghostDef.tool === 'delete') return;   // deleter has no ghost preview
   // rectangle/line tool preview
   if (ghostDef && ghostDef.tool) {
     const p = crosshairGround();
@@ -6988,6 +7166,11 @@ function updateGhost() {
 }
 
 function placeItem() {
+  // deleter tool: each click removes whatever the crosshair is aimed at
+  if (ghostDef && ghostDef.tool === 'delete') {
+    deleteAimed(true);
+    return;
+  }
   // rectangle/line tool: first click sets a corner, second click builds it
   if (ghostDef && ghostDef.tool) {
     const p = crosshairGround();
@@ -7001,7 +7184,7 @@ function placeItem() {
         const item = ghostDef.build();
         item.position.set(seg.x, 0, seg.z);
         item.rotation.y = seg.ry;
-        item.scale.z = seg.len / base;
+        if (!ghostDef.pointLine) item.scale.z = seg.len / base;   // cones/posts stay unscaled
         placedRoot.add(item);
         placed.push({ group: item, def: ghostDef });
       }
@@ -7012,7 +7195,7 @@ function placeItem() {
       if (patch) {
         placedRoot.add(patch);
         placed.push({ group: patch, def: ghostDef, corners: { ax: breakerA.x, az: breakerA.z, bx: p.x, bz: p.z } });
-        const kind = { breaker: 'Pavement demolished', trench: 'Trench dug', repave: 'Fresh asphalt laid', gravel: 'Gravel pad laid' }[ghostDef.tool];
+        const kind = { breaker: 'Pavement demolished', trench: 'Trench dug', repave: 'Fresh asphalt laid', gravel: 'Gravel pad laid', rumble: 'Rumble strips milled' }[ghostDef.tool];
         toast('🧨 ' + kind);
       }
     }
@@ -7021,6 +7204,7 @@ function placeItem() {
   }
   if (!ghostDef || !ghostOk || !ghost.visible) return;
   const item = ghostDef.build();
+  if (!ghostDef.drivable) attachContactShadow(item);   // ground it before positioning
   item.position.copy(ghost.position);
   item.rotation.y = buildYaw;
   if (ghostDef.stretch) applyStretch(item, ghostDef.stretch, buildStretch);
@@ -7046,17 +7230,40 @@ function dropBlinkersOf(obj) {
   blinkers = blinkers.filter((b) => !mats.has(b.mat));
 }
 
-function deleteAimed() {
+// Remove whatever the crosshair is aimed at. Right-click / X remove placed
+// items and vehicles; the Deleter tool passes all=true to also remove traffic
+// cars and scenery (buildings, trees, gantries, signs, structures).
+function deleteAimed(all = false) {
   raycaster.setFromCamera(CENTER, camera);
-  const hits = raycaster.intersectObjects([...placedRoot.children, ...vehiclesRoot.children], true);
-  if (!hits.length || hits[0].distance > 55) return;
-  let obj = hits[0].object;
-  while (obj && obj.parent !== placedRoot && obj.parent !== vehiclesRoot) obj = obj.parent;
-  if (!obj) return;
-  if (obj.parent === vehiclesRoot) {
-    // aiming at either the truck or its towed trailer removes the whole combo
-    const idx = vehicles.findIndex((v) => v.group === obj || v.trailerGroup === obj);
-    if (idx >= 0) {
+  const targets = all ? scene.children : [...placedRoot.children, ...vehiclesRoot.children];
+  const hits = raycaster.intersectObjects(targets, true);
+  const maxDist = all ? 140 : 55;
+  for (const hit of hits) {
+    if (hit.distance > maxDist) return;
+    // resolve to the top-level scene child that contains this face
+    let top = hit.object;
+    while (top.parent && top.parent !== scene) top = top.parent;
+
+    if (top === placedRoot) {
+      let item = hit.object;
+      while (item.parent && item.parent !== placedRoot) item = item.parent;
+      const idx = placed.findIndex((p) => p.group === item);
+      if (idx < 0) continue;
+      dropBlinkersOf(item);
+      const gone = new Set();
+      item.traverse((o) => { if (o.isSpotLight) gone.add(o); });
+      if (gone.size) towerSpots = towerSpots.filter((s) => !gone.has(s));
+      placedRoot.remove(item);
+      placed.splice(idx, 1);
+      computeLaneBlockers();
+      toast('Item removed');
+      return;
+    }
+    if (top === vehiclesRoot) {
+      let item = hit.object;
+      while (item.parent && item.parent !== vehiclesRoot) item = item.parent;
+      const idx = vehicles.findIndex((v) => v.group === item || v.trailerGroup === item);
+      if (idx < 0) continue;
       if (driving === vehicles[idx]) return;   // can't delete the one you're in
       const v = vehicles[idx];
       dropBlinkersOf(v.group);
@@ -7064,19 +7271,31 @@ function deleteAimed() {
       if (v.trailerGroup) { dropBlinkersOf(v.trailerGroup); vehiclesRoot.remove(v.trailerGroup); }
       vehicles.splice(idx, 1);
       toast(v.trailerGroup ? 'Truck + trailer removed' : 'Vehicle removed');
+      return;
     }
-    return;
-  }
-  const idx = placed.findIndex((p) => p.group === obj);
-  if (idx >= 0) {
-    dropBlinkersOf(obj);
+
+    if (!all) continue;   // right-click/X only touch placed + vehicles
+
+    // never delete the essentials
+    if (top === player || top === skyDome || groundMeshes.includes(top) || top.userData.protected) continue;
+
+    // a moving traffic car?
+    const cIdx = cars.findIndex((c) => c.mesh === top);
+    if (cIdx >= 0) {
+      dropBlinkersOf(top);
+      scene.remove(top);
+      cars.splice(cIdx, 1);
+      toast('Traffic car removed');
+      return;
+    }
+    // otherwise it's scenery or a world structure — remove it wholesale
+    dropBlinkersOf(top);
     const gone = new Set();
-    obj.traverse((o) => { if (o.isSpotLight) gone.add(o); });
+    top.traverse((o) => { if (o.isSpotLight) gone.add(o); });
     if (gone.size) towerSpots = towerSpots.filter((s) => !gone.has(s));
-    placedRoot.remove(obj);
-    placed.splice(idx, 1);
-    computeLaneBlockers();
-    toast('Item removed');
+    scene.remove(top);
+    toast('Removed');
+    return;
   }
 }
 

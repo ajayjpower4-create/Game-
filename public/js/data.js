@@ -375,8 +375,18 @@ const EXTRA_BRIDGES = {
     lanes: 5, speed: 60, water: "Tampa Bay", style: "girder" },
 };
 
+// Five downtown street designs, each with its own name, blade text and a
+// style index that drives the shop mix, building palette and street feel.
+const DOWNTOWN_STREETS = [
+  { name: "Main Street",       blade: "MAIN ST",     style: 0 },
+  { name: "Broadway",          blade: "BROADWAY",    style: 1 },
+  { name: "Market Street",     blade: "MARKET ST",   style: 2 },
+  { name: "Elm Avenue",        blade: "ELM AVE",     style: 3 },
+  { name: "Harbor Boulevard",  blade: "HARBOR BLVD", style: 4 },
+];
+
 // Six new road "designs" (venues) added to every state, alongside the
-// open highways, the long bridge, and downtown Main Street.
+// open highways, the long bridge, and the downtown streets.
 function extraRoads(s) {
   const city = s.highways[0].city;
   return [
@@ -395,10 +405,10 @@ for (const [stateName, s] of Object.entries(STATES)) {
   const br = BRIDGES[stateName];
   if (br) s.highways.push({ ...br, terrain: "bridge", style: BRIDGE_STYLE[stateName] || "arch" });
   if (EXTRA_BRIDGES[stateName]) s.highways.push({ ...EXTRA_BRIDGES[stateName], terrain: "bridge" });
-  s.highways.push({
-    sign: "ST", num: "MAIN", name: "Main Street",
-    city: s.highways[0].city, lanes: 2, terrain: "street", speed: 30,
-  });
+  for (const st of DOWNTOWN_STREETS) {
+    s.highways.push({ sign: "ST", num: st.blade, name: st.name, streetStyle: st.style,
+      city: s.highways[0].city, lanes: 2, terrain: "street", speed: 30 });
+  }
   for (const rd of extraRoads(s)) s.highways.push(rd);
 }
 

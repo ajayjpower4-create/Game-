@@ -57,12 +57,16 @@ Besides the open highways, every state adds hand-built settings to work in:
   **✈️ airport expressway** (control tower, terminal, parked jets, a runway),
   a **🌳 scenic parkway** (dense tree line and stone-faced arch overpasses),
   and a **🏜️ canyon highway** (tall red-rock walls hugging both shoulders).
-- **🏪 Downtown Main Street** — a slow two-lane city street with a double-yellow
-  centerline, running past storefronts with striped awnings and lit signs
-  (Joe's Diner, the pharmacy, the hardware store...), sidewalks with curbs,
-  parked cars, hydrants, benches and planter trees, cross-street intersections
-  with continental crosswalks, working traffic signals and green street-name
-  blade signs — with the town's skyline and residential streets beyond.
+- **🏪 Downtown streets** — five slow two-lane city streets, each with its own
+  name, shop mix and feel: **Main Street** (small-town classic), **Broadway**
+  (bright entertainment strip — theatres, jazz club, tall towers), **Market
+  Street** (grocers, fish market, produce), **Elm Avenue** (leafy
+  neighborhood cafés and salons) and **Harbor Boulevard** (waterfront seafood,
+  bait & tackle, marine supply). Each has a double-yellow centerline,
+  storefronts with striped awnings and lit signs, sidewalks with curbs, parked
+  cars, hydrants, benches and planter trees, cross-street intersections with
+  continental crosswalks, working traffic signals and green street-name blade
+  signs — with the skyline and residential streets beyond.
 
 ## Traffic
 
@@ -140,12 +144,26 @@ lane and the whole region is transformed:
 - **Fresh Asphalt Patch** — lays new blacktop
 - **Gravel Pad** — a compacted gravel work pad
 
-Two **line tools** work the same way with a start and end point instead:
+**Line tools** work the same way with a start and end point instead:
 
 - **Barrier Chain** — jersey barriers auto-connect between your two clicks,
   with red chevron reflectors and connector pins
 - **Fence Line** — orange safety mesh fencing strings itself post-to-post
   along the whole run, so you don't place panels one at a time
+- **Cone Taper** — spaces a line of cones between the two points, perfect for
+  laying a lane-closure taper in one drag
+- **Delineator Line** — spaces flexible delineator posts evenly down the run
+
+Plus two more:
+
+- **Rumble Strips** — click two corners to mill temporary rumble strips into
+  the pavement
+- **Deleter** — select it, then aim at *anything* — a traffic car, a building,
+  a tree, a sign, a prop, a gantry — and click to delete it. (Right-click and
+  `X` still quick-remove just your own placed props and vehicles.)
+
+The surface tools work on the bridges too: breaking or trenching a bridge deck
+exposes broken concrete and a rebar grid instead of a dirt pit.
 
 ## Drivable DOT fleet
 
