@@ -25,8 +25,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Best-guess vanilla base material names, ordered most to least likely.
 # Extra names cost nothing: a material that matches no mesh is simply unused.
+# The vanilla body material is usually named after the vehicle itself, with no
+# suffix - BeamNG's own documentation uses "pickup.skin.ambulance" as its
+# example, which means the D-Series body material is plain "pickup". The
+# suffixed names below are extra coverage for panels split onto their own
+# materials; a material that matches no mesh is simply unused, so casting a wide
+# net costs nothing but file size.
 BASE_MATERIALS = {
     "pickup": [
+        "pickup",
         "pickup_body",
         "pickup_bed",
         "pickup_bedside",
@@ -35,8 +42,11 @@ BASE_MATERIALS = {
         "pickup_fenders",
         "pickup_bumpers",
         "pickup_canopy",
+        "pickup_utility",
+        "pickup_flatbed",
     ],
     "us_semi": [
+        "us_semi",
         "us_semi_body",
         "us_semi_cab",
         "us_semi_doors",
@@ -45,6 +55,7 @@ BASE_MATERIALS = {
         "us_semi_sleeper",
         "us_semi_bumper",
         "us_semi_fueltank",
+        "us_semi_chassis",
     ],
 }
 

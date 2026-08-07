@@ -82,16 +82,55 @@ A comfortable starter set:
 
 ## Troubleshooting
 
-**The truck spawns in plain paint.** The skin materials have to match the base
-material names of your game version. Open the World Editor's Material Editor,
-click the panel that stayed unpainted, copy its material name into
-`BASE_MATERIALS` in `tools/generate_materials.py`, and rebuild. This is expected
-one-time setup and is explained in [ASSET_CHECKLIST.md](ASSET_CHECKLIST.md).
+### "The truck is just plain white / plain green with no markings"
 
-**No lights are visible.** That is expected until equipment meshes exist — see
-the "What still needs 3D work" section of the top-level README. All the logic is
-running; you can confirm it from the console app, which shows live state, and
-from the arrow board lamp preview, which blinks in step with the real board.
+This is the most likely problem, and there is a built-in diagnostic for it.
+
+A livery only paints the panels whose **base material name** it matches, and
+those names belong to the base game. Open the in-game console (the `~` key) and
+run:
+
+```lua
+extensions.load('belseco_materials')
+belseco_materials.check('pickup')
+```
+
+- **`MATCHED: none`** — the pack is aiming at the wrong names. Run
+  `belseco_materials.dump('pickup')`, which prints the real list, put the body /
+  paint names into `BASE_MATERIALS` in `tools/generate_materials.py`, and
+  `./build.sh` again. That is a one-line edit and it is the whole fix.
+- **Some matched but panels are still wrong** — the livery is attaching but the
+  stripes are landing in the wrong place in UV space. Fit the *Belseco DOT — UV
+  Guide Grid* livery to read off the coordinates, then adjust the `LIVERIES`
+  table in `tools/generate_skins.py`.
+
+Run the same two commands with `'us_semi'` for the T-Series.
+
+### "Nothing happens when I press the keys"
+
+First check that anything is bound at all: the pack's actions ship **unbound**,
+so `Options → Controls → Bindings → filter "Belseco"` and assign keys, or just
+use the console app, which needs no bindings.
+
+Then check the systems are actually running: open the **Belseco Fleet Console**
+app. If it says *"No Belseco upfit detected"*, the vehicle does not have a
+Belseco upfit part fitted — open the parts menu and select a **Vapid … Upfit**
+part in the *Paint Design* slot, or spawn one of the pack's configurations.
+
+If the app shows live state changing when you click, the logic is running.
+
+### "The lights don't flash"
+
+With the **STOCK** button lit (top of the console app, on by default), the
+lightbar drives the truck's own headlights, high beams and turn signals, so a
+completely stock truck flashes visibly. If that is not happening:
+
+- Confirm the console app reacts when you press the lightbar buttons.
+- Check the game console for Lua errors mentioning `belseco`.
+
+Dedicated lightbar, arrow board and plow **geometry does not exist yet** — the
+pack contains no 3D meshes. See the top-level README and
+[ASSET_CHECKLIST.md](ASSET_CHECKLIST.md) for exactly what that means.
 
 **No siren audio.** Check that `art/sound/belseco/*.wav` made it into the zip. If
 your setup prefers Ogg Vorbis, convert them and update `SOUND_DIR` /file names in

@@ -55,6 +55,7 @@ local function siren() return ctrl("belsecoSiren") end
 local function arrowboard() return ctrl("belsecoArrowBoard") end
 local function aux() return ctrl("belsecoAuxLights") end
 local function plow() return ctrl("belsecoPlow") end
+local function stock() return ctrl("belsecoStockLights") end
 
 -- ---------------------------------------------------------------------------
 -- switch panel state
@@ -160,6 +161,7 @@ local actions = {
     gui.message({txt = "Upfit master: " .. (master and "ON" or "OFF")}, 2, "belseco.master")
   end,
   ["all.off"] = allOff,
+  ["stock.toggle"] = function() local c = stock() if c then c.toggle() end end,
 
   ["lightbar.cycle"] = function(v) local c = lightbar() if c then c.cycleMode() end end,
   ["lightbar.toggle"] = function() local c = lightbar() if c then c.toggle() end end,
@@ -249,6 +251,7 @@ local function uiState()
     arrowboard = abState,
     aux = ax and ax.getState() or nil,
     plow = plState,
+    stock = (function() local c = stock() return c and c.getState() or nil end)(),
   }
 end
 

@@ -46,6 +46,23 @@ you install the zip:
 - **Three ways to drive all of it** — the in-game *Belseco Fleet Console* UI app,
   33 bindable keyboard/controller actions, and the cab switch panel props.
 
+## If the truck spawns plain
+
+Run this in the in-game console (`~`):
+
+```lua
+extensions.load('belseco_materials')
+belseco_materials.check('pickup')
+```
+
+It reports whether the names this pack's skins target actually exist in your
+copy of the game, and `belseco_materials.dump('pickup')` prints the real list.
+Paste the body names into `BASE_MATERIALS` in `tools/generate_materials.py` and
+run `./build.sh` — that is the entire fix. BeamNG resolves a livery by matching
+`<baseMaterialName>.skin.<skinName>`, and those base names belong to the base
+game, not to this pack, so they are the one thing that cannot be known without
+the game in front of you.
+
 ## What still needs 3D work
 
 This pack ships **no 3D meshes**, because meshes cannot be authored from a
@@ -63,9 +80,13 @@ terminal. Concretely, that means:
   `mod/vehicles/pickup/belseco_pickup_equipment.jbeam.template` is the wiring
   diagram: fill in mesh names and node names, rename it to `.jbeam`, and the
   hardware lights up with no changes to any code.
-- Until then, the controllers also drive the stock `lightbar` electrics value,
-  so any vanilla or third-party lightbar part fitted to the truck flashes with
-  the pack's own patterns.
+- Until then, a **stock light fallback** runs by default: the lightbar drives the
+  truck's own headlights, high beams and turn signals with the pack's patterns,
+  so warning lights are visible on a completely standard truck. It is additive —
+  it never turns a light off below what you already had on — and the `STOCK`
+  button in the console app switches it off once real geometry exists. The
+  controllers also drive the vanilla `lightbar` electrics value, so any existing
+  lightbar part fitted to the truck flashes with the pack's patterns too.
 
 See [`docs/ASSET_CHECKLIST.md`](docs/ASSET_CHECKLIST.md) for the full list of
 what to model and what to verify against your installed copy of the game.

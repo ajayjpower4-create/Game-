@@ -9,6 +9,7 @@
     "globalSkin": "belseco_first",
     "controller": [
         ["fileName"],
+        ["belseco/stocklights", {"name": "belsecoStockLights", "stockLightFallback": true}],
         ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 1}],
         ["belseco/siren", {"name": "belsecoSiren", "volume": 0.9}],
         ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],
@@ -27,6 +28,7 @@
     "globalSkin": "belseco_white",
     "controller": [
         ["fileName"],
+        ["belseco/stocklights", {"name": "belsecoStockLights", "stockLightFallback": true}],
         ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 2}],
         ["belseco/siren", {"name": "belsecoSiren", "volume": 0.8}],
         ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],
@@ -45,6 +47,7 @@
     "globalSkin": "belseco_fleet_plain",
     "controller": [
         ["fileName"],
+        ["belseco/stocklights", {"name": "belsecoStockLights", "stockLightFallback": true}],
         ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 2}],
         ["belseco/siren", {"name": "belsecoSiren", "volume": 0.75}],
         ["belseco/auxlights", {"name": "belsecoAuxLights"}],
@@ -62,6 +65,7 @@
     "globalSkin": "belseco_orange",
     "controller": [
         ["fileName"],
+        ["belseco/stocklights", {"name": "belsecoStockLights", "stockLightFallback": true}],
         ["belseco/lightbar", {"name": "belsecoLightbar", "defaultPattern": 3}],
         ["belseco/siren", {"name": "belsecoSiren", "volume": 0.8}],
         ["belseco/arrowboard", {"name": "belsecoArrowBoard"}],

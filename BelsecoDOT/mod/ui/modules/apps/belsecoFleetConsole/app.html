@@ -130,6 +130,9 @@
     <div class="row">
       <button class="red" ng-class="{on: !state.master}" ng-click="act('master.toggle')">MASTER</button>
       <button ng-click="act('all.off')">ALL OFF</button>
+      <button class="blue" ng-if="state.stock" ng-class="{on: state.stock.enabled}"
+              ng-click="act('stock.toggle')"
+              title="Flash the truck's own headlights and signals until lightbar geometry exists">STOCK</button>
     </div>
 
     <!-- ---------------------------------------------------------------- -->
