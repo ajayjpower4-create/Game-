@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Political Election Simulator</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🗳️</text></svg>" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">🗳️</span>
+    <div>
+      <h1>Political Election Simulator</h1>
+      <p class="brand-sub">Draft anyone. Run the campaign. Call the race.</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span id="save-status" class="save-status" aria-live="polite"></span>
+    <button id="btn-menu" class="ghost-btn" type="button">Menu</button>
+  </div>
+</header>
+
+<nav class="steps" id="steps" aria-label="Campaign progress"></nav>
+
+<main id="main">
+
+  <!-- ------------------------------------------------------------ START -->
+  <section class="screen" data-screen="start">
+    <div class="hero">
+      <h2>Any two people. One election.</h2>
+      <p class="lede">
+        Pick your candidates — famous or invented — schedule three months of
+        rallies, decide what they shout from the podium, then either rig the
+        map yourself or let the AI call all 51 contests.
+      </p>
+      <div class="hero-actions">
+        <button class="primary-btn big" data-action="new-game" type="button">Start a new election</button>
+        <button class="ghost-btn big" data-action="continue" id="btn-continue" type="button" hidden>Continue saved campaign</button>
+      </div>
+      <p class="disclaimer">
+        A fictional game. Every result here is invented for play — it is not a
+        poll, a forecast, or a claim about any real person or election.
+      </p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------- CANDIDATES -->
+  <section class="screen" data-screen="candidates" hidden>
+    <div class="screen-head">
+      <h2>Step 1 · Draft your candidates</h2>
+      <p>Pick a famous name and the game already knows who they are. Invent
+        someone and you'll need to write them into existence.</p>
+    </div>
+    <div class="two-col" id="candidate-forms"></div>
+    <div class="field election-date-field">
+      <label for="election-date">Election day</label>
+      <input type="date" id="election-date" />
+      <p class="hint" id="window-hint"></p>
+    </div>
+    <div class="screen-nav">
+      <button class="ghost-btn" data-action="back" type="button">Back</button>
+      <button class="primary-btn" data-action="to-rallies" type="button">Next: schedule rallies</button>
+    </div>
+    <p class="error-line" id="candidates-error" role="alert"></p>
+  </section>
+
+  <!-- ----------------------------------------------------------- RALLIES -->
+  <section class="screen" data-screen="rallies" hidden>
+    <div class="screen-head">
+      <h2>Step 2 · Three months of rallies</h2>
+      <p>Book each candidate into states across the campaign window. Where they
+        go moves those states — and late rallies hit hardest.</p>
+    </div>
+    <div class="two-col" id="rally-panels"></div>
+    <div class="screen-nav">
+      <button class="ghost-btn" data-action="back" type="button">Back</button>
+      <button class="primary-btn" data-action="to-message" type="button">Next: write the message</button>
+    </div>
+    <p class="error-line" id="rallies-error" role="alert"></p>
+  </section>
+
+  <!-- ----------------------------------------------------------- MESSAGE -->
+  <section class="screen" data-screen="message" hidden>
+    <div class="screen-head">
+      <h2>Step 3 · What do they say up there?</h2>
+      <p>The stump speech every rally is built around. Pick the themes they
+        hammer and write the line the crowd chants back.</p>
+    </div>
+    <div class="two-col" id="message-panels"></div>
+    <div class="screen-nav">
+      <button class="ghost-btn" data-action="back" type="button">Back</button>
+      <button class="primary-btn" data-action="to-electionday" type="button">Next: election day</button>
+    </div>
+    <p class="error-line" id="message-error" role="alert"></p>
+  </section>
+
+  <!-- ------------------------------------------------------ ELECTION DAY -->
+  <section class="screen" data-screen="electionday" hidden>
+    <div class="screen-head">
+      <h2>Step 4 · Election day</h2>
+      <p id="electionday-sub">The polls are closed. How does this end?</p>
+    </div>
+    <div class="mode-cards">
+      <button class="mode-card" data-action="mode-rigged" type="button">
+        <span class="mode-icon">🎛️</span>
+        <span class="mode-title">Rig it</span>
+        <span class="mode-copy">You hand out all 51 contests yourself, then set
+          the final vote counts. The game shows you what those states are
+          <em>supposed</em> to be worth.</span>
+      </button>
+      <button class="mode-card" data-action="mode-sim" type="button">
+        <span class="mode-icon">🧠</span>
+        <span class="mode-title">Simulate it</span>
+        <span class="mode-copy">Claude Opus reads the whole campaign — the
+          candidates, every rally, the message — and calls each state and the
+          national vote itself.</span>
+      </button>
+    </div>
+    <div class="screen-nav">
+      <button class="ghost-btn" data-action="back" type="button">Back</button>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ RIGGED -->
+  <section class="screen" data-screen="rigged" hidden>
+    <div class="screen-head">
+      <h2>Step 5 · Call the states</h2>
+      <p>Click a state to hand it to your first candidate, click again for the
+        second, once more to clear it.</p>
+    </div>
+    <div class="ev-bar" id="rig-evbar"></div>
+    <div class="map-tools">
+      <button class="ghost-btn" data-action="rig-all-a" type="button"></button>
+      <button class="ghost-btn" data-action="rig-all-b" type="button"></button>
+      <button class="ghost-btn" data-action="rig-clear" type="button">Clear map</button>
+    </div>
+    <div id="rig-map" class="map"></div>
+    <div class="vote-entry" id="vote-entry"></div>
+    <div class="screen-nav">
+      <button class="ghost-btn" data-action="back" type="button">Back</button>
+      <button class="primary-btn" data-action="finish-rigged" type="button">Certify the result</button>
+    </div>
+    <p class="error-line" id="rigged-error" role="alert"></p>
+  </section>
+
+  <!-- --------------------------------------------------------- SIMULATING -->
+  <section class="screen" data-screen="simulating" hidden>
+    <div class="sim-wait">
+      <div class="spinner" aria-hidden="true"></div>
+      <h2 id="sim-status">Counting the vote…</h2>
+      <p id="sim-detail" class="hint">Feeding the campaign to the model.</p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------- RECAP -->
+  <section class="screen" data-screen="recap" hidden>
+    <div id="recap"></div>
+    <div class="screen-nav">
+      <button class="ghost-btn" data-action="back-to-electionday" type="button">Re-run election day</button>
+      <button class="primary-btn" data-action="new-game" type="button">New election</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- ------------------------------------------------------------- MENU -->
+<div class="modal" id="menu-modal" hidden>
+  <div class="modal-card">
+    <h3>Menu</h3>
+    <p class="hint">The game autosaves to this browser every time you move to a
+      new step, and keeps the last few steps so you can roll back.</p>
+    <div class="menu-actions">
+      <button class="ghost-btn" data-action="export" type="button">Download save file</button>
+      <button class="ghost-btn" data-action="import" type="button">Load save file</button>
+      <button class="ghost-btn danger" data-action="wipe" type="button">Delete saved campaign</button>
+    </div>
+    <h4>Checkpoints</h4>
+    <ul class="checkpoints" id="checkpoint-list"></ul>
+    <button class="primary-btn" data-action="close-menu" type="button">Close</button>
+  </div>
+</div>
+<input type="file" id="import-file" accept="application/json" hidden />
+
+<script type="module" src="game.js"></script>
+</body>
+</html>
