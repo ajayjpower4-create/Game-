@@ -11,16 +11,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const ELECTION_MODEL = process.env.ELECTION_MODEL || 'claude-opus-4-6';
 
 app.use(express.json({ limit: '256kb' }));
-// index: false so the routes below decide what lives at each path; assets
-// (css/js) are still served straight out of public/.
-app.use(express.static(join(__dirname, 'public'), { index: false }));
-
-// The election game is the homepage; the Swerve chatbot moved to /chat.
-const page = (...parts) => (req, res) => res.sendFile(join(__dirname, 'public', ...parts));
-
-app.get('/', page('election', 'index.html'));
-app.get(['/election', '/election/'], page('election', 'index.html'));
-app.get(['/chat', '/chat/'], page('index.html'));
+app.use(express.static(join(__dirname, 'public')));
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
@@ -175,6 +166,6 @@ app.post('/api/election/simulate', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Political Election Simulator at http://localhost:${PORT}`);
-  console.log(`Swerve AI chat at http://localhost:${PORT}/chat`);
+  console.log(`Swerve AI running at http://localhost:${PORT}`);
+  console.log(`Political Election Simulator at http://localhost:${PORT}/election/`);
 });
