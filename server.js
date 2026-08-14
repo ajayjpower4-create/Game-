@@ -28,6 +28,11 @@ function getClient() {
 }
 
 app.use(express.json({ limit: '256kb' }));
+
+// The franchise sim is the front door. The chatbot lives at /chat/ and only
+// opens when somebody asks for it.
+app.get('/', (req, res) => res.redirect('/nfl/'));
+
 app.use(express.static(join(__dirname, 'public')));
 
 app.post('/api/chat', async (req, res) => {
@@ -268,7 +273,7 @@ app.post('/api/nfl/media', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Swerve AI running at http://localhost:${PORT}`);
+  console.log(`NFL Franchise Simulator at http://localhost:${PORT}/nfl/  (also served at /)`);
   console.log(`Political Election Simulator at http://localhost:${PORT}/election/`);
-  console.log(`NFL Franchise Simulator at http://localhost:${PORT}/nfl/`);
+  console.log(`Chatbot at http://localhost:${PORT}/chat/`);
 });

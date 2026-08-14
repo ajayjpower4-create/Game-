@@ -4,9 +4,9 @@ Two simulation games and a chatbot, served by one small Express app.
 
 | Path | What it is |
 | --- | --- |
-| `/nfl/` | **NFL Franchise Simulator** — run a franchise day by day |
+| `/` and `/nfl/` | **NFL Franchise Simulator** — run a franchise day by day |
 | `/election/` | **Political Election Simulator** — run a campaign, call the race |
-| `/` | The original Swerve chatbot |
+| `/chat/` | The original Swerve chatbot — only opens if you go looking for it |
 
 ## Running it
 

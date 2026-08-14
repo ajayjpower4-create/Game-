@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
-  "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "name": "franchise-sim-games",
+  "version": "1.1.0",
+  "description": "NFL Franchise Simulator, Political Election Simulator and a chatbot, served by one Express app",
   "main": "server.js",
   "type": "module",
   "scripts": {
