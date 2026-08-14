@@ -3,12 +3,29 @@ import Anthropic from '@anthropic-ai/sdk';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { STATES, STATE_CODES } from './public/election/data.js';
+import { sanitizeMediaItems } from './public/nfl/sim.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const ELECTION_MODEL = process.env.ELECTION_MODEL || 'claude-opus-4-6';
+const NFL_MEDIA_MODEL = process.env.NFL_MEDIA_MODEL || 'claude-sonnet-5';
+
+// Built lazily so the server still boots — and every game still plays — on a
+// host with no ANTHROPIC_API_KEY set.
+let cachedClient;
+function getClient() {
+  if (cachedClient !== undefined) return cachedClient;
+  cachedClient = null;
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      cachedClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    } catch (err) {
+      console.warn('Anthropic client unavailable:', err.message);
+    }
+  }
+  return cachedClient;
+}
 
 app.use(express.json({ limit: '256kb' }));
 app.use(express.static(join(__dirname, 'public')));
@@ -18,6 +35,11 @@ app.post('/api/chat', async (req, res) => {
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Invalid messages format' });
+  }
+
+  const client = getClient();
+  if (!client) {
+    return res.status(503).json({ error: 'no_api_key' });
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -129,7 +151,8 @@ function validateResult(result) {
 }
 
 app.post('/api/election/simulate', async (req, res) => {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const client = getClient();
+  if (!client) {
     return res.status(503).json({ error: 'no_api_key' });
   }
   const game = req.body?.game;
@@ -164,8 +187,88 @@ app.post('/api/election/simulate', async (req, res) => {
   }
 });
 
+/* ---------------------------------------------- NFL Franchise Simulator */
+
+const NFL_MEDIA_SYSTEM = `You are the league media desk for a fictional NFL franchise simulation game.
+
+The player runs one team. They pick the practices, the injuries, the lineups,
+the final scores and the plays that decided each game, and they issue
+statements as the general manager, the head coach, the owner or anybody else in
+the building. You write how the rest of the football world reacts.
+
+Everything here is invented for a game. The events did not happen: the scores,
+practices, quotes and injuries in the context are the player's fiction, not
+real news. Write about them the way sports media writes — but nothing you
+produce is a report about real people or real games.
+
+What to write:
+- React to what is actually in the context. Name the players and coaches the
+  context names, use the real score, quote back the statements the player made.
+- Vary the voices: a national headline, a beat writer's practice report, an
+  insider note, a radio hot take, a locker-room quote. Somebody should be wrong
+  about something. Not everyone has to be nice.
+- Injuries and absences are news. So is a quiet practice, if the week is quiet.
+- Keep each item short: a headline plus two to four sentences.
+- No markdown, no emoji, no hashtags, no invented statistics that contradict
+  the context.
+
+Reply with JSON only — no prose, no code fence:
+{ "items": [ { "outlet": "<who published it>",
+               "kind": "<headline | column | practice report | injury | hot take | insider | reaction>",
+               "headline": "<one line>",
+               "body": "<2-4 sentences>" } ] }
+Between 4 and 6 items.`;
+
+function parseModelItems(text) {
+  const trimmed = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('no JSON object in reply');
+  const parsed = JSON.parse(trimmed.slice(start, end + 1));
+  return Array.isArray(parsed) ? parsed : parsed.items;
+}
+
+app.post('/api/nfl/media', async (req, res) => {
+  const client = getClient();
+  if (!client) {
+    // The game has its own writer for this — it just says so on the item.
+    return res.status(503).json({ error: 'no_api_key' });
+  }
+  const context = req.body?.context;
+  if (!context || typeof context !== 'object' || !context.team) {
+    return res.status(400).json({ error: 'bad_request' });
+  }
+
+  try {
+    const message = await client.messages.create({
+      model: NFL_MEDIA_MODEL,
+      max_tokens: 2000,
+      system: NFL_MEDIA_SYSTEM,
+      messages: [{
+        role: 'user',
+        content: `Here is where the franchise stands:\n${JSON.stringify(context, null, 2).slice(0, 12000)}\n\n`
+          + 'Write the league media reaction. JSON only.',
+      }],
+    });
+
+    const text = message.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('');
+
+    const items = sanitizeMediaItems(parseModelItems(text));
+    if (!items.length) throw new Error('no usable items');
+    res.json({ items, model: NFL_MEDIA_MODEL });
+  } catch (err) {
+    const detail = err instanceof Anthropic.APIError ? `api_${err.status}` : err.message;
+    console.warn('NFL media generation failed:', detail);
+    res.status(502).json({ error: detail || 'media_failed' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Swerve AI running at http://localhost:${PORT}`);
   console.log(`Political Election Simulator at http://localhost:${PORT}/election/`);
+  console.log(`NFL Franchise Simulator at http://localhost:${PORT}/nfl/`);
 });

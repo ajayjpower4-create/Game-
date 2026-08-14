@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NFL Franchise Simulator</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🏈</text></svg>" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" id="brand-mark">🏈</span>
+    <div>
+      <h1 id="brand-title">Franchise Simulator</h1>
+      <p class="brand-sub" id="brand-sub">Run the building. Every day of it.</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="clock" id="clock" hidden>
+      <span class="clock-phase" id="clock-phase">Preseason</span>
+      <span class="clock-week" id="clock-week">Week 1</span>
+      <span class="clock-day" id="clock-day">Day 1</span>
+    </div>
+    <span id="save-status" class="save-status" aria-live="polite"></span>
+    <button id="btn-menu" class="ghost-btn" type="button">Menu</button>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ---------------------------------------------------------- START -->
+  <section class="screen" data-screen="start">
+    <div class="hero">
+      <h2>Pick a franchise. Run every day of the season.</h2>
+      <p class="lede">
+        Take over any of the 32 teams, edit the roster to whatever you want it
+        to be, build the preseason and regular-season schedule, then work the
+        calendar: practice by practice, statement by statement, game by game.
+        You call the scores. You write the plays. The league writes about you.
+      </p>
+      <div class="hero-actions">
+        <button class="primary-btn big" data-action="new-franchise" type="button">Start a new franchise</button>
+        <button class="ghost-btn big" data-action="continue" id="btn-continue" type="button" hidden>Continue saved franchise</button>
+      </div>
+      <div class="hero-cards">
+        <div class="hero-card"><h3>Every roster, editable</h3><p>Real players with sim ratings at every position, plus generated depth to 53. Rename anybody, re-rate anybody.</p></div>
+        <div class="hero-card"><h3>The week is yours</h3><p>Pick the practice, pick who got hurt, pick who did not show up, log the big play from team period.</p></div>
+        <div class="hero-card"><h3>You call the game</h3><p>Set the lineup, set the score, write the plays that decided it — down to the pick six with a minute left.</p></div>
+        <div class="hero-card"><h3>The league reacts</h3><p>Issue statements as the GM, the coach, the owner or anybody else. Post as ESPN. Then let the league media write back.</p></div>
+      </div>
+      <p class="disclaimer">
+        A fictional simulation game. Rosters and ratings are this game's own
+        estimates, editable in-game, and every result, quote and headline it
+        produces is invented for play — not real news and not a claim about any
+        real person or team.
+      </p>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------ TEAM SELECT -->
+  <section class="screen" data-screen="team-select" hidden>
+    <div class="screen-head">
+      <h2>Step 1 · Pick your team</h2>
+      <p>Any of the 32. You are the front office from this point on.</p>
+    </div>
+    <div id="team-grid" class="team-grid"></div>
+    <div class="step-actions">
+      <button class="ghost-btn" data-action="back-start" type="button">Back</button>
+      <button class="primary-btn" data-action="to-roster" id="btn-to-roster" type="button" disabled>Take the job</button>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------ ROSTER EDIT -->
+  <section class="screen" data-screen="roster-edit" hidden>
+    <div class="screen-head">
+      <h2>Step 2 · Your roster</h2>
+      <p>Rename anybody, re-rate anybody, set the ages. This is the roster you
+        carry into the season — you can edit it later too.</p>
+    </div>
+    <div class="roster-tools">
+      <input type="search" id="roster-filter" placeholder="Filter by name or position…" />
+      <button class="ghost-btn" data-action="reset-roster" type="button">Reset to default</button>
+      <span class="hint" id="roster-summary"></span>
+    </div>
+    <div id="roster-edit-table" class="table-wrap"></div>
+    <div class="step-actions">
+      <button class="ghost-btn" data-action="back-team" type="button">Back</button>
+      <button class="primary-btn" data-action="to-schedule" type="button">Build the schedule</button>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- SCHEDULE -->
+  <section class="screen" data-screen="schedule" hidden>
+    <div class="screen-head">
+      <h2>Step 3 · The schedule</h2>
+      <p>Three preseason games and a 17-game regular season across 18 weeks,
+        built on the real rotation formula. Reshuffle until you like it.</p>
+    </div>
+    <div class="sched-controls">
+      <button class="ghost-btn" data-action="reroll-pre" type="button">Reshuffle preseason</button>
+      <button class="ghost-btn" data-action="reroll-reg" type="button">Reshuffle regular season</button>
+      <span class="hint" id="sched-note"></span>
+    </div>
+    <div class="two-col">
+      <div class="panel">
+        <h3>Preseason</h3>
+        <div id="pre-schedule"></div>
+      </div>
+      <div class="panel">
+        <h3>Regular season</h3>
+        <div id="reg-schedule" class="scroll-list"></div>
+      </div>
+    </div>
+    <div class="start-choice">
+      <h3>Where do you want to start?</h3>
+      <div class="choice-row">
+        <button class="primary-btn" data-action="start-preseason" type="button">
+          Preseason · Week 1
+          <small>Camp battles, joint practices, a full three weeks of tape</small>
+        </button>
+        <button class="ghost-btn" data-action="start-regular" type="button">
+          Regular Season · Week 1
+          <small>Skip camp — you will have no preseason data at all</small>
+        </button>
+      </div>
+    </div>
+    <div class="step-actions">
+      <button class="ghost-btn" data-action="back-roster" type="button">Back</button>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------- FRANCHISE -->
+  <section class="screen" data-screen="franchise" hidden>
+    <div id="franchise-head" class="franchise-head"></div>
+    <nav class="tabs" id="tabs" aria-label="Franchise sections">
+      <button class="tab" data-tab="dashboard" type="button">Dashboard</button>
+      <button class="tab" data-tab="media" type="button">Media</button>
+      <button class="tab" data-tab="team" type="button">Team Settings</button>
+      <button class="tab" data-tab="practice" type="button">Practice</button>
+      <button class="tab" data-tab="gameday" type="button">Game Day</button>
+      <button class="tab" data-tab="league" type="button">League</button>
+    </nav>
+    <div id="tab-body" class="tab-body"></div>
+  </section>
+
+</main>
+
+<div id="modal-root"></div>
+
+<footer class="foot">
+  <span>NFL Franchise Simulator — a fictional game. Ratings are the game's own estimates and every quote, headline and result here is invented for play.</span>
+</footer>
+
+<script type="module" src="game.js"></script>
+</body>
+</html>
