@@ -13,6 +13,11 @@ const ELECTION_MODEL = process.env.ELECTION_MODEL || 'claude-opus-4-6';
 app.use(express.json({ limit: '256kb' }));
 app.use(express.static(join(__dirname, 'public')));
 
+// Tow Truck Simulator loads three.js from node_modules — no CDN at runtime.
+const threeRoot = join(__dirname, 'node_modules', 'three');
+app.use('/tow/vendor/three', express.static(join(threeRoot, 'build')));
+app.use('/tow/vendor/three-addons', express.static(join(threeRoot, 'examples', 'jsm')));
+
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
 
@@ -168,4 +173,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Swerve AI running at http://localhost:${PORT}`);
   console.log(`Political Election Simulator at http://localhost:${PORT}/election/`);
+  console.log(`Tow Truck Simulator at http://localhost:${PORT}/tow/`);
 });

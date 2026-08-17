@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tow Truck Simulator — Skyville</title>
+<link rel="stylesheet" href="/tow/style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🛻</text></svg>" />
+<script type="importmap">
+{
+  "imports": {
+    "three": "/tow/vendor/three/three.module.js",
+    "three/webgpu": "/tow/vendor/three/three.webgpu.js",
+    "three/tsl": "/tow/vendor/three/three.tsl.js",
+    "three/addons/": "/tow/vendor/three-addons/"
+  }
+}
+</script>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!-- ------------------------------------------------------------- loading -->
+<div id="loading">
+  <div class="loadbox">
+    <h1>TOW TRUCK SIMULATOR</h1>
+    <h2>SKYVILLE, EAST COAST</h2>
+    <div class="loadbar"><div id="loadFill"></div></div>
+    <p id="loadText">Paving the beltway…</p>
+  </div>
+</div>
+
+<!-- --------------------------------------------------------------- setup -->
+<div id="setup" class="hidden">
+  <div class="setup-bar"><div id="setupProgress"></div></div>
+
+  <div class="setup-grid">
+    <div class="setup-left">
+      <canvas id="previewCanvas"></canvas>
+      <div id="previewCaption"></div>
+      <canvas id="spawnMap"></canvas>
+    </div>
+
+    <div class="setup-right">
+      <section data-screen="title" class="active">
+        <h1>TOW TRUCK SIMULATOR</h1>
+        <p class="lede">You run a wrecker in Skyville — a mid-size East Coast city wrapped in the
+          I-671 beltway. Dispatch calls, you decide what it takes: a jump box, a winch,
+          four straps and a steady hand on the ramp.</p>
+        <ul class="bullets">
+          <li>5 rollbacks · 5 liveries each · full cab interiors with a working ELS panel</li>
+          <li>38 civilian vehicle models and 160 dispatch calls</li>
+          <li>Elevated ring highway, 8 interchanges, 8 mechanic shops</li>
+        </ul>
+        <div class="nav"><button class="primary" data-goto="character">Build your driver →</button></div>
+      </section>
+
+      <section data-screen="character">
+        <h2>Your driver</h2>
+        <p class="lede">Face, features, and how tall you stand next to the deck.</p>
+        <div id="characterOptions" class="options"></div>
+        <div class="nav">
+          <button data-goto="title">← Back</button>
+          <button class="primary" data-goto="clothes">Clothes →</button>
+        </div>
+      </section>
+
+      <section data-screen="clothes">
+        <h2>What you wear</h2>
+        <p class="lede">The vest is not optional on the beltway. Well — it is. But it should not be.</p>
+        <div id="clothesOptions" class="options"></div>
+        <div class="nav">
+          <button data-goto="character">← Back</button>
+          <button class="primary" data-goto="truck">Pick your truck →</button>
+        </div>
+      </section>
+
+      <section data-screen="truck">
+        <h2>Your truck</h2>
+        <p class="lede">All five are rollbacks with a tilting deck, a winch and utility compartments.</p>
+        <div id="truckOptions" class="cards"></div>
+        <div class="nav">
+          <button data-goto="clothes">← Back</button>
+          <button class="primary" data-goto="livery">Livery →</button>
+        </div>
+      </section>
+
+      <section data-screen="livery">
+        <h2>Livery</h2>
+        <p class="lede">Company name, address and phone go on both doors and both bed skirts.</p>
+        <div id="liveryOptions" class="cards"></div>
+        <div class="nav">
+          <button data-goto="truck">← Back</button>
+          <button class="primary" data-goto="weather">Weather →</button>
+        </div>
+      </section>
+
+      <section data-screen="weather">
+        <h2>Weather today</h2>
+        <p class="lede">It sets the light, the grip, and how busy the phone gets.</p>
+        <div id="weatherOptions" class="cards"></div>
+        <div class="nav">
+          <button data-goto="livery">← Back</button>
+          <button class="primary" data-goto="spawn">Where you start →</button>
+        </div>
+      </section>
+
+      <section data-screen="spawn">
+        <h2>Start of shift</h2>
+        <p class="lede">Pick where you and the truck begin the day.</p>
+        <div id="spawnOptions" class="cards small"></div>
+        <div class="nav">
+          <button data-goto="weather">← Back</button>
+          <button id="startShift" class="primary go">Start the shift</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ----------------------------------------------------------------- HUD -->
+<div id="hud" class="hidden">
+  <div id="topleft">
+    <div class="pill"><span class="k">$</span><span id="moneyValue">0</span></div>
+    <div class="pill"><span id="clockValue">9:00 AM</span></div>
+    <div class="pill"><span class="k">ELS</span><span id="elsValue" class="els">OFF</span></div>
+  </div>
+
+  <div id="jobCard" class="hidden"></div>
+
+  <div id="minimapWrap">
+    <canvas id="minimap" width="200" height="200"></canvas>
+  </div>
+
+  <div id="cluster">
+    <div id="speedValue">0</div>
+    <div class="unit">MPH</div>
+    <div id="gearValue">P</div>
+  </div>
+
+  <div id="carrying" class="hidden"></div>
+  <div id="meter" class="hidden"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="toasts"></div>
+  <div id="radioCall" class="hidden"></div>
+  <div id="crosshair"></div>
+
+  <div id="bigMapWrap" class="hidden">
+    <canvas id="bigMap" width="700" height="700"></canvas>
+    <p>M — close map</p>
+  </div>
+
+  <div id="help" class="hidden">
+    <h3>Controls</h3>
+    <div class="helpgrid">
+      <span><kbd>W A S D</kbd> drive / walk</span>
+      <span><kbd>Shift</kbd> sprint · <kbd>Space</kbd> jump</span>
+      <span><kbd>T</kbd> gear: P → R → N → D</span>
+      <span><kbd>P</kbd> parking brake · <kbd>Space</kbd> handbrake</span>
+      <span><kbd>F</kbd> get in / out of the truck</span>
+      <span><kbd>V</kbd> cab view ⇄ chase view</span>
+      <span><kbd>E</kbd> interact — hold it when the meter shows</span>
+      <span><kbd>Q</kbd> take the second item in a compartment</span>
+      <span><kbd>G</kbd> drop what you are carrying</span>
+      <span><kbd>LMB</kbd> hold to ratchet a strap tight</span>
+      <span><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> ELS: off / amber / slow flash</span>
+      <span><kbd>Y</kbd> / <kbd>N</kbd> accept or decline a call</span>
+      <span><kbd>M</kbd> map · <kbd>H</kbd> help · <kbd>Esc</kbd> pause</span>
+      <span><kbd>Mouse</kbd> look · <kbd>Wheel</kbd> zoom</span>
+    </div>
+  </div>
+
+  <div id="pause" class="hidden">
+    <div class="pausebox">
+      <h2>Shift paused</h2>
+      <div id="pauseStats"></div>
+      <div class="nav">
+        <button id="resumeBtn" class="primary">Resume</button>
+        <button id="helpBtn">Controls</button>
+        <button id="restartBtn">End shift &amp; restart</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/tow/js/main.js"></script>
+</body>
+</html>
