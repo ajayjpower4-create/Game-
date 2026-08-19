@@ -103,6 +103,8 @@ namespace LosSantosTowing
         {
             foreach (var g in _list)
             {
+                try
+                {
                 if (show)
                 {
                     if (g.Blip == null || !g.Blip.Exists())
@@ -120,6 +122,8 @@ namespace LosSantosTowing
                     g.Blip.Delete();
                     g.Blip = null;
                 }
+                }
+                catch (System.Exception ex) { Log.Error("Garages.ShowBlips(" + g.Id + ")", ex); }
             }
         }
     }

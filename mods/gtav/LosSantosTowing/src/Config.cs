@@ -29,6 +29,8 @@ namespace LosSantosTowing
         public bool StartOnDuty;
         public string ConeModel;
         public bool AllowTruckRequest;
+        public bool LogToFile;
+        public bool RichHud;
 
         public Config(ScriptSettings s)
         {
@@ -52,6 +54,8 @@ namespace LosSantosTowing
             UnsecuredLoadsFall = _s.GetValue("job", "UnsecuredLoadsFall", true);
             ConeModel = _s.GetValue("job", "ConeModel", "prop_roadcone02a");
             AllowTruckRequest = _s.GetValue("job", "AllowTruckRequest", true);
+            LogToFile = _s.GetValue("debug", "LogToFile", true);
+            RichHud = _s.GetValue("debug", "RichHud", true);
 
             ShowGarageBlips = _s.GetValue("hud", "ShowGarageBlips", true);
             StartOnDuty = _s.GetValue("hud", "StartOnDuty", false);
@@ -84,6 +88,8 @@ namespace LosSantosTowing
             _s.SetValue("job", "UnsecuredLoadsFall", UnsecuredLoadsFall);
             _s.SetValue("job", "ConeModel", ConeModel);
             _s.SetValue("job", "AllowTruckRequest", AllowTruckRequest);
+            _s.SetValue("debug", "LogToFile", LogToFile);
+            _s.SetValue("debug", "RichHud", RichHud);
             _s.SetValue("hud", "ShowGarageBlips", ShowGarageBlips);
             _s.SetValue("hud", "StartOnDuty", StartOnDuty);
             _s.Save();

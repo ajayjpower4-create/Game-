@@ -16,6 +16,8 @@ namespace LosSantosTowing
 {
     public class Main : Script
     {
+        public const string Version = "1.0.1";
+
         readonly Config _cfg;
         readonly Garages _garages;
         readonly Random _rng = new Random();
@@ -32,6 +34,15 @@ namespace LosSantosTowing
         int _offerExpiresAt;
         int _nextCallAt;
 
+        // Key presses are only recorded here; every call into the game happens on
+        // the script's own tick. Doing game work straight out of a key handler is
+        // the classic way to take GTA V down with you.
+        enum Pending { ToggleDuty, Accept, Decline, Els, CaptureGarage, RequestTruck }
+        readonly Queue<Pending> _pending = new Queue<Pending>();
+        bool _wantStartOnDuty;
+        int _errors;
+        bool _disabled;
+
         // hold-to-act
         StepId _holding;
         int _holdStartedAt;
@@ -45,15 +56,20 @@ namespace LosSantosTowing
         public Main()
         {
             _cfg = new Config(Settings);
-            _cfg.EnsureWritten();
+            Log.Init(BaseDirectory, _cfg.LogToFile);
+            try { _cfg.EnsureWritten(); }
+            catch (Exception ex) { Log.Error("Config.EnsureWritten", ex); }
             _garages = new Garages(Settings);
+            Hud.Rich = _cfg.RichHud;
+            Log.Write("Version " + Version + ". " + Calls.Count + " calls on the board. RichHud=" + _cfg.RichHud);
 
             Interval = 0;
             Tick += OnTick;
             KeyDown += OnKeyDown;
             Aborted += OnAborted;
 
-            if (_cfg.StartOnDuty) GoOnDuty();
+            // Not here: the game may not be ready during construction.
+            _wantStartOnDuty = _cfg.StartOnDuty;
         }
 
         /* --------------------------------------------------------------- duty */
@@ -61,6 +77,8 @@ namespace LosSantosTowing
         void GoOnDuty()
         {
             _onDuty = true;
+            _errors = 0;
+            Log.Write("On duty.");
             _nextCallAt = Game.GameTime + _cfg.FirstCallSeconds * 1000;
             if (_cfg.ShowGarageBlips) _garages.ShowBlips(true);
             Hud.Dispatch("Clocked on", "You are on the board. Keep the radio on - first call in about a minute.");
@@ -69,6 +87,7 @@ namespace LosSantosTowing
         void GoOffDuty()
         {
             _onDuty = false;
+            Log.Write("Off duty. " + _shiftJobs + " jobs, $" + _shiftEarnings + ".");
             ClearOffer();
             if (_job != null)
             {
@@ -82,25 +101,46 @@ namespace LosSantosTowing
 
         void OnKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyCode == _cfg.ToggleDutyKey)
-            {
-                if (_onDuty) GoOffDuty(); else GoOnDuty();
-                return;
-            }
-            if (!_onDuty) return;
+            // Nothing in here may touch the game.
+            if (_disabled) return;
+            if (e.KeyCode == _cfg.ToggleDutyKey) _pending.Enqueue(Pending.ToggleDuty);
+            else if (e.KeyCode == _cfg.AcceptKey) _pending.Enqueue(Pending.Accept);
+            else if (e.KeyCode == _cfg.DeclineKey) _pending.Enqueue(Pending.Decline);
+            else if (e.KeyCode == _cfg.ElsKey) _pending.Enqueue(Pending.Els);
+            else if (e.KeyCode == _cfg.RequestTruckKey) _pending.Enqueue(Pending.RequestTruck);
+            else if (e.KeyCode == _cfg.CaptureGarageKey) _pending.Enqueue(Pending.CaptureGarage);
+        }
 
-            if (e.KeyCode == _cfg.AcceptKey && _offer != null) AcceptOffer();
-            else if (e.KeyCode == _cfg.DeclineKey && _offer != null) DeclineOffer();
-            else if (e.KeyCode == _cfg.ElsKey)
+        void DrainKeys()
+        {
+            while (_pending.Count > 0)
             {
-                _els = (ElsMode)(((int)_els + 1) % 3);
-                Hud.Subtitle("ELS - " + Rig.ElsLabel(_els), 1800);
-            }
-            else if (e.KeyCode == _cfg.RequestTruckKey && _cfg.AllowTruckRequest) RequestTruck();
-            else if (e.KeyCode == _cfg.CaptureGarageKey)
-            {
-                var g = _garages.Capture(Game.Player.Character.Position);
-                if (g != null) Hud.Subtitle("Drop-off moved: " + g.Name, 3000);
+                var action = _pending.Dequeue();
+                switch (action)
+                {
+                    case Pending.ToggleDuty:
+                        if (_onDuty) GoOffDuty(); else GoOnDuty();
+                        break;
+                    case Pending.Accept:
+                        if (_onDuty && _offer != null) AcceptOffer();
+                        break;
+                    case Pending.Decline:
+                        if (_onDuty && _offer != null) DeclineOffer();
+                        break;
+                    case Pending.Els:
+                        if (!_onDuty) break;
+                        _els = (ElsMode)(((int)_els + 1) % 3);
+                        Hud.Subtitle("ELS - " + Rig.ElsLabel(_els), 1800);
+                        break;
+                    case Pending.RequestTruck:
+                        if (_onDuty && _cfg.AllowTruckRequest) RequestTruck();
+                        break;
+                    case Pending.CaptureGarage:
+                        if (!_onDuty) break;
+                        var g = _garages.Capture(Game.Player.Character.Position);
+                        if (g != null) Hud.Subtitle("Drop-off moved: " + g.Name, 3000);
+                        break;
+                }
             }
         }
 
@@ -148,6 +188,7 @@ namespace LosSantosTowing
                 blip.Name = "Your tow truck";
                 blip.IsShortRange = true;
             }
+            Log.Write("Dropped a " + hash + " for the player.");
             Hud.Dispatch("Truck dropped off", (heavy ? "Flatbed" : "Tow truck") + " is round the corner. Keys are in it.");
         }
 
@@ -163,10 +204,41 @@ namespace LosSantosTowing
 
         void OnTick(object sender, EventArgs e)
         {
-            if (!_onDuty || Game.IsLoading || Game.IsPaused) return;
+            if (_disabled) return;
+            try
+            {
+                TickBody();
+            }
+            catch (Exception ex)
+            {
+                _errors++;
+                Log.Error("OnTick", ex);
+                if (_errors >= 5)
+                {
+                    _disabled = true;
+                    Log.Write("Too many errors - shutting the script down. Nothing else will run this session.");
+                    try { Hud.Note("Los Santos Towing hit an error and stopped. See LosSantosTowing.log."); } catch { }
+                    try { if (_job != null) _job.Cleanup(false); _garages.ShowBlips(false); } catch { }
+                }
+            }
+        }
+
+        void TickBody()
+        {
+            if (Game.IsLoading) return;
 
             var player = Game.Player.Character;
-            if (player == null || !player.Exists() || player.IsDead) return;
+            if (player == null || !player.Exists()) return;
+
+            DrainKeys();
+
+            if (_wantStartOnDuty)
+            {
+                _wantStartOnDuty = false;
+                GoOnDuty();
+            }
+
+            if (!_onDuty || Game.IsPaused || player.IsDead) return;
 
             var truck = Rig.PlayerTruck();
             if (truck != null) Rig.ApplyEls(truck, _els, Game.GameTime);
@@ -257,6 +329,7 @@ namespace LosSantosTowing
                 StartedAt = Game.GameTime,
             };
             _used.Add(call.Id);
+            Log.Write("Accepted " + call.Id + " (" + call.Model + ") at " + scene + " -> " + garage.Name);
 
             _job.SceneBlip = World.CreateBlip(_job.ScenePosition);
             _job.SceneBlip.Sprite = BlipSprite.TowTruck;
