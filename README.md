@@ -207,3 +207,11 @@ markers. <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> do the same from the wheel.
 
 All the brands are invented. Any resemblance to a real tow company, or to a car
 you once owned, is a coincidence you are welcome to enjoy.
+
+## Also: the GTA V port
+
+The call-and-delivery half of this game also exists as a GTA V single-player
+script mod — same 160 calls, same hook/secure/deliver loop, running on Los
+Santos and GTA's own tow trucks with no map edits and no added vehicles.
+
+See [`mods/gtav/LosSantosTowing/`](mods/gtav/LosSantosTowing/README.md).
