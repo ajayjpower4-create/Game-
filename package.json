@@ -1,7 +1,7 @@
 {
-  "name": "swerve-ai-chat",
+  "name": "election-simulator",
   "version": "1.0.0",
-  "description": "Unfiltered AI chatbot inspired by Swerve",
+  "description": "Political Election Simulator \u2014 pick any two candidates, run the campaign, call the race",
   "main": "server.js",
   "type": "module",
   "scripts": {
