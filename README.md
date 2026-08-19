@@ -13,8 +13,8 @@ npm install
 npm start
 ```
 
-- Game: <http://localhost:3000/election/>
-- The original Swerve chatbot still lives at <http://localhost:3000/>
+- Game: <http://localhost:3000/> (also at `/election/`)
+- The original Swerve chatbot moved to <http://localhost:3000/chat>
 
 Set `ANTHROPIC_API_KEY` before starting if you want Claude to call the
 election. Without a key the game falls back to its own built-in model and says
@@ -77,7 +77,7 @@ wipes everything.
 | `public/election/sim.js` | The local election model — scoring, vote distribution, narrative. Pure functions, shared with the server |
 | `public/election/game.js` | Screen flow, save system, all rendering |
 | `public/election/style.css` | Styles |
-| `server.js` | Static hosting plus `POST /api/election/simulate`, which prompts Claude and validates what comes back |
+| `server.js` | Routing (game at `/`, chatbot at `/chat`) plus `POST /api/election/simulate`, which prompts Claude and validates what comes back |
 
 The map is a grid cartogram: one tile per state placed roughly where it sits on
 a US map, sized the same regardless of area, so Rhode Island is as clickable as
