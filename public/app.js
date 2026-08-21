@@ -266,6 +266,11 @@ const JOB_FORMS = {
           'Late-night outer boroughs — Brooklyn/Queens, long fares',
           'Tourist daytime — sightseers, slow traffic, big tips',
         ], allowCustom: true, customPlaceholder: 'Describe your own area / shift…' },
+      { name: 'appMode', label: 'The rideshare app', type: 'select',
+        options: [
+          'On — the app pings me ride requests (Uber/Lyft as a character)',
+          'Off — I narrate my own pickups (e.g. *I get a pickup from JFK to the Element Hotel*)',
+        ] },
     ],
   },
   warehouse: {

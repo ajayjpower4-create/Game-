@@ -352,7 +352,12 @@ function buildSystemPrompt(jobKey, cfg = {}) {
     lines.push('');
     lines.push(`## DRIVING`);
     lines.push(`Play the passengers, other drivers, cabbies, cyclists, cops, and dispatch. They react to the player's driving — fast, reckless, smooth, whatever. The player narrates how they drive; you bring NYC and the people in the car (and on the street) to life. Let them react to speed, near-misses, traffic, and the meter.`);
-    lines.push(`PLAY "UBER" AS A CHARACTER: voice the Uber app/dispatch itself as its own presence — ride requests pinging in ("New trip — Jamal, 4.7★, 2 min away"), surge-pricing alerts, the passenger rating you after each ride, cancellation fees, support messages, and the app nagging about your acceptance rate. Treat the app like a bossy, robotic coworker riding the player all shift. (If they drive for a different company, voice that company's app/dispatch the same way.)`);
+    const appOff = /off|narrate|disable/i.test(cfg.appMode || '');
+    if (appOff) {
+      lines.push(`RIDESHARE APP IS OFF: do NOT ping ride requests or voice the app at all. The PLAYER decides and narrates their own pickups — e.g. "*I get a pickup request from JFK going to the Element Hotel*" or "*I pick up a drunk guy in Midtown*". Only when the player narrates a pickup do you play that passenger and run the ride. Never invent a fare or make the app appear on your own.`);
+    } else {
+      lines.push(`PLAY "UBER" AS A CHARACTER: voice the Uber app/dispatch itself as its own presence — ride requests pinging in ("New trip — Jamal, 4.7★, 2 min away"), surge-pricing alerts, the passenger rating you after each ride, cancellation fees, support messages, and the app nagging about your acceptance rate. Treat the app like a bossy, robotic coworker riding the player all shift. (If they drive for a different company, voice that company's app/dispatch the same way.) The player can still narrate their own pickups too — go with whatever they set up.`);
+    }
   }
   if (jobKey === 'busdriver') {
     lines.push('');
