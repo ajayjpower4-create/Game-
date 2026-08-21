@@ -87,9 +87,9 @@ namespace LosSantosTowing
         }
 
         /// Moves the nearest drop-off to a position and writes it back to the ini.
-        public Garage Capture(Vector3 position)
+        public Garage Capture(Vector3 position, string id = null)
         {
-            var g = Nearest(position);
+            var g = id != null ? ById(id) : Nearest(position);
             if (g == null) return null;
             g.Position = position;
             _settings.SetValue("garages", g.Id, string.Format(CultureInfo.InvariantCulture,

@@ -40,18 +40,31 @@ dotnet build -c Release
 
 | Key | |
 | --- | --- |
-| **F5** | clock on / off the tow board |
+| **F5** | clock on — fades you to the yard with a truck. Again to clock off |
+| **Shift + M** | the towing menu |
 | **Y** / **N** | accept or pass the call that is ringing |
 | **E** | the context action — hook, chain, crank, drop. Hold it when the prompt says hold |
 | **L** | amber lights: off → steady → slow flash |
 | **F6** | have a stock tow truck sent out to you |
 | **F11** | move the nearest drop-off to where you are standing |
 
+### The menu
+
+**Shift + M** opens it; arrow keys move, **Enter** picks, **Backspace** closes.
+From there you can request a call instead of waiting for one, accept or turn
+down the call that is ringing, drop the job you are on, cycle the amber lights,
+have a truck brought to you, switch which truck the yard hands you, repair and
+clean it, teleport to the yard or straight to the call, move the yard or a
+drop-off to where you are standing, toggle the garage blips, and check what the
+shift has earned so far.
+
 A shift runs like this:
 
-1. **F5** to clock on. Grey blips appear on the eight drop-off garages.
+1. **F5** to clock on. The screen fades and you arrive at the yard with a tow
+   truck beside you, keys in it. Grey blips appear on the eight drop-offs.
 2. About a minute later dispatch calls: who it is, what happened, what it pays
-   and which shop it goes to. **Y** takes it.
+   and which shop it goes to. **Y** takes it — or open the menu and request one
+   right away rather than waiting.
 3. The casualty spawns on a real street somewhere between 250 m and 1.4 km away,
    with a route blip. It is dressed to match the call — crumpled front end, flat
    tyres, on its roof, locked, dry tank, dead battery.
@@ -114,6 +127,7 @@ tow with it, since it treats anything with a boom as a tow truck.
 
 This was written and compile-checked against ScriptHookVDotNet 3.6.0, but it has
 never been run inside GTA V — there is no copy of the game where it was built.
+It is confirmed to load and run under RAGE Plugin Hook.
 Every API and native it calls was verified to exist in the SHVDN assembly, and
 the logic follows the same flow as the browser game it came from, but expect to
 tune numbers in the ini (drop radii, garage coordinates) on your first shift,
@@ -128,6 +142,8 @@ and check `ScriptHookVDotNet.log` if a script errors out.
 | `src/Job.cs` | One live call: casualty, blips, progress, payout |
 | `src/Rig.cs` | Hooking, unhooking, the amber lights, wrecking a car to order |
 | `src/Garages.cs` | The eight drop-offs and the capture key |
-| `src/Main.cs` | Dispatch timing, the interactions, delivery |
+| `src/Main.cs` | Dispatch timing, the interactions, delivery, the menu contents |
+| `src/Menu.cs` | The menu itself, drawn with the game's own rect and text natives |
+| `src/Yard.cs` | Clocking on at the yard: fade, teleport, truck |
 | `src/Hud.cs` | Notifications, the checklist, prompts, markers |
 | `src/Config.cs` | Everything in the ini |

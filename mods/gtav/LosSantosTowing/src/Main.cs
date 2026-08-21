@@ -16,7 +16,7 @@ namespace LosSantosTowing
 {
     public class Main : Script
     {
-        public const string Version = "1.0.1";
+        public const string Version = "1.1.0";
 
         readonly Config _cfg;
         readonly Garages _garages;
@@ -37,7 +37,8 @@ namespace LosSantosTowing
         // Key presses are only recorded here; every call into the game happens on
         // the script's own tick. Doing game work straight out of a key handler is
         // the classic way to take GTA V down with you.
-        enum Pending { ToggleDuty, Accept, Decline, Els, CaptureGarage, RequestTruck }
+        enum Pending { ToggleDuty, Accept, Decline, Els, CaptureGarage, RequestTruck,
+            MenuToggle, MenuUp, MenuDown, MenuSelect, MenuBack }
         readonly Queue<Pending> _pending = new Queue<Pending>();
         bool _wantStartOnDuty;
         int _errors;
@@ -49,6 +50,7 @@ namespace LosSantosTowing
         bool _holdActive;
 
         Vehicle _requestedTruck;
+        readonly Menu _menu = new Menu();
         int _shiftEarnings;
         int _shiftJobs;
         int _lastSlipCheck;
@@ -81,7 +83,44 @@ namespace LosSantosTowing
             Log.Write("On duty.");
             _nextCallAt = Game.GameTime + _cfg.FirstCallSeconds * 1000;
             if (_cfg.ShowGarageBlips) _garages.ShowBlips(true);
-            Hud.Dispatch("Clocked on", "You are on the board. Keep the radio on - first call in about a minute.");
+
+            // Start the shift at the yard with a truck, the way you would in real
+            // life: turn up, sign for the keys, wait for the phone.
+            var yard = _garages.ById(_cfg.YardGarage) ?? _garages.ById("yard");
+            var existing = Rig.PlayerTruck();
+            if (yard != null && existing == null)
+            {
+                _requestedTruck = Yard.StartShift(yard.Position, _cfg.YardHeading,
+                    ParseTruck(_cfg.YardTruck), _cfg.TeleportToYard, null);
+                if (_requestedTruck != null)
+                {
+                    Hud.Dispatch("Clocked on at the yard",
+                        "Truck is next to you, keys are in it. First call in about a minute."
+                        + "~n~~c~" + _cfg.MenuHint);
+                }
+                else
+                {
+                    Hud.Dispatch("Clocked on",
+                        "Could not drop a truck here - find one, or use the menu."
+                        + "~n~~c~" + _cfg.MenuHint);
+                }
+            }
+            else
+            {
+                Hud.Dispatch("Clocked on",
+                    "You are on the board. First call in about a minute."
+                    + "~n~~c~" + _cfg.MenuHint);
+            }
+        }
+
+        static VehicleHash ParseTruck(string name)
+        {
+            switch ((name ?? "").Trim().ToLowerInvariant())
+            {
+                case "towtruck": return VehicleHash.TowTruck;
+                case "flatbed": return VehicleHash.Flatbed;
+                default: return VehicleHash.TowTruck2;
+            }
         }
 
         void GoOffDuty()
@@ -95,6 +134,19 @@ namespace LosSantosTowing
                 _job = null;
             }
             _garages.ShowBlips(false);
+            _menu.Close();
+            if (_requestedTruck != null && _requestedTruck.Exists())
+            {
+                try
+                {
+                    if (_requestedTruck.AttachedBlip != null && _requestedTruck.AttachedBlip.Exists())
+                        _requestedTruck.AttachedBlip.Delete();
+                    _requestedTruck.IsPersistent = false;
+                    _requestedTruck.MarkAsNoLongerNeeded();
+                }
+                catch (Exception ex) { Log.Error("GoOffDuty/truck", ex); }
+                _requestedTruck = null;
+            }
             Hud.Dispatch("Clocked off",
                 string.Format("{0} call{1} tonight, ${2} earned.", _shiftJobs, _shiftJobs == 1 ? "" : "s", _shiftEarnings));
         }
@@ -103,6 +155,24 @@ namespace LosSantosTowing
         {
             // Nothing in here may touch the game.
             if (_disabled) return;
+
+            if (e.KeyCode == _cfg.MenuKey && (!_cfg.MenuNeedsShift || e.Shift))
+            {
+                _pending.Enqueue(Pending.MenuToggle);
+                return;
+            }
+
+            if (_menu.IsOpen)
+            {
+                switch (e.KeyCode)
+                {
+                    case Keys.Up: case Keys.NumPad8: _pending.Enqueue(Pending.MenuUp); return;
+                    case Keys.Down: case Keys.NumPad2: _pending.Enqueue(Pending.MenuDown); return;
+                    case Keys.Enter: case Keys.NumPad5: _pending.Enqueue(Pending.MenuSelect); return;
+                    case Keys.Back: case Keys.NumPad0: case Keys.Escape: _pending.Enqueue(Pending.MenuBack); return;
+                }
+            }
+
             if (e.KeyCode == _cfg.ToggleDutyKey) _pending.Enqueue(Pending.ToggleDuty);
             else if (e.KeyCode == _cfg.AcceptKey) _pending.Enqueue(Pending.Accept);
             else if (e.KeyCode == _cfg.DeclineKey) _pending.Enqueue(Pending.Decline);
@@ -118,6 +188,14 @@ namespace LosSantosTowing
                 var action = _pending.Dequeue();
                 switch (action)
                 {
+                    case Pending.MenuToggle:
+                        BuildMenu();
+                        _menu.Toggle();
+                        break;
+                    case Pending.MenuUp: _menu.Up(); break;
+                    case Pending.MenuDown: _menu.Down(); break;
+                    case Pending.MenuSelect: _menu.Select(); BuildMenu(); break;
+                    case Pending.MenuBack: _menu.Close(); break;
                     case Pending.ToggleDuty:
                         if (_onDuty) GoOffDuty(); else GoOnDuty();
                         break;
@@ -192,6 +270,144 @@ namespace LosSantosTowing
             Hud.Dispatch("Truck dropped off", (heavy ? "Flatbed" : "Tow truck") + " is round the corner. Keys are in it.");
         }
 
+        /// Rebuilt whenever it opens or an item is chosen, so labels and greyed-out
+        /// states always reflect the shift as it stands.
+        void BuildMenu()
+        {
+            _menu.Items.Clear();
+            _menu.Title = "LOS SANTOS TOWING";
+            _menu.Subtitle = _onDuty
+                ? (_job != null ? "On a job - " + _job.Call.KindLabel
+                    : _offer != null ? "Call ringing" : "On duty, waiting on dispatch")
+                : "Off duty";
+
+            _menu.Items.Add(new MenuItem(
+                _onDuty ? "Clock off" : "Clock on",
+                _onDuty ? "End the shift. Anything outstanding is dropped."
+                        : "Start a shift at the yard with a truck.",
+                () => { if (_onDuty) GoOffDuty(); else GoOnDuty(); _menu.Close(); }));
+
+            _menu.Items.Add(new MenuItem("Request a call",
+                "Ask dispatch for work now instead of waiting.",
+                () => { _nextCallAt = 0; _menu.Close(); },
+                () => _offer != null ? "ringing" : _job != null ? "on a job" : "",
+                () => _onDuty && _job == null && _offer == null));
+
+            _menu.Items.Add(new MenuItem("Accept the call",
+                "Take the call that is ringing.",
+                () => { AcceptOffer(); _menu.Close(); },
+                null, () => _offer != null));
+
+            _menu.Items.Add(new MenuItem("Turn the call down",
+                "Pass it to somebody else.",
+                () => { DeclineOffer(); },
+                null, () => _offer != null));
+
+            _menu.Items.Add(new MenuItem("Drop this job",
+                "Cancel the job you are on. No pay, no penalty.",
+                () => { AbandonJob(); },
+                null, () => _job != null));
+
+            _menu.Items.Add(new MenuItem("Amber lights",
+                "Off, steady, or the slow wig-wag.",
+                () => { _els = (ElsMode)(((int)_els + 1) % 3); },
+                () => Rig.ElsLabel(_els)));
+
+            _menu.Items.Add(new MenuItem("Bring me a truck",
+                "Drops a stock tow truck on the road next to you.",
+                () => { RequestTruck(); _menu.Close(); },
+                () => _cfg.YardTruck,
+                () => _cfg.AllowTruckRequest));
+
+            _menu.Items.Add(new MenuItem("Change truck",
+                "Which truck the yard hands you: tow truck, the older one, or the flatbed.",
+                () =>
+                {
+                    _cfg.YardTruck = _cfg.YardTruck == "towtruck2" ? "towtruck"
+                        : _cfg.YardTruck == "towtruck" ? "flatbed" : "towtruck2";
+                    _cfg.EnsureWritten();
+                },
+                () => _cfg.YardTruck));
+
+            _menu.Items.Add(new MenuItem("Fix the truck",
+                "Repairs and cleans the truck you are in.",
+                () =>
+                {
+                    var t = Rig.PlayerTruck();
+                    if (t != null)
+                    {
+                        t.Repair();
+                        Function.Call(Hash.SET_VEHICLE_DIRT_LEVEL, t, 0f);
+                        Hud.Subtitle("Truck patched up.", 2500);
+                    }
+                },
+                null, () => Rig.PlayerTruck() != null));
+
+            _menu.Items.Add(new MenuItem("Go to the yard",
+                "Teleports you (and the truck you are in) back to the yard.",
+                () =>
+                {
+                    var yard = _garages.ById(_cfg.YardGarage) ?? _garages.ById("yard");
+                    if (yard != null) { _menu.Close(); Yard.Teleport(yard.Position, _cfg.YardHeading); }
+                }));
+
+            _menu.Items.Add(new MenuItem("Go to the call",
+                "Skips the drive. Puts you at the scene.",
+                () =>
+                {
+                    if (_job != null) { _menu.Close(); Yard.Teleport(_job.ScenePosition + new Vector3(6f, 0f, 0f), _job.SceneHeading); }
+                },
+                null, () => _job != null));
+
+            _menu.Items.Add(new MenuItem("Set the yard here",
+                "Uses where you are standing as the yard from now on.",
+                () =>
+                {
+                    var g = _garages.Capture(Game.Player.Character.Position, _cfg.YardGarage);
+                    if (g != null)
+                    {
+                        _cfg.YardHeading = Game.Player.Character.Heading;
+                        _cfg.EnsureWritten();
+                        Hud.Subtitle("Yard set here.", 3000);
+                    }
+                }));
+
+            _menu.Items.Add(new MenuItem("Move nearest drop-off here",
+                "Fixes a garage marker that sits in a wall.",
+                () =>
+                {
+                    var g = _garages.Capture(Game.Player.Character.Position);
+                    if (g != null) Hud.Subtitle("Drop-off moved: " + g.Name, 3000);
+                }));
+
+            _menu.Items.Add(new MenuItem("Garage blips",
+                "Grey blips on every drop-off.",
+                () =>
+                {
+                    _cfg.ShowGarageBlips = !_cfg.ShowGarageBlips;
+                    _garages.ShowBlips(_cfg.ShowGarageBlips && _onDuty);
+                    _cfg.EnsureWritten();
+                },
+                () => _cfg.ShowGarageBlips ? "on" : "off"));
+
+            _menu.Items.Add(new MenuItem("Shift so far",
+                "What you have done since clocking on.",
+                () => Hud.Dispatch("Shift so far",
+                    _shiftJobs + " job" + (_shiftJobs == 1 ? "" : "s") + ", $" + _shiftEarnings + " earned."),
+                () => "$" + _shiftEarnings));
+        }
+
+        void AbandonJob()
+        {
+            if (_job == null) return;
+            Log.Write("Player dropped job " + _job.Call.Id);
+            Rig.ForgetFlatbedLoad();
+            _job.Cleanup(false);
+            _job = null;
+            _nextCallAt = Game.GameTime + _cfg.CallGapSeconds * 1000;
+            Hud.Note("Job dropped. Dispatch will find somebody else.");
+        }
+
         void OnAborted(object sender, EventArgs e)
         {
             if (_requestedTruck != null && _requestedTruck.Exists()) _requestedTruck.MarkAsNoLongerNeeded();
@@ -231,6 +447,16 @@ namespace LosSantosTowing
             if (player == null || !player.Exists()) return;
 
             DrainKeys();
+
+            if (_menu.IsOpen)
+            {
+                _menu.Draw();
+                // Stop the shooting/attack controls firing behind the menu.
+                Game.DisableControlThisFrame(Control.Attack);
+                Game.DisableControlThisFrame(Control.Aim);
+                Game.DisableControlThisFrame(Control.VehicleAim);
+                Game.DisableControlThisFrame(Control.MeleeAttack1);
+            }
 
             if (_wantStartOnDuty)
             {
