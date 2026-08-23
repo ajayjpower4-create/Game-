@@ -13,9 +13,10 @@ npm install
 npm start
 ```
 
-- Election game: <http://localhost:3000/> (also at `/election/`)
+- Game hub: <http://localhost:3000/> — lists every game
 - Inspection Simulator: <http://localhost:3000/inspection>
-- The original Swerve chatbot moved to <http://localhost:3000/chat>
+- Election game: <http://localhost:3000/election>
+- The original Swerve chatbot: <http://localhost:3000/chat>
 
 Set `ANTHROPIC_API_KEY` before starting if you want Claude to call the
 election. Without a key the game falls back to its own built-in model and says

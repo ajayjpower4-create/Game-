@@ -15,10 +15,10 @@ app.use(express.json({ limit: '256kb' }));
 // (css/js) are still served straight out of public/.
 app.use(express.static(join(__dirname, 'public'), { index: false }));
 
-// The election game is the homepage; the Swerve chatbot moved to /chat.
+// The homepage is a hub listing every game; each game keeps its own path.
 const page = (...parts) => (req, res) => res.sendFile(join(__dirname, 'public', ...parts));
 
-app.get('/', page('election', 'index.html'));
+app.get('/', page('hub.html'));
 app.get(['/election', '/election/'], page('election', 'index.html'));
 app.get(['/chat', '/chat/'], page('index.html'));
 app.get(['/inspection', '/inspection/'], page('inspection', 'index.html'));
@@ -271,7 +271,8 @@ app.post('/api/inspection/summarize', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Political Election Simulator at http://localhost:${PORT}`);
+  console.log(`Game hub at http://localhost:${PORT}`);
+  console.log(`Political Election Simulator at http://localhost:${PORT}/election`);
   console.log(`Inspection Simulator at http://localhost:${PORT}/inspection`);
   console.log(`Swerve AI chat at http://localhost:${PORT}/chat`);
 });

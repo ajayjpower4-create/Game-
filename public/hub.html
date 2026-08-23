@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pick a game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100dvh; padding: 32px 18px calc(40px + env(safe-area-inset-bottom, 0px));
+    background: #0d1220; color: #eef2f8; -webkit-text-size-adjust: 100%;
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  main { width: 100%; max-width: 640px; }
+  h1 { font-size: 26px; margin: 0 0 6px; letter-spacing: -.01em; }
+  .sub { color: #93a3bb; margin: 0 0 26px; font-size: 15px; }
+  a.game {
+    display: block; text-decoration: none; color: inherit;
+    background: #161e30; border: 1px solid #26324a; border-radius: 14px;
+    padding: 20px; margin-bottom: 14px; min-height: 64px;
+  }
+  a.game:hover, a.game:focus { border-color: #6f7cff; background: #1b2438; }
+  a.game .top { display: flex; align-items: center; gap: 12px; }
+  a.game .icon { font-size: 26px; }
+  a.game strong { font-size: 18px; }
+  a.game p { margin: 10px 0 0; color: #93a3bb; font-size: 14px; }
+  a.game .tag {
+    display: inline-block; margin-left: auto; font-size: 11px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; color: #0d1220;
+    background: #8fe3c0; border-radius: 999px; padding: 4px 9px;
+  }
+  .note { color: #6a798f; font-size: 13px; margin-top: 22px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Pick a game</h1>
+  <p class="sub">Everything here is fiction, built for play.</p>
+
+  <a class="game" href="/inspection">
+    <span class="top"><span class="icon">🏚️</span><strong>Inspection Simulator</strong><span class="tag">Newest</span></span>
+    <p>Fill out the property once by clicking, then build a full home inspection report by picking
+      defects off a menu. The write-ups and recommendations come with them.</p>
+  </a>
+
+  <a class="game" href="/election">
+    <span class="top"><span class="icon">🗳️</span><strong>Political Election Simulator</strong></span>
+    <p>Pick any two candidates, run a three-month campaign of rallies and speeches, then rig the map
+      yourself or let Claude call all 51 contests.</p>
+  </a>
+
+  <a class="game" href="/chat">
+    <span class="top"><span class="icon">💬</span><strong>Swerve Chat</strong></span>
+    <p>The original chatbot.</p>
+  </a>
+
+  <p class="note">Nothing on this site is a real inspection, a poll, a forecast, or a claim about any
+    real person, property or election.</p>
+</main>
+</body>
+</html>
