@@ -17,6 +17,7 @@
 
 body {
   margin: 0;
+  -webkit-text-size-adjust: 100%;
   background: var(--bg);
   color: var(--ink);
   font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -237,6 +238,90 @@ button:active { transform: translateY(1px); }
   border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; vertical-align: -2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+
+/* ---------------------------------------------------------- device picker */
+
+.pick-grid.two { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.pick.device { padding: 18px; border-width: 2px; }
+.pick.device strong { font-size: 16px; margin-bottom: 6px; }
+.pick.device.on { border-color: var(--accent); background: var(--accent-soft); }
+.pick.device .tag {
+  display: inline-block; margin-top: 8px; font-style: normal; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .05em; font-weight: 700;
+  color: var(--accent); background: #fff; border: 1px solid #a7cfda;
+  border-radius: 999px; padding: 3px 9px;
+}
+ol.how { color: var(--ink-soft); font-size: 14px; line-height: 1.9; padding-left: 20px; margin: 0; }
+
+/* ------------------------------------------------------ floating add button */
+
+.fab { display: none; }
+
+/* --------------------------------------------------------- compact layout
+ * Applied when the player picked the phone layout, and forced on any narrow
+ * window so a desktop pick can't strand them in a two-column form. */
+
+body.compact main { padding: 14px 12px 96px; }
+body.compact .topbar { padding: 8px 14px; }
+body.compact .brand em { max-width: 58vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body.compact .card { padding: 16px 14px; border-radius: 8px; }
+body.compact .card > h2 { font-size: 18px; }
+
+body.compact .fields { grid-template-columns: 1fr; gap: 14px; }
+body.compact .field.short { max-width: none; }
+body.compact .field input, body.compact .field select, body.compact textarea,
+body.compact .search { font-size: 16px; padding: 12px 14px; }  /* 16px stops iOS zoom-on-focus */
+
+body.compact .chip { min-height: 44px; font-size: 15px; padding: 10px 16px; }
+body.compact .counter button { width: 46px; height: 46px; font-size: 20px; }
+body.compact .counter output { min-width: 56px; font-size: 19px; }
+
+body.compact .row > button:not(.link) { flex: 1 1 100%; min-height: 48px; font-size: 16px; }
+body.compact .spread { flex-direction: column; align-items: stretch; }
+body.compact .spread > button { width: 100%; min-height: 44px; }
+
+/* the step rail collapses to a progress bar with only the current label */
+body.compact .steps span { min-width: 0; font-size: 0; padding-top: 5px; }
+body.compact .steps span.on { font-size: 11px; flex: 3; }
+
+body.compact .tally div { flex: 1 1 40%; min-width: 0; }
+body.compact .section-progress span { font-size: 12px; padding: 6px 12px; }
+
+body.compact .finding .actions button { min-height: 40px; }
+
+/* menus become full-screen sheets */
+body.compact .modal { padding: 0; align-items: stretch; }
+body.compact .modal-card {
+  width: 100%; min-height: 100%; border-radius: 0; padding: 18px 14px 28px;
+}
+body.compact .modal-card h2 { font-size: 19px; padding-right: 34px; }
+body.compact .modal-close { font-size: 34px; top: 6px; right: 12px; padding: 4px 10px; }
+body.compact .pick-grid { grid-template-columns: 1fr; }
+body.compact .defect-list button { padding: 13px 14px; font-size: 15px; }
+
+body.compact .fab {
+  display: block; position: fixed; left: 12px; right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 30;
+  background: var(--accent); color: #fff; border: none; border-radius: 999px;
+  padding: 15px; font-size: 16px; font-weight: 700;
+  box-shadow: 0 6px 20px rgba(20, 35, 50, .28);
+}
+body.compact.modal-open .fab { display: none; }
+
+/* the report itself */
+body.compact .doc { padding: 20px 16px; border-radius: 8px; }
+body.compact .doc h1 { font-size: 21px; }
+body.compact .doc h2 { font-size: 15px; }
+body.compact .doc .toc { columns: 1; }
+body.compact .doc table, body.compact .doc tbody, body.compact .doc tr { display: block; }
+body.compact .doc th, body.compact .doc td { display: block; width: auto; border-bottom: none; }
+body.compact .doc tr { border-bottom: 1px solid var(--line); }
+body.compact .doc th { background: transparent; font-size: 12px; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--ink-soft); padding-bottom: 0; border-top: none; }
+body.compact .doc td { padding-top: 2px; }
+body.compact .scorecard { flex-direction: column; align-items: flex-start; }
+body.compact .sum-line { font-size: 13px; }
+
 @media print {
   .topbar, .no-print { display: none !important; }
   body { background: #fff; }
@@ -244,7 +329,6 @@ button:active { transform: translateY(1px); }
   .doc { border: none; box-shadow: none; padding: 0; }
 }
 
-@media (max-width: 640px) {
-  .doc { padding: 24px 20px; }
-  main { padding: 16px 12px 60px; }
+@media print {
+  body.compact .fab { display: none; }
 }

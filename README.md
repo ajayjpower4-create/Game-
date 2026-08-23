@@ -95,6 +95,22 @@ Write a sixty-page home inspection report without writing sixty paragraphs. At
 You type the address, the client, the company and the year built. Everything
 else in the report is a click.
 
+## Phone or computer
+
+The start screen asks where you are working before anything else, and the pick
+changes the layout (never the report). It guesses which one you are on from the
+pointer type and window width, and the Menu switches at any time.
+
+- **Phone** — one column, 44-48px tap targets, 16px inputs so iOS doesn't zoom
+  on focus, the step rail collapses to a progress bar, menus open as full-screen
+  sheets, the Information tables stack label-over-value, and a floating
+  *+ Add defect* button follows you down the walkthrough.
+- **Computer** — the wide layout: fields side by side, the defect menu on screen
+  at once.
+
+A window narrower than 720px gets the compact layout regardless of the pick, so
+choosing "computer" on a phone can't strand you in a two-column form.
+
 ## How a report gets built
 
 **1 · Intake.** Four screens of buttons and counters: house type, floors,

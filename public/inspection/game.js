@@ -28,7 +28,25 @@ function blankProfile() {
   return p;
 }
 
-let state = load() || { screen: 'start', intakeStep: 0, profile: blankProfile(), findings: [], narrative: null };
+let state = load() || {
+  screen: 'start', intakeStep: 0, device: null, profile: blankProfile(), findings: [], narrative: null,
+};
+
+/* Layout mode. The player picks it on the start screen; a narrow window forces
+ * the compact layout either way, so a desktop pick never traps them in a
+ * two-column form on a 380px screen. */
+function detectDevice() {
+  const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+  return coarse || window.innerWidth < 820 ? 'mobile' : 'desktop';
+}
+
+function applyDevice() {
+  const compact = state.device === 'mobile' || window.innerWidth < 720;
+  document.body.classList.toggle('compact', compact);
+  document.body.classList.toggle('device-mobile', state.device === 'mobile');
+}
+
+window.addEventListener('resize', applyDevice);
 
 function load() {
   try {
@@ -57,9 +75,14 @@ function set(patch) {
 function openModal(html, wire) {
   modalBody.innerHTML = html;
   modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
   if (wire) wire(modalBody);
 }
-function closeModal() { modal.classList.add('hidden'); modalBody.innerHTML = ''; }
+function closeModal() {
+  modal.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+  modalBody.innerHTML = '';
+}
 modal.addEventListener('click', (e) => {
   if (e.target === modal || e.target.hasAttribute('data-close')) closeModal();
 });
@@ -68,6 +91,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal
 /* ----------------------------------------------------------------- screens */
 
 function render() {
+  applyDevice();
   if (state.screen === 'start') renderStart();
   else if (state.screen === 'intake') renderIntake();
   else if (state.screen === 'walk') renderWalk();
@@ -78,11 +102,33 @@ function render() {
 function renderStart() {
   crumb.textContent = 'Field report generator';
   const hasSave = state.findings.length > 0 || state.profile.address;
+  const guess = detectDevice();
+  const picked = state.device;
+
   app.innerHTML = `
+    <div class="card">
+      <h2>Where are you working?</h2>
+      <p class="hint">This changes the layout, not the report. You can switch any time from the Menu.</p>
+      <div class="pick-grid two">
+        <button class="pick device ${picked === 'mobile' ? 'on' : ''}" data-device="mobile">
+          <strong>📱 On my phone</strong>
+          <small>One column, big tap targets, full-screen menus and a floating Add&nbsp;defect button —
+            for tapping findings in while you are still standing in the crawl space.</small>
+          ${guess === 'mobile' ? '<em class="tag">Looks like what you are on</em>' : ''}
+        </button>
+        <button class="pick device ${picked === 'desktop' ? 'on' : ''}" data-device="desktop">
+          <strong>💻 On a computer</strong>
+          <small>Wider layout, fields side by side, the whole defect menu on screen at once —
+            for writing the report up afterwards.</small>
+          ${guess === 'desktop' ? '<em class="tag">Looks like what you are on</em>' : ''}
+        </button>
+      </div>
+    </div>
+
     <div class="card">
       <h2>Write a 60-page inspection report without writing 60 pages.</h2>
       <p class="hint">You type the address, the client and the year built. Everything else is a click.</p>
-      <ol style="color:var(--ink-soft);font-size:14px;line-height:1.9;padding-left:20px">
+      <ol class="how">
         <li><strong>Intake.</strong> Address, house type, floors, basement, bedrooms, living rooms, systems.
             The answers fill the Information block of all sixteen sections.</li>
         <li><strong>Walkthrough.</strong> Add Defect → pick the severity → pick the section → pick the defect.
@@ -93,28 +139,37 @@ function renderStart() {
         <li><strong>Generate.</strong> Claude summarizes the whole inspection, the report assembles itself,
             and you get scored on how thorough you were.</li>
       </ol>
-      <div class="row" style="margin-top:20px">
+      ${picked ? `
+      <div class="row actions" style="margin-top:20px">
         <button class="primary" id="startBtn">${hasSave ? 'Resume inspection' : 'Start an inspection'}</button>
         ${hasSave ? '<button class="quiet" id="freshBtn">Start over</button>' : ''}
         <button class="quiet" id="demoBtn">Load the sample property</button>
-      </div>
+      </div>` : '<p class="banner" style="margin-top:20px">Pick phone or computer above to start.</p>'}
       <p class="ai-note">${DEFECTS.length} defects in the menu across ${SECTIONS.length} report sections.
         Everything autosaves to this browser.</p>
     </div>`;
+
+  app.querySelectorAll('[data-device]').forEach((b) => {
+    b.onclick = () => set({ device: b.dataset.device });
+  });
+  if (!picked) return;
 
   app.querySelector('#startBtn').onclick = () => set({ screen: 'intake' });
   const fresh = app.querySelector('#freshBtn');
   if (fresh) {
     fresh.onclick = () => {
       if (confirm('Wipe the current inspection and start clean?')) {
-        state = { screen: 'intake', intakeStep: 0, profile: blankProfile(), findings: [], narrative: null };
+        state = { ...state, screen: 'intake', intakeStep: 0, profile: blankProfile(), findings: [], narrative: null };
         save();
         render();
       }
     };
   }
   app.querySelector('#demoBtn').onclick = () => {
-    state = { screen: 'intake', intakeStep: 0, profile: { ...blankProfile(), ...SAMPLE }, findings: [], narrative: null };
+    state = {
+      ...state, screen: 'intake', intakeStep: 0,
+      profile: { ...blankProfile(), ...SAMPLE }, findings: [], narrative: null,
+    };
     save();
     render();
   };
@@ -263,6 +318,8 @@ function renderWalk() {
       <div id="findingList">${state.findings.length ? state.findings.map(findingHtml).join('') : '<p class="hint">Nothing added yet. Every defect you add carries its own write-up and contractor recommendation — you never have to type the paragraph.</p>'}</div>
     </div>
 
+    <button class="fab" id="addDefectFab" aria-label="Add defect">+ Add defect</button>
+
     <div class="row">
       <button class="primary" id="finishBtn" ${state.findings.length ? '' : 'disabled'}>Generate the report</button>
       <span class="hint" style="margin:0">${state.findings.length ? 'Claude Sonnet writes the summary, then the document assembles itself.' : 'Add at least one finding first.'}</span>
@@ -270,6 +327,7 @@ function renderWalk() {
 
   app.querySelector('#editIntake').onclick = () => set({ screen: 'intake', intakeStep: 0 });
   app.querySelector('#addDefect').onclick = () => pickSeverity();
+  app.querySelector('#addDefectFab').onclick = () => pickSeverity();
   app.querySelector('#addCustom').onclick = () => customDefectForm();
   app.querySelector('#finishBtn').onclick = () => generate();
 
@@ -707,6 +765,10 @@ document.getElementById('menuBtn').onclick = () => {
       <button class="pick" data-go="walk"><strong>Walkthrough</strong><small>Add or edit defects.</small></button>
       <button class="pick" data-go="report"><strong>Report</strong><small>The assembled document.</small></button>
     </div>
+    <p class="hint" style="margin:18px 0 8px">Layout: <strong>${state.device === 'mobile' ? 'phone' : 'computer'}</strong></p>
+    <div class="row">
+      <button class="quiet" id="switchDevice">Switch to the ${state.device === 'mobile' ? 'computer' : 'phone'} layout</button>
+    </div>
     <div class="row" style="margin-top:18px">
       <button class="quiet" id="exportSave">Export save file</button>
       <button class="quiet" id="importSave">Import save file</button>
@@ -715,6 +777,10 @@ document.getElementById('menuBtn').onclick = () => {
     root.querySelectorAll('[data-go]').forEach((b) => {
       b.onclick = () => { closeModal(); set({ screen: b.dataset.go }); };
     });
+    root.querySelector('#switchDevice').onclick = () => {
+      closeModal();
+      set({ device: state.device === 'mobile' ? 'desktop' : 'mobile' });
+    };
     root.querySelector('#exportSave').onclick = () => download(
       `${slug(state.profile.address || 'inspection')}-save.json`, JSON.stringify(state, null, 2), 'application/json');
     root.querySelector('#importSave').onclick = () => {
@@ -736,7 +802,10 @@ document.getElementById('menuBtn').onclick = () => {
     root.querySelector('#wipe').onclick = () => {
       if (!confirm('Delete the saved inspection from this browser?')) return;
       localStorage.removeItem(SAVE_KEY);
-      state = { screen: 'start', intakeStep: 0, profile: blankProfile(), findings: [], narrative: null };
+      state = {
+        screen: 'start', intakeStep: 0, device: state.device,
+        profile: blankProfile(), findings: [], narrative: null,
+      };
       closeModal();
       render();
     };
