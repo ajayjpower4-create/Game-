@@ -13,7 +13,8 @@ npm install
 npm start
 ```
 
-- Game: <http://localhost:3000/> (also at `/election/`)
+- Election game: <http://localhost:3000/> (also at `/election/`)
+- Inspection Simulator: <http://localhost:3000/inspection>
 - The original Swerve chatbot moved to <http://localhost:3000/chat>
 
 Set `ANTHROPIC_API_KEY` before starting if you want Claude to call the
@@ -82,3 +83,70 @@ wipes everything.
 The map is a grid cartogram: one tile per state placed roughly where it sits on
 a US map, sized the same regardless of area, so Rhode Island is as clickable as
 Texas. All 538 electoral votes are the 2024–2030 apportionment.
+
+
+---
+
+# Inspection Simulator
+
+Write a sixty-page home inspection report without writing sixty paragraphs. At
+`/inspection`.
+
+You type the address, the client, the company and the year built. Everything
+else in the report is a click.
+
+## How a report gets built
+
+**1 · Intake.** Four screens of buttons and counters: house type, floors,
+basement or slab, bedrooms, bathrooms, living rooms, kitchens, garage bays,
+attic access, cladding, roof covering, heating, water heater, service amperage,
+pipe materials, weather, occupancy, shutoff locations. Those answers fill the
+Information table and the standing narrative of all sixteen report sections, and
+they generate the room list a defect can be attached to (three bedrooms means
+Master, Bedroom 2, Bedroom 3).
+
+**2 · The walkthrough.** *Add defect* → pick the severity (Significant,
+Marginal, Minor/FYI) → pick the section → pick the defect off the menu. The
+report paragraph and the contractor recommendation come attached. Optionally
+choose a location and type your own note; you don't have to type anything.
+There are 247 defects in the menu across fourteen inspectable sections, filtered
+by severity and searchable by keyword.
+
+**3 · Anything not on the menu.** *Not on the menu…* takes a short title and a
+sentence about what you saw, and Claude Sonnet writes the defect paragraph and
+the recommendation in the same voice as the rest of the document — third person,
+past tense, observation then consequence then recommended correction, no prices,
+no guarantees.
+
+**4 · Generate.** Claude summarizes the whole inspection into an overview and a
+"what to address first" list, the findings get numbered the way an inspection
+report numbers them (`10.1.2` = section ten, first item, second finding on that
+item), and the document assembles: cover, table of contents, overview, summary
+with a planning budget range, then every section with its Information table, its
+standing narrative, and its numbered recommendations.
+
+**5 · The score.** The game part. You are graded out of 100 on how many sections
+you touched, how many findings you logged, how many carry a location, and how
+many carry your own note — with the specific criticism spelled out ("2 findings
+have no location attached").
+
+Copy the report as text, download it as `.txt` or `.json`, or print it to PDF.
+It autosaves to the browser on every click, and the Menu exports or imports a
+save file.
+
+Without `ANTHROPIC_API_KEY` set, both AI steps fall back to local text and the
+report says so on screen — every screen still works offline.
+`INSPECTION_MODEL` overrides the model (default `claude-sonnet-5`).
+
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `public/inspection/data.js` | The intake form, the sixteen sections, their Information blocks and standing narrative |
+| `public/inspection/defects.js` | The defect menu — every canned write-up and recommendation |
+| `public/inspection/report.js` | Numbering, summary, cost range, scoring, plain-text rendering. Pure functions |
+| `public/inspection/game.js` | Screen flow, the defect picker, the rendered document |
+| `server.js` | `POST /api/inspection/defect` (writes a custom defect) and `POST /api/inspection/summarize` (writes the overview) |
+
+Nothing in this report is real. It is a simulator for practicing and drafting,
+not a substitute for an inspection by a licensed inspector.

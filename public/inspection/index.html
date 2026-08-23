@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inspection Simulator — write a home inspection report without writing it</title>
+<link rel="stylesheet" href="/inspection/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏚️</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">🏚️</span>
+    <span>
+      <strong>Inspection Simulator</strong>
+      <em id="crumb">Field report generator</em>
+    </span>
+  </div>
+  <div class="topbar-actions">
+    <span id="autosave" class="autosave"></span>
+    <button id="menuBtn" class="ghost">Menu</button>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close>&times;</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script type="module" src="/inspection/game.js"></script>
+</body>
+</html>

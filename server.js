@@ -21,6 +21,7 @@ const page = (...parts) => (req, res) => res.sendFile(join(__dirname, 'public', 
 app.get('/', page('election', 'index.html'));
 app.get(['/election', '/election/'], page('election', 'index.html'));
 app.get(['/chat', '/chat/'], page('index.html'));
+app.get(['/inspection', '/inspection/'], page('inspection', 'index.html'));
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
@@ -173,8 +174,104 @@ app.post('/api/election/simulate', async (req, res) => {
   }
 });
 
+/* ------------------------------------------------------- Inspection Simulator */
+
+const INSPECTION_MODEL = process.env.INSPECTION_MODEL || 'claude-sonnet-5';
+
+const INSPECTION_VOICE = `You write for a residential home inspection report.
+
+House style, follow it exactly:
+- Third person, past tense, plain and factual. "Damaged receptacle(s) were present at the
+  referenced area(s)." Never "I think", never marketing language, never alarmist language.
+- State the observation, then why it matters in one clause, then the recommended correction.
+- Recommend evaluation and repair by the applicable trade. Never quote a price, never estimate
+  remaining service life in years for a specific component, never state a cause as certain.
+- A home inspection is visual, non-invasive, qualitative and not technically exhaustive. Do not
+  claim anything that would require invasive access or testing that was not performed.
+- Prefix safety items with "SFTY - " and age-related items with "AGED - " when it fits.`;
+
+app.post('/api/inspection/defect', async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'no_api_key' });
+  const { section, item, severity, title, observation, property } = req.body || {};
+  if (!title || !observation) return res.status(400).json({ error: 'bad_request' });
+
+  try {
+    const message = await client.messages.create({
+      model: INSPECTION_MODEL,
+      max_tokens: 700,
+      system: INSPECTION_VOICE,
+      messages: [{
+        role: 'user',
+        content: `Write one defect comment for an inspection report.\n\n`
+          + `Section: ${section}\nItem: ${item}\nSeverity: ${severity}\n`
+          + `Property: ${property?.type || 'single family home'}, built ${property?.yearBuilt || 'unknown'}\n`
+          + `Title the inspector gave it: ${title}\n`
+          + `What the inspector saw: ${observation}\n\n`
+          + `Reply with JSON only, no markdown fence:\n`
+          + `{ "body": "<3-6 sentences in house style>", "rec": "<one line, e.g. Contact a qualified plumbing contractor.>" }`,
+      }],
+    });
+
+    const text = message.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+    const parsed = parseModelJson(text);
+    res.json({
+      body: String(parsed.body || '').slice(0, 2000),
+      rec: String(parsed.rec || 'Contact a qualified professional.').slice(0, 200),
+    });
+  } catch (err) {
+    const detail = err instanceof Anthropic.APIError ? `api_${err.status}` : err.message;
+    console.warn('Inspection defect write-up failed:', detail);
+    res.status(502).json({ error: detail || 'write_failed' });
+  }
+});
+
+app.post('/api/inspection/summarize', async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'no_api_key' });
+  const body = req.body || {};
+  if (!Array.isArray(body.findings)) return res.status(400).json({ error: 'bad_request' });
+
+  try {
+    const message = await client.messages.create({
+      model: INSPECTION_MODEL,
+      max_tokens: 1500,
+      system: INSPECTION_VOICE,
+      messages: [{
+        role: 'user',
+        content: `Summarize a completed home inspection for the client.\n\n`
+          + `Property: ${JSON.stringify(body.property)}\n`
+          + `Systems: ${JSON.stringify(body.profile)}\n`
+          + `Finding counts: ${JSON.stringify(body.counts)}\n`
+          + `Findings:\n${body.findings.map((f) => `${f.ref} [${f.severity}] ${f.section} - ${f.item}: `
+            + `${f.title}${f.location ? ` (${f.location})` : ''}${f.note ? ` | inspector note: ${f.note}` : ''}`).join('\n')}\n\n`
+          + `Group what you see into themes rather than restating the list. Reply with JSON only, no `
+          + `markdown fence:\n`
+          + `{ "overview": "<2 short paragraphs, separated by a blank line, on the overall condition of `
+          + `the home and the themes running through the findings>",\n`
+          + `  "priorities": ["<up to 5 items, each starting with the finding reference number>"],\n`
+          + `  "closing": "<1-2 sentences on next steps within the contingency period>" }`,
+      }],
+    });
+
+    const text = message.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+    const parsed = parseModelJson(text);
+    res.json({
+      overview: String(parsed.overview || '').slice(0, 4000),
+      priorities: Array.isArray(parsed.priorities)
+        ? parsed.priorities.slice(0, 5).map((t) => String(t).slice(0, 300))
+        : [],
+      closing: String(parsed.closing || '').slice(0, 600),
+      model: INSPECTION_MODEL,
+    });
+  } catch (err) {
+    const detail = err instanceof Anthropic.APIError ? `api_${err.status}` : err.message;
+    console.warn('Inspection summary failed:', detail);
+    res.status(502).json({ error: detail || 'summary_failed' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Political Election Simulator at http://localhost:${PORT}`);
+  console.log(`Inspection Simulator at http://localhost:${PORT}/inspection`);
   console.log(`Swerve AI chat at http://localhost:${PORT}/chat`);
 });
