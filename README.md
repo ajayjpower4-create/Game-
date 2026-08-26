@@ -215,6 +215,14 @@ prosecutor and grab the papers.*` — and a row of one-tap objections and stock
 lines sits under the composer. Claude answers as the rest of the room: the
 gavel, the objection, the witness who doesn't want to answer.
 
+**It never speaks for you.** The rule is enforced three ways, because asking
+nicely isn't enough over a long trial: your characters and their exact speaker
+labels are banned in the system prompt, the ban is re-pinned to your newest line
+on every single request, and any turn that comes back labelled as one of your
+characters is cut before it reaches the transcript — the transcript says it was
+cut, the correction goes back to the model, and if the whole reply was you, the
+room is asked again.
+
 **Switching character.** *Cast* lists everyone. Take a character over and Claude
 stops playing them mid-sentence; hand one of yours back and it picks them up.
 Bring somebody new through the doors, or walk someone out. When you play more

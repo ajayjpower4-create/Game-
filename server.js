@@ -310,9 +310,19 @@ Charge or claim: ${clip(c.charge, 300) || 'unstated'}
 Background: ${clip(c.summary, 2000) || 'The player will fill this in as you go.'}
 The verdict will be decided by ${decider}.
 
-CHARACTERS THE PLAYER SPEAKS FOR — never write their dialogue, never narrate their
-actions, never decide what they think or do. Wait for the player.
+CHARACTERS THE PLAYER SPEAKS FOR — THE PLAYER IS THESE PEOPLE, NOT YOU.
 ${player.map(line).join('\n') || '- (none yet)'}
+
+These labels are banned from your output. Never write a line that starts with any
+of them, in any format, for any reason:
+${player.map((r) => `- **${clip(r.character, 80) || clip(r.role, 60)} (${clip(r.role, 60)}):**`).join('\n') || '- (none yet)'}
+
+You do not write their dialogue. You do not narrate their movements, gestures,
+expressions or thoughts. You do not answer a question that was put to them. You
+do not say what they "would" do, and you do not summarize what they just did. If
+the scene is waiting on one of them, you STOP and end your reply — silence is the
+correct move, and the player will fill it. A reply containing any of those labels
+is a broken reply.
 
 CHARACTERS YOU SPEAK FOR — you are all of them, and only them.
 ${ai.map(line).join('\n') || '- (none)'}
@@ -324,6 +334,7 @@ HOW TO WRITE
   **Marcus Hale (Prosecutor):** followed by what they say.
 - Physical action goes in asterisks, in the same line or on its own:
   *I walk over to the prosecutor and grab the papers.*
+- End your reply the moment the floor belongs to one of the player's characters.
 - Several of your characters may speak in one reply when the room would naturally
   react — an objection, a gavel, a witness answering. Keep it tight: usually one
   to four turns, then hand the floor back to the player.
@@ -354,6 +365,7 @@ contradict it.`;
 
 function courtMessages(body) {
   const raw = Array.isArray(body?.messages) ? body.messages.slice(-60) : [];
+  const { player } = courtCast(body?.setup);
   // Consecutive turns from the same side are merged — the player can send a
   // stage note, an evidence answer and a line of dialogue back to back.
   const msgs = [];
@@ -367,6 +379,15 @@ function courtMessages(body) {
   // The API needs a user turn to start from; an opening gavel counts as one.
   if (!msgs.length || msgs[0].role !== 'user') {
     msgs.unshift({ role: 'user', content: 'Court is called to order. Begin.' });
+  }
+  // The rule drifts over a long transcript, so it rides on the newest turn —
+  // the text sitting closest to the reply.
+  if (player.length) {
+    const last = msgs[msgs.length - 1];
+    last.content += `\n\n(The player speaks for `
+      + `${player.map((r) => `${clip(r.character, 80) || clip(r.role, 60)} (${clip(r.role, 60)})`).join(' and ')}. `
+      + `Write no line for them, no action for them, no thought for them. Stop your reply `
+      + `when it is their move.)`;
   }
   return msgs;
 }

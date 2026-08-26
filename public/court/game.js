@@ -639,7 +639,7 @@ function renderTrial() {
 }
 
 function turnHtml(m) {
-  if (m.kind === 'verdict') return '';   // the directive is for the model, not the transcript
+  if (m.kind === 'verdict' || m.kind === 'sys') return '';  // for the model, not the transcript
   if (m.kind === 'note' || m.kind === 'local') {
     return `<div class="note">${fmt(m.content)}</div>`;
   }
@@ -677,7 +677,7 @@ function wireMessages() {
     if (m.kind === 'local') return null;   // transcript-only, never sent
     if (m.kind === 'note') return { role: 'user', content: m.content };
     if (m.kind === 'evidence') return { role: 'user', content: `EVIDENCE ANSWER — ${m.content}` };
-    if (m.kind === 'verdict') return { role: 'user', content: m.content };
+    if (m.kind === 'verdict' || m.kind === 'sys') return { role: 'user', content: m.content };
     if (m.speaker === 'You (several characters)') {
       return { role: 'user', content: `The player, speaking for several of their characters at once:\n${m.content}` };
     }
@@ -685,7 +685,7 @@ function wireMessages() {
   }).filter(Boolean);
 }
 
-async function sendTurn() {
+async function sendTurn(retry = 0) {
   if (state.busy) return;
   state.busy = true;
   render();
@@ -698,7 +698,7 @@ async function sendTurn() {
 
   const paint = () => {
     if (!live) return;
-    const shown = streamText.split('[[EVIDENCE]]')[0];
+    const shown = cutPlayerVoice(streamText.split('[[EVIDENCE]]')[0]).text;
     live.innerHTML = shown
       ? `<div class="turn"><div class="bubble">${fmt(shown)}</div></div>`
       : '<div class="thinking">The room is thinking…</div>';
@@ -743,19 +743,58 @@ async function sendTurn() {
     }
     if (streamErr && !streamText) throw new Error(streamErr);
 
-    const { body, evidence } = splitEvidence(streamText);
+    const split = splitEvidence(streamText);
+    const { text: body, cut } = cutPlayerVoice(split.body);
     state.busy = false;
     if (body) push({ id: uid(), role: 'assistant', content: body });
+    if (cut) {
+      push({
+        id: uid(), role: 'user', kind: 'local', speaker: 'Court',
+        content: `**Cut.** The room started speaking for you. That part was dropped — the floor is yours.`,
+      });
+      // Say it again where the model will read it, not just to the player.
+      push({
+        id: uid(), role: 'user', kind: 'sys', speaker: 'Court',
+        content: 'You wrote a line for one of the player\'s own characters. It was cut before it '
+          + 'reached the courtroom. Do not do it again: no dialogue, no actions, no reactions for '
+          + `${myRoles().map(label).join(' or ') || 'the player'}. Stop your reply when it is their move.`,
+      });
+    }
     render();
-    if (evidence) askEvidence(evidence);
+    if (evidenceOrRetry(split.evidence, body, retry)) return;
   } catch (err) {
     state.busy = false;
-    if (streamText) push({ id: uid(), role: 'assistant', content: splitEvidence(streamText).body });
+    const partial = cutPlayerVoice(splitEvidence(streamText).body).text;
+    if (partial) push({ id: uid(), role: 'assistant', content: partial });
     render();
     const box = app.querySelector('#trialErr');
     if (box) { box.hidden = false; box.textContent = err.message; }
     if (errBox) errBox.hidden = false;
   }
+}
+
+/* The model still slips and writes a turn for one of the player's characters.
+ * The prompt says not to; this makes sure it never lands in the transcript. A
+ * speaker label for one of them ends the reply — everything from that label on
+ * is the player's move to make. */
+const reEsc = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function playerLabelRe() {
+  const names = [];
+  myRoles().forEach((r) => {
+    [r.character, r.role].forEach((n) => { if (n && n.trim()) names.push(reEsc(n.trim())); });
+  });
+  if (!names.length) return null;
+  // "Nadia Cortez:", "**Nadia Cortez (Defense Attorney):**", "_Judge:_" — at the
+  // start of a line only, so a character addressing them mid-sentence survives.
+  return new RegExp(`^[ \\t>*_]*(?:${names.join('|')})\\s*(?:\\([^)\\n]{0,40}\\))?[ *_]*:`, 'im');
+}
+
+function cutPlayerVoice(text) {
+  const re = playerLabelRe();
+  const m = re && re.exec(text);
+  if (!m) return { text, cut: false };
+  return { text: text.slice(0, m.index).trimEnd(), cut: true };
 }
 
 /* The model ends a turn with an evidence block when it needs something off the
@@ -818,6 +857,14 @@ function askEvidence(e) {
       if (v) answer(v);
     });
   });
+}
+
+/* If the whole reply was the player's own character talking, there is nothing
+ * left to show — ask the room again once, with the correction attached. */
+function evidenceOrRetry(evidence, body, retry) {
+  if (evidence) { askEvidence(evidence); return true; }
+  if (!body && retry < 1) { sendTurn(retry + 1); return true; }
+  return false;
 }
 
 /* --------------------------------------------------------- cast, mid-trial */
