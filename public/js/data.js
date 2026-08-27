@@ -24,6 +24,7 @@ export const TERRAIN_NAMES = {
   airport:  "Airport Expressway",
   parkway:  "Scenic Parkway",
   canyon:   "Canyon Highway",
+  country:  "Country Road",
 };
 
 // c1/c2 = state theme colors used for the "State Pride" vest
@@ -396,6 +397,8 @@ function extraRoads(s) {
     { sign: "SR", num: "170", name: "Airport Expressway",  city, lanes: 3, terrain: "airport",    speed: 55 },
     { sign: "SR", num: "28",  name: "Scenic Parkway",      city, lanes: 2, terrain: "parkway",    speed: 50 },
     { sign: "US", num: "191", name: "Canyon Highway",      city, lanes: 2, terrain: "canyon",     speed: 55 },
+    { sign: "SR", num: "12",  name: "County Road",         city, lanes: 1, terrain: "country",  countryStyle: 0, speed: 55 },
+    { sign: "SR", num: "7",   name: "Forest Route",        city, lanes: 1, terrain: "country",  countryStyle: 1, speed: 50 },
   ];
 }
 

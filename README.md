@@ -49,14 +49,18 @@ Besides the open highways, every state adds hand-built settings to work in:
   real thing. Two extra wide, many-lane crossings — the 7-lane **George
   Washington Bridge** (New York) and the **Howard Frankland Bridge**
   (Florida) — are in there too.
-- **Six more road designs**, each a distinct setting: a **🚇 highway tunnel**
+- **More road designs**, each a distinct setting: a **🚇 highway tunnel**
   (tiled walls, vaulted ceiling, glowing light strips, jet-fans, emergency
   doors), a **💰 toll expressway** (a plaza with a canopy, toll booths between
   the lanes and an E-ZPass gantry), an **🏭 industrial district** (factories
   with sawtooth roofs and smokestacks, storage tanks, perimeter fencing), an
   **✈️ airport expressway** (control tower, terminal, parked jets, a runway),
   a **🌳 scenic parkway** (dense tree line and stone-faced arch overpasses),
-  and a **🏜️ canyon highway** (tall red-rock walls hugging both shoulders).
+  a **🏜️ canyon highway** (tall red-rock walls hugging both shoulders), and
+  two **🌾 country roads** — a rural **County Road** through farmland (red
+  barns, grain silos, crop fields, hay bales, post-and-rail fences, a farm
+  windpump) and a **Forest Route** through the woods (dense pines, log piles,
+  log cabins, underbrush).
 - **🏪 Downtown streets** — five slow two-lane city streets, each with its own
   name, shop mix and feel: **Main Street** (small-town classic), **Broadway**
   (bright entertainment strip — theatres, jazz club, tall towers), **Market
@@ -193,9 +197,18 @@ light towers you've placed actually light up the job site.
   delineator posts
 - **Barricades** — Type I / II / III barricades (with flashing marker lights),
   A-frames, concrete jersey barriers, water-filled barriers, safety fencing
-- **Road signs** — ROAD WORK AHEAD, LEFT/RIGHT LANE CLOSED, MERGE, FLAGGER
-  AHEAD, DETOUR, ROAD CLOSED, work zone SPEED LIMIT, END ROAD WORK, ONE LANE
-  ROAD, a two-sided STOP/SLOW flagger paddle, and more
+- **Road signs** — proper MUTCD-proportioned orange work-zone diamonds with
+  crisp legends and correct borders, including the **W20-7 flagger symbol** and
+  **W21-1 worker symbol** signs (real black figures, not just words), plus
+  ROAD WORK AHEAD, LEFT/RIGHT LANE CLOSED, MERGE, DETOUR, ROAD CLOSED, work
+  zone SPEED LIMIT, END ROAD WORK, ONE LANE ROAD, a two-sided STOP/SLOW
+  flagger paddle, and more
+- **Trailers** — nicely detailed towables in their own tab: an enclosed
+  aluminium **cargo trailer**, a hydraulic **dump trailer**, a gooseneck
+  **lowboy equipment trailer**, a **wood chipper** (brush/tree) trailer with
+  branches feeding in, five loaded **flatbeds** (cones, drums, barriers, pipe,
+  mixed supplies), plus the towable light/message/arrow boards, solar towers,
+  radar trailer, concrete mixer, air compressor and job-site office trailer
 - **Equipment** — steel pole bundles, pallets and pallet stacks, sandbags,
   steel road plates, light towers, generators, flashing arrow boards, message
   boards, a mini excavator, and the all-important porta-john — plus a full

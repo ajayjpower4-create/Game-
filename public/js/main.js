@@ -204,74 +204,154 @@ function shieldCanvas(sign, num, size = 128) {
 }
 
 // Generic road-sign texture (diamond / rect / octagon)
-function signTexture({ shape = 'diamond', bg = '#ff7900', fg = '#111', lines = [], sub = null, big = null }) {
-  const s = 256;
+function signTexture({ shape = 'diamond', bg = '#ff7900', fg = '#111', lines = [], sub = null, big = null, symbol = null }) {
+  const s = 512;                       // 2x the old resolution → crisp legends
   const c = makeCanvas(s, s);
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, s, s);
   ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // helper: rounded-corner square used for both diamond & rectangle plates
+  const plate = (cx, cy, size, r) => roundRect(ctx, cx - size / 2, cy - size / 2, size, size, r);
 
   if (shape === 'diamond') {
+    // MUTCD warning diamond: a square rotated 45°, thin black border set in
+    // from the edge, small corner radius (~1.5" on a 48" sign)
     ctx.save();
     ctx.translate(s / 2, s / 2);
     ctx.rotate(Math.PI / 4);
-    const d = s * 0.62;
-    ctx.fillStyle = '#111';
-    roundRect(ctx, -d / 2 - 5, -d / 2 - 5, d + 10, d + 10, 14); ctx.fill();
+    const d = s * 0.68, r = d * 0.045;
     ctx.fillStyle = bg;
-    roundRect(ctx, -d / 2, -d / 2, d, d, 10); ctx.fill();
-    ctx.strokeStyle = fg; ctx.lineWidth = 5;
-    roundRect(ctx, -d / 2 + 12, -d / 2 + 12, d - 24, d - 24, 6); ctx.stroke();
+    plate(0, 0, d, r); ctx.fill();
+    ctx.strokeStyle = fg; ctx.lineWidth = d * 0.032;
+    plate(0, 0, d - d * 0.10, r * 0.7); ctx.stroke();
     ctx.restore();
   } else if (shape === 'octagon') {
     ctx.fillStyle = '#fff';
-    octPath(ctx, s / 2, s / 2, s * 0.48); ctx.fill();
+    octPath(ctx, s / 2, s / 2, s * 0.49); ctx.fill();
     ctx.fillStyle = bg;
-    octPath(ctx, s / 2, s / 2, s * 0.44); ctx.fill();
+    octPath(ctx, s / 2, s / 2, s * 0.45); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = s * 0.02;
+    octPath(ctx, s / 2, s / 2, s * 0.40); ctx.stroke();
   } else {
-    ctx.fillStyle = '#111';
-    roundRect(ctx, s * 0.06, s * 0.06, s * 0.88, s * 0.88, 12); ctx.fill();
+    // rectangle plate — white regulatory or orange construction
+    const border = bg === '#ffffff' ? '#111' : fg;
     ctx.fillStyle = bg;
-    roundRect(ctx, s * 0.09, s * 0.09, s * 0.82, s * 0.82, 8); ctx.fill();
-    ctx.strokeStyle = fg; ctx.lineWidth = 4;
-    roundRect(ctx, s * 0.13, s * 0.13, s * 0.74, s * 0.74, 5); ctx.stroke();
+    roundRect(ctx, s * 0.05, s * 0.05, s * 0.90, s * 0.90, s * 0.05); ctx.fill();
+    ctx.strokeStyle = border; ctx.lineWidth = s * 0.028;
+    roundRect(ctx, s * 0.10, s * 0.10, s * 0.80, s * 0.80, s * 0.03); ctx.stroke();
   }
 
   ctx.fillStyle = fg;
+  ctx.strokeStyle = fg;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  if (big === 'arrow-merge') {
-    // merge arrow symbol
-    ctx.strokeStyle = fg; ctx.lineWidth = 16; ctx.lineCap = 'round';
+  // fit a legend line to a max width by shrinking the font
+  const fitLine = (txt, maxW, px, weight = '800') => {
+    let f = px;
+    ctx.font = `${weight} ${f}px "Arial Narrow", "Arial", sans-serif`;
+    while (ctx.measureText(txt).width > maxW && f > 10) { f -= 1; ctx.font = `${weight} ${f}px "Arial Narrow","Arial",sans-serif`; }
+    return f;
+  };
+
+  if (symbol === 'flagger') {
+    drawFlaggerSymbol(ctx, s, fg);
+  } else if (symbol === 'worker') {
+    drawWorkerSymbol(ctx, s, fg);
+  } else if (big === 'arrow-merge') {
+    ctx.lineWidth = s * 0.05;
     ctx.beginPath();
-    ctx.moveTo(s * 0.40, s * 0.72);
-    ctx.quadraticCurveTo(s * 0.40, s * 0.48, s * 0.55, s * 0.34);
+    ctx.moveTo(s * 0.42, s * 0.70);
+    ctx.quadraticCurveTo(s * 0.42, s * 0.46, s * 0.56, s * 0.34);
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(s * 0.40, s * 0.30);
-    ctx.lineTo(s * 0.62, s * 0.24);
-    ctx.lineTo(s * 0.56, s * 0.46);
+    ctx.lineTo(s * 0.64, s * 0.22);
+    ctx.lineTo(s * 0.56, s * 0.48);
     ctx.closePath();
-    ctx.fillStyle = fg; ctx.fill();
+    ctx.fill();
   } else if (big) {
-    ctx.font = `900 ${Math.floor(s * 0.30)}px Arial`;
+    fitLine(big, s * 0.62, Math.floor(s * 0.30), '900');
     ctx.fillText(big, s / 2, s / 2);
   } else {
     const n = lines.length;
-    const fs = shape === 'diamond' ? (n >= 3 ? 26 : 30) : (n >= 3 ? 34 : 40);
-    ctx.font = `800 ${fs}px Arial Narrow, Arial`;
-    const lh = fs * 1.15;
+    const maxW = shape === 'diamond' ? s * 0.52 : s * 0.72;
+    const px = shape === 'diamond' ? (n >= 3 ? 62 : 74) : (n >= 3 ? 78 : 92);
+    // fit every line to a common size so the block reads evenly
+    let fs = px;
+    for (const ln of lines) fs = Math.min(fs, fitLine(ln, maxW, px));
+    ctx.font = `800 ${fs}px "Arial Narrow","Arial",sans-serif`;
+    const lh = fs * 1.14;
     const y0 = s / 2 - ((n - 1) * lh) / 2;
     lines.forEach((ln, i) => ctx.fillText(ln, s / 2, y0 + i * lh));
   }
   if (sub) {
-    ctx.font = '800 30px Arial';
-    ctx.fillText(sub, s / 2, s * 0.72);
+    ctx.font = `800 ${Math.floor(s * 0.11)}px "Arial Narrow","Arial",sans-serif`;
+    ctx.fillText(sub, s / 2, s * 0.74);
   }
   const tex = new THREE.CanvasTexture(c);
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   return tex;
+}
+
+// MUTCD W20-7 flagger: black silhouette of a person holding a flag on a pole
+function drawFlaggerSymbol(ctx, s, fg) {
+  ctx.save();
+  ctx.fillStyle = fg; ctx.strokeStyle = fg;
+  const cx = s * 0.46, cy = s * 0.5;
+  // head
+  ctx.beginPath(); ctx.arc(cx, cy - s * 0.16, s * 0.045, 0, Math.PI * 2); ctx.fill();
+  // torso
+  ctx.lineWidth = s * 0.055; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.11); ctx.lineTo(cx, cy + s * 0.05); ctx.stroke();
+  // legs
+  ctx.lineWidth = s * 0.045;
+  ctx.beginPath(); ctx.moveTo(cx, cy + s * 0.05); ctx.lineTo(cx - s * 0.05, cy + s * 0.19); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy + s * 0.05); ctx.lineTo(cx + s * 0.055, cy + s * 0.19); ctx.stroke();
+  // near arm down, far arm raised toward the flag pole
+  ctx.lineWidth = s * 0.04;
+  ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.07); ctx.lineTo(cx - s * 0.08, cy + s * 0.02); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.07); ctx.lineTo(cx + s * 0.11, cy - s * 0.11); ctx.stroke();
+  // flag pole (diagonal) + flag
+  ctx.lineWidth = s * 0.018;
+  ctx.beginPath(); ctx.moveTo(cx + s * 0.11, cy - s * 0.11); ctx.lineTo(cx + s * 0.24, cy + s * 0.12); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx + s * 0.13, cy - s * 0.075);
+  ctx.lineTo(cx + s * 0.27, cy - s * 0.11);
+  ctx.lineTo(cx + s * 0.20, cy + s * 0.02);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// MUTCD W21-1 worker: black silhouette digging with a shovel + mound
+function drawWorkerSymbol(ctx, s, fg) {
+  ctx.save();
+  ctx.fillStyle = fg; ctx.strokeStyle = fg; ctx.lineCap = 'round';
+  const cx = s * 0.44, cy = s * 0.46;
+  ctx.beginPath(); ctx.arc(cx, cy - s * 0.15, s * 0.045, 0, Math.PI * 2); ctx.fill();  // head
+  ctx.lineWidth = s * 0.055;
+  ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.10); ctx.lineTo(cx + s * 0.02, cy + s * 0.06); ctx.stroke();  // leaning torso
+  ctx.lineWidth = s * 0.045;
+  ctx.beginPath(); ctx.moveTo(cx + s * 0.02, cy + s * 0.06); ctx.lineTo(cx - s * 0.06, cy + s * 0.2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx + s * 0.02, cy + s * 0.06); ctx.lineTo(cx + s * 0.09, cy + s * 0.2); ctx.stroke();
+  // arms holding a shovel toward the mound
+  ctx.lineWidth = s * 0.035;
+  ctx.beginPath(); ctx.moveTo(cx, cy - s * 0.06); ctx.lineTo(cx + s * 0.16, cy + s * 0.02); ctx.stroke();
+  ctx.lineWidth = s * 0.02;
+  ctx.beginPath(); ctx.moveTo(cx + s * 0.16, cy + s * 0.02); ctx.lineTo(cx + s * 0.26, cy + s * 0.16); ctx.stroke();  // shovel handle
+  ctx.beginPath();
+  ctx.moveTo(cx + s * 0.23, cy + s * 0.14);
+  ctx.lineTo(cx + s * 0.30, cy + s * 0.16);
+  ctx.lineTo(cx + s * 0.27, cy + s * 0.22);
+  ctx.closePath(); ctx.fill();   // shovel blade
+  // mound of dirt
+  ctx.beginPath();
+  ctx.moveTo(cx + s * 0.12, cy + s * 0.24);
+  ctx.quadraticCurveTo(cx + s * 0.24, cy + s * 0.12, cx + s * 0.36, cy + s * 0.24);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -745,9 +825,10 @@ function barricadeBuilder(panels, width, withLight) {
   };
 }
 
-function signBuilder(texOpts, { w = 1.1, h = 1.1, postH = 2.1, twoPost = false, backTex = null } = {}) {
+function signBuilder(texOpts, { w = 1.2, h = 1.2, postH = 2.2, twoPost = false, backTex = null } = {}) {
   return () => {
     const g = new THREE.Group();
+    // U-channel breakaway posts, galvanized with the punched holes look
     const posts = twoPost ? [-w * 0.35, w * 0.35] : [0];
     for (const px of posts) g.add(box(0.07, postH, 0.07, '#8a8f98', px, postH / 2, 0));
     const tex = signTexture(texOpts);
@@ -941,9 +1022,15 @@ function buildCatalog() {
     { cat: 'Signs', id: 's_merge', icon: '↖️', name: 'MERGE Arrow',
       desc: 'Lane-merge arrow diamond', blocks: true,
       build: signBuilder({ big: 'arrow-merge' }) },
-    { cat: 'Signs', id: 's_flagger', icon: '🚩', name: 'FLAGGER AHEAD',
-      desc: 'Flagger symbol warning', blocks: true,
+    { cat: 'Signs', id: 's_flagger', icon: '🚩', name: 'FLAGGER (Symbol)',
+      desc: 'W20-7 orange diamond with the flagger symbol', blocks: true,
+      build: signBuilder({ symbol: 'flagger' }, { w: 1.2, h: 1.2 }) },
+    { cat: 'Signs', id: 's_flagger_text', icon: '🚩', name: 'FLAGGER AHEAD',
+      desc: 'Flagger-ahead word message diamond', blocks: true,
       build: signBuilder({ lines: ['FLAGGER', 'AHEAD'] }) },
+    { cat: 'Signs', id: 's_worker', icon: '👷', name: 'WORKER (Symbol)',
+      desc: 'W21-1 orange diamond with the worker symbol', blocks: true,
+      build: signBuilder({ symbol: 'worker' }, { w: 1.2, h: 1.2 }) },
     { cat: 'Signs', id: 's_shoulder', icon: '⚠️', name: 'SHOULDER WORK',
       desc: 'Shoulder work warning', blocks: true,
       build: signBuilder({ lines: ['SHOULDER', 'WORK'] }) },
@@ -1032,7 +1119,7 @@ function buildCatalog() {
         g.add(box(2.4, 0.05, 3, '#6b737d', 0, 0.025, 0));
         return g;
       } },
-    { cat: 'Equipment', id: 'light_tower', icon: '💡', name: 'Light Tower',
+    { cat: 'Trailers', id: 'light_tower', icon: '💡', name: 'Light Tower',
       desc: 'Portable mast lighting, night-ready', blocks: true, build: () => {
         const g = new THREE.Group();
         g.add(box(1.4, 0.7, 0.8, '#ffb400', 0, 0.45, 0));
@@ -1073,7 +1160,7 @@ function buildCatalog() {
         g.add(cyl(0.04, 0.04, 1.0, '#888', 1.2, 0.35, 0));
         return g;
       } },
-    { cat: 'Equipment', id: 'arrow_board', icon: '➡️', name: 'Arrow Board',
+    { cat: 'Trailers', id: 'arrow_board', icon: '➡️', name: 'Arrow Board',
       desc: 'Flashing arrow trailer — merge left', blocks: true, build: () => {
         const g = new THREE.Group();
         g.add(box(1.9, 0.12, 1.1, '#ff8c1a', 0, 0.5, 0));
@@ -1097,7 +1184,7 @@ function buildCatalog() {
         }
         return g;
       } },
-    { cat: 'Equipment', id: 'message_board', icon: '🔤', name: 'Message Board',
+    { cat: 'Trailers', id: 'message_board', icon: '🔤', name: 'Message Board',
       desc: 'Programmable message sign trailer', blocks: true, build: () => {
         const g = new THREE.Group();
         g.add(box(1.9, 0.12, 1.1, '#ff8c1a', 0, 0.5, 0));
@@ -1451,7 +1538,7 @@ function buildCatalog() {
         g.add(machineBeacon(0, 2.05, -0.7));
         return g;
       } },
-    { cat: 'Equipment', id: 'tow_mixer', icon: '🌀', name: 'Towable Concrete Mixer',
+    { cat: 'Trailers', id: 'tow_mixer', icon: '🌀', name: 'Towable Concrete Mixer',
       desc: 'Tow-behind drum mixer', blocks: true, build: () => {
         const g = trailerChassis(1.9);
         const drum = new THREE.Group();
@@ -1785,7 +1872,7 @@ function buildCatalog() {
         g.add(side1, side2, core);
         return g;
       } },
-    { cat: 'Props', id: 'portable_signal', icon: '🚦', name: 'Portable Traffic Signal',
+    { cat: 'Equipment', id: 'portable_signal', icon: '🚦', name: 'Portable Traffic Signal',
       desc: 'Temporary work-zone signal on a trailer mast', blocks: true, build: () => {
         const g = new THREE.Group();
         g.add(box(1.0, 0.14, 1.4, '#ff8c1a', 0, 0.4, 0));
@@ -1832,7 +1919,7 @@ function buildCatalog() {
         g.add(wrap);
         return g;
       } },
-    { cat: 'Props', id: 'compressor', icon: '⚙️', name: 'Air Compressor',
+    { cat: 'Trailers', id: 'compressor', icon: '⚙️', name: 'Air Compressor',
       desc: 'Towable air compressor unit', blocks: true, build: () => {
         const g = new THREE.Group();
         g.add(rbox(1.5, 0.9, 0.9, lamb('#d21f1f'), 0.1, 0, 0.75, 0));
@@ -1844,7 +1931,7 @@ function buildCatalog() {
         g.add(cyl(0.05, 0.05, 0.6, '#1a1c20', -0.6, 0.9, 0.3, 6));
         return g;
       } },
-    { cat: 'Props', id: 'jackhammer', icon: '🔨', name: 'Jackhammer',
+    { cat: 'Equipment', id: 'jackhammer', icon: '🔨', name: 'Jackhammer',
       desc: 'Pneumatic breaker leaning on the deck', blocks: false, build: () => {
         const g = new THREE.Group();
         const jh = new THREE.Group();
@@ -1855,7 +1942,7 @@ function buildCatalog() {
         g.add(jh);
         return g;
       } },
-    { cat: 'Props', id: 'saw_stand', icon: '🪚', name: 'Cut-Off Saw',
+    { cat: 'Equipment', id: 'saw_stand', icon: '🪚', name: 'Cut-Off Saw',
       desc: 'Concrete cut-off saw on a stand', blocks: false, build: () => {
         const g = new THREE.Group();
         for (const dx of [-0.3, 0.3]) { const l = box(0.05, 0.7, 0.05, '#3a3d42', dx, 0.35, -0.2); l.rotation.x = 0.2; g.add(l); }
@@ -1969,19 +2056,19 @@ function buildCatalog() {
         }
         return g;
       } },
-    { cat: 'Props', id: 'solar_tower_yellow', icon: '📡', name: 'Solar Surveillance Tower',
+    { cat: 'Trailers', id: 'solar_tower_yellow', icon: '📡', name: 'Solar Surveillance Tower',
       desc: 'Trailer-mounted solar array with a twin camera/light mast', blocks: true,
       build: () => makeSolarTowerTrailer('#f2cb1d', 'tilted') },
-    { cat: 'Props', id: 'solar_tower_black', icon: '📡', name: 'Compact Solar Light Tower',
+    { cat: 'Trailers', id: 'solar_tower_black', icon: '📡', name: 'Compact Solar Light Tower',
       desc: 'Smaller solar trailer, single panel, telescoping mast', blocks: true,
       build: () => makeSolarTowerTrailer('#2a2c30', 'single') },
-    { cat: 'Props', id: 's_speedphoto', icon: '📷', name: 'SPEED PHOTO ENFORCED',
+    { cat: 'Signs', id: 's_speedphoto', icon: '📷', name: 'SPEED PHOTO ENFORCED',
       desc: 'Work zone photo-enforcement notice sign', blocks: true,
       build: () => makeSpeedPhotoSign() },
-    { cat: 'Props', id: 'radar_trailer', icon: '🚨', name: 'Radar Speed Trailer',
+    { cat: 'Trailers', id: 'radar_trailer', icon: '🚨', name: 'Radar Speed Trailer',
       desc: 'Portable driver feedback radar sign on its own trailer', blocks: true,
       build: () => makeRadarTrailer() },
-    { cat: 'Props', id: 'job_trailer', icon: '🏠', name: 'Job Site Office Trailer',
+    { cat: 'Trailers', id: 'job_trailer', icon: '🏠', name: 'Job Site Office Trailer',
       desc: 'Site office trailer — stretch its length with [ ]', blocks: true, stretch: 'z',
       build: () => makeJobTrailer() },
     { cat: 'Props', id: 'cone_stack', icon: '🔶', name: 'Cone Stack',
@@ -1998,7 +2085,20 @@ function buildCatalog() {
         }
         return g;
       } },
-    { cat: 'Props', id: 'flatbed_supply', icon: '🚛', name: 'Flatbed Trailer + Supplies',
+    // ---------- TRAILERS ----------
+    { cat: 'Trailers', id: 'cargo_trailer', icon: '🚚', name: 'Enclosed Cargo Trailer',
+      desc: 'White aluminium box trailer with rear ramp door and stone guard',
+      blocks: true, build: makeCargoTrailer },
+    { cat: 'Trailers', id: 'dump_trailer', icon: '🚛', name: 'Hydraulic Dump Trailer',
+      desc: 'Red steel dump body tilted up with a hydraulic ram and open tailgate',
+      blocks: true, build: makeDumpTrailer },
+    { cat: 'Trailers', id: 'lowboy_trailer', icon: '🚛', name: 'Lowboy Equipment Trailer',
+      desc: 'Gooseneck drop-deck lowboy with loading ramps and a tri-axle',
+      blocks: true, build: makeLowboyTrailer },
+    { cat: 'Trailers', id: 'chipper_trailer', icon: '🌲', name: 'Wood Chipper Trailer',
+      desc: 'Towable brush chipper — feed hopper, discharge chute, branches feeding in',
+      blocks: true, build: makeChipperTrailer },
+    { cat: 'Trailers', id: 'flatbed_supply', icon: '🚛', name: 'Flatbed Trailer + Supplies',
       desc: 'Drop-deck trailer loaded with lumber, pipe and concrete', blocks: true, build: () => {
         const g = new THREE.Group();
         const deckL = 5.8;
@@ -2034,7 +2134,7 @@ function buildCatalog() {
         }
         return g;
       } },
-    { cat: 'Props', id: 'flatbed_cones', icon: '🚛', name: 'Flatbed of Cone Stacks',
+    { cat: 'Trailers', id: 'flatbed_cones', icon: '🚛', name: 'Flatbed of Cone Stacks',
       desc: 'Trailer loaded with rows of stacked traffic cones', blocks: true, build: () => {
         const g = makeFlatbedDeck(5.8);
         for (let row = -2; row <= 2; row++) {
@@ -2047,7 +2147,7 @@ function buildCatalog() {
         }
         return g;
       } },
-    { cat: 'Props', id: 'flatbed_drums', icon: '🚛', name: 'Flatbed of Drums',
+    { cat: 'Trailers', id: 'flatbed_drums', icon: '🚛', name: 'Flatbed of Drums',
       desc: 'Trailer loaded with orange channelizer barrels', blocks: true, build: () => {
         const g = makeFlatbedDeck(5.8);
         const bandMat = new THREE.MeshStandardMaterial({ color: '#fff', roughness: 0.25, emissive: '#cfd8de', emissiveIntensity: 0.2 });
@@ -2066,7 +2166,7 @@ function buildCatalog() {
         }
         return g;
       } },
-    { cat: 'Props', id: 'flatbed_barrier', icon: '🚛', name: 'Flatbed of Barriers',
+    { cat: 'Trailers', id: 'flatbed_barrier', icon: '🚛', name: 'Flatbed of Barriers',
       desc: 'Trailer stacked with spare jersey barriers', blocks: true, build: () => {
         const g = makeFlatbedDeck(6.2);
         for (const [sx, sy] of [[-0.55, 0.85], [0.55, 0.85], [0, 1.66]]) {
@@ -2079,7 +2179,7 @@ function buildCatalog() {
         }
         return g;
       } },
-    { cat: 'Props', id: 'flatbed_pipe', icon: '🚛', name: 'Flatbed of Pipe',
+    { cat: 'Trailers', id: 'flatbed_pipe', icon: '🚛', name: 'Flatbed of Pipe',
       desc: 'Trailer loaded with large culvert pipe', blocks: true, build: () => {
         const g = makeFlatbedDeck(5.8);
         // pyramid stack of big concrete culvert pipes running lengthwise
@@ -2679,8 +2779,204 @@ function deckStrap(g, z, h) {
   g.add(box(2.26, 0.03, 0.03, '#d8a713', 0, 0.85 + h, z));
 }
 
+// ============================================================
+// Nice towable trailers (Trailers category)
+// ============================================================
+// black tire with a bright alloy hub + lug bolts — reads as a real road tire
+function trailerTire(r, w, x, y, z) {
+  const g = new THREE.Group();
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(r, r, w, 16), lamb('#17191b', { roughness: 0.92 }));
+  t.rotation.z = Math.PI / 2; t.castShadow = true; g.add(t);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.52, r * 0.52, w + 0.02, 14), metalMat('#cfd4d8', { roughness: 0.35 }));
+  hub.rotation.z = Math.PI / 2; g.add(hub);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const lug = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, w + 0.06, 6), lamb('#3a3d42'));
+    lug.rotation.z = Math.PI / 2;
+    lug.position.set(0, Math.cos(a) * r * 0.28, Math.sin(a) * r * 0.28);
+    g.add(lug);
+  }
+  g.position.set(x, y, z);
+  return g;
+}
+
+// shared trailer front: converging A-frame tongue, coupler, landing jack,
+// safety chains and a light-duty amber marker — frontZ is the deck's front edge
+function trailerFront(g, halfW, deckY, frontZ) {
+  const steel = lamb('#2b2e31', { roughness: 0.6, metalness: 0.3 });
+  for (const sx of [-halfW * 0.55, halfW * 0.55]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.13, 1.7), steel);
+    bar.position.set(sx * 0.5, deckY, frontZ + 0.85);
+    bar.rotation.y = sx > 0 ? -0.2 : 0.2;
+    g.add(bar);
+  }
+  g.add(box(0.24, 0.18, 0.5, '#1a1c20', 0, deckY, frontZ + 1.55));      // coupler body
+  g.add(cyl(0.085, 0.085, 0.16, '#111', 0, deckY - 0.06, frontZ + 1.7, 10)); // hitch cup
+  // landing jack with a crank wheel
+  g.add(cyl(0.05, 0.05, 0.75, '#8a9099', 0.32, deckY - 0.38, frontZ + 1.0, 8));
+  g.add(cyl(0.11, 0.11, 0.06, '#111', 0.32, deckY - 0.76, frontZ + 1.0, 12));
+  const crank = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.02, 6, 12), metalMat('#9aa0a6'));
+  crank.position.set(0.32, deckY - 0.05, frontZ + 1.0); crank.rotation.y = Math.PI / 2; g.add(crank);
+  // safety chains (short hanging loops)
+  for (const sx of [-0.18, 0.18]) {
+    const ch = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.018, 6, 10, Math.PI), lamb('#4c5158'));
+    ch.position.set(sx, deckY - 0.16, frontZ + 1.35); ch.rotation.x = Math.PI / 2; g.add(ch);
+  }
+}
+
+// twin round taillights + license plate at the rear (backZ = rear edge)
+function trailerRearLights(g, halfW, y, backZ) {
+  for (const sx of [-halfW + 0.18, halfW - 0.18]) {
+    const l = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.05, 12),
+      new THREE.MeshStandardMaterial({ color: '#8a1414', emissive: '#ff2020', emissiveIntensity: 0.4, roughness: 0.4 }));
+    l.rotation.x = Math.PI / 2; l.position.set(sx, y, backZ - 0.02);
+    g.add(l);
+    lightGlowMats.push(addGlowSprite(l, '#ff2020', 0.3, -0.05));
+  }
+  g.add(box(0.4, 0.16, 0.03, '#e8e8e8', 0, y - 0.16, backZ - 0.02));   // plate
+}
+
+// 1) enclosed cargo trailer — rounded box body, ramp door, diamond-plate stone guard
+function makeCargoTrailer() {
+  const g = new THREE.Group();
+  const L = 5.0, W = 2.1, H = 1.9, floorY = 0.78;
+  const bodyMat = lamb('#e9edf0', { roughness: 0.35, metalness: 0.25 });   // white aluminium
+  g.add(box(W + 0.1, 0.14, L, '#2b2e31', 0, floorY - 0.05, 0));           // frame
+  const body = rbox(W, H, L, bodyMat, 0.16, 0, floorY + H / 2, 0);
+  body.castShadow = true; g.add(body);
+  // colored accent stripe + brand band
+  g.add(box(W + 0.02, 0.22, L * 0.98, '#1f6fb2', 0, floorY + H * 0.62, 0));
+  // corrugation lines
+  for (let z = -L / 2 + 0.3; z < L / 2; z += 0.5) g.add(box(W + 0.03, 0.02, 0.04, '#c4cace', 0, floorY + H * 0.3, z));
+  // rear ramp door with hinge + handle
+  const door = box(W - 0.12, H - 0.2, 0.06, '#d7dce0', 0, floorY + H / 2, -L / 2 - 0.02);
+  g.add(door);
+  g.add(box(W - 0.3, 0.05, 0.08, '#8a9099', 0, floorY + H * 0.3, -L / 2 - 0.05));
+  g.add(box(0.16, 0.05, 0.05, '#3a3d42', 0, floorY + H * 0.5, -L / 2 - 0.07)); // latch
+  // rounded nose front cap
+  g.add(rbox(W, H * 0.9, 0.4, bodyMat, 0.18, 0, floorY + H * 0.5, L / 2 + 0.1));
+  // diamond-plate stone guard on the front
+  g.add(box(W, 0.5, 0.05, metalMat('#b8bdc2', { roughness: 0.4 }), 0, floorY + 0.35, L / 2 + 0.28));
+  // fenders over the wheels
+  for (const sx of [-1, 1]) g.add(rbox(0.6, 0.1, 1.5, lamb('#26282c'), 0.05, sx * (W / 2 + 0.05), floorY - 0.05, -L * 0.12));
+  for (const az of [-L * 0.02, -L * 0.22]) for (const sx of [-1, 1]) g.add(trailerTire(0.34, 0.24, sx * (W / 2 + 0.02), 0.34, az));
+  trailerRearLights(g, W / 2, floorY + 0.2, -L / 2 - 0.05);
+  trailerFront(g, W, floorY - 0.05, L / 2 + 0.1);
+  return g;
+}
+
+// 2) hydraulic dump trailer — high steel sides, raised/tilted bed, tailgate, ram
+function makeDumpTrailer() {
+  const g = new THREE.Group();
+  const L = 4.4, W = 2.1, floorY = 0.82, tilt = 0.16;
+  const steel = lamb('#c23a2a', { roughness: 0.5, metalness: 0.35 });   // red dump body
+  g.add(box(W + 0.1, 0.16, L + 0.6, '#26282c', 0, floorY - 0.12, -0.2));   // chassis
+  // tilted dump bin (pivoted at the rear)
+  const bin = new THREE.Group();
+  const wall = 0.9;
+  bin.add(box(W, 0.12, L, '#8a2a20', 0, 0, 0));                          // floor
+  bin.add(box(W, wall, 0.1, steel, 0, wall / 2, L / 2));                 // front wall (tall)
+  for (const sx of [-1, 1]) bin.add(box(0.1, wall * 0.7, L, steel, sx * W / 2, wall * 0.35, 0));
+  // ribs on the sides
+  for (let z = -L / 2 + 0.4; z < L / 2; z += 0.7) for (const sx of [-1, 1]) bin.add(box(0.13, wall * 0.6, 0.06, '#9a2f24', sx * (W / 2 + 0.06), wall * 0.3, z));
+  // a heap of dirt in the bed
+  const heap = new THREE.Mesh(new THREE.ConeGeometry(0.9, 0.55, 10), lamb('#6e532f'));
+  heap.position.set(0, 0.35, 0.2); heap.scale.set(1.4, 1, 2.2); bin.add(heap);
+  bin.position.set(0, floorY + 0.5, -0.1);
+  bin.rotation.x = tilt;
+  g.add(bin);
+  // tailgate hinged open at the low rear
+  const gate = box(W, wall * 0.75, 0.08, steel, 0, floorY + 0.2, -L / 2 - 0.35);
+  gate.rotation.x = 0.5; g.add(gate);
+  // hydraulic scissor ram under the front
+  const ram = cyl(0.09, 0.09, 1.3, metalMat('#9aa0a6'), 0, floorY + 0.4, L / 2 - 0.6, 8);
+  ram.rotation.x = -0.7; g.add(ram);
+  g.add(cyl(0.13, 0.13, 0.3, '#3a3d42', 0, floorY - 0.05, L / 2 - 1.0, 8));
+  for (const az of [0.1, -0.75]) for (const sx of [-1, 1]) g.add(trailerTire(0.36, 0.26, sx * (W / 2 + 0.04), 0.36, az));
+  trailerRearLights(g, W / 2, floorY - 0.05, -L / 2 - 0.4);
+  trailerFront(g, W, floorY - 0.1, L / 2 + 0.3);
+  return g;
+}
+
+// 3) lowboy / gooseneck equipment trailer — drop deck, ramps, tri-axle
+function makeLowboyTrailer() {
+  const g = new THREE.Group();
+  const W = 2.4, deckL = 4.6, deckY = 0.55;
+  const steel = lamb('#33383d', { roughness: 0.55, metalness: 0.35 });
+  const wood = lamb('#6f5330', { roughness: 0.85 });
+  // low drop deck
+  g.add(box(W + 0.2, 0.22, deckL, steel, 0, deckY - 0.11, 0));
+  g.add(box(W, 0.06, deckL, wood, 0, deckY + 0.04, 0));
+  for (const sx of [-1, 1]) g.add(box(0.08, 0.14, deckL, '#26282c', sx * W / 2, deckY, 0));
+  // raised gooseneck over the tow point
+  const neck = box(W - 0.3, 0.7, 1.7, steel, 0, deckY + 0.55, deckL / 2 + 0.7);
+  g.add(neck);
+  const ramp = box(0.9, 0.06, 1.6, wood, 0, deckY, deckL / 2 + 0.6);
+  // loading ramps at the rear, angled down
+  for (const sx of [-0.55, 0.55]) {
+    const r = box(0.7, 0.06, 1.5, steel, sx, deckY - 0.25, -deckL / 2 - 0.6);
+    r.rotation.x = 0.4; g.add(r);
+  }
+  // tri-axle running gear at the rear
+  for (const az of [-deckL * 0.18, -deckL * 0.30, -deckL * 0.42]) for (const sx of [-1, 1]) g.add(trailerTire(0.34, 0.24, sx * (W / 2 + 0.02), 0.34, az));
+  // outrigger stake pockets
+  for (let z = -deckL / 2 + 0.5; z < deckL / 2; z += 1.0) for (const sx of [-1, 1]) g.add(cyl(0.03, 0.03, 0.3, '#f2c200', sx * (W / 2 + 0.04), deckY + 0.15, z, 6));
+  trailerRearLights(g, W / 2, deckY + 0.1, -deckL / 2 - 0.1);
+  // gooseneck coupler up front
+  g.add(box(0.3, 0.5, 0.4, '#1a1c20', 0, deckY + 0.3, deckL / 2 + 1.6));
+  return g;
+}
+
+// 4) towable wood chipper (tree / brush compactor) — engine, feed hopper with
+// a fold-out infeed tray, discharge chute, branches sticking out of the intake
+function makeChipperTrailer() {
+  const g = new THREE.Group();
+  const W = 1.7, floorY = 0.62;
+  const orange = lamb('#e8641c', { roughness: 0.5, metalness: 0.2 });
+  const steel = lamb('#2f3236', { roughness: 0.6, metalness: 0.4 });
+  g.add(box(W + 0.1, 0.14, 3.4, '#26282c', 0, floorY - 0.06, -0.1));       // chassis
+  // main chipper body / engine housing
+  g.add(rbox(W, 1.0, 1.9, orange, 0.1, 0, floorY + 0.5, -0.5));
+  g.add(box(W - 0.1, 0.5, 1.0, steel, 0, floorY + 1.1, -0.6));             // engine top
+  g.add(cyl(0.05, 0.06, 0.5, '#1a1c20', 0.4, floorY + 1.4, -0.9, 6));      // exhaust
+  // caution striping band
+  g.add(box(W + 0.02, 0.18, 1.92, '#111', 0, floorY + 0.15, -0.5));
+  // funnel feed hopper at the front, opening upward/forward
+  const hopper = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.4, 1.1, 4), orange);
+  hopper.rotation.y = Math.PI / 4;
+  hopper.rotation.x = 0.5;
+  hopper.position.set(0, floorY + 0.85, 1.0);
+  g.add(hopper);
+  // fold-out infeed tray
+  const tray = box(1.0, 0.06, 0.9, steel, 0, floorY + 0.5, 1.75);
+  g.add(tray);
+  for (const sx of [-0.45, 0.45]) g.add(box(0.05, 0.25, 0.9, steel, sx, floorY + 0.62, 1.75));
+  // discharge chute arcing up and back with a deflector cap
+  const chute = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 1.8, 10), steel);
+  chute.position.set(0, floorY + 1.6, -1.1);
+  chute.rotation.x = -0.5;
+  g.add(chute);
+  const cap = box(0.5, 0.3, 0.5, orange, 0, floorY + 2.35, -1.55);
+  cap.rotation.x = 0.6; g.add(cap);
+  // branches sticking out of the hopper being fed in
+  for (let i = 0; i < 4; i++) {
+    const br = cyl(0.03 + Math.random() * 0.02, 0.02, 1.4 + Math.random() * 0.6, '#6b4a2a', (Math.random() - 0.5) * 0.5, floorY + 1.1 + Math.random() * 0.2, 1.9 + Math.random() * 0.3, 5);
+    br.rotation.set(0.6 + Math.random() * 0.3, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.4);
+    g.add(br);
+    // a couple of leafy bits
+    const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.18, 0), lamb(jitterColor('#3f7d32', 0.15)));
+    leaf.position.set(br.position.x, floorY + 1.7, 2.5); g.add(leaf);
+  }
+  // wood chips scattered under the discharge
+  for (let i = 0; i < 12; i++) g.add(box(0.08, 0.02, 0.05, jitterColor('#c8a05e', 0.2), (Math.random() - 0.5) * 1.2, 0.02, -1.8 - Math.random() * 1.2));
+  g.add(machineBeacon(0, floorY + 1.6, -0.6));
+  for (const sx of [-1, 1]) g.add(trailerTire(0.33, 0.22, sx * (W / 2 + 0.05), 0.33, -0.5));
+  trailerFront(g, W, floorY - 0.06, 3.4 / 2 + 0.4);
+  return g;
+}
+
 const CATALOG = buildCatalog();
-const CATEGORIES = ['Vehicles', 'Tools', 'Cones', 'Barricades', 'Signs', 'Equipment', 'Props'];
+const CATEGORIES = ['Vehicles', 'Trailers', 'Tools', 'Cones', 'Barricades', 'Signs', 'Equipment', 'Props'];
 
 // ============================================================
 // Menu UI flow
@@ -2757,7 +3053,7 @@ function showHighwayPicker() {
     const BADGES = {
       bridge: '🌉 BRIDGE', street: '🏪 DOWNTOWN', tunnel: '🚇 TUNNEL',
       toll: '💰 TOLL', industrial: '🏭 INDUSTRIAL', airport: '✈️ AIRPORT',
-      parkway: '🌳 PARKWAY', canyon: '🏜️ CANYON',
+      parkway: '🌳 PARKWAY', canyon: '🏜️ CANYON', country: '🌾 COUNTRY',
     };
     const badge = BADGES[hw.terrain] ? ` <span class="hw-badge">${BADGES[hw.terrain]}</span>` : '';
     info.innerHTML = `<div class="highway-name">${label} &mdash; ${hw.name}${badge}</div>
@@ -3059,6 +3355,7 @@ const TERRAIN_STYLE = {
   airport:  { ground: '#7d9a6a', sky: '#57a4ee', fog: '#d3e2ea', fogFar: 1000 },
   parkway:  { ground: '#4e7a3a', sky: '#549fec', fog: '#cfe0d4', fogFar: 850 },
   canyon:   { ground: '#c27b4a', sky: '#4f97e6', fog: '#e0cbb0', fogFar: 700 },
+  country:  { ground: '#6f9c48', sky: '#58a6ee', fog: '#d6e6c8', fogFar: 950 },
 };
 
 // ============================================================
@@ -3189,9 +3486,10 @@ function buildWorld() {
   const T = hw.terrain;
   // terrains with a narrow concrete (jersey) median instead of a grass one
   const NARROW_MEDIAN = T === 'urban' || T === 'bridge' || T === 'tunnel' || T === 'toll' || T === 'canyon';
-  const medianW = NARROW_MEDIAN ? 1.2 : T === 'street' ? 0.9 : 9;
-  const shoulderIn = T === 'bridge' ? 0.6 : T === 'street' ? 0.25 : T === 'tunnel' ? 0.8 : 1.5;
-  const shoulderOut = T === 'bridge' ? 1.4 : T === 'street' ? 2.8 : T === 'tunnel' ? 1.0 : 3.0;   // street: outer shoulder is the parking lane
+  const FLAT_CENTER = T === 'street' || T === 'country';   // painted double-yellow, no barrier
+  const medianW = NARROW_MEDIAN ? 1.2 : FLAT_CENTER ? 0.9 : 9;
+  const shoulderIn = T === 'bridge' ? 0.6 : T === 'street' ? 0.25 : T === 'country' ? 0.45 : T === 'tunnel' ? 0.8 : 1.5;
+  const shoulderOut = T === 'bridge' ? 1.4 : T === 'street' ? 2.8 : T === 'country' ? 1.6 : T === 'tunnel' ? 1.0 : 3.0;   // street: outer shoulder is the parking lane
   const sideW = shoulderIn + lanes * LANE_W + shoulderOut;
   roadInfo = {
     medianHalf: medianW / 2, shoulderIn, shoulderOut, sideW,
@@ -3249,8 +3547,8 @@ function buildWorld() {
     const jb = new THREE.Mesh(jerseyGeometry(ROAD_LEN), concreteMat());
     jb.castShadow = true; jb.receiveShadow = true;
     scene.add(jb);
-  } else if (T === 'street') {
-    // downtown: no barrier — just pavement with a double yellow centerline
+  } else if (FLAT_CENTER) {
+    // street / country: no barrier — just pavement with a double yellow centerline
     const mid = new THREE.Mesh(new THREE.BoxGeometry(medianW + 0.2, 0.15, ROAD_LEN), lamb('#3d4045'));
     mid.position.y = -0.08;
     mid.receiveShadow = true;
@@ -3288,6 +3586,9 @@ function buildWorld() {
     }
     buildBridgeSigns(hw);
     buildMileMarkers(hw);
+  } else if (T === 'country') {
+    // rural two-lane: no overhead gantries or billboards, just ground signs
+    buildRoadsideSigns(hw);
   } else {
     buildGantry(hw, -120, 'A', 'exit');
     buildGantry(hw, 320, 'B', 'cities');
@@ -3508,6 +3809,9 @@ function buildRoadside(hw, style) {
   if (hw.terrain === 'canyon') {
     buildCanyonWalls();
     return;
+  }
+  if (hw.terrain === 'country') {
+    return;   // rural roads: no guardrail — just the post-and-rail farm fence in scenery
   }
   if (hw.terrain === 'urban') {
     // precast sound walls with panel seams
@@ -4585,8 +4889,8 @@ function buildTollPlaza(hw) {
 // dusk/night. This is a brand-new, easy-to-spot addition to the roadside.
 const LAMP_EMISSIVE = [];
 function buildStreetlights(hw) {
-  // bridge & tunnel supply their own lighting; canyon walls would swallow poles
-  if (hw.terrain === 'bridge' || hw.terrain === 'tunnel' || hw.terrain === 'canyon') return;
+  // bridge & tunnel supply their own lighting; canyon/country roads have none
+  if (hw.terrain === 'bridge' || hw.terrain === 'tunnel' || hw.terrain === 'canyon' || hw.terrain === 'country') return;
   const { outerEdge } = roadInfo;
   const off = outerEdge + (hw.terrain === 'street' ? 1.6 : hw.terrain === 'urban' ? 5.5 : 3.4);
   const poleMat = metalMat('#8f949c', { roughness: 0.55 });
@@ -5456,6 +5760,134 @@ function buildScenery(hw, style) {
       add(makeCactus(0.5 + Math.random() * 0.8), x, z);
     }
   }
+  if (T === 'country') {
+    const forest = (hw.countryStyle || 0) === 1;
+    // wooden post-and-rail fence lining both shoulders
+    for (const dir of [1, -1]) {
+      const off = roadInfo.outerEdge + 1.4;
+      const n = Math.floor(ROAD_LEN / 3);
+      const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 1.0, 0.1), lamb('#6b4a2a'), n);
+      const m4 = new THREE.Matrix4();
+      for (let i = 0; i < n; i++) { m4.setPosition(dir * off, 0.5, -ROAD_LEN / 2 + i * 3); posts.setMatrixAt(i, m4); }
+      scene.add(posts);
+      for (const ry of [0.4, 0.8]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, ROAD_LEN), lamb('#7a5638'));
+        rail.position.set(dir * off, ry, 0); scene.add(rail);
+      }
+    }
+    if (forest) {
+      // dense mixed forest crowding the road
+      for (let i = 0; i < Math.round(150 * SCENERY_SCALE); i++) {
+        const { x, z } = rndRoadside(3, 130);
+        add(Math.random() < 0.6 ? makePine(0.9 + Math.random() * 1.5) : makeBlobTree(0.7 + Math.random() * 1.2), x, z);
+      }
+      // log piles, a couple of cabins, underbrush
+      for (let i = 0; i < Math.round(7 * SCENERY_SCALE); i++) { const { x, z } = rndRoadside(4, 40); add(makeLogPile(), x, z); }
+      for (let i = 0; i < Math.round(3 * SCENERY_SCALE); i++) { const { x, z } = rndRoadside(18, 70); add(makeCabin(), x, z, (Math.random() - 0.5)); }
+      for (let i = 0; i < Math.round(40 * SCENERY_SCALE); i++) {
+        const { x, z } = rndRoadside(3, 30);
+        const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 + Math.random() * 0.5, 0), lamb(jitterColor('#3f6e2a', 0.16)));
+        bush.position.set(x, 0.3, z); bush.scale.y = 0.6; scene.add(bush);
+      }
+    } else {
+      // open farmland — crop fields, barns + silos, hay bales, scattered trees
+      for (let i = 0; i < Math.round(10 * SCENERY_SCALE); i++) {
+        const side = Math.random() < 0.5 ? 1 : -1;
+        add(makeCropField(), side * (roadInfo.outerEdge + 18 + Math.random() * 120), (Math.random() - 0.5) * (ROAD_LEN + 200), 0);
+      }
+      for (let i = 0; i < Math.round(5 * SCENERY_SCALE); i++) { const { x, z } = rndRoadside(30, 160); add(makeBarnSilo(), x, z, (Math.random() - 0.5)); }
+      for (let i = 0; i < Math.round(24 * SCENERY_SCALE); i++) {
+        const { x, z } = rndRoadside(8, 220);
+        const bale = cyl(0.8, 0.8, 1.2, jitterColor('#d9b866', 0.1), 0, 0.8, 0, 10);
+        bale.rotation.z = Math.PI / 2;
+        const w = new THREE.Group(); w.add(bale); add(w, x, z);
+      }
+      for (let i = 0; i < Math.round(28 * SCENERY_SCALE); i++) { const { x, z } = rndRoadside(6, 180); add(makeBlobTree(0.6 + Math.random() * 1.0), x, z); }
+      for (let i = 0; i < Math.round(4 * SCENERY_SCALE); i++) { const { x, z } = rndRoadside(120, 400); add(makeWindmill(), x, z, 0); }
+    }
+  }
+}
+
+// ---- country scenery pieces ----
+function makeBarnSilo() {
+  const g = new THREE.Group();
+  const barn = new THREE.Group();
+  barn.add(box(8, 5, 12, jitterColor('#a83232', 0.06), 0, 2.5, 0));
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 12, 3), lamb('#6e2020'));
+  roof.rotation.z = Math.PI / 2; roof.rotation.y = Math.PI / 2; roof.position.y = 6.2; roof.scale.y = 0.7;
+  barn.add(roof);
+  barn.add(box(2.6, 3.4, 0.2, '#7a2626', 0, 1.7, 6.05));        // big door
+  barn.add(box(0.2, 3.4, 0.2, '#e8e2d0', -1.2, 1.7, 6.12));     // white X trim
+  g.add(barn);
+  // grain silo alongside
+  const silo = new THREE.Group();
+  silo.add(cyl(1.8, 1.8, 9, '#c8ccce', 0, 4.5, 0, 16));
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1.8, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), lamb('#9aa0a6'));
+  dome.position.y = 9; silo.add(dome);
+  silo.position.set(6.5, 0, -3);
+  g.add(silo);
+  return g;
+}
+
+function makeCropField() {
+  const g = new THREE.Group();
+  const w = 40 + Math.random() * 40, d = 40 + Math.random() * 40;
+  const crop = ['#c2a63a', '#8faa3a', '#6f9c48', '#b9a24a'][Math.floor(Math.random() * 4)];
+  const soil = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, d), lamb(jitterColor(crop, 0.08)));
+  soil.position.y = 0.03; soil.receiveShadow = true; g.add(soil);
+  // furrow rows
+  for (let x = -w / 2 + 1; x < w / 2; x += 1.6) g.add(box(0.12, 0.08, d, jitterColor('#6e5a2f', 0.1), x, 0.08, 0));
+  return g;
+}
+
+function makeLogPile() {
+  const g = new THREE.Group();
+  const bark = '#6b4a2a', end = '#c8a06a';
+  for (let row = 0; row < 3; row++) {
+    const n = 4 - row;
+    for (let i = 0; i < n; i++) {
+      const log = cyl(0.28, 0.28, 3.2, bark, -((n - 1) * 0.3) + i * 0.6, 0.3 + row * 0.52, 0, 10);
+      log.rotation.x = Math.PI / 2;
+      g.add(log);
+      const face = cyl(0.29, 0.29, 0.05, end, log.position.x, log.position.y, 1.6, 10);
+      face.rotation.x = Math.PI / 2;
+      g.add(face);
+    }
+  }
+  // support stakes
+  for (const sx of [-1.4, 1.4]) g.add(cyl(0.06, 0.06, 1.6, '#4a3520', sx, 0.8, 0, 6));
+  return g;
+}
+
+function makeCabin() {
+  const g = new THREE.Group();
+  const w = 6, d = 7, h = 3.2;
+  g.add(box(w, h, d, jitterColor('#6e4a2c', 0.06), 0, h / 2, 0));
+  // log courses
+  for (let y = 0.4; y < h; y += 0.6) g.add(box(w + 0.06, 0.06, d + 0.06, '#4a3520', 0, y, 0));
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.6, w * 0.6, d + 1, 3), lamb('#3a2c22'));
+  roof.rotation.z = Math.PI / 2; roof.rotation.y = Math.PI / 2; roof.position.y = h + w * 0.22; roof.scale.y = 0.6;
+  g.add(roof);
+  g.add(box(1.0, 2.0, 0.1, '#3a2c22', 0, 1.0, d / 2 + 0.02));   // door
+  g.add(box(0.8, 0.9, 0.1, '#c9d6dc', w * 0.25, 1.8, d / 2 + 0.02)); // window
+  g.add(cyl(0.3, 0.35, 1.6, '#7d6a5a', -w * 0.3, h + 0.8, -d * 0.2, 8)); // chimney
+  return g;
+}
+
+function makeWindmill() {
+  const g = new THREE.Group();
+  // farm windpump lattice tower
+  for (let y = 0; y < 8; y += 1) {
+    const s = 1.2 - y * 0.1;
+    g.add(box(s, 0.06, 0.06, '#8a8f98', 0, y + 0.5, s / 2));
+    g.add(box(s, 0.06, 0.06, '#8a8f98', 0, y + 0.5, -s / 2));
+  }
+  for (const sx of [-0.5, 0.5]) g.add(cyl(0.04, 0.06, 8, '#7d838c', sx, 4, 0, 5));
+  const fan = new THREE.Group();
+  for (let b = 0; b < 8; b++) { const blade = box(0.1, 0.9, 0.02, '#c8ccce', 0, 0.5, 0); const p = new THREE.Group(); p.add(blade); p.rotation.z = b / 8 * Math.PI * 2; fan.add(p); }
+  fan.position.set(0, 8.4, 0.3); g.add(fan);
+  g.add(box(0.4, 0.2, 1.4, '#6b4a2a', 0, 8.4, -0.4));   // tail vane
+  return g;
 }
 
 // ---- industrial / airport scenery pieces ----
