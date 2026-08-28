@@ -386,6 +386,68 @@ const DOWNTOWN_STREETS = [
   { name: "Harbor Boulevard",  blade: "HARBOR BLVD", style: 4 },
 ];
 
+// ============================================================
+// REAL downtown streets, per control city — sourced from real-world
+// geography (like the highways). Each city's actual named streets and their
+// real cross streets replace the generic "Main Street" set, so every state's
+// downtown is a real place. (Live map APIs are blocked in this environment, so
+// this data is baked in; street names are factual and freely usable, unlike
+// proprietary map imagery.)
+// Format: [ full name, blade text, shop-style 0-4, [real cross streets] ]
+//   styles: 0 classic • 1 entertainment/nightlife • 2 market • 3 leafy • 4 waterfront
+// ============================================================
+const REAL_STREETS = {
+  "Birmingham":   [["20th Street North","20TH ST N",0,["1ST AVE N","3RD AVE N","MORRIS AVE"]],["2nd Avenue North","2ND AVE N",1,["18TH ST","20TH ST","24TH ST"]],["Morris Avenue","MORRIS AVE",2,["20TH ST","22ND ST","24TH ST"]],["Highland Avenue","HIGHLAND AVE",3,["32ND ST","MAGNOLIA AVE","RICHMOND ST"]]],
+  "Anchorage":    [["4th Avenue","4TH AVE",0,["C ST","D ST","E ST"]],["5th Avenue","5TH AVE",1,["D ST","E ST","F ST"]],["Spenard Road","SPENARD RD",3,["FIREWEED LN","BENSON BLVD","NORTHERN LIGHTS"]],["C Street","C STREET",2,["4TH AVE","6TH AVE","FIREWEED LN"]]],
+  "Phoenix":      [["Central Avenue","CENTRAL AVE",0,["ROOSEVELT ST","MCDOWELL RD","VAN BUREN ST"]],["Roosevelt Street","ROOSEVELT ST",1,["1ST ST","3RD ST","5TH ST"]],["Washington Street","WASHINGTON ST",2,["1ST AVE","CENTRAL AVE","7TH ST"]],["Camelback Road","CAMELBACK RD",3,["7TH AVE","CENTRAL AVE","16TH ST"]]],
+  "Little Rock":  [["Main Street","MAIN ST",0,["MARKHAM ST","CAPITOL AVE","6TH ST"]],["President Clinton Avenue","CLINTON AVE",4,["ROCK ST","COMMERCE ST","CUMBERLAND ST"]],["Kavanaugh Boulevard","KAVANAUGH BLVD",3,["BEECHWOOD ST","POLK ST","SPRUCE ST"]],["Markham Street","MARKHAM ST",2,["MAIN ST","BROADWAY","SPRING ST"]]],
+  "Los Angeles":  [["Hollywood Boulevard","HOLLYWOOD BLVD",1,["VINE ST","HIGHLAND AVE","CAHUENGA BLVD"]],["Sunset Boulevard","SUNSET BLVD",1,["VINE ST","GOWER ST","LA BREA AVE"]],["Broadway","BROADWAY",2,["5TH ST","7TH ST","9TH ST"]],["Melrose Avenue","MELROSE AVE",3,["FAIRFAX AVE","LA BREA AVE","VINE ST"]],["Spring Street","SPRING ST",0,["4TH ST","5TH ST","6TH ST"]]],
+  "Denver":       [["16th Street Mall","16TH ST MALL",1,["LARIMER ST","MARKET ST","CALIFORNIA ST"]],["Larimer Street","LARIMER ST",2,["14TH ST","15TH ST","16TH ST"]],["Colfax Avenue","COLFAX AVE",0,["BROADWAY","LINCOLN ST","PENNSYLVANIA ST"]],["Blake Street","BLAKE ST",4,["20TH ST","21ST ST","22ND ST"]]],
+  "New Haven":    [["Chapel Street","CHAPEL ST",0,["COLLEGE ST","ORANGE ST","STATE ST"]],["College Street","COLLEGE ST",1,["CHAPEL ST","CROWN ST","GEORGE ST"]],["Whitney Avenue","WHITNEY AVE",3,["TRUMBULL ST","AUDUBON ST","EDWARDS ST"]],["Crown Street","CROWN ST",2,["COLLEGE ST","HIGH ST","ORANGE ST"]]],
+  "Wilmington":   [["Market Street","MARKET ST",2,["4TH ST","6TH ST","8TH ST"]],["King Street","KING ST",0,["5TH ST","7TH ST","9TH ST"]],["Delaware Avenue","DELAWARE AVE",3,["ADAMS ST","JACKSON ST","UNION ST"]],["Shipley Street","SHIPLEY ST",1,["4TH ST","7TH ST","9TH ST"]]],
+  "Miami":        [["Ocean Drive","OCEAN DR",4,["5TH ST","8TH ST","11TH ST"]],["Collins Avenue","COLLINS AVE",1,["LINCOLN RD","15TH ST","21ST ST"]],["Calle Ocho","SW 8TH ST",2,["SW 12TH AVE","SW 15TH AVE","SW 17TH AVE"]],["Lincoln Road","LINCOLN RD",1,["WASHINGTON AVE","MERIDIAN AVE","LENOX AVE"]],["Brickell Avenue","BRICKELL AVE",0,["SE 8TH ST","SE 10TH ST","SE 14TH ST"]]],
+  "Atlanta":      [["Peachtree Street","PEACHTREE ST",0,["BAKER ST","ELLIS ST","EDGEWOOD AVE"]],["Auburn Avenue","AUBURN AVE",2,["JACKSON ST","BOULEVARD","FORT ST"]],["Edgewood Avenue","EDGEWOOD AVE",1,["PEACHTREE ST","PRYOR ST","COURTLAND ST"]],["Ponce de Leon Avenue","PONCE DE LEON",3,["JUNIPER ST","MYRTLE ST","MONROE DR"]]],
+  "Honolulu":     [["Kalakaua Avenue","KALAKAUA AVE",4,["KUHIO AVE","LEWERS ST","SEASIDE AVE"]],["Kuhio Avenue","KUHIO AVE",1,["LEWERS ST","NAMAHANA ST","KAIULANI AVE"]],["Bishop Street","BISHOP ST",0,["KING ST","HOTEL ST","MERCHANT ST"]],["King Street","KING ST",2,["BISHOP ST","ALAKEA ST","FORT ST"]]],
+  "Boise":        [["Main Street","MAIN ST",0,["8TH ST","9TH ST","CAPITOL BLVD"]],["Idaho Street","IDAHO ST",1,["8TH ST","9TH ST","10TH ST"]],["Capitol Boulevard","CAPITOL BLVD",2,["MAIN ST","IDAHO ST","BANNOCK ST"]],["8th Street","8TH STREET",3,["MAIN ST","IDAHO ST","BANNOCK ST"]]],
+  "Chicago":      [["Michigan Avenue","MICHIGAN AVE",1,["RANDOLPH ST","MADISON ST","ADAMS ST"]],["State Street","STATE ST",2,["LAKE ST","RANDOLPH ST","MADISON ST"]],["Wacker Drive","WACKER DR",0,["STATE ST","DEARBORN ST","LASALLE ST"]],["Rush Street","RUSH ST",1,["OAK ST","CEDAR ST","BELLEVUE PL"]],["Clark Street","CLARK ST",3,["DIVISION ST","NORTH AVE","ARMITAGE AVE"]]],
+  "Indianapolis": [["Massachusetts Avenue","MASS AVE",1,["VERMONT ST","NEW YORK ST","COLLEGE AVE"]],["Meridian Street","MERIDIAN ST",0,["WASHINGTON ST","OHIO ST","VERMONT ST"]],["Washington Street","WASHINGTON ST",2,["MERIDIAN ST","ILLINOIS ST","CAPITOL AVE"]],["Illinois Street","ILLINOIS ST",3,["OHIO ST","VERMONT ST","NEW YORK ST"]]],
+  "Des Moines":   [["Court Avenue","COURT AVE",1,["2ND ST","3RD ST","4TH ST"]],["Locust Street","LOCUST ST",0,["6TH AVE","7TH ST","9TH ST"]],["Grand Avenue","GRAND AVE",2,["6TH AVE","10TH ST","15TH ST"]],["Ingersoll Avenue","INGERSOLL AVE",3,["28TH ST","31ST ST","MARTIN LUTHER KING"]]],
+  "Topeka":       [["Kansas Avenue","KANSAS AVE",0,["6TH AVE","8TH AVE","10TH AVE"]],["6th Avenue","6TH AVE",2,["KANSAS AVE","JACKSON ST","QUINCY ST"]],["Gage Boulevard","GAGE BLVD",3,["10TH AVE","17TH ST","21ST ST"]],["Topeka Boulevard","TOPEKA BLVD",1,["6TH AVE","10TH AVE","17TH ST"]]],
+  "Lexington":    [["Main Street","MAIN ST",0,["LIMESTONE ST","UPPER ST","MILL ST"]],["Short Street","SHORT ST",1,["LIMESTONE ST","MILL ST","MARKET ST"]],["Limestone Street","LIMESTONE ST",2,["MAIN ST","SHORT ST","VINE ST"]],["Jefferson Street","JEFFERSON ST",3,["MAIN ST","SHORT ST","6TH ST"]]],
+  "Baton Rouge":  [["Third Street","THIRD ST",1,["MAIN ST","LAUREL ST","FLORIDA ST"]],["Government Street","GOVERNMENT ST",0,["ST LOUIS ST","EUGENE ST","JEFFERSON HWY"]],["North Boulevard","NORTH BLVD",2,["3RD ST","4TH ST","ST PHILIP ST"]],["Perkins Road","PERKINS RD",3,["ACADIAN THWY","LEE DR","STANFORD AVE"]]],
+  "Bangor":       [["Main Street","MAIN ST",0,["UNION ST","BUCK ST","DUTTON ST"]],["State Street","STATE ST",2,["EXCHANGE ST","FRENCH ST","OAK ST"]],["Hammond Street","HAMMOND ST",1,["MAIN ST","COLUMBIA ST","HIGH ST"]],["Central Street","CENTRAL ST",3,["HARLOW ST","STATE ST","FRANKLIN ST"]]],
+  "Silver Spring":[["Ellsworth Drive","ELLSWORTH DR",1,["GEORGIA AVE","FENTON ST","GROVE ST"]],["Georgia Avenue","GEORGIA AVE",0,["COLESVILLE RD","WAYNE AVE","SLIGO AVE"]],["Fenton Street","FENTON ST",2,["ELLSWORTH DR","WAYNE AVE","BONIFANT ST"]],["Wayne Avenue","WAYNE AVE",3,["GEORGIA AVE","FENTON ST","CEDAR ST"]]],
+  "Boston":       [["Newbury Street","NEWBURY ST",3,["ARLINGTON ST","BERKELEY ST","CLARENDON ST"]],["Boylston Street","BOYLSTON ST",1,["ARLINGTON ST","BERKELEY ST","DARTMOUTH ST"]],["Hanover Street","HANOVER ST",2,["CROSS ST","RICHMOND ST","PRINCE ST"]],["Tremont Street","TREMONT ST",0,["PARK ST","BEACON ST","BOYLSTON ST"]],["Washington Street","WASHINGTON ST",2,["SCHOOL ST","MILK ST","STATE ST"]]],
+  "Detroit":      [["Woodward Avenue","WOODWARD AVE",0,["GRAND CIRCUS","GRATIOT AVE","MICHIGAN AVE"]],["Michigan Avenue","MICHIGAN AVE",2,["TRUMBULL AVE","ROSA PARKS BLVD","14TH ST"]],["Jefferson Avenue","JEFFERSON AVE",4,["RANDOLPH ST","BRUSH ST","ST AUBIN ST"]],["Gratiot Avenue","GRATIOT AVE",1,["RANDOLPH ST","ST ANTOINE ST","RIVARD ST"]]],
+  "Minneapolis":  [["Nicollet Mall","NICOLLET MALL",1,["WASHINGTON AVE","5TH ST","8TH ST"]],["Hennepin Avenue","HENNEPIN AVE",1,["WASHINGTON AVE","5TH ST","LAGOON AVE"]],["Washington Avenue","WASHINGTON AVE",2,["NICOLLET MALL","HENNEPIN AVE","4TH AVE"]],["Lake Street","LAKE ST",3,["HENNEPIN AVE","LYNDALE AVE","NICOLLET AVE"]]],
+  "Jackson":      [["Capitol Street","CAPITOL ST",0,["STATE ST","PRESIDENT ST","LAMAR ST"]],["Farish Street","FARISH ST",2,["CAPITOL ST","AMITE ST","HAMILTON ST"]],["State Street","STATE ST",1,["CAPITOL ST","PEARL ST","HIGH ST"]],["Fortification Street","FORTIFICATION",3,["STATE ST","NORTH ST","MILL ST"]]],
+  "Columbia":     [["Broadway","BROADWAY",1,["9TH ST","10TH ST","HITT ST"]],["9th Street","9TH STREET",0,["BROADWAY","CHERRY ST","LOCUST ST"]],["Cherry Street","CHERRY ST",2,["9TH ST","10TH ST","HITT ST"]],["Providence Road","PROVIDENCE RD",3,["BROADWAY","STADIUM BLVD","ROLLINS RD"]]],
+  "Bozeman":      [["Main Street","MAIN ST",0,["ROUSE AVE","BLACK AVE","TRACY AVE"]],["Mendenhall Street","MENDENHALL ST",2,["ROUSE AVE","BLACK AVE","WILLSON AVE"]],["Babcock Street","BABCOCK ST",1,["ROUSE AVE","BOZEMAN AVE","WILLSON AVE"]],["Willson Avenue","WILLSON AVE",3,["MAIN ST","BABCOCK ST","OLIVE ST"]]],
+  "Lincoln":      [["O Street","O STREET",0,["9TH ST","11TH ST","13TH ST"]],["P Street","P STREET",1,["8TH ST","11TH ST","14TH ST"]],["13th Street","13TH ST",2,["O ST","P ST","Q ST"]],["Haymarket","HAYMARKET",4,["7TH ST","8TH ST","9TH ST"]]],
+  "Las Vegas":    [["Las Vegas Boulevard","LV BLVD",1,["FLAMINGO RD","TROPICANA AVE","SAHARA AVE"]],["Fremont Street","FREMONT ST",1,["MAIN ST","4TH ST","LAS VEGAS BLVD"]],["Charleston Boulevard","CHARLESTON BLVD",2,["MAIN ST","3RD ST","LAS VEGAS BLVD"]],["Sahara Avenue","SAHARA AVE",0,["LAS VEGAS BLVD","PARADISE RD","INDUSTRIAL RD"]]],
+  "Concord":      [["Main Street","MAIN ST",0,["PLEASANT ST","SCHOOL ST","WARREN ST"]],["Pleasant Street","PLEASANT ST",3,["MAIN ST","STATE ST","SPRING ST"]],["State Street","STATE ST",2,["PLEASANT ST","SCHOOL ST","CENTRE ST"]],["Storrs Street","STORRS ST",1,["PLEASANT ST","WARREN ST","THEATRE ST"]]],
+  "Newark":       [["Broad Street","BROAD ST",0,["MARKET ST","WILLIAM ST","CENTRAL AVE"]],["Market Street","MARKET ST",2,["BROAD ST","HALSEY ST","WASHINGTON ST"]],["Ferry Street","FERRY ST",2,["MADISON ST","JEFFERSON ST","VAN BUREN ST"]],["Halsey Street","HALSEY ST",1,["MARKET ST","WILLIAM ST","NEW ST"]]],
+  "Albuquerque":  [["Central Avenue","CENTRAL AVE",1,["1ST ST","2ND ST","4TH ST"]],["Gold Avenue","GOLD AVE",2,["2ND ST","3RD ST","4TH ST"]],["Nob Hill","NOB HILL",3,["GIRARD BLVD","CARLISLE BLVD","MONTE VISTA"]],["4th Street","4TH STREET",0,["CENTRAL AVE","GOLD AVE","COPPER AVE"]]],
+  "Albany":       [["State Street","STATE ST",0,["PEARL ST","EAGLE ST","SWAN ST"]],["Pearl Street","PEARL ST",1,["STATE ST","MAIDEN LN","STEUBEN ST"]],["Lark Street","LARK ST",3,["STATE ST","MADISON AVE","HUDSON AVE"]],["Central Avenue","CENTRAL AVE",2,["LARK ST","HENRY JOHNSON","QUAIL ST"]]],
+  "Raleigh":      [["Fayetteville Street","FAYETTEVILLE ST",0,["MARTIN ST","HARGETT ST","DAVIE ST"]],["Glenwood Avenue","GLENWOOD AVE",1,["JOHNSON ST","TUCKER ST","LANE ST"]],["Hillsborough Street","HILLSBOROUGH ST",3,["DIXIE TRAIL","OBERLIN RD","ENTERPRISE ST"]],["Wilmington Street","WILMINGTON ST",2,["MARTIN ST","HARGETT ST","MORGAN ST"]]],
+  "Bismarck":     [["Main Avenue","MAIN AVE",0,["4TH ST","5TH ST","6TH ST"]],["Broadway Avenue","BROADWAY AVE",1,["4TH ST","5TH ST","7TH ST"]],["4th Street","4TH STREET",2,["MAIN AVE","BROADWAY","THAYER AVE"]],["Front Avenue","FRONT AVE",3,["4TH ST","7TH ST","9TH ST"]]],
+  "Columbus":     [["High Street","HIGH ST",1,["BROAD ST","GAY ST","LONG ST"]],["Broad Street","BROAD ST",0,["HIGH ST","3RD ST","4TH ST"]],["Gay Street","GAY ST",2,["HIGH ST","3RD ST","4TH ST"]],["Nationwide Boulevard","NATIONWIDE BLVD",4,["HIGH ST","NEIL AVE","MCCONNELL BLVD"]]],
+  "Oklahoma City":[["Broadway Avenue","BROADWAY",0,["RENO AVE","SHERIDAN AVE","MAIN ST"]],["Sheridan Avenue","SHERIDAN AVE",1,["ROBINSON AVE","BROADWAY","OKLAHOMA AVE"]],["Automobile Alley","AUTO ALLEY",2,["BROADWAY","6TH ST","8TH ST"]],["Reno Avenue","RENO AVE",4,["ROBINSON AVE","BROADWAY","EK GAYLORD"]]],
+  "Portland":     [["Burnside Street","BURNSIDE ST",1,["2ND AVE","10TH AVE","23RD AVE"]],["Hawthorne Boulevard","HAWTHORNE BLVD",3,["12TH AVE","20TH AVE","37TH AVE"]],["Alberta Street","ALBERTA ST",2,["14TH AVE","22ND AVE","30TH AVE"]],["Mississippi Avenue","MISSISSIPPI AVE",4,["FREMONT ST","SKIDMORE ST","SHAVER ST"]]],
+  "Harrisburg":   [["2nd Street","2ND STREET",1,["MARKET ST","WALNUT ST","LOCUST ST"]],["Market Street","MARKET ST",2,["FRONT ST","2ND ST","3RD ST"]],["State Street","STATE ST",0,["FRONT ST","2ND ST","3RD ST"]],["Front Street","FRONT ST",4,["MARKET ST","WALNUT ST","STATE ST"]]],
+  "Providence":   [["Westminster Street","WESTMINSTER ST",1,["DORRANCE ST","MATHEWSON ST","EMPIRE ST"]],["Thayer Street","THAYER ST",3,["ANGELL ST","WATERMAN ST","MEETING ST"]],["Atwells Avenue","ATWELLS AVE",2,["DEAN ST","SUTTON ST","BRADFORD ST"]],["Wickenden Street","WICKENDEN ST",4,["BENEFIT ST","BROOK ST","GOVERNOR ST"]]],
+  "Rapid City":   [["Main Street","MAIN ST",0,["5TH ST","6TH ST","7TH ST"]],["St Joseph Street","ST JOSEPH ST",1,["5TH ST","6TH ST","7TH ST"]],["Mount Rushmore Road","RUSHMORE RD",2,["MAIN ST","ST JOSEPH ST","KANSAS CITY ST"]],["Omaha Street","OMAHA ST",3,["5TH ST","MAPLE AVE","LACROSSE ST"]]],
+  "Nashville":    [["Broadway","BROADWAY",1,["2ND AVE","3RD AVE","4TH AVE"]],["2nd Avenue","2ND AVE",1,["BROADWAY","CHURCH ST","UNION ST"]],["Church Street","CHURCH ST",0,["4TH AVE","5TH AVE","6TH AVE"]],["Demonbreun Street","DEMONBREUN ST",2,["4TH AVE","8TH AVE","12TH AVE"]],["Music Row","MUSIC ROW",3,["16TH AVE","17TH AVE","DIVISION ST"]]],
+  "Houston":      [["Main Street","MAIN ST",0,["PRAIRIE ST","TEXAS AVE","CAPITOL ST"]],["Westheimer Road","WESTHEIMER RD",1,["MONTROSE BLVD","DUNLAVY ST","SHEPHERD DR"]],["Washington Avenue","WASHINGTON AVE",2,["STUDEMONT ST","YALE ST","HEIGHTS BLVD"]],["Montrose Boulevard","MONTROSE BLVD",3,["WESTHEIMER RD","ALABAMA ST","RICHMOND AVE"]]],
+  "Salt Lake City":[["Main Street","MAIN ST",0,["SOUTH TEMPLE","100 SOUTH","300 SOUTH"]],["State Street","STATE ST",1,["100 SOUTH","200 SOUTH","400 SOUTH"]],["300 South","300 SOUTH",2,["MAIN ST","STATE ST","200 EAST"]],["South Temple","SOUTH TEMPLE",3,["MAIN ST","STATE ST","200 EAST"]]],
+  "Montpelier":   [["State Street","STATE ST",0,["MAIN ST","ELM ST","BAILEY AVE"]],["Main Street","MAIN ST",1,["STATE ST","SCHOOL ST","LANGDON ST"]],["Elm Street","ELM ST",3,["STATE ST","SPRING ST","LOOMIS ST"]],["Langdon Street","LANGDON ST",2,["MAIN ST","STATE ST","SCHOOL ST"]]],
+  "Richmond":     [["Broad Street","BROAD ST",0,["1ST ST","5TH ST","BELVIDERE ST"]],["Cary Street","CARY ST",1,["12TH ST","14TH ST","ROBINSON ST"]],["Main Street","MAIN ST",2,["9TH ST","12TH ST","14TH ST"]],["Monument Avenue","MONUMENT AVE",3,["LOMBARDY ST","ALLEN AVE","BOULEVARD"]]],
+  "Seattle":      [["Pike Street","PIKE ST",2,["1ST AVE","2ND AVE","BROADWAY"]],["Pine Street","PINE ST",1,["1ST AVE","3RD AVE","5TH AVE"]],["1st Avenue","1ST AVE",4,["PIKE ST","PINE ST","UNIVERSITY ST"]],["Broadway","BROADWAY",3,["PIKE ST","PINE ST","JOHN ST"]],["Ballard Avenue","BALLARD AVE",0,["MARKET ST","22ND AVE","VERNON PL"]]],
+  "Charleston":   [["Capitol Street","CAPITOL ST",0,["QUARRIER ST","LEE ST","VIRGINIA ST"]],["Quarrier Street","QUARRIER ST",1,["CAPITOL ST","SUMMERS ST","LAIDLEY ST"]],["Kanawha Boulevard","KANAWHA BLVD",4,["CAPITOL ST","LAIDLEY ST","MORRIS ST"]],["Summers Street","SUMMERS ST",2,["VIRGINIA ST","QUARRIER ST","LEE ST"]]],
+  "Milwaukee":    [["Water Street","WATER ST",1,["WISCONSIN AVE","STATE ST","JUNEAU AVE"]],["Wisconsin Avenue","WISCONSIN AVE",0,["WATER ST","BROADWAY","MILWAUKEE ST"]],["Brady Street","BRADY ST",3,["FARWELL AVE","ARLINGTON PL","HUMBOLDT AVE"]],["Old World 3rd Street","OLD WORLD 3RD",2,["WISCONSIN AVE","STATE ST","HIGHLAND AVE"]]],
+  "Laramie":      [["Grand Avenue","GRAND AVE",0,["2ND ST","3RD ST","9TH ST"]],["Ivinson Avenue","IVINSON AVE",1,["1ST ST","2ND ST","3RD ST"]],["2nd Street","2ND STREET",2,["GRAND AVE","IVINSON AVE","GARFIELD ST"]],["University Avenue","UNIVERSITY AVE",3,["9TH ST","11TH ST","15TH ST"]]],
+};
+
 // Six new road "designs" (venues) added to every state, alongside the
 // open highways, the long bridge, and the downtown streets.
 function extraRoads(s) {
@@ -408,9 +470,20 @@ for (const [stateName, s] of Object.entries(STATES)) {
   const br = BRIDGES[stateName];
   if (br) s.highways.push({ ...br, terrain: "bridge", style: BRIDGE_STYLE[stateName] || "arch" });
   if (EXTRA_BRIDGES[stateName]) s.highways.push({ ...EXTRA_BRIDGES[stateName], terrain: "bridge" });
-  for (const st of DOWNTOWN_STREETS) {
-    s.highways.push({ sign: "ST", num: st.blade, name: st.name, streetStyle: st.style,
-      city: s.highways[0].city, lanes: 2, terrain: "street", speed: 30 });
+  // downtown streets: use this city's REAL streets + cross streets where we
+  // have them, otherwise fall back to the generic named set
+  const city = s.highways[0].city;
+  const real = REAL_STREETS[city];
+  if (real) {
+    for (const [name, blade, style, cross] of real) {
+      s.highways.push({ sign: "ST", num: blade, name, streetStyle: style, crossStreets: cross, realCity: city,
+        city, lanes: 2, terrain: "street", speed: 30 });
+    }
+  } else {
+    for (const st of DOWNTOWN_STREETS) {
+      s.highways.push({ sign: "ST", num: st.blade, name: st.name, streetStyle: st.style,
+        city, lanes: 2, terrain: "street", speed: 30 });
+    }
   }
   for (const rd of extraRoads(s)) s.highways.push(rd);
 }

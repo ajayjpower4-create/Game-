@@ -61,12 +61,12 @@ Besides the open highways, every state adds hand-built settings to work in:
   barns, grain silos, crop fields, hay bales, post-and-rail fences, a farm
   windpump) and a **Forest Route** through the woods (dense pines, log piles,
   log cabins, underbrush).
-- **🏪 Downtown streets** — five slow two-lane city streets, each with its own
-  name, shop mix and feel: **Main Street** (small-town classic), **Broadway**
-  (bright entertainment strip — theatres, jazz club, tall towers), **Market
-  Street** (grocers, fish market, produce), **Elm Avenue** (leafy
-  neighborhood cafés and salons) and **Harbor Boulevard** (waterfront seafood,
-  bait & tackle, marine supply). Each has a double-yellow centerline,
+- **🏪 Downtown streets** — each state's downtown uses its control city's
+  **real streets**, with real cross-streets on the green blade signs: Court
+  Avenue in Des Moines, Broadway in Nashville, Peachtree Street in Atlanta,
+  Newbury Street in Boston, Las Vegas Boulevard, and so on for all 50 cities.
+  Each street picks a fitting shop mix and feel (classic, entertainment strip,
+  market, leafy neighborhood, or waterfront). Each has a double-yellow centerline,
   storefronts with striped awnings and lit signs, sidewalks with curbs, parked
   cars, hydrants, benches and planter trees, cross-street intersections with
   continental crosswalks, working traffic signals and green street-name blade

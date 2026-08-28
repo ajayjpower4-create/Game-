@@ -4685,7 +4685,8 @@ function buildIntersectionSignals(z) {
 function buildBladeSigns(z) {
   const { outerEdge } = roadInfo;
   const theme = streetTheme(sel.highway.streetStyle || 0);
-  const crossNames = theme.cross;
+  // real cross streets for this city where we have them, else the themed set
+  const crossNames = (sel.highway.crossStreets && sel.highway.crossStreets.length) ? sel.highway.crossStreets : theme.cross;
   const mainBlade = sel.highway.num || 'MAIN ST';
   const idx = Math.abs(Math.round(z / STREET_BLOCK)) % crossNames.length;
   const blade = (text, w) => {
