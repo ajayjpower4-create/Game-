@@ -391,6 +391,11 @@ document.addEventListener('click', (e) => {
 });
 
 // The lot sliders on the start screen write to `pending`, not to the design.
+// When the drag ends, put the detail back.
+document.addEventListener('change', (e) => {
+  if (e.target?.dataset?.path) drawStageOnly(false);
+});
+
 document.addEventListener('input', (e) => {
   const el = e.target;
   if (el.dataset.act === 'lot-w' || el.dataset.act === 'lot-d') {
@@ -407,7 +412,7 @@ document.addEventListener('input', (e) => {
   keys.reduce((o, k) => o[k], state)[last] = value;
   save();
   // Redraw the view without rebuilding the panel, so focus and caret survive.
-  drawStageOnly();
+  scheduleStage(true);
   const label = document.querySelector(`label[for="c-${CSS.escape(path)}"] b`);
   if (label && el.dataset.kind === 'num') label.textContent = labelFor(path, value);
 });
@@ -418,12 +423,21 @@ function labelFor(path, value) {
   return String(value);
 }
 
-function drawStageOnly() {
+// Dragging a slider fires input far faster than the scene can be redrawn, so
+// redraws are coalesced onto the next frame.
+let framePending = false;
+function scheduleStage(fast) {
+  if (framePending) return;
+  framePending = true;
+  requestAnimationFrame(() => { framePending = false; drawStageOnly(fast); });
+}
+
+function drawStageOnly(fast = false) {
   const stage = document.getElementById('stage');
   if (!stage) return;
   const rect = stage.getBoundingClientRect();
   const size = { w: Math.max(320, Math.round(rect.width)), h: Math.max(240, Math.round(rect.height)) };
-  const scene = render(state, size);
+  const scene = render(state, size, { fast });
   stage.innerHTML = frame(state, size, scene.svg);
   const readout = document.getElementById('readout');
   if (readout) {

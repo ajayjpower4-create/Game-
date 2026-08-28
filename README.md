@@ -213,18 +213,41 @@ the view to jump straight to its text.
 **7 · The site.** Parking stripes itself out around whatever you built, and
 cars, trailers at the docks, light poles and trees are each a switch.
 
-Rotate through four viewpoints, zoom, flip between day and night — after dark
-the windows light up, the poles throw pools on the asphalt and the signs glow —
-and "Save image" writes the view out as a PNG. The design autosaves to the
-browser; "New site" clears it.
+Rotate through four viewpoints, zoom, flip between day and night, and "Save
+image" writes the view out as a PNG. The design autosaves to the browser; "New
+site" clears it.
+
+## How it draws
+
+The whole picture is one SVG, rebuilt from scratch on every change.
+
+- **Cast shadows.** Every mass sweeps its own footprint along the sun vector,
+  and the convex hull of that sweep is its shadow — so a tower lays a shadow
+  across the lot, and a trailer's shadow comes away from it at the right angle.
+- **Materials.** Precast panel joints and reveals, ribbed metal siding on
+  trailers and storage rows, recessed roll-up doors with bumpers and numbers,
+  and glazing that reflects sky by day and lights up cell by cell after dark.
+- **Roofs.** The biggest surface in an isometric view never stays blank:
+  coping, membrane seams, rooftop units and skylight bands.
+- **Ground.** The site sits on a slab, so the grass has an edge to stop at.
+  Striped stalls, kerbed and planted islands, accessible bays, a crosswalk to
+  the doors, lane arrows, a stop bar, a concrete truck apron, kerb and footway.
+- **Night.** The palette drops, pole heads throw pools on the asphalt, dock
+  lamps wash the wall, and signage brightens and glows instead of sinking into
+  the dark.
+
+Low buildings can't carry a readable name on the wall, so a retail strip or a
+storage office gets what a real one gets: a raised parapet element over the
+entrance, with the sign on it. While a slider is being dragged the scene draws
+in a cheap pass and the detail comes back when you let go.
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `public/building/iso.js` | The isometric kit: projection, boxes, wall faces, and the matrix that lays text onto a wall |
+| `public/building/iso.js` | The isometric kit: projection, lit boxes, cast-shadow hulls, wall faces, and the matrix that lays text onto a wall |
 | `public/building/catalog.js` | Building types and their presets, palettes, logos, and the saved-state shape |
-| `public/building/scene.js` | Site layout in feet, then the whole drawing — masses, windows, dock doors, signage, props |
+| `public/building/scene.js` | Site layout in feet, then the whole drawing — masses, materials, roofs, ground marking, signage, props, and the day/night palette |
 | `public/building/game.js` | Screens, the control panel, click-to-edit surfaces, PNG export |
 
 Every site in it is invented. It is a toy for sketching a layout, not a set of
