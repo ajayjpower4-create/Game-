@@ -14,6 +14,7 @@ npm start
 ```
 
 - Game hub: <http://localhost:3000/> — lists every game
+- Building Design Simulator: <http://localhost:3000/building>
 - Inspection Simulator: <http://localhost:3000/inspection>
 - Election game: <http://localhost:3000/election>
 - The original Swerve chatbot: <http://localhost:3000/chat>
@@ -167,3 +168,64 @@ report says so on screen — every screen still works offline.
 
 Nothing in this report is real. It is a simulator for practicing and drafting,
 not a substitute for an inspection by a licensed inspector.
+
+
+---
+
+# Building Design Simulator
+
+Set a lot, drop a building on it, shape the thing, and sign it in your own
+words. It draws the whole site in isometric — building, docks, doors, security,
+parking, landscaping — and redraws on every change. No API key, no server work:
+it all runs in the browser.
+
+Open <http://localhost:3000/building>.
+
+## Building one
+
+**1 · The lot.** Frontage along the street and depth back from it, in feet. The
+game tells you the acreage. Then pick what goes on it: a warehouse or
+distribution shed, an office tower, a storage unit complex, or a retail strip.
+
+**2 · The building.** Length and depth first. After that the controls follow the
+type you picked — dock bays and clear height for a warehouse, floors for a
+tower, doors per row and rows of units for storage, tenant units for retail.
+Wall colour and trim colour sit on the same tab.
+
+**3 · The office end.** Raise part of the shell into two or three floors of
+office, choose which end it takes and how much of the building it eats, then
+glaze it: punched openings, ribbon windows or a full curtain wall. It always
+comes out a little taller than the shell it grows from, so it reads as its own
+mass from the street.
+
+**4 · The entrance.** Front doors, a canopy over them, a columned porch, steps
+and a walk.
+
+**5 · Security.** A guard booth beside the drive, a gate arm across it, a
+perimeter fence along the street frontage with a gap for the drive, a guard and
+a visitor, and up to two dozen bollards.
+
+**6 · Text and logos.** Three surfaces carry lettering: the building wall (name
+plus an optional strapline), the guard booth fascia, and the monument sign at
+the drive. Each takes your text, a font colour and a logo. Click a surface in
+the view to jump straight to its text.
+
+**7 · The site.** Parking stripes itself out around whatever you built, and
+cars, trailers at the docks, light poles and trees are each a switch.
+
+Rotate through four viewpoints, zoom, flip between day and night — after dark
+the windows light up, the poles throw pools on the asphalt and the signs glow —
+and "Save image" writes the view out as a PNG. The design autosaves to the
+browser; "New site" clears it.
+
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `public/building/iso.js` | The isometric kit: projection, boxes, wall faces, and the matrix that lays text onto a wall |
+| `public/building/catalog.js` | Building types and their presets, palettes, logos, and the saved-state shape |
+| `public/building/scene.js` | Site layout in feet, then the whole drawing — masses, windows, dock doors, signage, props |
+| `public/building/game.js` | Screens, the control panel, click-to-edit surfaces, PNG export |
+
+Every site in it is invented. It is a toy for sketching a layout, not a set of
+construction documents.

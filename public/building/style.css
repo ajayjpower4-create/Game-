@@ -1,0 +1,146 @@
+:root {
+  --bg: #0d1220;
+  --panel: #161e30;
+  --panel-2: #1b2438;
+  --line: #26324a;
+  --ink: #eef2f8;
+  --dim: #93a3bb;
+  --accent: #6f7cff;
+  --accent-2: #8fe3c0;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-text-size-adjust: 100%;
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3 { line-height: 1.2; margin: 0 0 .5em; }
+
+/* -------------------------------------------------------------- top bar */
+
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 16px;
+  background: #0a0f1b; border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.brand .mark { font-size: 22px; }
+.brand strong { display: block; font-size: 15px; }
+.brand em { display: block; font-style: normal; font-size: 12px; color: var(--dim); }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 9px; padding: 8px 12px; min-height: 38px;
+}
+.btn:hover { border-color: var(--accent); background: var(--panel-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); font-weight: 700; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; }
+.btn.on { border-color: var(--accent-2); color: var(--accent-2); }
+
+/* ---------------------------------------------------------------- layout */
+
+.workshop { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 16px; align-items: start; }
+
+.stage {
+  position: relative; background: #070b14;
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+  min-height: 420px; aspect-ratio: 3 / 2;
+}
+.stage svg { display: block; width: 100%; height: 100%; }
+.stage .hot { fill: rgba(255,255,255,0); cursor: pointer; }
+.stage .hot:hover { fill: rgba(143,227,192,.28); stroke: var(--accent-2); stroke-width: 1.5; }
+
+.stagebar {
+  position: absolute; left: 12px; bottom: 12px; right: 12px;
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  pointer-events: none;
+}
+.stagebar > * { pointer-events: auto; }
+.readout {
+  margin-left: auto; background: rgba(10,15,27,.78); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 12px; font-size: 12px; color: var(--dim);
+}
+
+/* ---------------------------------------------------------------- panel */
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; border-bottom: 1px solid var(--line); background: #121a2a; }
+.tabs button {
+  background: transparent; border: 1px solid transparent; color: var(--dim);
+  border-radius: 8px; padding: 7px 10px; font-size: 13px; min-height: 34px;
+}
+.tabs button.active { background: var(--panel-2); border-color: var(--line); color: var(--ink); font-weight: 600; }
+.panel-body { padding: 16px; max-height: calc(100dvh - 180px); overflow: auto; }
+.panel-body h2 { font-size: 17px; }
+.panel-body .hint { color: var(--dim); font-size: 13px; margin: -4px 0 16px; }
+
+.field { margin-bottom: 16px; }
+.field > label { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--dim); margin-bottom: 6px; }
+.field > label b { color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; }
+input[type=range] { width: 100%; accent-color: var(--accent); height: 26px; }
+input[type=text] {
+  width: 100%; background: #0d1424; border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; min-height: 40px;
+}
+input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  background: #0d1424; border: 1px solid var(--line); color: var(--dim);
+  border-radius: 999px; padding: 7px 11px; font-size: 13px; min-height: 34px;
+}
+.chip.on { border-color: var(--accent); background: var(--panel-2); color: var(--ink); font-weight: 600; }
+.chip.swatch { width: 38px; height: 34px; padding: 0; border-radius: 8px; }
+.chip.swatch.on { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.chip.glyph { font-size: 17px; width: 40px; padding: 0; }
+
+.toggles { display: grid; gap: 8px; }
+.toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: #0d1424; border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; width: 100%; text-align: left; min-height: 44px;
+}
+.toggle.on { border-color: var(--accent-2); }
+.toggle .pill { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.toggle.on .pill { color: var(--accent-2); }
+
+.note { color: #6a798f; font-size: 12px; margin-top: 14px; }
+.divider { height: 1px; background: var(--line); margin: 18px 0; }
+
+/* ---------------------------------------------------------------- start */
+
+.start { max-width: 860px; margin: 0 auto; padding: 28px 18px 60px; }
+.start h1 { font-size: 26px; }
+.start .lede { color: var(--dim); margin: 0 0 24px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px; text-align: left; width: 100%;
+}
+.card:hover, .card.on { border-color: var(--accent); background: var(--panel-2); }
+.card .icon { font-size: 26px; display: block; margin-bottom: 8px; }
+.card strong { display: block; font-size: 16px; margin-bottom: 4px; }
+.card p { margin: 0; color: var(--dim); font-size: 13px; }
+.start .field { max-width: 420px; }
+
+@media (max-width: 900px) {
+  /* minmax(0, 1fr), not 1fr: an auto minimum lets the stage's aspect ratio
+     resolve against its own height and push the page wider than the phone. */
+  .workshop { grid-template-columns: minmax(0, 1fr); }
+  .panel-body { max-height: none; }
+  .stage { aspect-ratio: 4 / 3; min-height: 240px; }
+  .stagebar { flex-wrap: wrap; }
+  .readout { margin-left: 0; }
+}

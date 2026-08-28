@@ -22,6 +22,7 @@ app.get('/', page('hub.html'));
 app.get(['/election', '/election/'], page('election', 'index.html'));
 app.get(['/chat', '/chat/'], page('index.html'));
 app.get(['/inspection', '/inspection/'], page('inspection', 'index.html'));
+app.get(['/building', '/building/'], page('building', 'index.html'));
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
