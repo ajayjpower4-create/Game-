@@ -176,8 +176,8 @@ function renderStart() {
 }
 
 const SAMPLE = {
-  address: '8328 Scotts Level Rd', city: 'Pikesville', state: 'MD', zip: '21208',
-  client: 'Jerai Brown', inspector: 'A. Inspector', company: 'Chesapeake Inspection Associates',
+  address: '8329 Newtown Rd', city: 'Pikesville', state: 'MD', zip: '21208',
+  client: 'Liam Powell', inspector: 'A. Inspector', company: 'Chesapeake Inspection Associates',
   yearBuilt: '1966', houseType: 'Single Family, Detached', floors: '2',
   foundation: 'Partially Finished Basement', bedrooms: 3, fullBaths: 2, halfBaths: 1,
   cladding: 'Fiber Cement', roofCovering: '3-Tab Composition Shingles', roofMethod: 'Aerial Drone',

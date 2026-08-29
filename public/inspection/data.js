@@ -98,11 +98,11 @@ export const INTAKE = [
     title: 'The Property',
     hint: 'The only part you actually have to type.',
     fields: [
-      { id: 'address', label: 'Street Address', type: 'text', placeholder: '8328 Scotts Level Rd', required: true },
+      { id: 'address', label: 'Street Address', type: 'text', placeholder: '8329 Newtown Rd', required: true },
       { id: 'city', label: 'City', type: 'text', placeholder: 'Pikesville', required: true },
       { id: 'state', label: 'State', type: 'text', placeholder: 'MD', required: true, width: 'short' },
       { id: 'zip', label: 'ZIP', type: 'text', placeholder: '21208', required: true, width: 'short' },
-      { id: 'client', label: 'Client Name', type: 'text', placeholder: 'Jerai Brown', required: true },
+      { id: 'client', label: 'Client Name', type: 'text', placeholder: 'Liam Powell', required: true },
       { id: 'inspector', label: 'Inspector Name', type: 'text', placeholder: 'Your name', required: true },
       { id: 'company', label: 'Company', type: 'text', placeholder: 'Chesapeake Inspection Associates', required: true },
       { id: 'date', label: 'Inspection Date', type: 'date', required: true },
