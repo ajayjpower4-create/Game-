@@ -158,47 +158,112 @@ export const CLADDINGS = [
 ];
 
 export const ROOF_TYPES = [
-  { id: 'flat', name: 'Flat roof' },
-  { id: 'gable', name: 'Pitched roof' },
+  { id: 'flat', name: 'Flat' },
+  { id: 'gable', name: 'Pitched' },
+  { id: 'mono', name: 'Monopitch' },
+  { id: 'barrel', name: 'Barrel arch' },
   { id: 'saw', name: 'Sawtooth' },
 ];
 
 export const BUILDING_STYLES = {
-  shed: { name: 'Warehouse shell', icon: '🏭', w: 380, d: 150, floors: 1, height: 34, cell: 12, blurb: 'Clear-span box. Put loading bays where you want them.' },
-  office: { name: 'Office block', icon: '🏢', w: 110, d: 90, floors: 3, height: null, cell: 11, blurb: 'Two to six floors of offices.' },
-  small: { name: 'Small building', icon: '🏬', w: 70, d: 50, floors: 2, height: null, cell: 11, blurb: 'A little two or three storey block.' },
-  tower: { name: 'Tower', icon: '🏙️', w: 150, d: 110, floors: 12, height: null, cell: 11, blurb: 'Glass high-rise.' },
-  row: { name: 'Storage row', icon: '🔒', w: 300, d: 40, floors: 1, height: 11, cell: 10, blurb: 'Single-storey units with roll-up doors both sides.' },
-  strip: { name: 'Retail strip', icon: '🛒', w: 300, d: 90, floors: 1, height: 20, cell: 15, blurb: 'Storefront block with a deep sign band.' },
+  shed: { group: 'Sheds & industry', name: 'Warehouse shell', icon: '🏭', w: 380, d: 150, floors: 1, height: 34, cell: 12, blurb: 'Clear-span box. Put loading bays where you want them.' },
+  office: { group: 'Offices & shops', name: 'Office block', icon: '🏢', w: 110, d: 90, floors: 3, height: null, cell: 11, blurb: 'Two to six floors of offices.' },
+  small: { group: 'Small buildings', name: 'Small building', icon: '🏬', w: 70, d: 50, floors: 2, height: null, cell: 11, blurb: 'A little two or three storey block.' },
+  tower: { group: 'Offices & shops', name: 'Tower', icon: '🏙️', w: 150, d: 110, floors: 12, height: null, cell: 11, blurb: 'Glass high-rise.' },
+  row: { group: 'Sheds & industry', name: 'Storage row', icon: '🔒', w: 300, d: 40, floors: 1, height: 11, cell: 10, blurb: 'Single-storey units with roll-up doors both sides.' },
+  strip: { group: 'Offices & shops', name: 'Retail strip', icon: '🛒', w: 300, d: 90, floors: 1, height: 20, cell: 15, blurb: 'Storefront block with a deep sign band.' },
   workshop: {
-    name: 'Workshop', icon: '🔧', w: 100, d: 62, floors: 1, height: 24, cell: 12,
+    group: 'Sheds & industry', name: 'Workshop', icon: '🔧', w: 100, d: 62, floors: 1, height: 24, cell: 12,
     cladding: 'rib', wall: '#b9c2c9', band: '#3f4a57',
     blurb: 'Maintenance shop with roll-up doors and ribbed cladding.',
   },
   pitched: {
-    name: 'Pitched unit', icon: '🏘️', w: 84, d: 52, floors: 1, height: 16, cell: 10,
+    group: 'Small buildings', name: 'Pitched unit', icon: '🏘️', w: 84, d: 52, floors: 1, height: 16, cell: 10,
     cladding: 'brick', roofType: 'gable', wall: '#9c5b47', band: '#6d4034', roofColor: '#5d646d',
     blurb: 'Brick unit under a pitched roof.',
   },
   deck: {
-    name: 'Car park deck', icon: '🅿️', w: 190, d: 122, floors: 4, height: null, cell: 12,
+    group: 'Offices & shops', name: 'Car park deck', icon: '🅿️', w: 190, d: 122, floors: 4, height: null, cell: 12,
     cladding: 'plain', wall: '#c6cbd1', band: '#5a636e',
     blurb: 'Open-sided multi-storey parking.',
   },
   cold: {
-    name: 'Cold store', icon: '🧊', w: 170, d: 120, floors: 1, height: 46, cell: 12,
+    group: 'Sheds & industry', name: 'Cold store', icon: '🧊', w: 170, d: 120, floors: 1, height: 46, cell: 12,
     cladding: 'rib', wall: '#eef1f4', band: '#2f5f8a',
     blurb: 'Tall insulated box, almost no openings.',
   },
   pavilion: {
-    name: 'Glass pavilion', icon: '🪟', w: 76, d: 54, floors: 1, height: 17, cell: 9,
+    group: 'Offices & shops', name: 'Glass pavilion', icon: '🪟', w: 76, d: 54, floors: 1, height: 17, cell: 9,
     cladding: 'plain', wall: '#e7eef3', band: '#4a5a68',
     blurb: 'Fully glazed showroom or reception.',
   },
   plant: {
-    name: 'Plant room', icon: '⚙️', w: 64, d: 42, floors: 1, height: 27, cell: 10,
+    group: 'Sheds & industry', name: 'Plant room', icon: '⚙️', w: 64, d: 42, floors: 1, height: 27, cell: 10,
     cladding: 'precast', wall: '#a7adb6', band: '#40484f',
     blurb: 'Louvred energy centre for the back of the site.',
+  },
+
+  crossdock: {
+    group: 'Sheds & industry', name: 'Cross-dock', icon: '↔️', w: 320, d: 70, floors: 1, height: 30, cell: 12,
+    cladding: 'precast', wall: '#d3d9df', band: '#204b73',
+    blurb: 'Long narrow terminal with bays down both sides.',
+  },
+  mill: {
+    group: 'Sheds & industry', name: 'Sawtooth mill', icon: '🪚', w: 260, d: 160, floors: 1, height: 28, cell: 13,
+    cladding: 'brick', roofType: 'saw', wall: '#9c5b47', band: '#5e3529',
+    blurb: 'Old brick factory under a run of north lights.',
+  },
+  hangar: {
+    group: 'Sheds & industry', name: 'Hangar', icon: '🛩️', w: 210, d: 150, floors: 1, height: 40, cell: 15,
+    cladding: 'rib', roofType: 'barrel', wall: '#b9c2c9', band: '#3f4a57',
+    blurb: 'Arched shed with a full-width door.',
+  },
+  highbay: {
+    group: 'Sheds & industry', name: 'High-bay store', icon: '🗼', w: 130, d: 110, floors: 1, height: 95, cell: 13,
+    cladding: 'rib', wall: '#eef1f4', band: '#2f5f8a',
+    blurb: 'Automated warehouse — very tall, almost blank.',
+  },
+  datacentre: {
+    group: 'Sheds & industry', name: 'Data hall', icon: '🖥️', w: 190, d: 130, floors: 1, height: 36, cell: 12,
+    cladding: 'precast', wall: '#8f97a1', band: '#2f5f8a',
+    blurb: 'Blank box banded with louvres.',
+  },
+
+  bigbox: {
+    group: 'Offices & shops', name: 'Big-box store', icon: '🏪', w: 240, d: 180, floors: 1, height: 32, cell: 15,
+    cladding: 'plain', wall: '#cdb7a4', band: '#7a3f34',
+    blurb: 'Single large unit with a glazed front and a service yard.',
+  },
+  terrace: {
+    group: 'Offices & shops', name: 'Terrace of units', icon: '🏘️', w: 230, d: 60, floors: 1, height: 18, cell: 12,
+    cladding: 'brick', roofType: 'gable', wall: '#b07a5e', band: '#5e3529', roofColor: '#5d646d',
+    blurb: 'A row of small units under one pitched roof.',
+  },
+
+  annex: {
+    group: 'Small buildings', name: 'Link annex', icon: '➖', w: 96, d: 28, floors: 2, cell: 12,
+    cladding: 'precast', wall: '#d8dde3', band: '#1f3a63',
+    blurb: 'Narrow block for joining two buildings.',
+  },
+  lodge: {
+    group: 'Small buildings', name: 'Lodge', icon: '🏡', w: 62, d: 46, floors: 2, cell: 10,
+    cladding: 'brick', roofType: 'gable', wall: '#9c5b47', band: '#6d4034', roofColor: '#5d646d',
+    blurb: 'Two storeys of brick under a pitched roof.',
+  },
+  kiosk: {
+    group: 'Small buildings', name: 'Kiosk', icon: '🥤', w: 28, d: 22, floors: 1, height: 12, cell: 7,
+    cladding: 'plain', wall: '#e7eef3', band: '#1f7a54',
+    blurb: 'Tiny glazed unit for a counter or a coffee stop.',
+  },
+  barn: {
+    group: 'Small buildings', name: 'Barn', icon: '🚜', w: 120, d: 74, floors: 1, height: 20, cell: 12,
+    cladding: 'plain', roofType: 'gable', wall: '#8d5a45', band: '#4a3a30', roofColor: '#5f666f',
+    blurb: 'Big doors, big roof, timber walls.',
+  },
+  substation: {
+    group: 'Small buildings', name: 'Substation', icon: '🔌', w: 44, d: 32, floors: 1, height: 18, cell: 8,
+    cladding: 'brick', wall: '#9c5b47', band: '#6d4034',
+    blurb: 'Little louvred brick house for the switchgear.',
   },
 };
 
@@ -271,6 +336,63 @@ export function makeBuilding(style, over = {}) {
       for (const face of ['E', 'W']) fill(face, f, 0, cd, 'glass');
     }
     fill('N', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'door');
+  } else if (style === 'crossdock') {
+    fill('N', 0, 1, cw - 1, 'dock');
+    fill('S', 0, 1, cw - 1, 'dock');
+    fill('E', 0, 0, 1, 'door');
+  } else if (style === 'mill') {
+    fill('N', 0, 0, cw, 'window');
+    fill('N', 0, 1, 3, 'roll');
+    fill('N', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'door');
+    fill('S', 0, 1, cw - 1, 'window');
+    fill('E', 0, 1, cd - 1, 'window');
+    fill('W', 0, 1, cd - 1, 'window');
+  } else if (style === 'hangar') {
+    fill('N', 0, 0, cw, 'roll');
+    fill('E', 0, 1, 2, 'door');
+    b.parapet = false;
+  } else if (style === 'highbay') {
+    fill('N', 0, 1, 4, 'dock');
+    fill('E', 0, 0, 1, 'door');
+  } else if (style === 'datacentre') {
+    for (const face of ['N', 'S']) fill(face, 0, 1, cw - 1, 'louvre');
+    for (const face of ['E', 'W']) fill(face, 0, 1, cd - 1, 'louvre');
+    fill('N', 0, 0, 1, 'door');
+    fill('S', 0, 1, 3, 'roll');
+  } else if (style === 'bigbox') {
+    fill('N', 0, 2, cw - 2, 'glass');
+    fill('N', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'door');
+    fill('S', 0, 1, 4, 'dock');
+  } else if (style === 'terrace') {
+    // Unit fronts: a door and a window, over and over.
+    for (let i = 0; i < cw; i++) fill('N', 0, i, i + 1, i % 3 === 1 ? 'door' : 'window');
+    fill('S', 0, 1, cw - 1, 'window');
+    b.parapet = false;
+  } else if (style === 'annex') {
+    for (let f = 0; f < floors; f++) {
+      for (const face of ['N', 'S']) fill(face, f, 0, cw, 'ribbon');
+    }
+    fill('N', 0, 0, 1, 'door');
+  } else if (style === 'lodge') {
+    for (let f = 0; f < floors; f++) {
+      for (const face of ['N', 'S']) fill(face, f, 0, cw, 'window');
+      for (const face of ['E', 'W']) fill(face, f, 1, cd - 1, 'window');
+    }
+    fill('N', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'door');
+    b.parapet = false;
+  } else if (style === 'kiosk') {
+    for (const face of ['N', 'S']) fill(face, 0, 0, cw, 'glass');
+    for (const face of ['E', 'W']) fill(face, 0, 0, cd, 'glass');
+    fill('N', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'door');
+  } else if (style === 'barn') {
+    fill('N', 0, 0, cw, 'window');
+    fill('N', 0, Math.floor(cw / 2) - 1, Math.floor(cw / 2) + 1, 'roll');
+    fill('S', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'roll');
+    b.parapet = false;
+  } else if (style === 'substation') {
+    for (const face of ['N', 'S']) fill(face, 0, 1, cw - 1, 'louvre');
+    for (const face of ['E', 'W']) fill(face, 0, 1, cd - 1, 'louvre');
+    fill('N', 0, 0, 1, 'door');
   } else if (style === 'workshop') {
     fill('N', 0, 1, cw - 1, 'roll');
     fill('N', 0, 0, 1, 'door');

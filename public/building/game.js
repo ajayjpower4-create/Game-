@@ -8,7 +8,8 @@ import {
   CELLS, CLADDINGS, ROOF_TYPES, WALL_COLORS, SIGN_COLORS, LOGOS, FLOOR_HEIGHT, freshState, normalize, makeBuilding,
   buildingHeight, wallCols, newId,
 } from './catalog.js';
-import { render, frame, fitCamera, footprint, objHeight, isClear, bounds, buildingsOf } from './scene.js';
+import { render, frame, footprint, objHeight, isClear, bounds, buildingsOf, snapToDock, evictFrom } from './scene.js';
+import { createRig, fitCamera, viewOf, PITCH_MIN, PITCH_MAX, ZOOM_MIN, ZOOM_MAX } from './camera.js';
 import { contains, corners, clamp } from './iso.js';
 
 const SAVE_KEY = 'building-sim:v3';
@@ -119,6 +120,39 @@ function toLocal(b, x, y) {
 }
 
 const snapXY = (v, step = 2) => Math.round(v / step) * step;
+const DEG = Math.PI / 180;
+
+/**
+ * Put an object down at a world position: snapped to the grid, kept on the
+ * site, and — for a vehicle that has been reversed up near a loading bay —
+ * squared up to the bay instead of left at whatever angle it was dragged at.
+ */
+function place(o, x, y, opts = {}) {
+  const snap = opts.snap !== false;
+  const fp = footprint(o);
+  let nx = snap ? snapXY(x) : x;
+  let ny = snap ? snapXY(y) : y;
+
+  // Stay on the ground the site is built on.
+  const margin = 34;
+  const bb = bounds({ ...fp, x: nx, y: ny });
+  const w = bb.x1 - bb.x0;
+  const d = bb.y1 - bb.y0;
+  const offX = nx - bb.x0;
+  const offY = ny - bb.y0;
+  nx = clamp(bb.x0, -margin, state.lot.width + margin - w) + offX;
+  ny = clamp(bb.y0, -margin, state.lot.depth + margin - d) + offY;
+  o.x = nx;
+  o.y = ny;
+
+  if (snap && o.kind === 'prop') {
+    const spec = PROP_BY_ID[o.type];
+    if (spec && spec.vehicle && o.type !== 'car' && o.type !== 'forklift') {
+      const spot = snapToDock(state, o);
+      if (spot) Object.assign(o, spot);
+    }
+  }
+}
 
 /* ------------------------------------------------------------- start screen */
 
@@ -154,14 +188,25 @@ function buildScreen() {
     <div class="stagewrap">
       <div class="stage" id="stage"></div>
       <div class="stagehud">
+        <button class="compass" data-act="north" title="Face north (N)">
+          <svg viewBox="-22 -22 44 44" aria-hidden="true">
+            <circle r="20" class="ring"/>
+            <g id="needle">
+              <path d="M0 -15 L5 3 L0 0 L-5 3 Z" class="n"/>
+              <path d="M0 15 L5 3 L0 0 L-5 3 Z" class="s"/>
+            </g>
+            <text y="-13.5" class="cardinal">N</text>
+          </svg>
+        </button>
         <div class="camrow">
-          <button class="btn sq" data-act="orbit" data-value="-30" title="Orbit left">↺</button>
-          <button class="btn sq" data-act="orbit" data-value="30" title="Orbit right">↻</button>
-          <button class="btn sq" data-act="tilt" data-value="8" title="Tilt down">▾</button>
-          <button class="btn sq" data-act="tilt" data-value="-8" title="Tilt up">▴</button>
-          <button class="btn sq" data-act="zoom" data-value="1.25" title="Zoom in">+</button>
-          <button class="btn sq" data-act="zoom" data-value="0.8" title="Zoom out">−</button>
-          <button class="btn sq" data-act="cam-reset" title="Reset view">⟲</button>
+          <button class="btn sq" data-act="orbit" data-value="-45" title="Orbit left (Q)">↺</button>
+          <button class="btn sq" data-act="orbit" data-value="45" title="Orbit right (E)">↻</button>
+          <button class="btn sq" data-act="tilt" data-value="10" title="Tilt down">▾</button>
+          <button class="btn sq" data-act="tilt" data-value="-10" title="Tilt up">▴</button>
+          <button class="btn sq" data-act="zoom" data-value="1.35" title="Zoom in (+)">+</button>
+          <button class="btn sq" data-act="zoom" data-value="0.74" title="Zoom out (−)">−</button>
+          <button class="btn sq" data-act="focus" title="Frame the selection (F)">⦿</button>
+          <button class="btn sq" data-act="cam-reset" title="Reset the view (0)">⟲</button>
         </div>
         <span class="readout" id="readout"></span>
       </div>
@@ -207,10 +252,14 @@ function drawStage(fast = false) {
   const size = stageSize();
   const scene = render(state, size, { fast, selected: ui.selected, hover: ui.hover, ghost: ui.ghost });
   stage.innerHTML = frame(state, size, scene.svg);
+  const v = viewOf(state);
   const readout = document.getElementById('readout');
   if (readout) {
-    readout.textContent = `${Math.round(state.view.yaw)}° · tilt ${Math.round(state.view.pitch)}° · ${(state.view.zoom || 1).toFixed(2)}×`;
+    const compass = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(((v.yaw + 360) % 360) / 45) % 8];
+    readout.textContent = `looking ${compass} · ${Math.round(v.yaw)}° · tilt ${Math.round(v.pitch)}° · ${v.zoom.toFixed(2)}×`;
   }
+  const needle = document.getElementById('needle');
+  if (needle) needle.setAttribute('transform', `rotate(${(-v.yaw).toFixed(1)})`);
   const hb = document.getElementById('hintbar');
   if (hb) {
     const blocked = ui.pending && ui.ghost && !ui.ghost.ok;
@@ -218,7 +267,7 @@ function drawStage(fast = false) {
       ? (blocked
         ? (ui.pending.kind === 'roof' ? 'Hover a roof to put this on' : 'Blocked — that spot is inside a building')
         : `Placing ${ui.pending.name} · click to drop · shift-click to keep placing · R turns it · Esc cancels`)
-      : 'Drag to orbit · shift-drag to pan · wheel to zoom · click anything to select');
+      : 'Drag to orbit · right-drag or shift-drag to pan · wheel zooms at the pointer · click to select · double-click to fly to it');
     hb.classList.toggle('warn', !!ui.pending);
     hb.classList.toggle('bad', !!blocked);
   }
@@ -243,7 +292,12 @@ function palettePanel() {
   const isArmed = (kind, key) => armedKey === `${kind}:${key}`;
   let items = '';
   if (ui.cat === 'Buildings') {
-    items = Object.entries(BUILDING_STYLES).map(([id, b]) => itemButton('building', id, b.icon, b.name, isArmed('building', id))).join('');
+    // Two dozen models is too many for one wall of buttons, so they come in
+    // families.
+    const fam = {};
+    for (const [id, b] of Object.entries(BUILDING_STYLES)) (fam[b.group || 'Other'] ||= []).push([id, b]);
+    items = Object.entries(fam).map(([name, list]) => `<h3 class="famhead">${esc(name)}</h3>
+      <div class="grid-items">${list.map(([id, b]) => itemButton('building', id, b.icon, b.name, isArmed('building', id))).join('')}</div>`).join('');
   } else if (ui.cat === 'Roof plant') {
     items = ROOF_KIT.map((m) => itemButton('roof', m.id, m.icon, m.name, isArmed('roof', m.id))).join('');
   } else if (ui.cat === 'Booths') {
@@ -254,7 +308,7 @@ function palettePanel() {
   return `<h2>Add to the site</h2>
     <p class="hint">Pick a thing, then click the ground to drop it. Roof machines go on a roof.</p>
     <div class="chips catrow">${CATS.map((c) => `<button class="chip${ui.cat === c ? ' on' : ''}" data-act="cat" data-value="${c}">${c}</button>`).join('')}</div>
-    <div class="grid-items">${items}</div>
+    ${ui.cat === 'Buildings' ? items : `<div class="grid-items">${items}</div>`}
     ${ui.pending ? `<p class="note">Placing <b>${esc(ui.pending.name)}</b> — click the view. <button class="btn tiny" data-act="cancel">Cancel</button></p>` : ''}`;
 }
 
@@ -442,22 +496,30 @@ function sitePanel() {
 }
 
 function viewPanel() {
-  const v = state.view;
+  const v = viewOf(state);
   const preset = (name, yaw, pitch, zoom) => `<button class="chip" data-act="campreset" data-value="${yaw},${pitch},${zoom}">${name}</button>`;
   return `<h2>Camera</h2>
-    <p class="hint">Fly around it. Drag the view to orbit, shift-drag to pan, wheel to zoom.</p>
-    <div class="field"><label for="v-yaw">Compass<b>${Math.round(v.yaw)}°</b></label>
+    <p class="hint">Drag to orbit, right-drag or shift-drag to pan, wheel to zoom at the pointer.
+      Two fingers pinch and pan. Double-click anything to fly to it.</p>
+    <div class="field"><label for="v-yaw">Heading<b>${Math.round(v.yaw)}°</b></label>
       <input id="v-yaw" type="range" min="0" max="359" step="1" value="${Math.round(v.yaw)}" data-act="view" data-key="yaw"></div>
     <div class="field"><label for="v-pitch">Tilt<b>${Math.round(v.pitch)}°</b></label>
-      <input id="v-pitch" type="range" min="6" max="86" step="1" value="${Math.round(v.pitch)}" data-act="view" data-key="pitch"></div>
-    <div class="field"><label for="v-zoom">Zoom<b>${(v.zoom || 1).toFixed(2)}×</b></label>
-      <input id="v-zoom" type="range" min="0.4" max="6" step="0.05" value="${v.zoom || 1}" data-act="view" data-key="zoom"></div>
-    <div class="field"><label>Jump to</label><div class="chips">
+      <input id="v-pitch" type="range" min="${PITCH_MIN}" max="${PITCH_MAX}" step="1" value="${Math.round(v.pitch)}" data-act="view" data-key="pitch"></div>
+    <div class="field"><label for="v-zoom">Zoom<b>${v.zoom.toFixed(2)}×</b></label>
+      <input id="v-zoom" type="range" min="${ZOOM_MIN}" max="${ZOOM_MAX}" step="0.05" value="${v.zoom}" data-act="view" data-key="zoom"></div>
+    <div class="field"><label>Fly to</label><div class="chips">
       ${preset('Front', 45, 34, 1)}${preset('Back', 225, 34, 1)}${preset('Left', 135, 34, 1)}${preset('Right', 315, 34, 1)}
-      ${preset('Overhead', 45, 84, 1)}${preset('Street level', 20, 9, 2.2)}${preset('Drone', 60, 20, 1.8)}
+      ${preset('Overhead', 45, 86, 1)}${preset('Street level', 20, 7, 3)}${preset('Drone', 60, 18, 2)}${preset('Corner', 25, 26, 1.4)}
     </div></div>
+    <div class="row tight">
+      <button class="btn tiny" data-act="focus">Frame selection (F)</button>
+      <button class="btn tiny" data-act="north">Face north (N)</button>
+      <button class="btn tiny" data-act="cam-reset">Reset (0)</button>
+    </div>
     <div class="toggles"><button class="toggle${state.view.time === 'night' ? ' on' : ''}" data-act="time">
-      <span>Night</span><span class="pill">${state.view.time === 'night' ? 'On' : 'Off'}</span></button></div>`;
+      <span>Night</span><span class="pill">${state.view.time === 'night' ? 'On' : 'Off'}</span></button></div>
+    <p class="note">Keys: WASD or arrows pan · Q/E turn · PgUp/PgDn tilt · +/− zoom · F frames the
+      selection · N faces north · 0 resets.</p>`;
 }
 
 function drawPanel() {
@@ -510,7 +572,8 @@ function setBays(b, face, n) {
 function armItem(kind, key) {
   const make = () => {
     if (kind === 'building') {
-      const b = makeBuilding(key, { wall: state.skin.wall, band: state.skin.band });
+      // Keep the model's own materials — a brick terrace should arrive brick.
+      const b = makeBuilding(key);
       b.sign.on = false;
       return b;
     }
@@ -549,17 +612,15 @@ function ghostAt(ev) {
   }
   const [x, y] = worldAt(ev, 0);
   const fp = footprint(o);
-  o.x = snapXY(x - fp.w / 2);
-  o.y = snapXY(y - fp.d / 2);
-  const ok = o.kind === 'building' ? true : isClear(state, footprint(o));
-  return { obj: o, ok, z: 0 };
+  place(o, x - fp.w / 2, y - fp.d / 2, { snap: !ev.altKey });
+  return { obj: o, ok: isClear(state, footprint(o), null, o.kind), z: 0 };
 }
 
 function placeGhost() {
   const p = ui.pending;
   if (!p || !ui.ghost) return;
-  if (!ui.ghost.ok && p.kind !== 'building') {
-    ui.hint = p.kind === 'roof' ? 'That is not over a roof.' : 'That would sit inside a building.';
+  if (!ui.ghost.ok) {
+    ui.hint = p.kind === 'roof' ? 'That is not over a roof.' : 'Something solid is already there.';
     drawStage();
     return;
   }
@@ -576,6 +637,10 @@ function placeGhost() {
     copy.id = newId(p.kind[0]);
     state.objects.push(copy);
     ui.selected = copy.id;
+    if (copy.kind === 'building') {
+      const shoved = evictFrom(state, copy);
+      if (shoved) ui.hint = `Moved ${shoved} thing${shoved > 1 ? 's' : ''} out of the way.`;
+    }
   }
   ui.hint = '';
   save();
@@ -587,6 +652,14 @@ function placeGhost() {
 /* -------------------------------------------------------------- the stage */
 
 let drag = null;
+const rig = createRig({
+  getState: () => state,
+  getSize: stageSize,
+  redraw: (fast) => drawStage(fast),
+  save,
+});
+
+const stageRect = () => document.getElementById('stage').getBoundingClientRect();
 
 function bindStage() {
   const stage = document.getElementById('stage');
@@ -595,21 +668,30 @@ function bindStage() {
   stage.addEventListener('pointermove', onMove);
   stage.addEventListener('pointerleave', () => { ui.hover = null; });
   stage.addEventListener('wheel', onWheel, { passive: false });
+  stage.addEventListener('dblclick', onDoubleClick);
+  stage.addEventListener('contextmenu', (ev) => ev.preventDefault());
   window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
 }
 
 function onDown(ev) {
   ev.preventDefault();
   const stage = document.getElementById('stage');
-  stage.setPointerCapture?.(ev.pointerId);
+  try { stage.setPointerCapture(ev.pointerId); } catch { /* synthetic or already gone */ }
   ui.shift = ev.shiftKey;
-  if (ui.pending) {
+
+  if (ui.pending && ev.button === 0 && !ev.shiftKey) {
     ui.ghost = ghostAt(ev);
     placeGhost();
     return;
   }
-  const hit = ev.target.closest?.('[data-id]');
-  if (hit && !ev.shiftKey) {
+
+  // Right button, middle button, shift or two fingers all mean "move the
+  // world", never "move the thing under the pointer".
+  const wantsPan = ev.button === 1 || ev.button === 2 || ev.shiftKey;
+  const hit = wantsPan ? null : ev.target.closest?.('[data-id]');
+
+  if (hit) {
     const id = hit.dataset.id;
     ui.selected = id;
     ui.tab = 'selected';
@@ -626,77 +708,65 @@ function onDown(ev) {
     drawAll();
     return;
   }
-  drag = {
-    mode: ev.shiftKey || ev.button === 1 ? 'pan' : 'orbit',
-    sx: ev.clientX, sy: ev.clientY,
-    yaw: state.view.yaw, pitch: state.view.pitch,
-    panX: state.view.panX || 0, panY: state.view.panY || 0,
-    world: worldAt(ev, 0), moved: false,
-  };
-  if (!hit) { ui.selected = null; drawPanel(); }
+
+  rig.down(ev, wantsPan ? 'pan' : 'orbit', stageRect());
+  if (!wantsPan && ev.button === 0) { ui.selected = null; drawPanel(); }
 }
 
 function onMove(ev) {
-  if (!drag) {
-    if (ui.pending) {
-      ui.ghost = ghostAt(ev);
+  if (drag) {
+    drag.moved = true;
+    if (drag.mode === 'move') {
+      const o = byId(drag.id);
+      if (!o) return;
+      const now = worldAt(ev, 0);
+      place(o, drag.from.x + (now[0] - drag.start[0]), drag.from.y + (now[1] - drag.start[1]), { snap: !ev.altKey });
+      ui.badDrop = !isClear(state, footprint(o), o.id, o.kind);
+      ui.hint = ui.badDrop ? 'Blocked — it will spring back' : '';
       scheduleStage(true);
-      return;
+    } else if (drag.mode === 'roof') {
+      const { roof } = drag;
+      const now = worldAt(ev, buildingHeight(roof.b));
+      const local = toLocal(roof.b, now[0], now[1]);
+      const startLocal = toLocal(roof.b, drag.start[0], drag.start[1]);
+      const spec = ROOF_BY_ID[roof.item.type] || { w: 8, d: 6 };
+      roof.item.dx = clamp(drag.from.dx + (local.dx - startLocal.dx), spec.w / 2 + 1, roof.b.w - spec.w / 2 - 1);
+      roof.item.dy = clamp(drag.from.dy + (local.dy - startLocal.dy), spec.d / 2 + 1, roof.b.d - spec.d / 2 - 1);
+      scheduleStage(true);
     }
-    const hit = ev.target.closest?.('[data-id]');
-    const id = hit ? hit.dataset.id : null;
-    if (id !== ui.hover) { ui.hover = id; scheduleStage(true); }
     return;
   }
-  drag.moved = true;
-  if (drag.mode === 'orbit') {
-    state.view.yaw = (drag.yaw - (ev.clientX - drag.sx) * 0.42 + 360) % 360;
-    state.view.pitch = clamp(drag.pitch + (ev.clientY - drag.sy) * 0.28, 6, 86);
+  if (rig.move(ev, stageRect())) return;
+
+  if (ui.pending) {
+    ui.ghost = ghostAt(ev);
     scheduleStage(true);
-  } else if (drag.mode === 'pan') {
-    // Keep the ground point that was grabbed under the pointer.
-    state.view.panX = drag.panX;
-    state.view.panY = drag.panY;
-    const now = worldAt(ev, 0);
-    state.view.panX = drag.panX + (drag.world[0] - now[0]);
-    state.view.panY = drag.panY + (drag.world[1] - now[1]);
-    scheduleStage(true);
-  } else if (drag.mode === 'move') {
-    const o = byId(drag.id);
-    if (!o) return;
-    const now = worldAt(ev, 0);
-    o.x = snapXY(drag.from.x + (now[0] - drag.start[0]));
-    o.y = snapXY(drag.from.y + (now[1] - drag.start[1]));
-    ui.badDrop = o.kind !== 'building' && !isClear(state, footprint(o), o.id);
-    ui.hint = ui.badDrop ? 'That would sit inside a building — it will spring back.' : '';
-    scheduleStage(true);
-  } else if (drag.mode === 'roof') {
-    const { roof } = drag;
-    const now = worldAt(ev, buildingHeight(roof.b));
-    const local = toLocal(roof.b, now[0], now[1]);
-    const startLocal = toLocal(roof.b, drag.start[0], drag.start[1]);
-    const spec = ROOF_BY_ID[roof.item.type] || { w: 8, d: 6 };
-    roof.item.dx = clamp(drag.from.dx + (local.dx - startLocal.dx), spec.w / 2 + 1, roof.b.w - spec.w / 2 - 1);
-    roof.item.dy = clamp(drag.from.dy + (local.dy - startLocal.dy), spec.d / 2 + 1, roof.b.d - spec.d / 2 - 1);
-    scheduleStage(true);
+    return;
   }
+  const hit = ev.target.closest?.('[data-id]');
+  const id = hit ? hit.dataset.id : null;
+  if (id !== ui.hover) { ui.hover = id; scheduleStage(true); }
 }
 
-function onUp() {
+function onUp(ev) {
+  rig.up(ev);
   if (!drag) return;
   if (drag.mode === 'move' && drag.moved) {
     const o = byId(drag.id);
-    if (o && o.kind !== 'building' && !isClear(state, footprint(o), o.id)) {
+    if (o && o.kind === 'building') {
+      evictFrom(state, o);
+      ui.hint = '';
+    } else if (o && !isClear(state, footprint(o), o.id, o.kind)) {
       o.x = drag.from.x;
       o.y = drag.from.y;
-      ui.hint = 'Put back — that spot is inside a building.';
+      ui.hint = 'Put back — that spot is taken.';
     } else {
       ui.hint = '';
     }
     save();
-  } else if ((drag.mode === 'roof' || drag.mode === 'move') && !drag.moved) {
+  } else if (!drag.moved) {
     undoStack.pop();   // a click that only selected does not need an undo step
-  } else if (drag.mode === 'roof') {
+  } else {
     save();
   }
   ui.badDrop = false;
@@ -706,10 +776,14 @@ function onUp() {
 
 function onWheel(ev) {
   ev.preventDefault();
-  state.view.zoom = clamp((state.view.zoom || 1) * Math.pow(1.0016, -ev.deltaY), 0.4, 6);
-  scheduleStage(true);
-  clearTimeout(onWheel.t);
-  onWheel.t = setTimeout(() => { save(); drawStage(); }, 160);
+  rig.wheel(ev, stageRect());
+}
+
+function onDoubleClick(ev) {
+  const hit = ev.target.closest?.('[data-id]');
+  if (!hit) return;
+  const o = byId(hit.dataset.id.split('#')[0]);
+  if (o) rig.focus(footprint(o), stageSize());
 }
 
 /* ----------------------------------------------------------------- actions */
@@ -736,7 +810,12 @@ function rotateSelected(deg) {
     const o = selected();
     if (!o) return;
     o.rot = (((o.rot || 0) + deg) % 360 + 360) % 360;
-    if (o.kind !== 'building' && !isClear(state, footprint(o), o.id)) o.rot = (((o.rot || 0) - deg) % 360 + 360) % 360;
+    if (o.kind === 'building') { evictFrom(state, o); ui.hint = ''; } else if (!isClear(state, footprint(o), o.id, o.kind)) {
+      o.rot = (((o.rot || 0) - deg) % 360 + 360) % 360;
+      ui.hint = 'No room to turn it there — drag it clear first.';
+    } else {
+      ui.hint = '';
+    }
   }
   save();
   drawAll();
@@ -864,14 +943,22 @@ function applyAction(el, ev) {
     }
     case 'campreset': {
       const [yaw, pitch, zoom] = value.split(',').map(Number);
-      Object.assign(state.view, { yaw, pitch, zoom, panX: 0, panY: 0 });
-      save();
-      return drawAll();
+      rig.flyTo({ yaw, pitch, zoom });
+      return;
     }
-    case 'orbit': state.view.yaw = ((state.view.yaw + +value) % 360 + 360) % 360; save(); return drawAll();
-    case 'tilt': state.view.pitch = clamp(state.view.pitch + +value, 6, 86); save(); return drawAll();
-    case 'zoom': state.view.zoom = clamp((state.view.zoom || 1) * +value, 0.4, 6); save(); return drawAll();
-    case 'cam-reset': Object.assign(state.view, { yaw: 45, pitch: 34, zoom: 1, panX: 0, panY: 0 }); save(); return drawAll();
+    case 'orbit': return rig.nudge('yaw', +value);
+    case 'tilt': return rig.nudge('pitch', +value);
+    case 'zoom': return rig.nudge('zoom', +value);
+    case 'north': return rig.flyTo({ yaw: 0 });
+    case 'focus': {
+      const o = selected() || (selectedRoof() || {}).b;
+      if (o) rig.focus(footprint(o), stageSize());
+      else rig.flyTo({ tx: state.lot.width / 2, ty: state.lot.depth / 2, zoom: 1 });
+      return;
+    }
+    case 'cam-reset':
+      rig.flyTo({ yaw: 45, pitch: 34, zoom: 1, tx: state.lot.width / 2, ty: state.lot.depth / 2 });
+      return;
     case 'time': state.view.time = state.view.time === 'night' ? 'day' : 'night'; save(); return drawAll();
     case 'undo': return restore(undoStack, redoStack);
     case 'redo': return restore(redoStack, undoStack);
@@ -917,7 +1004,7 @@ document.addEventListener('input', (ev) => {
     return;
   }
   if (act === 'view') {
-    state.view[el.dataset.key] = num;
+    viewOf(state)[el.dataset.key] = num;
     const b = document.querySelector(`label[for="${el.id}"] b`);
     if (b) b.textContent = el.dataset.key === 'zoom' ? `${num.toFixed(2)}×` : `${Math.round(num)}°`;
     queueSave();
@@ -953,6 +1040,9 @@ document.addEventListener('input', (ev) => {
 
 document.addEventListener('change', (ev) => {
   if (!ev.target.dataset?.act) return;
+  // Resizing a building can swallow whatever was parked beside it.
+  const o = selected();
+  if (o && o.kind === 'building' && ev.target.dataset.act === 'num') evictFrom(state, o);
   save();
   drawStage(false);
   if (ev.target.dataset.act === 'num') drawPanel();
@@ -968,8 +1058,15 @@ document.addEventListener('keydown', (ev) => {
     snapshot();
     if (roof) { roof.item.dx += dx; roof.item.dy += dy; }
     else {
-      o.x += dx; o.y += dy;
-      if (o.kind !== 'building' && !isClear(state, footprint(o), o.id)) { o.x -= dx; o.y -= dy; }
+      const was = { x: o.x, y: o.y };
+      place(o, o.x + dx, o.y + dy, { snap: false });
+      if (!isClear(state, footprint(o), o.id, o.kind)) {
+        o.x = was.x;
+        o.y = was.y;
+        ui.hint = 'Blocked — something solid is in the way.';
+      } else {
+        ui.hint = '';
+      }
     }
     save();
     drawAll();
@@ -988,10 +1085,33 @@ document.addEventListener('keydown', (ev) => {
     ev.preventDefault();
     return ev.shiftKey ? restore(redoStack, undoStack) : restore(undoStack, redoStack);
   }
-  if (ev.key === 'ArrowLeft') return nudge(-step, 0);
-  if (ev.key === 'ArrowRight') return nudge(step, 0);
-  if (ev.key === 'ArrowUp') return nudge(0, -step);
-  if (ev.key === 'ArrowDown') return nudge(0, step);
+  // Arrows nudge the selection when there is one, and fly the camera when
+  // there is not.
+  const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+  if (arrows[ev.key]) {
+    const [ax, ay] = arrows[ev.key];
+    ev.preventDefault();
+    if (ui.selected) return nudge(ax * step, ay * step);
+    return rig.slide(ax, ay);
+  }
+  const pans = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] };
+  if (pans[ev.key.toLowerCase()]) {
+    const [ax, ay] = pans[ev.key.toLowerCase()];
+    return rig.slide(ax, ay);
+  }
+  if (ev.key === 'q' || ev.key === 'Q') return rig.nudge('yaw', ev.shiftKey ? -5 : -15);
+  if (ev.key === 'e' || ev.key === 'E') return rig.nudge('yaw', ev.shiftKey ? 5 : 15);
+  if (ev.key === 'n' || ev.key === 'N') return rig.flyTo({ yaw: 0 });
+  if (ev.key === '+' || ev.key === '=') return rig.nudge('zoom', 1.3);
+  if (ev.key === '-' || ev.key === '_') return rig.nudge('zoom', 1 / 1.3);
+  if (ev.key === '0') return rig.flyTo({ yaw: 45, pitch: 34, zoom: 1, tx: state.lot.width / 2, ty: state.lot.depth / 2 });
+  if (ev.key === 'f' || ev.key === 'F') {
+    const o = selected() || (selectedRoof() || {}).b;
+    if (o) rig.focus(footprint(o), stageSize());
+    return;
+  }
+  if (ev.key === 'PageUp') return rig.nudge('pitch', -6);
+  if (ev.key === 'PageDown') return rig.nudge('pitch', 6);
 });
 
 /* ------------------------------------------------------------------ export */

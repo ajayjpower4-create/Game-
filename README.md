@@ -182,10 +182,20 @@ Open <http://localhost:3000/building>.
 
 ## The camera
 
-Drag the view to orbit all the way around the site, shift-drag to pan, and the
-wheel to zoom from an overview down to standing between the trailers. Tilt runs
-from 6° (street level) to 86° (straight down), and the View tab has jumps for
-front, back, left, right, overhead, street level and a low drone angle.
+It orbits a point on the ground rather than the middle of the lot, so:
+
+- **Drag** to orbit, and a flick keeps turning and eases off.
+- **Right-drag** or shift-drag to pan — the ground stays under the pointer.
+- **Wheel** zooms *at the pointer*, not at the middle of the screen.
+- **Two fingers** pinch to zoom and drag to pan.
+- **Double-click** anything to fly to it; F frames the selection.
+- Tilt runs from 4° (standing at the fence) to 88° (straight down), zoom from
+  0.25× to 12×, and the preset views fly rather than cut.
+
+The scale is fixed against the lot's own diagonal, so swinging round the site
+no longer pumps it in and out — which was the thing that made the old camera
+feel wrong. A compass in the corner shows where north is; click it to face
+north.
 
 ## Everything is an object
 
@@ -194,21 +204,34 @@ Buildings included. Click anything in the view to select it; then turn it in
 or delete it. Ctrl+Z undoes. So the security sign facing the wrong way can be
 turned to face the right way — or deleted and done again.
 
-Nothing but a building may stand inside a building: drag a trailer into a wall
-and it springs back, and a placement that would land inside one is refused with
-the footprint drawn in red.
+Nothing solid may share ground with anything else solid: drag a trailer into a
+wall — or into another trailer — and it springs back, and a placement that
+would land on something is refused with the footprint drawn in red. Bollards,
+cones, trees and signs are exempt, since they are scatter.
+
+Buildings are the exception, because they are the permanent thing on a lot:
+drop one wherever you like and whatever was standing there is pushed out to
+clear ground. The same happens when you drag, turn or *resize* a building —
+growing a wall over a parked trailer is exactly how things used to end up
+inside buildings.
+
+Back a trailer, box truck or van up near a loading bay and it squares itself
+onto the bay instead of staying at whatever angle you dragged it in at.
 
 ## What you can add
 
 The Add tab holds the catalogue. Pick a thing, then click the ground to drop
 it; shift-click keeps the tool armed for a run of fence or bollards.
 
-- **Buildings** — twelve models: warehouse shell, office block, small 2–3
-  storey building, tower, storage row, retail strip, workshop, pitched unit,
-  car park deck, cold store, glass pavilion and plant room. Put as many on the
-  lot as you like. Each one also takes a cladding (precast panels, ribbed
-  metal, brick courses, plain render) and a roof (flat, pitched, sawtooth), so
-  the same box can read as a shed, a brick unit or a glazed showroom.
+- **Buildings** — twenty-four models in three families. *Sheds and industry*:
+  warehouse shell, storage row, workshop, cold store, plant room, cross-dock,
+  sawtooth mill, hangar, high-bay store, data hall. *Offices and shops*: office
+  block, tower, retail strip, car park deck, glass pavilion, big-box store,
+  terrace of units. *Small buildings*: small building, pitched unit, link
+  annex, lodge, kiosk, barn, substation. Put as many on the lot as you like.
+  Each one also takes a cladding (precast panels, ribbed metal, brick courses,
+  plain render) and a roof (flat, pitched, monopitch, barrel arch, sawtooth),
+  so the same box can read as a shed, a brick terrace or an arched hangar.
 - **Roof plant** — 18 machines: packaged AC units, large rooftop units, a
   chiller, cooling tower, exhaust fan, mushroom vent, flue stack, skylight,
   skylight monitor, solar array, satellite dish, antenna mast, water tank,
@@ -263,10 +286,13 @@ detail comes back when you let go.
 
 | Key | What it does |
 | --- | --- |
-| Drag / shift-drag / wheel | Orbit · pan · zoom |
-| Click | Select · click empty ground to deselect |
+| Drag / right-drag / wheel | Orbit · pan · zoom at the pointer |
+| Click / double-click | Select · fly to it |
+| WASD | Pan the camera |
+| Arrows | Nudge the selection 2 ft (10 ft with shift), or pan when nothing is selected |
+| Q / E | Turn the camera · PgUp/PgDn tilt · +/− zoom |
+| N / F / 0 | Face north · frame the selection · reset the view |
 | R / Shift+R | Turn the selection (or the thing being placed) |
-| Arrows | Nudge 2 ft, or 10 ft with shift |
 | Delete | Delete the selection |
 | Esc | Cancel placement, or deselect |
 | Ctrl+Z / Ctrl+Shift+Z | Undo · redo |
@@ -275,7 +301,8 @@ detail comes back when you let go.
 
 | Path | What it is |
 | --- | --- |
-| `public/building/iso.js` | Projection with free yaw/pitch/zoom and unprojection, lit prisms, cast-shadow hulls, wall faces, overlap tests |
+| `public/building/iso.js` | Projection and unprojection, lit prisms, roof forms, cast-shadow hulls, wall faces, overlap tests |
+| `public/building/camera.js` | The camera: orbit target, fixed scale, zoom-to-cursor, pinch, damping, flights |
 | `public/building/catalog.js` | The object model, item catalogues, presets, save migration, and the rule that nothing stands inside a building |
 | `public/building/parts.js` | Every drawable piece: wall openings, the 18 machines, the 10 booths, props and vehicles |
 | `public/building/scene.js` | Site assembly, ground and marking, depth sort, hit shapes, day/night palette |

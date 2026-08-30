@@ -4,10 +4,11 @@
  * whole scene is painted back to front from the camera's own depth. */
 
 import {
-  makeCamera, drawBox, boxFaces, poly, line, pad, ellipse, faceText, topFace, gableRoof,
+  makeCamera, drawBox, boxFaces, poly, line, pad, ellipse, faceText, topFace, gableRoof, barrelRoof, monoRoof,
   mixHex, rgba, lum, clamp, corners, hull, shadowOf, overlaps, contains, facing, SUN, DEG,
 } from './iso.js';
 import { drawCell, drawRoofItem, drawBooth, drawProp, ribs } from './parts.js';
+import { fitCamera } from './camera.js';
 import {
   FLOOR_HEIGHT, STALL, PROP_BY_ID, ROOF_BY_ID, BOOTH_BY_ID, buildingHeight, wallCols,
   footprint, objHeight,
@@ -66,45 +67,119 @@ const nearKey = (cam, fp) => Math.max(...corners(fp).map((p) => cam.depth(p[0], 
 /** Buildings an object must not sit inside. */
 export const buildingsOf = (state) => state.objects.filter((o) => o.kind === 'building');
 
-/** Is this footprint clear of every building (and optionally other solids)? */
-export function isClear(state, fp, ignoreId) {
-  for (const b of state.objects) {
-    if (b.id === ignoreId) continue;
-    if (b.kind !== 'building') continue;
-    if (overlaps(fp, footprint(b), -0.5)) return false;
+/* Things with enough bulk that two of them in the same place is a glitch, not
+ * a design. Bollards, cones, trees and signs are left out — they are scatter,
+ * and stopping them touching would be more annoying than the overlap. */
+const SOLID_PROPS = new Set([
+  'trailer', 'tractor', 'boxtruck', 'van', 'car', 'forklift',
+  'container', 'silo', 'generator', 'transformer', 'dumpster', 'canopy', 'pallets',
+]);
+
+export const isSolid = (o) => o.kind === 'building' || o.kind === 'booth' || (o.kind === 'prop' && SOLID_PROPS.has(o.type));
+
+/**
+ * Is this footprint free? Nothing solid may share ground with anything else
+ * solid — which is what stops trailers parking inside a wall or inside each
+ * other. Buildings are the exception to each other, since wings and podiums
+ * are meant to join.
+ */
+export function isClear(state, fp, ignoreId, kind = 'prop') {
+  // A building is the permanent thing on a lot: it goes where you put it, and
+  // whatever was standing there gets moved out (see `evictFrom`).
+  if (kind === 'building') return true;
+  for (const o of state.objects) {
+    if (o.id === ignoreId || !isSolid(o)) continue;
+    if (overlaps(fp, footprint(o), -0.5)) return false;
   }
   return true;
 }
 
-/* ------------------------------------------------------------------ camera */
-
-export function fitCamera(state, size) {
-  const { lot, view } = state;
-  const margin = 46;
-  const slab = { x: -margin, y: -margin, w: lot.width + margin * 2, d: lot.depth + margin + 70, rot: 0 };
-  const probe = makeCamera({ yaw: view.yaw, pitch: view.pitch, scale: 1, cx: lot.width / 2, cy: lot.depth / 2 });
-  let maxZ = 40;
-  for (const o of state.objects) maxZ = Math.max(maxZ, objHeight(o) + 20);
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const [x, y] of corners(slab)) {
-    for (const z of [-11, maxZ]) {
-      const [px, py] = probe.project(x, y, z);
-      minX = Math.min(minX, px); maxX = Math.max(maxX, px);
-      minY = Math.min(minY, py); maxY = Math.max(maxY, py);
+/**
+ * Push anything caught inside a building out to the nearest clear ground.
+ * Called whenever a building is placed, moved, turned or resized — growing a
+ * wall over a parked trailer is exactly how things end up inside buildings.
+ */
+export function evictFrom(state, b) {
+  const box = footprint(b);
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.d / 2;
+  let moved = 0;
+  for (const o of state.objects) {
+    if (o === b || o.kind === 'building' || !isSolid(o)) continue;
+    if (!overlaps(footprint(o), box, -0.5)) continue;
+    const f = footprint(o);
+    let dx = f.x + f.w / 2 - cx;
+    let dy = f.y + f.d / 2 - cy;
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    for (let step = 5; step <= 300; step += 5) {
+      const nx = o.x + dx * step;
+      const ny = o.y + dy * step;
+      if (isClear(state, { ...f, x: nx, y: ny }, o.id, o.kind)) {
+        o.x = nx;
+        o.y = ny;
+        moved += 1;
+        break;
+      }
     }
   }
-  const fit = Math.min(size.w / (maxX - minX), size.h / (maxY - minY)) * 0.98;
-  const scale = fit * (view.zoom || 1);
-  return makeCamera({
-    yaw: view.yaw,
-    pitch: view.pitch,
-    scale,
-    cx: lot.width / 2 + (view.panX || 0),
-    cy: lot.depth / 2 + (view.panY || 0),
-    ox: size.w / 2 - ((minX + maxX) / 2) * scale,
-    oy: size.h / 2 - ((minY + maxY) / 2) * scale,
-  });
+  return moved;
 }
+
+/**
+ * Square a vehicle onto the nearest loading bay it has been backed up to, so a
+ * trailer left roughly at a door ends up parked at it rather than at whatever
+ * angle it was dragged in at. Returns the new placement, or null if it is not
+ * near a bay.
+ */
+export function snapToDock(state, o, reach = 24) {
+  const fp = footprint(o);
+  const cx = fp.x + fp.w / 2;
+  const cy = fp.y + fp.d / 2;
+  let best = null;
+  for (const a of dockAnchors(state)) {
+    const px = a.x + a.nx * (fp.d / 2 + 1.5);
+    const py = a.y + a.ny * (fp.d / 2 + 1.5);
+    const dist = Math.hypot(px - cx, py - cy);
+    if (dist < reach && (!best || dist < best.dist)) best = { dist, px, py, a };
+  }
+  if (!best) return null;
+  // Back it in: the vehicle's own length axis points into the wall.
+  const rot = (Math.atan2(best.a.nx, -best.a.ny) * 180) / Math.PI;
+  const turned = footprint({ ...o, rot });
+  const spot = { x: best.px - turned.w / 2, y: best.py - turned.d / 2, rot };
+  return isClear(state, footprint({ ...o, ...spot }), o.id, o.kind) ? spot : null;
+}
+
+/** Every loading bay on the site, as a point on the wall and its outward normal. */
+export function dockAnchors(state) {
+  const out = [];
+  const ids = ['S', 'E', 'N', 'W'];
+  for (const b of buildingsOf(state)) {
+    const c = corners(footprint(b));
+    for (let i = 0; i < 4; i++) {
+      const a = c[i];
+      const e = c[(i + 1) % 4];
+      const len = Math.hypot(e[0] - a[0], e[1] - a[1]);
+      if (len < 1) continue;
+      const u = [(e[0] - a[0]) / len, (e[1] - a[1]) / len];
+      const n = [u[1], -u[0]];
+      const row = ((b.walls[ids[i]] || [])[0]) || [];
+      const cw = len / Math.max(1, row.length);
+      row.forEach((type, col) => {
+        if (type !== 'dock' && type !== 'roll') return;
+        const t = (col + 0.5) * cw;
+        out.push({ x: a[0] + u[0] * t, y: a[1] + u[1] * t, nx: n[0], ny: n[1], type });
+      });
+    }
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ camera */
+
+export { fitCamera, baseScale } from './camera.js';
 
 /* --------------------------------------------------------------- buildings */
 
@@ -188,6 +263,22 @@ function drawBuilding(cam, b, ctx) {
       color: b.roofColor || (night ? '#3a3138' : '#8d5a45'),
       rise: clamp(Math.min(b.w, b.d) * 0.22, 4, 16),
       along,
+    });
+    return svg + signSvg;
+  }
+  if (roofType === 'barrel') {
+    svg += barrelRoof(cam, box, {
+      color: b.roofColor || (night ? '#3a4048' : '#aeb5bd'),
+      rise: clamp(Math.min(b.w, b.d) * 0.34, 8, 34),
+      along: b.w >= b.d ? 'w' : 'd',
+    });
+    return svg + signSvg;
+  }
+  if (roofType === 'mono') {
+    svg += monoRoof(cam, box, {
+      color: b.roofColor || (night ? '#333a42' : '#98a0a8'),
+      rise: clamp(Math.min(b.w, b.d) * 0.18, 4, 16),
+      along: b.w >= b.d ? 'w' : 'd',
     });
     return svg + signSvg;
   }

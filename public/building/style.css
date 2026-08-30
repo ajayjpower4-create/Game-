@@ -158,6 +158,16 @@ input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px;
 }
 .stagehud > * { pointer-events: auto; }
 .camrow { display: flex; gap: 4px; flex-wrap: wrap; }
+.compass {
+  width: 54px; height: 54px; padding: 0; flex: none;
+  background: rgba(10,15,27,.82); border: 1px solid var(--line); border-radius: 50%;
+}
+.compass:hover { border-color: var(--accent-2); }
+.compass svg { width: 100%; height: 100%; display: block; }
+.compass .ring { fill: none; stroke: rgba(255,255,255,.14); stroke-width: 1.5; }
+.compass .n { fill: #ff7a6b; }
+.compass .s { fill: #8d97a8; }
+.compass .cardinal { fill: var(--dim); font-size: 8px; text-anchor: middle; font-family: inherit; font-weight: 700; }
 .btn.sq { width: 38px; padding: 0; text-align: center; font-size: 15px; }
 .stagehud .readout {
   margin-left: auto; background: rgba(10,15,27,.82); border: 1px solid var(--line);
@@ -218,3 +228,6 @@ input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px;
 
 .toggle small { color: #6a798f; font-size: 11.5px; }
 .panel-body h3 { font-size: 14px; margin: 4px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+
+.famhead { font-size: 12px; margin: 14px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: .08em; }
+.famhead:first-child { margin-top: 0; }

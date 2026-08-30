@@ -326,6 +326,68 @@ export function gableRoof(cam, box, { color = '#8d5a45', rise = 4, along = 'w' }
   return out;
 }
 
+const lerp2 = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+
+/** A curved arch roof — hangars, barns, anything with a hooped frame. */
+export function barrelRoof(cam, box, { color = '#9aa2ac', rise = 12, along = 'w', segs = 14 } = {}) {
+  const c = corners(box);
+  const z = box.z1 == null ? 10 : box.z1;
+  const [a0, a1, b0, b1] = along === 'w' ? [c[0], c[1], c[3], c[2]] : [c[0], c[3], c[1], c[2]];
+  const prof = (t) => ({ p: lerp2(a0, b0, t), q: lerp2(a1, b1, t), z: z + rise * Math.sin(Math.PI * t) });
+  const strips = [];
+  for (let i = 0; i < segs; i++) {
+    const t0 = i / segs;
+    const t1 = (i + 1) / segs;
+    const A = prof(t0);
+    const B = prof(t1);
+    const pts = [[A.p[0], A.p[1], A.z], [A.q[0], A.q[1], A.z], [B.q[0], B.q[1], B.z], [B.p[0], B.p[1], B.z]];
+    // The hoop's normal swings from one flank to the other across the sweep.
+    const mid = (t0 + t1) / 2;
+    const sweep = [b0[0] - a0[0], b0[1] - a0[1]];
+    const len = Math.hypot(sweep[0], sweep[1]) || 1;
+    const flank = Math.cos(Math.PI * mid);
+    const n = [(-sweep[0] / len) * flank, (-sweep[1] / len) * flank];
+    strips.push({
+      pts,
+      key: cam.depth((A.p[0] + B.q[0]) / 2, (A.p[1] + B.q[1]) / 2),
+      fill: mixHex(color, 0.72 + 0.5 * Math.sin(Math.PI * mid) * toneOf(n)),
+    });
+  }
+  let out = '';
+  for (const cap of [[a0, b0], [a1, b1]]) {
+    const arc = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      const p = lerp2(cap[0], cap[1], t);
+      arc.push([p[0], p[1], z + rise * Math.sin(Math.PI * t)]);
+    }
+    out += poly(cam, arc, { fill: mixHex(color, 0.78), stroke: 'rgba(18,26,38,.35)', 'stroke-width': 0.5 });
+  }
+  for (const s of strips.sort((x, y) => x.key - y.key)) {
+    out += poly(cam, s.pts, { fill: s.fill, stroke: 'rgba(18,26,38,.18)', 'stroke-width': 0.4 });
+  }
+  return out;
+}
+
+/** A single sloped plane — lean-to and monopitch roofs. */
+export function monoRoof(cam, box, { color = '#8d949c', rise = 8, along = 'w' } = {}) {
+  const c = corners(box);
+  const z = box.z1 == null ? 10 : box.z1;
+  const [lo0, lo1, hi0, hi1] = along === 'w' ? [c[0], c[1], c[3], c[2]] : [c[0], c[3], c[1], c[2]];
+  let out = poly(cam, [
+    [lo0[0], lo0[1], z], [lo1[0], lo1[1], z], [hi1[0], hi1[1], z + rise], [hi0[0], hi0[1], z + rise],
+  ], { fill: mixHex(color, 1.1), stroke: 'rgba(18,26,38,.35)', 'stroke-width': 0.5 });
+  for (const [a, b] of [[lo0, hi0], [lo1, hi1]]) {
+    out += poly(cam, [[a[0], a[1], z], [b[0], b[1], z], [b[0], b[1], z + rise]], {
+      fill: mixHex(color, 0.85), stroke: 'rgba(18,26,38,.3)', 'stroke-width': 0.5,
+    });
+  }
+  out += poly(cam, [[hi0[0], hi0[1], z], [hi1[0], hi1[1], z], [hi1[0], hi1[1], z + rise], [hi0[0], hi0[1], z + rise]], {
+    fill: mixHex(color, 0.92), stroke: 'rgba(18,26,38,.3)', 'stroke-width': 0.5,
+  });
+  return out;
+}
+
 /** A vertical cylinder — tanks, stacks, silos, bollards. */
 export function cylinder(cam, { x, y, r, z0 = 0, z1 = 10 }, { color = '#b9c0c8', top = null } = {}) {
   const seg = 16;
