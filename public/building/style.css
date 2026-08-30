@@ -51,16 +51,20 @@ h1, h2, h3 { line-height: 1.2; margin: 0 0 .5em; }
 
 /* ---------------------------------------------------------------- layout */
 
-.workshop { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 16px; align-items: start; }
+.workshop { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px; align-items: start; }
+.stagewrap { position: relative; }
 
 .stage {
   position: relative; background: #070b14;
   border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
   min-height: 420px; aspect-ratio: 3 / 2;
 }
+.stage { touch-action: none; cursor: grab; }
+.stage:active { cursor: grabbing; }
 .stage svg { display: block; width: 100%; height: 100%; }
-.stage .hot { fill: rgba(255,255,255,0); cursor: pointer; }
-.stage .hot:hover { fill: rgba(143,227,192,.28); stroke: var(--accent-2); stroke-width: 1.5; }
+.stage .pick { cursor: pointer; }
+.stage .hit { stroke: none; }
+.stage .pick.hov { filter: brightness(1.14) saturate(1.05); }
 
 .stagebar {
   position: absolute; left: 12px; bottom: 12px; right: 12px;
@@ -144,3 +148,73 @@ input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px;
   .stagebar { flex-wrap: wrap; }
   .readout { margin-left: 0; }
 }
+
+
+/* ------------------------------------------------------------ editor chrome */
+
+.stagehud {
+  position: absolute; left: 10px; right: 10px; top: 10px;
+  display: flex; gap: 8px; align-items: flex-start; pointer-events: none;
+}
+.stagehud > * { pointer-events: auto; }
+.camrow { display: flex; gap: 4px; flex-wrap: wrap; }
+.btn.sq { width: 38px; padding: 0; text-align: center; font-size: 15px; }
+.stagehud .readout {
+  margin-left: auto; background: rgba(10,15,27,.82); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 12px; font-size: 12px; color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.hintbar {
+  position: absolute; left: 10px; bottom: 10px; right: 10px;
+  background: rgba(10,15,27,.82); border: 1px solid var(--line); border-radius: 9px;
+  padding: 7px 11px; font-size: 12.5px; color: var(--dim); pointer-events: none;
+}
+.hintbar.warn { color: var(--accent-2); border-color: var(--accent-2); }
+.hintbar.bad { color: #ffb4b4; border-color: #b04747; }
+
+.btn.danger { border-color: #5c2b2b; color: #ffb4b4; }
+.btn.danger:hover { border-color: #b04747; background: #2a1a1f; }
+.btn.tiny { padding: 5px 9px; min-height: 30px; font-size: 12.5px; }
+
+.row.tight { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.mini { color: var(--dim); font-size: 12px; align-self: center; }
+.linkish { background: none; border: 0; color: var(--ink); text-align: left; flex: 1; padding: 4px 0; }
+.linkish:hover { color: var(--accent-2); }
+
+.catrow { margin-bottom: 12px; }
+
+.grid-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; }
+.grid-items.small { grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); }
+.item {
+  background: #0d1424; border: 1px solid var(--line); color: var(--ink);
+  border-radius: 10px; padding: 8px 6px; display: flex; flex-direction: column;
+  align-items: center; gap: 4px; min-height: 62px; text-align: center;
+}
+.item:hover { border-color: var(--accent); background: var(--panel-2); }
+.item.on { border-color: var(--accent-2); background: #17263a; }
+.item .ic { font-size: 18px; line-height: 1; }
+.item .nm { font-size: 11px; color: var(--dim); line-height: 1.2; }
+.item.on .nm { color: var(--ink); }
+
+.wallwrap { overflow-x: auto; margin: 10px 0 12px; background: #0b1120; border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+.wallgrid { display: grid; gap: 3px; }
+.cell {
+  /* No aspect-ratio: with many bays it would force the grid wider than the
+     panel and let cells overlap each other. */
+  height: 26px; border-radius: 5px; font-size: 12px;
+  background: #16203a; border: 1px solid #26324a; color: var(--ink); padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.cell:hover { border-color: var(--accent-2); }
+.cell.filled { background: #24406a; border-color: #3a5f96; }
+
+.objlist { list-style: none; margin: 10px 0 0; padding: 0; }
+.objlist li {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: 8px; margin-bottom: 5px; background: #0d1424;
+}
+.objlist li.on { border-color: var(--accent-2); }
+.objlist li span { display: flex; gap: 4px; }
+
+.toggle small { color: #6a798f; font-size: 11.5px; }
+.panel-body h3 { font-size: 14px; margin: 4px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }

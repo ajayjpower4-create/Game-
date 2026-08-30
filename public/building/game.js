@@ -1,17 +1,38 @@
-/* Building Design Simulator — pick a lot, place a building, shape it, sign it. */
+/* Building Design Simulator — a site editor.
+ *
+ * The camera orbits freely, every object on the lot can be picked up, turned
+ * or thrown away, and buildings are edited wall by wall and roof by roof. */
 
-import { BUILDINGS, WALL_COLORS, SIGN_COLORS, LOGOS, WINDOW_STYLES, FLOOR_HEIGHT, freshState, normalize } from './catalog.js';
-import { render, frame, layout } from './scene.js';
+import {
+  SITE_PRESETS, BUILDING_STYLES, ROOF_KIT, BOOTHS, PROPS, PROP_BY_ID, ROOF_BY_ID, BOOTH_BY_ID,
+  CELLS, WALL_COLORS, SIGN_COLORS, LOGOS, FLOOR_HEIGHT, freshState, normalize, makeBuilding,
+  buildingHeight, wallCols, newId,
+} from './catalog.js';
+import { render, frame, fitCamera, footprint, objHeight, isClear, bounds, buildingsOf } from './scene.js';
+import { contains, corners, clamp } from './iso.js';
 
-const SAVE_KEY = 'building-sim:v1';
+const SAVE_KEY = 'building-sim:v3';
 const app = document.getElementById('app');
 const tools = document.getElementById('tools');
 const crumb = document.getElementById('crumb');
 
 let state = load() || freshState('warehouse');
 let screen = load() ? 'build' : 'start';
-let tab = 'building';
-let pending = { type: 'warehouse', lot: { ...BUILDINGS.warehouse.lot } };
+const ui = {
+  tab: 'build',
+  selected: null,
+  hover: null,
+  pending: null,      // an item armed for placement
+  ghost: null,        // where it would land
+  wall: 'N',
+  paint: 'window',
+  cat: 'Buildings',
+  pointer: null,
+  hint: '',
+};
+let pendingStart = { preset: 'warehouse', lot: { ...SITE_PRESETS.warehouse.lot } };
+const undoStack = [];
+const redoStack = [];
 
 /* ------------------------------------------------------------- persistence */
 
@@ -24,259 +45,182 @@ function load() {
 function save() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch { /* private mode */ }
 }
-
-/* ------------------------------------------------------------ state access */
-
-function get(path) {
-  return path.split('.').reduce((o, k) => (o == null ? o : o[k]), state);
+// Typing never fires `change` until the field loses focus, so edits are saved
+// as they are made rather than waiting for a blur that may not come.
+let saveTimer;
+function queueSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 400);
 }
-function set(path, value) {
-  const keys = path.split('.');
-  const last = keys.pop();
-  const target = keys.reduce((o, k) => o[k], state);
-  target[last] = value;
+function snapshot() {
+  undoStack.push(JSON.stringify({ objects: state.objects, lot: state.lot, site: state.site }));
+  if (undoStack.length > 60) undoStack.shift();
+  redoStack.length = 0;
+}
+function restore(stack, other) {
+  if (!stack.length) return;
+  other.push(JSON.stringify({ objects: state.objects, lot: state.lot, site: state.site }));
+  const snap = JSON.parse(stack.pop());
+  state.objects = snap.objects;
+  state.lot = snap.lot;
+  state.site = snap.site;
+  if (!state.objects.some((o) => o.id === ui.selected)) ui.selected = null;
   save();
-  draw();
+  drawAll();
 }
 
-/* --------------------------------------------------------------- controls */
+/* ----------------------------------------------------------------- helpers */
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const byId = (id) => state.objects.find((o) => o.id === id);
+const selected = () => (ui.selected && !ui.selected.includes('#') ? byId(ui.selected) : null);
+const selectedRoof = () => {
+  if (!ui.selected || !ui.selected.includes('#')) return null;
+  const [bid, idx] = ui.selected.split('#');
+  const b = byId(bid);
+  return b && b.roofItems[+idx] ? { b, idx: +idx, item: b.roofItems[+idx] } : null;
+};
+const specOf = (o) => (o.kind === 'booth' ? BOOTH_BY_ID[o.design] : o.kind === 'prop' ? PROP_BY_ID[o.type] : null);
 
-function range(label, path, { min, max, step = 1, unit = '', fmt } = {}) {
-  const v = get(path);
-  const shown = fmt ? fmt(v) : `${v}${unit}`;
-  return `<div class="field">
-    <label for="c-${path}">${esc(label)}<b>${esc(shown)}</b></label>
-    <input id="c-${path}" type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-path="${path}" data-kind="num">
-  </div>`;
+function stageSize() {
+  const stage = document.getElementById('stage');
+  if (!stage) return { w: 900, h: 600 };
+  const r = stage.getBoundingClientRect();
+  return { w: Math.max(320, Math.round(r.width)), h: Math.max(240, Math.round(r.height)) };
 }
 
-function chips(label, path, options, { swatch = false, glyph = false } = {}) {
-  const v = get(path);
-  const cls = swatch ? ' swatch' : glyph ? ' glyph' : '';
-  const body = options.map((o) => {
-    const on = String(o.value) === String(v) ? ' on' : '';
-    const style = swatch ? ` style="background:${esc(o.value)}"` : '';
-    const title = swatch ? ` title="${esc(o.label)}" aria-label="${esc(o.label)}"` : '';
-    return `<button class="chip${cls}${on}" data-path="${path}" data-kind="pick" data-value="${esc(o.value)}"${style}${title}>${swatch ? '' : esc(o.label || '—')}</button>`;
-  }).join('');
-  return `<div class="field"><label>${esc(label)}</label><div class="chips">${body}</div></div>`;
+/** Screen point -> world point on the plane at height z. */
+function worldAt(ev, z = 0) {
+  const stage = document.getElementById('stage');
+  const r = stage.getBoundingClientRect();
+  const cam = fitCamera(state, stageSize());
+  return cam.unproject(ev.clientX - r.left, ev.clientY - r.top, z);
 }
 
-function toggle(label, path, hint = '') {
-  const on = !!get(path);
-  return `<button class="toggle${on ? ' on' : ''}" data-path="${path}" data-kind="toggle">
-    <span>${esc(label)}${hint ? `<br><small style="color:#6a798f">${esc(hint)}</small>` : ''}</span>
-    <span class="pill">${on ? 'On' : 'Off'}</span>
-  </button>`;
+/** The building whose roof is under the pointer, tallest first. */
+function roofUnder(ev) {
+  const list = [...buildingsOf(state)].sort((a, b) => buildingHeight(b) - buildingHeight(a));
+  for (const b of list) {
+    const h = buildingHeight(b);
+    const [x, y] = worldAt(ev, h);
+    if (contains(footprint(b), x, y)) return { b, x, y, h };
+  }
+  return null;
 }
 
-function textField(label, path, placeholder = '') {
-  return `<div class="field">
-    <label for="c-${path}">${esc(label)}</label>
-    <input id="c-${path}" type="text" value="${esc(get(path) ?? '')}" placeholder="${esc(placeholder)}" data-path="${path}" data-kind="text" maxlength="46">
-  </div>`;
+/** Local (unrotated) offset of a world point inside a building. */
+function toLocal(b, x, y) {
+  const a = -(b.rot || 0) * Math.PI / 180;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const dx = x - (b.x + b.w / 2);
+  const dy = y - (b.y + b.d / 2);
+  return { dx: dx * ca - dy * sa + b.w / 2, dy: dx * sa + dy * ca + b.d / 2 };
 }
 
-/* ------------------------------------------------------------ start screen */
+const snapXY = (v, step = 2) => Math.round(v / step) * step;
+
+/* ------------------------------------------------------------- start screen */
 
 function startScreen() {
-  const cards = Object.entries(BUILDINGS).map(([id, b]) => `
-    <button class="card${pending.type === id ? ' on' : ''}" data-act="pick-type" data-value="${id}">
-      <span class="icon">${b.icon}</span>
-      <strong>${esc(b.name)}</strong>
-      <p>${esc(b.blurb)}</p>
+  const cards = Object.entries(SITE_PRESETS).map(([id, p]) => `
+    <button class="card${pendingStart.preset === id ? ' on' : ''}" data-act="pick-preset" data-value="${id}">
+      <span class="icon">${p.icon}</span><strong>${esc(p.name)}</strong><p>${esc(p.blurb)}</p>
     </button>`).join('');
-
   app.innerHTML = `<div class="start">
-    <h1>Start a new site</h1>
-    <p class="lede">First set the lot, then pick what goes on it. Everything after this is editable — floors,
-      bays, doors, security, signage, day or night.</p>
+    <h1>Start a site</h1>
+    <p class="lede">Pick something to start from — you can add, move, turn and delete everything on it
+      afterwards, including the buildings.</p>
     <div class="cards">${cards}</div>
     <div class="divider"></div>
     <h2>Lot size</h2>
-    <div class="field">
-      <label for="lw">Frontage (along the street)<b>${pending.lot.width} ft</b></label>
-      <input id="lw" type="range" min="240" max="900" step="20" value="${pending.lot.width}" data-act="lot-w">
-    </div>
-    <div class="field">
-      <label for="ld">Depth (back from the street)<b>${pending.lot.depth} ft</b></label>
-      <input id="ld" type="range" min="240" max="700" step="20" value="${pending.lot.depth}" data-act="lot-d">
-    </div>
-    <p class="hint">That is ${(pending.lot.width * pending.lot.depth / 43560).toFixed(2)} acres.</p>
+    <div class="field"><label for="lw">Frontage<b>${pendingStart.lot.width} ft</b></label>
+      <input id="lw" type="range" min="240" max="1000" step="20" value="${pendingStart.lot.width}" data-act="lot-w"></div>
+    <div class="field"><label for="ld">Depth<b>${pendingStart.lot.depth} ft</b></label>
+      <input id="ld" type="range" min="240" max="800" step="20" value="${pendingStart.lot.depth}" data-act="lot-d"></div>
+    <p class="hint">${(pendingStart.lot.width * pendingStart.lot.depth / 43560).toFixed(2)} acres.</p>
     <button class="btn primary" data-act="break-ground">Break ground →</button>
   </div>`;
   tools.innerHTML = '';
-  crumb.textContent = 'Pick a lot, drop a building, sign it';
-}
-
-/* ------------------------------------------------------------------ panels */
-
-const TABS = [
-  ['building', 'Building'],
-  ['office', 'Office'],
-  ['entrance', 'Entrance'],
-  ['security', 'Security'],
-  ['text', 'Text & logos'],
-  ['site', 'Site'],
-  ['lot', 'Lot'],
-];
-
-function panelFor(which) {
-  const t = state.type;
-  if (which === 'lot') {
-    return `<h2>Lot</h2><p class="hint">The ground you get to build on. The building re-centres itself.</p>
-      ${range('Frontage', 'lot.width', { min: 240, max: 900, step: 20, unit: ' ft' })}
-      ${range('Depth', 'lot.depth', { min: 240, max: 700, step: 20, unit: ' ft' })}
-      <p class="hint">${(state.lot.width * state.lot.depth / 43560).toFixed(2)} acres.
-        Front yard in front of the building: ${Math.round(layout(state).yard)} ft.</p>
-      <div class="divider"></div>
-      ${chips('Building type', 'type', Object.entries(BUILDINGS).map(([id, b]) => ({ value: id, label: `${b.icon} ${b.name}` })))}
-      <p class="note">Switching type re-presets the massing. Your signage and lot stay put.</p>`;
-  }
-
-  if (which === 'building') {
-    const sizeFields = `
-      ${range('Length', 'body.length', { min: 60, max: Math.max(120, state.lot.width - 60), step: 10, unit: ' ft' })}
-      ${range('Depth', 'body.width', { min: 30, max: Math.max(60, state.lot.depth - 180), step: 10, unit: ' ft' })}`;
-    let extra = '';
-    if (t === 'tower') {
-      extra = range('Floors', 'body.floors', { min: 2, max: 30, step: 1, fmt: (v) => `${v} · ${v * FLOOR_HEIGHT} ft` });
-    } else if (t === 'warehouse') {
-      extra = range('Dock bays', 'body.bays', { min: 0, max: 40, step: 1 }) +
-        range('Clear height', 'body.height', { min: 18, max: 60, step: 2, unit: ' ft' });
-    } else if (t === 'storage') {
-      extra = range('Doors per row', 'body.bays', { min: 6, max: 40, step: 1 }) +
-        range('Rows of units', 'body.rows', { min: 1, max: 5, step: 1 }) +
-        range('Unit height', 'body.height', { min: 9, max: 16, step: 1, unit: ' ft' });
-    } else {
-      extra = range('Tenant units', 'body.bays', { min: 2, max: 14, step: 1 }) +
-        range('Parapet height', 'body.height', { min: 14, max: 32, step: 2, unit: ' ft' });
-    }
-    return `<h2>${esc(BUILDINGS[t].name)}</h2><p class="hint">${esc(BUILDINGS[t].blurb)}</p>
-      ${sizeFields}${extra}
-      <div class="divider"></div>
-      ${chips('Wall colour', 'skin.wall', WALL_COLORS.map((c) => ({ value: c.hex, label: c.name })), { swatch: true })}
-      ${chips('Trim / band', 'skin.band', SIGN_COLORS.map((c) => ({ value: c.hex, label: c.name })), { swatch: true })}
-      <p class="note">Footprint: ${Math.round(state.body.length * state.body.width).toLocaleString()} sq ft.</p>`;
-  }
-
-  if (which === 'office') {
-    if (t === 'tower') {
-      return `<h2>Office</h2><p class="hint">A tower is all office — the floor count lives on the Building tab.
-        The podium at its base carries the entrance.</p>
-        ${chips('Glazing', 'skin.windows', WINDOW_STYLES.map((w) => ({ value: w.id, label: w.name })))}`;
-    }
-    return `<h2>Office section</h2>
-      <p class="hint">Raise one end of the building into two or three floors of office, then glaze it.</p>
-      <div class="toggles">${toggle('Office section', 'office.on', 'Turn part of the shell into offices')}</div>
-      <div class="divider"></div>
-      ${range('Floors', 'office.floors', { min: 1, max: 6, step: 1, fmt: (v) => `${v} · ${v * FLOOR_HEIGHT} ft` })}
-      ${range('How much of the building', 'office.length', { min: 30, max: Math.max(40, state.body.length - 20), step: 10, unit: ' ft' })}
-      ${chips('Which end', 'office.side', [{ value: 'left', label: 'Left end' }, { value: 'right', label: 'Right end' }])}
-      ${chips('Windows', 'skin.windows', WINDOW_STYLES.map((w) => ({ value: w.id, label: w.name })))}`;
-  }
-
-  if (which === 'entrance') {
-    return `<h2>Entrance</h2><p class="hint">Front doors go on the office end, facing the street.</p>
-      <div class="toggles">
-        ${toggle('Front doors', 'entrance.doors', 'Glazed double doors with a transom')}
-        ${toggle('Canopy over the doors', 'entrance.canopy')}
-        ${toggle('Porch', 'entrance.porch', 'Raised slab and columns out front')}
-        ${toggle('Steps and walk', 'entrance.steps')}
-      </div>`;
-  }
-
-  if (which === 'security') {
-    return `<h2>Security</h2><p class="hint">The booth sits beside the drive; the gate arm crosses it.</p>
-      <div class="toggles">
-        ${toggle('Guard booth', 'security.booth', 'Main entrance check-in')}
-        ${toggle('Gate arm', 'security.gate')}
-        ${toggle('Perimeter fence', 'security.fence', 'Runs the street frontage, open at the drive')}
-        ${toggle('Guard and visitor', 'security.guard')}
-      </div>
-      <div class="divider"></div>
-      ${range('Barricades / bollards', 'security.barricades', { min: 0, max: 24, step: 2 })}`;
-  }
-
-  if (which === 'site') {
-    return `<h2>Site</h2><p class="hint">The parking lot lays itself out around whatever you have built.</p>
-      <div class="toggles">
-        ${toggle('Parking lot', 'site.parking', 'Striped stalls, auto-placed')}
-        ${toggle('Parked cars', 'site.cars')}
-        ${toggle('Trailers at the docks', 'site.trailers')}
-        ${toggle('Light poles', 'site.poles', 'They actually light the lot at night')}
-        ${toggle('Trees and landscaping', 'site.trees')}
-      </div>`;
-  }
-
-  // Text & logos
-  return `<h2>Text &amp; logos</h2>
-    <p class="hint">Click any surface in the view to jump straight to its text, or edit them here.</p>
-    <h3 style="font-size:14px;color:var(--dim)">Building wall</h3>
-    ${textField('Sign text', 'signs.wall.text', 'COMPANY NAME')}
-    ${textField('Tagline underneath', 'signs.wall.sub', 'Optional strapline')}
-    ${chips('Font colour', 'signs.wall.color', SIGN_COLORS.map((c) => ({ value: c.hex, label: c.name })), { swatch: true })}
-    ${chips('Logo', 'signs.wall.logo', LOGOS.map((l) => ({ value: l, label: l })), { glyph: true })}
-    <div class="divider"></div>
-    <h3 style="font-size:14px;color:var(--dim)">Security booth</h3>
-    ${textField('Booth fascia', 'signs.booth.text', 'COMPANY NAME')}
-    ${chips('Font colour', 'signs.booth.color', SIGN_COLORS.map((c) => ({ value: c.hex, label: c.name })), { swatch: true })}
-    ${chips('Logo', 'signs.booth.logo', LOGOS.map((l) => ({ value: l, label: l })), { glyph: true })}
-    <div class="divider"></div>
-    <h3 style="font-size:14px;color:var(--dim)">Monument sign</h3>
-    <div class="toggles">${toggle('Sign at the drive', 'signs.monument.on')}</div>
-    <div style="height:12px"></div>
-    ${textField('Sign text', 'signs.monument.text', 'ALL VISITORS MUST CHECK IN')}
-    ${chips('Font colour', 'signs.monument.color', SIGN_COLORS.map((c) => ({ value: c.hex, label: c.name })), { swatch: true })}
-    ${chips('Logo', 'signs.monument.logo', LOGOS.map((l) => ({ value: l, label: l })), { glyph: true })}`;
+  crumb.textContent = 'Orbit, zoom, place, edit';
 }
 
 /* ------------------------------------------------------------ build screen */
 
+const TABS = [['build', 'Add'], ['selected', 'Selected'], ['site', 'Site'], ['view', 'View']];
+
 function buildScreen() {
   app.innerHTML = `<div class="workshop">
-    <div>
+    <div class="stagewrap">
       <div class="stage" id="stage"></div>
-      <div class="stagebar" style="position:static;padding-top:10px">
-        <button class="btn" data-act="rotate">↻ Rotate view</button>
-        <button class="btn" data-act="zoom-out">−</button>
-        <button class="btn" data-act="zoom-in">+</button>
+      <div class="stagehud">
+        <div class="camrow">
+          <button class="btn sq" data-act="orbit" data-value="-30" title="Orbit left">↺</button>
+          <button class="btn sq" data-act="orbit" data-value="30" title="Orbit right">↻</button>
+          <button class="btn sq" data-act="tilt" data-value="8" title="Tilt down">▾</button>
+          <button class="btn sq" data-act="tilt" data-value="-8" title="Tilt up">▴</button>
+          <button class="btn sq" data-act="zoom" data-value="1.25" title="Zoom in">+</button>
+          <button class="btn sq" data-act="zoom" data-value="0.8" title="Zoom out">−</button>
+          <button class="btn sq" data-act="cam-reset" title="Reset view">⟲</button>
+        </div>
         <span class="readout" id="readout"></span>
       </div>
+      <div class="hintbar" id="hintbar"></div>
     </div>
     <div class="panel">
-      <div class="tabs">${TABS.map(([id, label]) => `<button data-act="tab" data-value="${id}" class="${tab === id ? 'active' : ''}">${label}</button>`).join('')}</div>
+      <div class="tabs">${TABS.map(([id, label]) => `<button data-act="tab" data-value="${id}" class="${ui.tab === id ? 'active' : ''}">${label}</button>`).join('')}</div>
       <div class="panel-body" id="panelBody"></div>
     </div>
   </div>`;
   tools.innerHTML = `
+    <button class="btn sq" data-act="undo" title="Undo (Ctrl+Z)">↶</button>
+    <button class="btn sq" data-act="redo" title="Redo">↷</button>
     <button class="btn ${state.view.time === 'night' ? 'on' : ''}" data-act="time">${state.view.time === 'night' ? '🌙 Night' : '☀️ Day'}</button>
     <button class="btn" data-act="png">Save image</button>
     <button class="btn ghost" data-act="restart">New site</button>`;
-  crumb.textContent = `${BUILDINGS[state.type].name} · ${state.lot.width}×${state.lot.depth} ft lot`;
-  draw();
+  crumb.textContent = `${state.objects.length} objects · ${state.lot.width}×${state.lot.depth} ft lot`;
+  bindStage();
+  drawAll();
 }
 
-function draw() {
-  const body = document.getElementById('panelBody');
-  if (body) body.innerHTML = panelFor(tab);
+function drawAll() {
+  drawPanel();
+  drawStage();
+}
+
+let framePending = false;
+let settleTimer;
+function scheduleStage(fast) {
+  if (framePending) return;
+  framePending = true;
+  requestAnimationFrame(() => { framePending = false; drawStage(fast); });
+}
+
+function drawStage(fast = false) {
   const stage = document.getElementById('stage');
   if (!stage) return;
-  const rect = stage.getBoundingClientRect();
-  const size = { w: Math.max(320, Math.round(rect.width)), h: Math.max(240, Math.round(rect.height)) };
-  const scene = render(state, size);
+  // The cheap pass drops shadows, texture and the hit shapes, so the view must
+  // always settle back to the full one — a text field never fires `change`
+  // until it loses focus, and an un-settled stage is not clickable.
+  clearTimeout(settleTimer);
+  if (fast) settleTimer = setTimeout(() => drawStage(false), 220);
+  const size = stageSize();
+  const scene = render(state, size, { fast, selected: ui.selected, hover: ui.hover, ghost: ui.ghost });
   stage.innerHTML = frame(state, size, scene.svg);
-  const L = scene.layout;
   const readout = document.getElementById('readout');
   if (readout) {
-    const bits = [`${state.lot.width}×${state.lot.depth} ft lot`, `${Math.round(state.body.length)}×${Math.round(state.body.width)} ft building`];
-    if (state.type === 'tower') bits.push(`${state.body.floors} floors`);
-    else if (L.dockRun) bits.push(`${L.dockRun.bays} dock bays`);
-    if (state.office.on && state.type !== 'tower') bits.push(`${state.office.floors}-floor office`);
-    if (L.stalls) bits.push(`${L.stalls.length} stalls`);
-    readout.textContent = bits.join(' · ');
+    readout.textContent = `${Math.round(state.view.yaw)}° · tilt ${Math.round(state.view.pitch)}° · ${(state.view.zoom || 1).toFixed(2)}×`;
+  }
+  const hb = document.getElementById('hintbar');
+  if (hb) {
+    const blocked = ui.pending && ui.ghost && !ui.ghost.ok;
+    hb.textContent = ui.hint || (ui.pending
+      ? (blocked
+        ? (ui.pending.kind === 'roof' ? 'Hover a roof to put this on' : 'Blocked — that spot is inside a building')
+        : `Placing ${ui.pending.name} · click to drop · shift-click to keep placing · R turns it · Esc cancels`)
+      : 'Drag to orbit · shift-drag to pan · wheel to zoom · click anything to select');
+    hb.classList.toggle('warn', !!ui.pending);
+    hb.classList.toggle('bad', !!blocked);
   }
   const t = tools.querySelector('[data-act="time"]');
   if (t) {
@@ -285,25 +229,770 @@ function draw() {
   }
 }
 
-/* ---------------------------------------------------------------- actions */
+/* ------------------------------------------------------------------ panels */
 
-function applyType(id) {
-  const preset = BUILDINGS[id];
-  state.type = id;
-  state.body = { ...preset.body };
-  state.office = { ...preset.office };
-  state.skin = { ...state.skin, wall: preset.color, windows: preset.office.windows };
-  // Keep the lot at least big enough for the preset it just received.
-  state.lot.width = Math.max(state.lot.width, preset.body.length + 120);
-  state.lot.depth = Math.max(state.lot.depth, preset.body.width + 220);
-  save();
-  buildScreen();
+const CATS = ['Buildings', 'Roof plant', 'Booths', 'Boundary', 'Signs', 'Lighting', 'Planting', 'Yard', 'Vehicles'];
+
+function itemButton(kind, key, icon, name, armed) {
+  return `<button class="item${armed ? ' on' : ''}" data-act="arm" data-kind="${kind}" data-key="${key}" title="${esc(name)}">
+    <span class="ic">${icon}</span><span class="nm">${esc(name)}</span></button>`;
 }
+
+function palettePanel() {
+  const armedKey = ui.pending ? `${ui.pending.kind}:${ui.pending.key}` : '';
+  const isArmed = (kind, key) => armedKey === `${kind}:${key}`;
+  let items = '';
+  if (ui.cat === 'Buildings') {
+    items = Object.entries(BUILDING_STYLES).map(([id, b]) => itemButton('building', id, b.icon, b.name, isArmed('building', id))).join('');
+  } else if (ui.cat === 'Roof plant') {
+    items = ROOF_KIT.map((m) => itemButton('roof', m.id, m.icon, m.name, isArmed('roof', m.id))).join('');
+  } else if (ui.cat === 'Booths') {
+    items = BOOTHS.map((b) => itemButton('booth', b.id, b.icon, b.name, isArmed('booth', b.id))).join('');
+  } else {
+    items = PROPS.filter((p) => p.cat === ui.cat).map((p) => itemButton('prop', p.id, p.icon, p.name, isArmed('prop', p.id))).join('');
+  }
+  return `<h2>Add to the site</h2>
+    <p class="hint">Pick a thing, then click the ground to drop it. Roof machines go on a roof.</p>
+    <div class="chips catrow">${CATS.map((c) => `<button class="chip${ui.cat === c ? ' on' : ''}" data-act="cat" data-value="${c}">${c}</button>`).join('')}</div>
+    <div class="grid-items">${items}</div>
+    ${ui.pending ? `<p class="note">Placing <b>${esc(ui.pending.name)}</b> — click the view. <button class="btn tiny" data-act="cancel">Cancel</button></p>` : ''}`;
+}
+
+function signFields(prefix, sign, opts = {}) {
+  return `
+    <div class="field"><label for="${prefix}-text">Sign text</label>
+      <input id="${prefix}-text" type="text" maxlength="46" value="${esc(sign.text || '')}" data-act="sign" data-key="text" placeholder="Type a name"></div>
+    ${opts.sub ? `<div class="field"><label for="${prefix}-sub">Tagline</label>
+      <input id="${prefix}-sub" type="text" maxlength="46" value="${esc(sign.sub || '')}" data-act="sign" data-key="sub" placeholder="Optional"></div>` : ''}
+    <div class="field"><label>Font colour</label><div class="chips">
+      ${SIGN_COLORS.map((c) => `<button class="chip swatch${sign.color === c.hex ? ' on' : ''}" style="background:${c.hex}" title="${c.name}" data-act="sign" data-key="color" data-value="${c.hex}"></button>`).join('')}
+    </div></div>
+    <div class="field"><label>Logo</label><div class="chips">
+      ${LOGOS.map((l) => `<button class="chip glyph${(sign.logo || '') === l ? ' on' : ''}" data-act="sign" data-key="logo" data-value="${l}">${l || '—'}</button>`).join('')}
+    </div></div>`;
+}
+
+function wallEditor(b) {
+  const face = ui.wall;
+  const g = b.walls[face];
+  const cols = wallCols(b, face);
+  const label = { N: 'Front', E: 'Right', S: 'Back', W: 'Left' };
+  let cells = '';
+  for (let row = g.length - 1; row >= 0; row--) {
+    for (let col = 0; col < cols; col++) {
+      const t = g[row][col];
+      const spec = CELLS.find((c) => c.id === t) || CELLS[0];
+      cells += `<button class="cell${t !== 'blank' ? ' filled' : ''}" data-act="cell" data-face="${face}" data-row="${row}" data-col="${col}"
+        title="Floor ${row + 1}, bay ${col + 1}: ${spec.name}">${t === 'blank' ? '' : spec.icon}</button>`;
+    }
+  }
+  return `
+    <h3>Walls</h3>
+    <p class="hint">Paint one bay at a time. Doors and loading bays only go on the ground floor.</p>
+    <div class="chips">${['N', 'E', 'S', 'W'].map((f) => `<button class="chip${face === f ? ' on' : ''}" data-act="wall" data-value="${f}">${label[f]}</button>`).join('')}</div>
+    <div class="field" style="margin-top:12px"><label>Brush</label><div class="chips">
+      ${CELLS.map((c) => `<button class="chip${ui.paint === c.id ? ' on' : ''}" data-act="paint" data-value="${c.id}">${c.icon} ${c.name}</button>`).join('')}
+    </div></div>
+    <div class="wallwrap"><div class="wallgrid" style="grid-template-columns:repeat(${cols},minmax(19px,1fr))">${cells}</div></div>
+    <div class="row tight">
+      <button class="btn tiny" data-act="bays" data-value="-1">− bay</button>
+      <button class="btn tiny" data-act="bays" data-value="1">+ bay</button>
+      <span class="mini">${cols} bays across</span>
+    </div>
+    <div class="row tight">
+      <button class="btn tiny" data-act="fillwall">Fill wall with brush</button>
+      <button class="btn tiny" data-act="clearwall">Clear wall</button>
+    </div>`;
+}
+
+function roofEditor(b) {
+  const list = (b.roofItems || []).map((it, i) => {
+    const spec = ROOF_BY_ID[it.type];
+    return `<li class="${ui.selected === `${b.id}#${i}` ? 'on' : ''}">
+      <button class="linkish" data-act="pick-roof" data-value="${i}">${spec ? spec.icon : '▫'} ${esc(spec ? spec.name : it.type)}</button>
+      <span>
+        <button class="btn tiny" data-act="roof-rot" data-value="${i}">↻</button>
+        <button class="btn tiny danger" data-act="roof-del" data-value="${i}">✕</button>
+      </span></li>`;
+  }).join('');
+  return `<h3>Roof</h3>
+    <p class="hint">Pick a machine, then click this building's roof. Nothing appears up there unless you put it there.</p>
+    <div class="grid-items small">${ROOF_KIT.map((m) => itemButton('roof', m.id, m.icon, m.name,
+      ui.pending && ui.pending.kind === 'roof' && ui.pending.key === m.id)).join('')}</div>
+    ${list ? `<ul class="objlist">${list}</ul>` : '<p class="note">Nothing on this roof yet.</p>'}`;
+}
+
+function buildingPanel(b) {
+  const H = buildingHeight(b);
+  const single = b.floors === 1;
+  return `<h2>${esc(b.name)}</h2>
+    <p class="hint">${Math.round(b.w)} × ${Math.round(b.d)} ft · ${b.floors} floor${b.floors > 1 ? 's' : ''} · ${Math.round(H)} ft tall</p>
+    ${objActions(b)}
+    <div class="field"><label for="p-w">Width<b>${Math.round(b.w)} ft</b></label>
+      <input id="p-w" type="range" min="20" max="600" step="5" value="${Math.round(b.w)}" data-act="num" data-key="w"></div>
+    <div class="field"><label for="p-d">Depth<b>${Math.round(b.d)} ft</b></label>
+      <input id="p-d" type="range" min="20" max="400" step="5" value="${Math.round(b.d)}" data-act="num" data-key="d"></div>
+    <div class="field"><label for="p-floors">Floors<b>${b.floors}</b></label>
+      <input id="p-floors" type="range" min="1" max="30" step="1" value="${b.floors}" data-act="num" data-key="floors"></div>
+    ${single ? `<div class="field"><label for="p-height">Wall height<b>${Math.round(H)} ft</b></label>
+      <input id="p-height" type="range" min="9" max="70" step="1" value="${Math.round(H)}" data-act="num" data-key="height"></div>` : ''}
+    <div class="field"><label>Wall colour</label><div class="chips">
+      ${WALL_COLORS.map((c) => `<button class="chip swatch${b.wall === c.hex ? ' on' : ''}" style="background:${c.hex}" title="${c.name}" data-act="set" data-key="wall" data-value="${c.hex}"></button>`).join('')}
+    </div></div>
+    <div class="field"><label>Trim colour</label><div class="chips">
+      ${SIGN_COLORS.map((c) => `<button class="chip swatch${b.band === c.hex ? ' on' : ''}" style="background:${c.hex}" title="${c.name}" data-act="set" data-key="band" data-value="${c.hex}"></button>`).join('')}
+    </div></div>
+    <div class="toggles"><button class="toggle${b.parapet !== false ? ' on' : ''}" data-act="toggle" data-key="parapet">
+      <span>Parapet band</span><span class="pill">${b.parapet !== false ? 'On' : 'Off'}</span></button></div>
+    <div class="divider"></div>
+    ${wallEditor(b)}
+    <div class="divider"></div>
+    ${roofEditor(b)}
+    <div class="divider"></div>
+    <h3>Sign</h3>
+    <div class="toggles"><button class="toggle${b.sign.on ? ' on' : ''}" data-act="signtoggle">
+      <span>Name on the wall</span><span class="pill">${b.sign.on ? 'On' : 'Off'}</span></button></div>
+    <div class="field" style="margin-top:10px"><label>Which wall</label><div class="chips">
+      ${['N', 'E', 'S', 'W'].map((f) => `<button class="chip${b.sign.face === f ? ' on' : ''}" data-act="sign" data-key="face" data-value="${f}">${{ N: 'Front', E: 'Right', S: 'Back', W: 'Left' }[f]}</button>`).join('')}
+    </div></div>
+    ${signFields('b', b.sign, { sub: true })}`;
+}
+
+function boothPanel(o) {
+  return `<h2>Guard booth</h2>
+    <p class="hint">Ten designs. Turn it to face the way you want.</p>
+    ${objActions(o)}
+    <div class="field"><label>Design</label><div class="grid-items small">
+      ${BOOTHS.map((b) => `<button class="item${o.design === b.id ? ' on' : ''}" data-act="set" data-key="design" data-value="${b.id}">
+        <span class="ic">${b.icon}</span><span class="nm">${esc(b.name)}</span></button>`).join('')}
+    </div></div>
+    <div class="divider"></div>
+    <h3>Fascia sign</h3>
+    ${signFields('g', o.sign || {})}`;
+}
+
+function propPanel(o) {
+  const spec = PROP_BY_ID[o.type] || {};
+  return `<h2>${esc(spec.name || o.type)}</h2>
+    <p class="hint">${esc(spec.cat || '')}</p>
+    ${objActions(o)}
+    ${spec.len ? `<div class="field"><label for="p-len">Length<b>${Math.round(o.w != null ? o.w : spec.w)} ft</b></label>
+      <input id="p-len" type="range" min="8" max="200" step="2" value="${Math.round(o.w != null ? o.w : spec.w)}" data-act="num" data-key="w"></div>` : ''}
+    ${spec.color ? `<div class="field"><label>Colour</label><div class="chips">
+      ${['#c8ccd2', '#26374f', '#7d2f2f', '#1e2229', '#e9ebee', '#35543f', '#8d5a24', '#2c4a7c'].map((c) => `<button class="chip swatch${o.color === c ? ' on' : ''}" style="background:${c}" data-act="set" data-key="color" data-value="${c}"></button>`).join('')}
+    </div></div>` : ''}
+    ${spec.sign ? `<div class="divider"></div><h3>Sign</h3>${signFields('s', o.sign || {})}` : ''}`;
+}
+
+function roofItemPanel(sel) {
+  const spec = ROOF_BY_ID[sel.item.type] || {};
+  return `<h2>${esc(spec.name || sel.item.type)}</h2>
+    <p class="hint">On the roof of ${esc(sel.b.name)} · drag it around up there.</p>
+    <div class="row tight">
+      <button class="btn" data-act="rot" data-value="-15">↺ 15°</button>
+      <button class="btn" data-act="rot" data-value="15">↻ 15°</button>
+      <button class="btn danger" data-act="delete">Delete</button>
+    </div>
+    <p class="note">Click the building itself to get back to its walls and roof list.</p>`;
+}
+
+function objActions(o) {
+  return `<div class="row tight">
+      <button class="btn" data-act="rot" data-value="-15">↺ 15°</button>
+      <button class="btn" data-act="rot" data-value="15">↻ 15°</button>
+      <button class="btn" data-act="rot" data-value="90">↻ 90°</button>
+      <button class="btn" data-act="dup">Duplicate</button>
+      <button class="btn danger" data-act="delete">Delete</button>
+    </div>
+    <p class="note">At ${Math.round(o.x)}, ${Math.round(o.y)} ft · turned ${Math.round(((o.rot || 0) % 360 + 360) % 360)}°.
+      Drag it in the view, or nudge with the arrow keys.</p>`;
+}
+
+function sitePanel() {
+  const counts = {};
+  for (const o of state.objects) {
+    const k = o.kind === 'building' ? 'buildings' : o.kind === 'booth' ? 'booths' : (PROP_BY_ID[o.type] || {}).cat || 'props';
+    counts[k] = (counts[k] || 0) + 1;
+  }
+  const t = (key, label, hint) => `<button class="toggle${state.site[key] ? ' on' : ''}" data-act="site" data-key="${key}">
+    <span>${label}${hint ? `<br><small>${hint}</small>` : ''}</span><span class="pill">${state.site[key] ? 'On' : 'Off'}</span></button>`;
+  return `<h2>Site</h2>
+    <p class="hint">The ground under everything. Buildings and props are objects — add them from the Add tab.</p>
+    <div class="field"><label for="s-w">Lot frontage<b>${state.lot.width} ft</b></label>
+      <input id="s-w" type="range" min="240" max="1000" step="20" value="${state.lot.width}" data-act="lot" data-key="width"></div>
+    <div class="field"><label for="s-d">Lot depth<b>${state.lot.depth} ft</b></label>
+      <input id="s-d" type="range" min="240" max="800" step="20" value="${state.lot.depth}" data-act="lot" data-key="depth"></div>
+    <div class="toggles">
+      ${t('pavement', 'Pavement', 'Paves around whatever you have built')}
+      ${t('parking', 'Parking bays', 'Lays out around buildings and truck courts')}
+      ${t('cars', 'Parked cars')}
+      ${t('markings', 'Road markings', 'Crossings at doors, arrows at the gate')}
+      ${t('road', 'Street and footway')}
+      ${t('grass', 'Grass texture')}
+    </div>
+    <div class="divider"></div>
+    <p class="note">On the lot: ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(' · ') || 'nothing yet'}.</p>
+    <button class="btn tiny danger" data-act="clear-props">Delete every prop</button>`;
+}
+
+function viewPanel() {
+  const v = state.view;
+  const preset = (name, yaw, pitch, zoom) => `<button class="chip" data-act="campreset" data-value="${yaw},${pitch},${zoom}">${name}</button>`;
+  return `<h2>Camera</h2>
+    <p class="hint">Fly around it. Drag the view to orbit, shift-drag to pan, wheel to zoom.</p>
+    <div class="field"><label for="v-yaw">Compass<b>${Math.round(v.yaw)}°</b></label>
+      <input id="v-yaw" type="range" min="0" max="359" step="1" value="${Math.round(v.yaw)}" data-act="view" data-key="yaw"></div>
+    <div class="field"><label for="v-pitch">Tilt<b>${Math.round(v.pitch)}°</b></label>
+      <input id="v-pitch" type="range" min="6" max="86" step="1" value="${Math.round(v.pitch)}" data-act="view" data-key="pitch"></div>
+    <div class="field"><label for="v-zoom">Zoom<b>${(v.zoom || 1).toFixed(2)}×</b></label>
+      <input id="v-zoom" type="range" min="0.4" max="6" step="0.05" value="${v.zoom || 1}" data-act="view" data-key="zoom"></div>
+    <div class="field"><label>Jump to</label><div class="chips">
+      ${preset('Front', 45, 34, 1)}${preset('Back', 225, 34, 1)}${preset('Left', 135, 34, 1)}${preset('Right', 315, 34, 1)}
+      ${preset('Overhead', 45, 84, 1)}${preset('Street level', 20, 9, 2.2)}${preset('Drone', 60, 20, 1.8)}
+    </div></div>
+    <div class="toggles"><button class="toggle${state.view.time === 'night' ? ' on' : ''}" data-act="time">
+      <span>Night</span><span class="pill">${state.view.time === 'night' ? 'On' : 'Off'}</span></button></div>`;
+}
+
+function drawPanel() {
+  const body = document.getElementById('panelBody');
+  if (!body) return;
+  let html = '';
+  if (ui.tab === 'build') html = palettePanel();
+  else if (ui.tab === 'site') html = sitePanel();
+  else if (ui.tab === 'view') html = viewPanel();
+  else {
+    const roof = selectedRoof();
+    const o = selected();
+    if (roof) html = roofItemPanel(roof);
+    else if (!o) html = '<h2>Nothing selected</h2><p class="hint">Click anything in the view — a building, a booth, a trailer, a sign — to edit it, turn it or delete it.</p>';
+    else if (o.kind === 'building') html = buildingPanel(o);
+    else if (o.kind === 'booth') html = boothPanel(o);
+    else html = propPanel(o);
+  }
+  body.innerHTML = html;
+  document.querySelectorAll('.tabs button').forEach((btn) => btn.classList.toggle('active', btn.dataset.value === ui.tab));
+}
+
+/* ------------------------------------------------------------- grid edits */
+
+function setFloors(b, n) {
+  n = clamp(Math.round(n), 1, 30);
+  for (const f of ['N', 'E', 'S', 'W']) {
+    const g = b.walls[f];
+    const cols = g[0] ? g[0].length : 4;
+    while (g.length > n) g.pop();
+    while (g.length < n) g.push(Array.from({ length: cols }, () => (b.style === 'tower' ? 'glass' : 'window')));
+  }
+  b.floors = n;
+  if (b.height != null && n > 1) b.height = null;   // floors take over from a set wall height
+}
+
+function setBays(b, face, n) {
+  const g = b.walls[face];
+  const cols = g[0] ? g[0].length : 1;
+  n = clamp(Math.round(n), 1, 60);
+  for (const row of g) {
+    while (row.length > n) row.pop();
+    while (row.length < n) row.push('blank');
+  }
+  return n !== cols;
+}
+
+/* --------------------------------------------------------------- placement */
+
+function armItem(kind, key) {
+  const make = () => {
+    if (kind === 'building') {
+      const b = makeBuilding(key, { wall: state.skin.wall, band: state.skin.band });
+      b.sign.on = false;
+      return b;
+    }
+    if (kind === 'booth') return { id: 'ghost', kind: 'booth', design: key, rot: 0, x: 0, y: 0, sign: { text: 'SECURITY', color: '#ffffff', logo: '🛡️' } };
+    if (kind === 'roof') return { id: 'ghost', kind: 'roof', type: key, rot: 0, x: 0, y: 0 };
+    const spec = PROP_BY_ID[key];
+    return { id: 'ghost', kind: 'prop', type: key, rot: 0, x: 0, y: 0, w: spec.w, d: spec.d, ...(spec.sign ? { sign: { text: 'SIGN', color: '#ffffff', logo: '' } } : {}) };
+  };
+  const names = {
+    building: (BUILDING_STYLES[key] || {}).name,
+    booth: (BOOTH_BY_ID[key] || {}).name,
+    roof: (ROOF_BY_ID[key] || {}).name,
+    prop: (PROP_BY_ID[key] || {}).name,
+  };
+  ui.pending = { kind, key, name: names[kind] || key, obj: make() };
+  ui.selected = null;
+  ui.ghost = null;
+  drawAll();
+}
+
+function ghostAt(ev) {
+  const p = ui.pending;
+  if (!p) return null;
+  const o = p.obj;
+  if (p.kind === 'roof') {
+    const hit = roofUnder(ev);
+    const spec = ROOF_BY_ID[p.key];
+    if (!hit) {
+      const [x, y] = worldAt(ev, 0);
+      o.x = x - spec.w / 2; o.y = y - spec.d / 2;
+      return { obj: o, ok: false, z: 0 };
+    }
+    o.x = hit.x - spec.w / 2; o.y = hit.y - spec.d / 2;
+    ui.roofTarget = hit.b;
+    return { obj: o, ok: true, z: hit.h };
+  }
+  const [x, y] = worldAt(ev, 0);
+  const fp = footprint(o);
+  o.x = snapXY(x - fp.w / 2);
+  o.y = snapXY(y - fp.d / 2);
+  const ok = o.kind === 'building' ? true : isClear(state, footprint(o));
+  return { obj: o, ok, z: 0 };
+}
+
+function placeGhost() {
+  const p = ui.pending;
+  if (!p || !ui.ghost) return;
+  if (!ui.ghost.ok && p.kind !== 'building') {
+    ui.hint = p.kind === 'roof' ? 'That is not over a roof.' : 'That would sit inside a building.';
+    drawStage();
+    return;
+  }
+  snapshot();
+  if (p.kind === 'roof') {
+    const b = ui.roofTarget;
+    if (!b) return;
+    const spec = ROOF_BY_ID[p.key];
+    const local = toLocal(b, p.obj.x + spec.w / 2, p.obj.y + spec.d / 2);
+    b.roofItems.push({ type: p.key, dx: local.dx, dy: local.dy, rot: p.obj.rot - (b.rot || 0) });
+    ui.selected = `${b.id}#${b.roofItems.length - 1}`;
+  } else {
+    const copy = JSON.parse(JSON.stringify(p.obj));
+    copy.id = newId(p.kind[0]);
+    state.objects.push(copy);
+    ui.selected = copy.id;
+  }
+  ui.hint = '';
+  save();
+  // Shift keeps the tool armed so a run of fence or bollards is quick.
+  if (!ui.shift) { ui.pending = null; ui.ghost = null; ui.tab = 'selected'; }
+  drawAll();
+}
+
+/* -------------------------------------------------------------- the stage */
+
+let drag = null;
+
+function bindStage() {
+  const stage = document.getElementById('stage');
+  if (!stage) return;
+  stage.addEventListener('pointerdown', onDown);
+  stage.addEventListener('pointermove', onMove);
+  stage.addEventListener('pointerleave', () => { ui.hover = null; });
+  stage.addEventListener('wheel', onWheel, { passive: false });
+  window.addEventListener('pointerup', onUp);
+}
+
+function onDown(ev) {
+  ev.preventDefault();
+  const stage = document.getElementById('stage');
+  stage.setPointerCapture?.(ev.pointerId);
+  ui.shift = ev.shiftKey;
+  if (ui.pending) {
+    ui.ghost = ghostAt(ev);
+    placeGhost();
+    return;
+  }
+  const hit = ev.target.closest?.('[data-id]');
+  if (hit && !ev.shiftKey) {
+    const id = hit.dataset.id;
+    ui.selected = id;
+    ui.tab = 'selected';
+    const roof = selectedRoof();
+    if (roof) {
+      const w = worldAt(ev, buildingHeight(roof.b));
+      drag = { mode: 'roof', roof, start: w, from: { dx: roof.item.dx, dy: roof.item.dy }, moved: false };
+    } else {
+      const o = byId(id);
+      const w = worldAt(ev, 0);
+      drag = { mode: 'move', id, start: w, from: { x: o.x, y: o.y }, moved: false };
+    }
+    snapshot();
+    drawAll();
+    return;
+  }
+  drag = {
+    mode: ev.shiftKey || ev.button === 1 ? 'pan' : 'orbit',
+    sx: ev.clientX, sy: ev.clientY,
+    yaw: state.view.yaw, pitch: state.view.pitch,
+    panX: state.view.panX || 0, panY: state.view.panY || 0,
+    world: worldAt(ev, 0), moved: false,
+  };
+  if (!hit) { ui.selected = null; drawPanel(); }
+}
+
+function onMove(ev) {
+  if (!drag) {
+    if (ui.pending) {
+      ui.ghost = ghostAt(ev);
+      scheduleStage(true);
+      return;
+    }
+    const hit = ev.target.closest?.('[data-id]');
+    const id = hit ? hit.dataset.id : null;
+    if (id !== ui.hover) { ui.hover = id; scheduleStage(true); }
+    return;
+  }
+  drag.moved = true;
+  if (drag.mode === 'orbit') {
+    state.view.yaw = (drag.yaw - (ev.clientX - drag.sx) * 0.42 + 360) % 360;
+    state.view.pitch = clamp(drag.pitch + (ev.clientY - drag.sy) * 0.28, 6, 86);
+    scheduleStage(true);
+  } else if (drag.mode === 'pan') {
+    // Keep the ground point that was grabbed under the pointer.
+    state.view.panX = drag.panX;
+    state.view.panY = drag.panY;
+    const now = worldAt(ev, 0);
+    state.view.panX = drag.panX + (drag.world[0] - now[0]);
+    state.view.panY = drag.panY + (drag.world[1] - now[1]);
+    scheduleStage(true);
+  } else if (drag.mode === 'move') {
+    const o = byId(drag.id);
+    if (!o) return;
+    const now = worldAt(ev, 0);
+    o.x = snapXY(drag.from.x + (now[0] - drag.start[0]));
+    o.y = snapXY(drag.from.y + (now[1] - drag.start[1]));
+    ui.badDrop = o.kind !== 'building' && !isClear(state, footprint(o), o.id);
+    ui.hint = ui.badDrop ? 'That would sit inside a building — it will spring back.' : '';
+    scheduleStage(true);
+  } else if (drag.mode === 'roof') {
+    const { roof } = drag;
+    const now = worldAt(ev, buildingHeight(roof.b));
+    const local = toLocal(roof.b, now[0], now[1]);
+    const startLocal = toLocal(roof.b, drag.start[0], drag.start[1]);
+    const spec = ROOF_BY_ID[roof.item.type] || { w: 8, d: 6 };
+    roof.item.dx = clamp(drag.from.dx + (local.dx - startLocal.dx), spec.w / 2 + 1, roof.b.w - spec.w / 2 - 1);
+    roof.item.dy = clamp(drag.from.dy + (local.dy - startLocal.dy), spec.d / 2 + 1, roof.b.d - spec.d / 2 - 1);
+    scheduleStage(true);
+  }
+}
+
+function onUp() {
+  if (!drag) return;
+  if (drag.mode === 'move' && drag.moved) {
+    const o = byId(drag.id);
+    if (o && o.kind !== 'building' && !isClear(state, footprint(o), o.id)) {
+      o.x = drag.from.x;
+      o.y = drag.from.y;
+      ui.hint = 'Put back — that spot is inside a building.';
+    } else {
+      ui.hint = '';
+    }
+    save();
+  } else if ((drag.mode === 'roof' || drag.mode === 'move') && !drag.moved) {
+    undoStack.pop();   // a click that only selected does not need an undo step
+  } else if (drag.mode === 'roof') {
+    save();
+  }
+  ui.badDrop = false;
+  drag = null;
+  drawAll();
+}
+
+function onWheel(ev) {
+  ev.preventDefault();
+  state.view.zoom = clamp((state.view.zoom || 1) * Math.pow(1.0016, -ev.deltaY), 0.4, 6);
+  scheduleStage(true);
+  clearTimeout(onWheel.t);
+  onWheel.t = setTimeout(() => { save(); drawStage(); }, 160);
+}
+
+/* ----------------------------------------------------------------- actions */
+
+function deleteSelected() {
+  const roof = selectedRoof();
+  snapshot();
+  if (roof) {
+    roof.b.roofItems.splice(roof.idx, 1);
+    ui.selected = roof.b.id;
+  } else if (ui.selected) {
+    state.objects = state.objects.filter((o) => o.id !== ui.selected);
+    ui.selected = null;
+  }
+  save();
+  drawAll();
+}
+
+function rotateSelected(deg) {
+  const roof = selectedRoof();
+  snapshot();
+  if (roof) roof.item.rot = ((roof.item.rot || 0) + deg) % 360;
+  else {
+    const o = selected();
+    if (!o) return;
+    o.rot = (((o.rot || 0) + deg) % 360 + 360) % 360;
+    if (o.kind !== 'building' && !isClear(state, footprint(o), o.id)) o.rot = (((o.rot || 0) - deg) % 360 + 360) % 360;
+  }
+  save();
+  drawAll();
+}
+
+function applyAction(el, ev) {
+  const act = el.dataset.act;
+  const key = el.dataset.key;
+  const value = el.dataset.value;
+  const o = selected();
+
+  switch (act) {
+    case 'tab': ui.tab = value; return drawPanel();
+    case 'cat': ui.cat = value; return drawPanel();
+    case 'arm': return armItem(el.dataset.kind, el.dataset.key);
+    case 'cancel': ui.pending = null; ui.ghost = null; return drawAll();
+    case 'wall': ui.wall = value; return drawPanel();
+    case 'paint': ui.paint = value; return drawPanel();
+    case 'cell': {
+      if (!o || o.kind !== 'building') return;
+      const row = +el.dataset.row;
+      const col = +el.dataset.col;
+      const spec = CELLS.find((c) => c.id === ui.paint) || CELLS[0];
+      if (row > 0 && !spec.upper) { ui.hint = `${spec.name} only goes on the ground floor.`; return drawStage(); }
+      snapshot();
+      o.walls[el.dataset.face][row][col] = o.walls[el.dataset.face][row][col] === ui.paint ? 'blank' : ui.paint;
+      save();
+      return drawAll();
+    }
+    case 'bays': {
+      if (!o || o.kind !== 'building') return;
+      snapshot();
+      setBays(o, ui.wall, wallCols(o, ui.wall) + (+value));
+      save();
+      return drawAll();
+    }
+    case 'fillwall': {
+      if (!o || o.kind !== 'building') return;
+      const spec = CELLS.find((c) => c.id === ui.paint) || CELLS[0];
+      snapshot();
+      o.walls[ui.wall].forEach((row, i) => {
+        if (i > 0 && !spec.upper) return;
+        for (let c = 0; c < row.length; c++) row[c] = ui.paint;
+      });
+      save();
+      return drawAll();
+    }
+    case 'clearwall': {
+      if (!o || o.kind !== 'building') return;
+      snapshot();
+      o.walls[ui.wall].forEach((row) => { for (let c = 0; c < row.length; c++) row[c] = 'blank'; });
+      save();
+      return drawAll();
+    }
+    case 'pick-roof': ui.selected = `${o.id}#${value}`; return drawAll();
+    case 'roof-rot': {
+      if (!o) return;
+      snapshot();
+      o.roofItems[+value].rot = ((o.roofItems[+value].rot || 0) + 45) % 360;
+      save();
+      return drawAll();
+    }
+    case 'roof-del': {
+      if (!o) return;
+      snapshot();
+      o.roofItems.splice(+value, 1);
+      save();
+      return drawAll();
+    }
+    case 'rot': return rotateSelected(+value);
+    case 'delete': return deleteSelected();
+    case 'dup': {
+      if (!o) return;
+      snapshot();
+      const copy = JSON.parse(JSON.stringify(o));
+      copy.id = newId(o.kind[0]);
+      copy.x += 14;
+      copy.y += 14;
+      state.objects.push(copy);
+      ui.selected = copy.id;
+      save();
+      return drawAll();
+    }
+    case 'set': {
+      if (!o) return;
+      snapshot();
+      o[key] = value;
+      save();
+      return drawAll();
+    }
+    case 'toggle': {
+      if (!o) return;
+      snapshot();
+      o[key] = o[key] === false;
+      save();
+      return drawAll();
+    }
+    case 'signtoggle': {
+      if (!o) return;
+      snapshot();
+      o.sign.on = !o.sign.on;
+      save();
+      return drawAll();
+    }
+    case 'sign': {
+      if (!o || value === undefined) return;
+      snapshot();
+      o.sign = { ...(o.sign || {}), [key]: value };
+      save();
+      return drawAll();
+    }
+    case 'site': {
+      snapshot();
+      state.site[key] = !state.site[key];
+      save();
+      return drawAll();
+    }
+    case 'clear-props': {
+      if (!confirm('Delete every prop, booth and vehicle? Buildings stay.')) return;
+      snapshot();
+      state.objects = state.objects.filter((x) => x.kind === 'building');
+      ui.selected = null;
+      save();
+      return drawAll();
+    }
+    case 'campreset': {
+      const [yaw, pitch, zoom] = value.split(',').map(Number);
+      Object.assign(state.view, { yaw, pitch, zoom, panX: 0, panY: 0 });
+      save();
+      return drawAll();
+    }
+    case 'orbit': state.view.yaw = ((state.view.yaw + +value) % 360 + 360) % 360; save(); return drawAll();
+    case 'tilt': state.view.pitch = clamp(state.view.pitch + +value, 6, 86); save(); return drawAll();
+    case 'zoom': state.view.zoom = clamp((state.view.zoom || 1) * +value, 0.4, 6); save(); return drawAll();
+    case 'cam-reset': Object.assign(state.view, { yaw: 45, pitch: 34, zoom: 1, panX: 0, panY: 0 }); save(); return drawAll();
+    case 'time': state.view.time = state.view.time === 'night' ? 'day' : 'night'; save(); return drawAll();
+    case 'undo': return restore(undoStack, redoStack);
+    case 'redo': return restore(redoStack, undoStack);
+    case 'png': return savePng();
+    case 'restart':
+      if (!confirm('Start a new site? This clears the current one.')) return;
+      localStorage.removeItem(SAVE_KEY);
+      pendingStart = { preset: state.preset || 'warehouse', lot: { ...state.lot } };
+      screen = 'start';
+      return startScreen();
+    case 'pick-preset':
+      pendingStart.preset = value;
+      pendingStart.lot = { ...SITE_PRESETS[value].lot };
+      return startScreen();
+    case 'break-ground':
+      state = freshState(pendingStart.preset);
+      state.lot = { ...pendingStart.lot };
+      ui.selected = null;
+      ui.tab = 'build';
+      screen = 'build';
+      save();
+      return buildScreen();
+    default:
+  }
+}
+
+document.addEventListener('click', (ev) => {
+  const el = ev.target.closest('[data-act]');
+  if (!el || el.tagName === 'INPUT') return;
+  applyAction(el, ev);
+});
+
+document.addEventListener('input', (ev) => {
+  const el = ev.target;
+  const act = el.dataset.act;
+  if (!act) return;
+  const num = Number(el.value);
+
+  if (act === 'lot-w' || act === 'lot-d') {
+    pendingStart.lot[act === 'lot-w' ? 'width' : 'depth'] = num;
+    const b = el.previousElementSibling?.querySelector('b');
+    if (b) b.textContent = `${num} ft`;
+    return;
+  }
+  if (act === 'view') {
+    state.view[el.dataset.key] = num;
+    const b = document.querySelector(`label[for="${el.id}"] b`);
+    if (b) b.textContent = el.dataset.key === 'zoom' ? `${num.toFixed(2)}×` : `${Math.round(num)}°`;
+    queueSave();
+    return scheduleStage(true);
+  }
+  if (act === 'lot') {
+    state.lot[el.dataset.key] = num;
+    const b = document.querySelector(`label[for="${el.id}"] b`);
+    if (b) b.textContent = `${num} ft`;
+    queueSave();
+    return scheduleStage(true);
+  }
+  if (act === 'num') {
+    const o = selected();
+    if (!o) return;
+    const key = el.dataset.key;
+    if (key === 'floors') setFloors(o, num);
+    else if (key === 'height') o.height = num;
+    else o[key] = num;
+    const b = document.querySelector(`label[for="${el.id}"] b`);
+    if (b) b.textContent = key === 'floors' ? String(num) : `${Math.round(num)} ft`;
+    queueSave();
+    return scheduleStage(true);
+  }
+  if (act === 'sign') {
+    const o = selected();
+    if (!o) return;
+    o.sign = { ...(o.sign || {}), [el.dataset.key]: el.value };
+    queueSave();
+    return scheduleStage(true);
+  }
+});
+
+document.addEventListener('change', (ev) => {
+  if (!ev.target.dataset?.act) return;
+  save();
+  drawStage(false);
+  if (ev.target.dataset.act === 'num') drawPanel();
+});
+
+document.addEventListener('keydown', (ev) => {
+  if (ev.target.matches('input, textarea')) return;
+  const step = ev.shiftKey ? 10 : 2;
+  const nudge = (dx, dy) => {
+    const roof = selectedRoof();
+    const o = selected();
+    if (!roof && !o) return;
+    snapshot();
+    if (roof) { roof.item.dx += dx; roof.item.dy += dy; }
+    else {
+      o.x += dx; o.y += dy;
+      if (o.kind !== 'building' && !isClear(state, footprint(o), o.id)) { o.x -= dx; o.y -= dy; }
+    }
+    save();
+    drawAll();
+    ev.preventDefault();
+  };
+  if (ev.key === 'Escape') {
+    if (ui.pending) { ui.pending = null; ui.ghost = null; } else ui.selected = null;
+    return drawAll();
+  }
+  if (ev.key === 'Delete' || ev.key === 'Backspace') { if (ui.selected) { deleteSelected(); ev.preventDefault(); } return; }
+  if (ev.key === 'r' || ev.key === 'R') {
+    if (ui.pending) { ui.pending.obj.rot = ((ui.pending.obj.rot || 0) + (ev.shiftKey ? -15 : 15)) % 360; return drawStage(true); }
+    return rotateSelected(ev.shiftKey ? -15 : 15);
+  }
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') {
+    ev.preventDefault();
+    return ev.shiftKey ? restore(redoStack, undoStack) : restore(undoStack, redoStack);
+  }
+  if (ev.key === 'ArrowLeft') return nudge(-step, 0);
+  if (ev.key === 'ArrowRight') return nudge(step, 0);
+  if (ev.key === 'ArrowUp') return nudge(0, -step);
+  if (ev.key === 'ArrowDown') return nudge(0, step);
+});
+
+/* ------------------------------------------------------------------ export */
 
 async function savePng() {
   const svg = document.querySelector('#stage svg');
   if (!svg) return;
-  const scale = 2;
   const w = svg.viewBox.baseVal.width;
   const h = svg.viewBox.baseVal.height;
   const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml;charset=utf-8' });
@@ -316,13 +1005,12 @@ async function savePng() {
       i.src = url;
     });
     const canvas = document.createElement('canvas');
-    canvas.width = w * scale;
-    canvas.height = h * scale;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    canvas.width = w * 2;
+    canvas.height = h * 2;
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
     const a = document.createElement('a');
     a.href = canvas.toDataURL('image/png');
-    a.download = `site-${state.type}.png`;
+    a.download = 'site.png';
     a.click();
   } catch {
     alert('This browser would not rasterise the view. Try a screenshot instead.');
@@ -331,129 +1019,10 @@ async function savePng() {
   }
 }
 
-document.addEventListener('click', (e) => {
-  // Clicking a surface in the view is the fast way into its text.
-  const hot = e.target.closest('.hot');
-  if (hot) {
-    tab = 'text';
-    buildScreen();
-    const field = document.getElementById(`c-signs.${hot.dataset.sign}.text`);
-    if (field) { field.focus(); field.select(); }
-    return;
-  }
-
-  const el = e.target.closest('[data-act], [data-kind]');
-  if (!el) return;
-  const act = el.dataset.act;
-  const kind = el.dataset.kind;
-
-  if (kind === 'toggle') return set(el.dataset.path, !get(el.dataset.path));
-  if (kind === 'pick') {
-    if (el.dataset.path === 'type') return applyType(el.dataset.value);
-    return set(el.dataset.path, el.dataset.value);
-  }
-
-  switch (act) {
-    case 'pick-type':
-      pending.type = el.dataset.value;
-      pending.lot = { ...BUILDINGS[el.dataset.value].lot };
-      return startScreen();
-    case 'break-ground':
-      state = freshState(pending.type);
-      state.lot = { ...pending.lot };
-      tab = 'building';
-      screen = 'build';
-      save();
-      return buildScreen();
-    case 'tab':
-      tab = el.dataset.value;
-      document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b === el));
-      return draw();
-    case 'rotate':
-      state.view.rot = (state.view.rot + 1) % 4;
-      return set('view.rot', state.view.rot);
-    case 'zoom-in':
-      return set('view.zoom', Math.min(2.2, (state.view.zoom || 1) + 0.15));
-    case 'zoom-out':
-      return set('view.zoom', Math.max(0.6, (state.view.zoom || 1) - 0.15));
-    case 'time':
-      return set('view.time', state.view.time === 'night' ? 'day' : 'night');
-    case 'png':
-      return savePng();
-    case 'restart':
-      if (!confirm('Start a new site? This clears the current design.')) return;
-      localStorage.removeItem(SAVE_KEY);
-      pending = { type: state.type, lot: { ...state.lot } };
-      screen = 'start';
-      return startScreen();
-    default:
-  }
-});
-
-// The lot sliders on the start screen write to `pending`, not to the design.
-// When the drag ends, put the detail back.
-document.addEventListener('change', (e) => {
-  if (e.target?.dataset?.path) drawStageOnly(false);
-});
-
-document.addEventListener('input', (e) => {
-  const el = e.target;
-  if (el.dataset.act === 'lot-w' || el.dataset.act === 'lot-d') {
-    pending.lot[el.dataset.act === 'lot-w' ? 'width' : 'depth'] = Number(el.value);
-    const label = el.previousElementSibling?.querySelector('b');
-    if (label) label.textContent = `${el.value} ft`;
-    return;
-  }
-  if (!el.dataset.path) return;
-  const value = el.dataset.kind === 'num' ? Number(el.value) : el.value;
-  const path = el.dataset.path;
-  const keys = path.split('.');
-  const last = keys.pop();
-  keys.reduce((o, k) => o[k], state)[last] = value;
-  save();
-  // Redraw the view without rebuilding the panel, so focus and caret survive.
-  scheduleStage(true);
-  const label = document.querySelector(`label[for="c-${CSS.escape(path)}"] b`);
-  if (label && el.dataset.kind === 'num') label.textContent = labelFor(path, value);
-});
-
-function labelFor(path, value) {
-  if (path === 'body.floors' || path === 'office.floors') return `${value} · ${value * FLOOR_HEIGHT} ft`;
-  if (path.startsWith('lot.') || path === 'body.length' || path === 'body.width' || path === 'body.height' || path === 'office.length') return `${value} ft`;
-  return String(value);
-}
-
-// Dragging a slider fires input far faster than the scene can be redrawn, so
-// redraws are coalesced onto the next frame.
-let framePending = false;
-function scheduleStage(fast) {
-  if (framePending) return;
-  framePending = true;
-  requestAnimationFrame(() => { framePending = false; drawStageOnly(fast); });
-}
-
-function drawStageOnly(fast = false) {
-  const stage = document.getElementById('stage');
-  if (!stage) return;
-  const rect = stage.getBoundingClientRect();
-  const size = { w: Math.max(320, Math.round(rect.width)), h: Math.max(240, Math.round(rect.height)) };
-  const scene = render(state, size, { fast });
-  stage.innerHTML = frame(state, size, scene.svg);
-  const readout = document.getElementById('readout');
-  if (readout) {
-    const L = scene.layout;
-    const bits = [`${state.lot.width}×${state.lot.depth} ft lot`, `${Math.round(state.body.length)}×${Math.round(state.body.width)} ft building`];
-    if (state.type === 'tower') bits.push(`${state.body.floors} floors`);
-    else if (L.dockRun) bits.push(`${L.dockRun.bays} dock bays`);
-    if (L.stalls) bits.push(`${L.stalls.length} stalls`);
-    readout.textContent = bits.join(' · ');
-  }
-}
-
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (screen === 'build') drawStageOnly(); }, 150);
+  resizeTimer = setTimeout(() => { if (screen === 'build') drawStage(); }, 150);
 });
 
-screen === 'build' ? buildScreen() : startScreen();
+if (screen === 'build') buildScreen(); else startScreen();

@@ -1,40 +1,50 @@
 /* Isometric drawing kit.
  *
- * The world is measured in feet: x runs along the front of the lot, y runs back
- * into it, z is up. Everything drawn is a box, a flat patch of ground, or
- * something glued to the side of a box, so that is all this file knows how to
- * make — but it makes them with lighting, cast shadows and material detail. */
-
-const COS30 = Math.cos(Math.PI / 6);
-const SIN30 = Math.sin(Math.PI / 6);
+ * The world is measured in feet: x runs east, y runs south toward the street,
+ * z is up. The camera orbits freely — any yaw, a pitch from near-ground to
+ * overhead, zoom and pan — so nothing here may assume a fixed viewpoint.
+ *
+ * Everything drawn is a prism (a box with a heading), a flat patch of ground,
+ * or something glued to the side of a prism. */
 
 /* Where a shadow lands, per foot of height. The sun sits up and to the left of
- * the screen, so shadows fall down and to the right, into the yard where they
- * can be seen. */
+ * the world, so shadows fall down and to the right of the buildings. */
 export const SUN = { dx: 0.72, dy: 0.46 };
+const SUN_LEN = Math.hypot(SUN.dx, SUN.dy);
+const SUN_N = { x: SUN.dx / SUN_LEN, y: SUN.dy / SUN_LEN };
 
-export function makeCamera({ rot = 0, scale = 1, cx = 0, cy = 0, ox = 0, oy = 0 }) {
-  const a = (rot * Math.PI) / 2;
+export const DEG = Math.PI / 180;
+
+export function makeCamera({ yaw = 45, pitch = 34, scale = 1, cx = 0, cy = 0, ox = 0, oy = 0 }) {
+  const a = yaw * DEG;
   const ca = Math.cos(a);
   const sa = Math.sin(a);
-  const spin = (x, y) => {
-    const dx = x - cx;
-    const dy = y - cy;
-    return [dx * ca - dy * sa, dx * sa + dy * ca];
-  };
+  const k = Math.sin(pitch * DEG);   // how much depth squashes vertically
+  const kz = Math.cos(pitch * DEG);  // how much height rises on screen
   return {
-    scale,
+    yaw, pitch, scale, k, kz, cx, cy, ox, oy,
     project(x, y, z = 0) {
-      const [rx, ry] = spin(x, y);
-      return [ox + (rx - ry) * COS30 * scale, oy + ((rx + ry) * SIN30 - z) * scale];
+      const dx = x - cx;
+      const dy = y - cy;
+      const rx = dx * ca - dy * sa;
+      const ry = dx * sa + dy * ca;
+      return [ox + rx * scale, oy + (ry * k - z * kz) * scale];
+    },
+    /** Screen point back to a world point on the plane at height z. */
+    unproject(sx, sy, z = 0) {
+      const rx = (sx - ox) / scale;
+      const ry = ((sy - oy) / scale + z * kz) / k;
+      return [cx + rx * ca + ry * sa, cy - rx * sa + ry * ca];
     },
     // Painter's-algorithm key: bigger means nearer the viewer, so draw last.
     depth(x, y) {
-      const [rx, ry] = spin(x, y);
-      return rx + ry;
+      return (x - cx) * sa + (y - cy) * ca;
     },
   };
 }
+
+/** True when a wall with this outward normal is turned toward the camera. */
+export const facing = (cam, nx, ny) => cam.depth(cam.cx + nx, cam.cy + ny) > 0;
 
 /* --------------------------------------------------------------- svg pieces */
 
@@ -60,12 +70,23 @@ export function line(cam, a, b, style = {}) {
   return `<line x1="${p1[0].toFixed(2)}" y1="${p1[1].toFixed(2)}" x2="${p2[0].toFixed(2)}" y2="${p2[1].toFixed(2)}" ${attrs(style)}/>`;
 }
 
-/** A flat patch of ground: parking, pavement, grass, the lot itself. */
+/** An axis-aligned patch of ground: pavement, grass, paint. */
 export function pad(cam, { x, y, w, d, z = 0 }, style) {
   return poly(cam, [[x, y, z], [x + w, y, z], [x + w, y + d, z], [x, y + d, z]], style);
 }
 
 export function ellipse(cam, x, y, rx, ry, style, z = 0) {
+  const [px, py] = cam.project(x, y, z);
+  // A circle lying on a horizontal plane squashes with the camera pitch.
+  return `<ellipse cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" rx="${(rx * cam.scale).toFixed(1)}" ry="${(ry * cam.scale * cam.k * 2).toFixed(1)}" ${attrs(style)}/>`;
+}
+
+/**
+ * A blob with volume — a tree canopy, a dish. Unlike a painted circle on the
+ * ground it must NOT squash when the camera drops toward the horizon, or the
+ * trees turn into puddles.
+ */
+export function sphere(cam, x, y, z, rx, ry, style) {
   const [px, py] = cam.project(x, y, z);
   return `<ellipse cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" rx="${(rx * cam.scale).toFixed(1)}" ry="${(ry * cam.scale).toFixed(1)}" ${attrs(style)}/>`;
 }
@@ -73,12 +94,13 @@ export function ellipse(cam, x, y, rx, ry, style, z = 0) {
 /* ------------------------------------------------------------------- colour */
 
 function hexToRgb(hex) {
-  const h = hex.replace('#', '');
+  const h = String(hex).replace('#', '');
   const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 const clamp255 = (n) => Math.max(0, Math.min(255, Math.round(n)));
+export const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
 /** Mix a hex colour toward white (f > 1) or black (f < 1), returned as hex. */
 export function mixHex(hex, f) {
@@ -87,21 +109,32 @@ export function mixHex(hex, f) {
   return '#' + [mix(r), mix(g), mix(b)].map((n) => n.toString(16).padStart(2, '0')).join('');
 }
 
-export const shade = (hex, f) => mixHex(hex, f);
-
-/** Push a colour toward a tint — used to sit everything in the same daylight. */
-export function tint(hex, target, amount) {
-  const a = hexToRgb(hex);
-  const b = hexToRgb(target);
-  return '#' + a.map((c, i) => clamp255(c + (b[i] - c) * amount).toString(16).padStart(2, '0')).join('');
-}
+export const shade = mixHex;
 
 export function rgba(hex, alpha) {
   const [r, g, b] = hexToRgb(hex);
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+export function lum(hex) {
+  const [r, g, b] = hexToRgb(hex);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
 /* ---------------------------------------------------------------- geometry */
+
+/** Footprint corners of a box with a heading, counter-clockwise from (0,0). */
+export function corners({ x, y, w, d, rot = 0 }) {
+  const a = rot * DEG;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const hx = w / 2;
+  const hy = d / 2;
+  const cxp = x + hx;
+  const cyp = y + hy;
+  return [[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]]
+    .map(([lx, ly]) => [cxp + lx * ca - ly * sa, cyp + lx * sa + ly * ca]);
+}
 
 /** Convex hull (monotone chain) of 2-d points, used for cast shadows. */
 export function hull(points) {
@@ -122,37 +155,64 @@ export function hull(points) {
 
 /**
  * The shadow a box throws on the ground: the footprint swept along the sun
- * vector between the box's own bottom and top. Boxes that float (a trailer
- * body, a canopy) cast a shadow that has come away from them, which is what
+ * vector between the box's own bottom and top. Boxes that float — a trailer
+ * body, a canopy — cast a shadow that has come away from them, which is what
  * sells the height.
  */
-export function shadowOf(cam, box) {
-  const { x, y, w, d, z0 = 0, z1 = 10 } = box;
-  const base = [[x, y], [x + w, y], [x + w, y + d], [x, y + d]];
+export function shadowOf(cam, box, k = 1) {
+  const base = corners(box);
+  const z0 = (box.z0 || 0) * k;
+  const z1 = (box.z1 == null ? 10 : box.z1) * k;
   const at = (h) => base.map(([px, py]) => [px + SUN.dx * h, py + SUN.dy * h]);
   const ring = hull([...at(z0), ...at(z1)]);
   return `<polygon points="${pts(cam, ring.map((p) => [p[0], p[1], 0]))}"/>`;
+}
+
+/** Do two footprints overlap? Separating-axis test on rotated rectangles. */
+export function overlaps(a, b, margin = 0) {
+  const A = corners({ ...a, w: a.w + margin * 2, d: a.d + margin * 2, x: a.x - margin, y: a.y - margin });
+  const B = corners(b);
+  for (const poly4 of [A, B]) {
+    for (let i = 0; i < 4; i++) {
+      const p = poly4[i];
+      const q = poly4[(i + 1) % 4];
+      const axis = [-(q[1] - p[1]), q[0] - p[0]];
+      let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity;
+      for (const [px, py] of A) { const v = px * axis[0] + py * axis[1]; minA = Math.min(minA, v); maxA = Math.max(maxA, v); }
+      for (const [px, py] of B) { const v = px * axis[0] + py * axis[1]; minB = Math.min(minB, v); maxB = Math.max(maxB, v); }
+      if (maxA < minB || maxB < minA) return false;
+    }
+  }
+  return true;
+}
+
+/** Is a point inside a footprint? */
+export function contains(box, px, py) {
+  const c = corners(box);
+  let inside = false;
+  for (let i = 0, j = 3; i < 4; j = i++) {
+    const [xi, yi] = c[i];
+    const [xj, yj] = c[j];
+    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
 
 /* ---------------------------------------------------------------- box faces */
 
 /* A wall face carries its own little coordinate system: `t` runs along the wall
  * from 0..len, `h` runs up it from the face's own base. Anything glued to a
- * wall — a dock door, a window grid, a sign — is written in those terms and
- * never has to think about the projection. */
-function faceFrame(cam, o, u, len, z0, z1, id) {
+ * wall — a door, a window grid, a sign — is written in those terms and never
+ * has to think about the projection or the building's heading. */
+function faceFrame(cam, o, u, len, z0, z1, id, normal) {
   const at = (t, h) => [o[0] + u[0] * t, o[1] + u[1] * t, z0 + h];
   return {
-    id,
-    len,
+    id, len, normal, at,
     height: z1 - z0,
-    at,
     depth: cam.depth(o[0] + u[0] * (len / 2), o[1] + u[1] * (len / 2)),
+    visible: cam.depth(cam.cx + normal[0], cam.cy + normal[1]) > 0,
     quad(t0, t1, h0, h1, style) {
       return poly(cam, [at(t0, h1), at(t1, h1), at(t1, h0), at(t0, h0)], style);
-    },
-    edge(t0, h0, t1, h1, style) {
-      return line(cam, at(t0, h0), at(t1, h1), style);
     },
     /* Screen-space matrix that lays flat content (text, a logo) onto the wall.
      * Local y points up the wall, which is why V is negated. Signwriters paint
@@ -172,24 +232,39 @@ function faceFrame(cam, o, u, len, z0, z1, id) {
   };
 }
 
-export function boxFaces(cam, { x, y, w, d, z0 = 0, z1 = 10 }) {
-  return [
-    faceFrame(cam, [x, y, z0], [1, 0], w, z0, z1, 'S'),
-    faceFrame(cam, [x + w, y, z0], [0, 1], d, z0, z1, 'E'),
-    faceFrame(cam, [x + w, y + d, z0], [-1, 0], w, z0, z1, 'N'),
-    faceFrame(cam, [x, y + d, z0], [0, -1], d, z0, z1, 'W'),
-  ];
+// Face ids are local to the object: 'N' always means its own front, whichever
+// way it has been turned.
+const FACE_IDS = ['S', 'E', 'N', 'W'];
+
+export function boxFaces(cam, box) {
+  const c = corners(box);
+  const z0 = box.z0 || 0;
+  const z1 = box.z1 == null ? 10 : box.z1;
+  const out = [];
+  for (let i = 0; i < 4; i++) {
+    const a = c[i];
+    const b = c[(i + 1) % 4];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue;
+    const u = [dx / len, dy / len];
+    out.push(faceFrame(cam, [a[0], a[1], z0], u, len, z0, z1, FACE_IDS[i], [u[1], -u[0]]));
+  }
+  return out;
 }
 
-// How much light each wall catches. The sun is off the front-left, so the
-// street face is brightest and the far side falls away.
-export const TONE = { N: 1.0, E: 0.83, S: 0.7, W: 0.62 };
+/** How much sun a wall with this normal catches. */
+export function toneOf(normal) {
+  const lit = -(normal[0] * SUN_N.x + normal[1] * SUN_N.y);
+  return 0.64 + 0.36 * clamp((lit + 0.25) / 1.25, 0, 1);
+}
 
 /**
- * Draw a box far walls first, then near walls, then the roof. For a convex box
- * the near walls plus the roof cover the far ones exactly, so nothing needs a
- * visibility test — the back of the building is painted over, and so is
- * anything decorating it.
+ * Draw a prism far walls first, then near walls, then the roof. For a convex
+ * box the near walls plus the roof cover the far ones exactly, so nothing needs
+ * a visibility test — the back is painted over, and so is anything decorating
+ * it.
  */
 export function drawBox(cam, box, opts = {}) {
   const {
@@ -200,19 +275,75 @@ export function drawBox(cam, box, opts = {}) {
     grade = true,     // vertical light falloff down each wall
     ao = 0,           // feet of ground-shadow darkening at the base
     crisp = false,    // small props: skip the gradients, keep the edges tight
+    roofStyle = null, // extra attributes for the top face
   } = opts;
   const faces = boxFaces(cam, box);
   let out = '';
   for (const f of [...faces].sort((a, b) => a.depth - b.depth)) {
-    out += f.quad(0, f.len, 0, f.height, { fill: mixHex(color, TONE[f.id]), stroke, 'stroke-width': 0.5 });
+    out += f.quad(0, f.len, 0, f.height, { fill: mixHex(color, toneOf(f.normal)), stroke, 'stroke-width': 0.5 });
     if (grade && !crisp) out += f.quad(0, f.len, 0, f.height, { fill: 'url(#wallFade)', stroke: 'none' });
     if (decorate) out += decorate(f) || '';
     if (ao > 0) out += f.quad(0, f.len, 0, Math.min(ao, f.height), { fill: 'url(#baseAO)', stroke: 'none' });
   }
-  const { x, y, w, d, z1 = 10 } = box;
-  const top = [[x, y, z1], [x + w, y, z1], [x + w, y + d, z1], [x, y + d, z1]];
-  out += poly(cam, top, { fill: roof || mixHex(color, 1.16), stroke, 'stroke-width': 0.5 });
+  const z1 = box.z1 == null ? 10 : box.z1;
+  const top = corners(box).map((p) => [p[0], p[1], z1]);
+  out += poly(cam, top, { fill: roof || mixHex(color, 1.16), stroke, 'stroke-width': 0.5, ...(roofStyle || {}) });
   if (!crisp) out += poly(cam, top, { fill: 'url(#roofFade)', stroke: 'none' });
+  return out;
+}
+
+/** The top face on its own, for drawing things onto a roof. */
+export function topFace(cam, box, style) {
+  const z1 = box.z1 == null ? 10 : box.z1;
+  return poly(cam, corners(box).map((p) => [p[0], p[1], z1]), style);
+}
+
+/** A pitched roof, for the props that want one. */
+export function gableRoof(cam, box, { color = '#8d5a45', rise = 4, along = 'w' } = {}) {
+  const c = corners(box);
+  const z = box.z1 == null ? 10 : box.z1;
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const ridgeA = along === 'w' ? mid(c[0], c[3]) : mid(c[0], c[1]);
+  const ridgeB = along === 'w' ? mid(c[1], c[2]) : mid(c[3], c[2]);
+  const slopes = along === 'w'
+    ? [[c[0], c[1], ridgeB, ridgeA], [c[3], c[2], ridgeB, ridgeA]]
+    : [[c[0], c[3], ridgeB, ridgeA], [c[1], c[2], ridgeB, ridgeA]];
+  let out = '';
+  const ends = along === 'w'
+    ? [[c[0], c[3], ridgeA], [c[1], c[2], ridgeB]]
+    : [[c[0], c[1], ridgeA], [c[3], c[2], ridgeB]];
+  for (const [a, b, r] of ends) {
+    out += poly(cam, [[a[0], a[1], z], [b[0], b[1], z], [r[0], r[1], z + rise]], {
+      fill: mixHex(color, 0.82), stroke: 'rgba(18,26,38,.35)', 'stroke-width': 0.5,
+    });
+  }
+  slopes.forEach((q, i) => {
+    out += poly(cam, [
+      [q[0][0], q[0][1], z], [q[1][0], q[1][1], z],
+      [q[2][0], q[2][1], z + rise], [q[3][0], q[3][1], z + rise],
+    ], { fill: mixHex(color, i ? 0.9 : 1.12), stroke: 'rgba(18,26,38,.35)', 'stroke-width': 0.5 });
+  });
+  return out;
+}
+
+/** A vertical cylinder — tanks, stacks, silos, bollards. */
+export function cylinder(cam, { x, y, r, z0 = 0, z1 = 10 }, { color = '#b9c0c8', top = null } = {}) {
+  const seg = 16;
+  const ring = (z) => Array.from({ length: seg }, (_, i) => {
+    const a = (i / seg) * Math.PI * 2;
+    return [x + Math.cos(a) * r, y + Math.sin(a) * r, z];
+  });
+  const lo = ring(z0);
+  const hi = ring(z1);
+  let out = '';
+  const order = Array.from({ length: seg }, (_, i) => i)
+    .sort((i, j) => cam.depth(lo[i][0], lo[i][1]) - cam.depth(lo[j][0], lo[j][1]));
+  for (const i of order) {
+    const j = (i + 1) % seg;
+    const n = [Math.cos(((i + 0.5) / seg) * Math.PI * 2), Math.sin(((i + 0.5) / seg) * Math.PI * 2)];
+    out += poly(cam, [hi[i], hi[j], lo[j], lo[i]], { fill: mixHex(color, toneOf(n)), stroke: 'none' });
+  }
+  out += poly(cam, hi, { fill: top || mixHex(color, 1.18), stroke: 'rgba(18,26,38,.3)', 'stroke-width': 0.5 });
   return out;
 }
 

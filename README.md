@@ -174,81 +174,108 @@ not a substitute for an inspection by a licensed inspector.
 
 # Building Design Simulator
 
-Set a lot, drop a building on it, shape the thing, and sign it in your own
-words. It draws the whole site in isometric — building, docks, doors, security,
-parking, landscaping — and redraws on every change. No API key, no server work:
-it all runs in the browser.
+A site editor. Set a lot, put buildings on it, and then edit everything —
+every wall bay, every machine on every roof, every trailer, sign, booth and
+tree. The camera flies around it like a drone.
 
 Open <http://localhost:3000/building>.
 
-## Building one
+## The camera
 
-**1 · The lot.** Frontage along the street and depth back from it, in feet. The
-game tells you the acreage. Then pick what goes on it: a warehouse or
-distribution shed, an office tower, a storage unit complex, or a retail strip.
+Drag the view to orbit all the way around the site, shift-drag to pan, and the
+wheel to zoom from an overview down to standing between the trailers. Tilt runs
+from 6° (street level) to 86° (straight down), and the View tab has jumps for
+front, back, left, right, overhead, street level and a low drone angle.
 
-**2 · The building.** Length and depth first. After that the controls follow the
-type you picked — dock bays and clear height for a warehouse, floors for a
-tower, doors per row and rows of units for storage, tenant units for retail.
-Wall colour and trim colour sit on the same tab.
+## Everything is an object
 
-**3 · The office end.** Raise part of the shell into two or three floors of
-office, choose which end it takes and how much of the building it eats, then
-glaze it: punched openings, ribbon windows or a full curtain wall. It always
-comes out a little taller than the shell it grows from, so it reads as its own
-mass from the street.
+Buildings included. Click anything in the view to select it; then turn it in
+15° or 90° steps, duplicate it, nudge it with the arrow keys, drag it around,
+or delete it. Ctrl+Z undoes. So the security sign facing the wrong way can be
+turned to face the right way — or deleted and done again.
 
-**4 · The entrance.** Front doors, a canopy over them, a columned porch, steps
-and a walk.
+Nothing but a building may stand inside a building: drag a trailer into a wall
+and it springs back, and a placement that would land inside one is refused with
+the footprint drawn in red.
 
-**5 · Security.** A guard booth beside the drive, a gate arm across it, a
-perimeter fence along the street frontage with a gap for the drive, a guard and
-a visitor, and up to two dozen bollards.
+## What you can add
 
-**6 · Text and logos.** Three surfaces carry lettering: the building wall (name
-plus an optional strapline), the guard booth fascia, and the monument sign at
-the drive. Each takes your text, a font colour and a logo. Click a surface in
-the view to jump straight to its text.
+The Add tab holds the catalogue. Pick a thing, then click the ground to drop
+it; shift-click keeps the tool armed for a run of fence or bollards.
 
-**7 · The site.** Parking stripes itself out around whatever you built, and
-cars, trailers at the docks, light poles and trees are each a switch.
+- **Buildings** — warehouse shell, office block, small 2–3 storey building,
+  tower, storage row, retail strip. Put as many on the lot as you like.
+- **Roof plant** — 18 machines: packaged AC units, large rooftop units, a
+  chiller, cooling tower, exhaust fan, mushroom vent, flue stack, skylight,
+  skylight monitor, solar array, satellite dish, antenna mast, water tank,
+  stair bulkhead, lift overrun, duct run, pipe rack and a louvred plant screen.
+  None of it appears on its own — you place every piece, on any roof, and drag
+  it around up there.
+- **Booths** — 10 designs: classic cabin, deep canopy, brick gatehouse, glass
+  cube, container booth, twin-lane kiosk, pitched hut, raised lookout, round
+  kiosk and a full gate office. Each carries a fascia sign you write yourself.
+- **Props** — fences and walls by the run, guard rails, gate arms, bollards,
+  barriers, cones, monument/pylon/post signs, stop signs, flagpoles, light
+  poles, flood masts, bollard lights, trees, conifers, shrubs, hedges,
+  planters, dumpsters, containers, generators, transformers, silos, pallet
+  stacks, yard canopies, bike racks, benches, picnic tables.
+- **Vehicles** — trailers, tractor units, box trucks, vans, cars, forklifts.
 
-Rotate through four viewpoints, zoom, flip between day and night, and "Save
-image" writes the view out as a PNG. The design autosaves to the browser; "New
-site" clears it.
+## Walls, bay by bay
+
+Select a building and its four walls come up as grids: one row per floor, one
+column per bay. Pick a brush — window, ribbon glass, full glazing, loading bay,
+roll-up door, entrance, louvre, vent — and paint the bays one at a time, or
+fill and clear a whole wall. Add and remove bays across a wall, change the
+floor count, and the openings follow. Loading bays and doors are ground floor
+only, because that is where they go.
+
+What you put on a wall changes the ground in front of it: a run of loading bays
+gets a poured concrete apron and a truck court that parking will not encroach
+on, and an entrance gets a path and a crossing.
+
+## The site
+
+Lot size, and toggles for pavement, parking, parked cars, road markings, the
+street and grass. The parking lays itself out around whatever is on the lot —
+add a building in the middle of the car park and the bays re-flow around it.
 
 ## How it draws
 
-The whole picture is one SVG, rebuilt from scratch on every change.
+One SVG, rebuilt on every change, with cast shadows swept along the sun vector,
+precast joints and ribbed siding, glazing that reflects sky by day and lights
+up cell by cell at night, roofs with coping and membrane seams, and a night
+palette where pole heads pool light on the asphalt and dock lamps wash the wall
+above every bay.
 
-- **Cast shadows.** Every mass sweeps its own footprint along the sun vector,
-  and the convex hull of that sweep is its shadow — so a tower lays a shadow
-  across the lot, and a trailer's shadow comes away from it at the right angle.
-- **Materials.** Precast panel joints and reveals, ribbed metal siding on
-  trailers and storage rows, recessed roll-up doors with bumpers and numbers,
-  and glazing that reflects sky by day and lights up cell by cell after dark.
-- **Roofs.** The biggest surface in an isometric view never stays blank:
-  coping, membrane seams, rooftop units and skylight bands.
-- **Ground.** The site sits on a slab, so the grass has an edge to stop at.
-  Striped stalls, kerbed and planted islands, accessible bays, a crosswalk to
-  the doors, lane arrows, a stop bar, a concrete truck apron, kerb and footway.
-- **Night.** The palette drops, pole heads throw pools on the asphalt, dock
-  lamps wash the wall, and signage brightens and glows instead of sinking into
-  the dark.
+Painter ordering compares objects pairwise rather than by a single depth
+number — a 380-foot shed has a corner nearer the camera than a trailer parked
+in front of its other end, and a single number gets that backwards.
 
-Low buildings can't carry a readable name on the wall, so a retail strip or a
-storage office gets what a real one gets: a raised parapet element over the
-entrance, with the sign on it. While a slider is being dragged the scene draws
-in a cheap pass and the detail comes back when you let go.
+While the camera or a slider is moving the scene draws in a cheap pass; the
+detail comes back when you let go.
+
+## Keys
+
+| Key | What it does |
+| --- | --- |
+| Drag / shift-drag / wheel | Orbit · pan · zoom |
+| Click | Select · click empty ground to deselect |
+| R / Shift+R | Turn the selection (or the thing being placed) |
+| Arrows | Nudge 2 ft, or 10 ft with shift |
+| Delete | Delete the selection |
+| Esc | Cancel placement, or deselect |
+| Ctrl+Z / Ctrl+Shift+Z | Undo · redo |
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `public/building/iso.js` | The isometric kit: projection, lit boxes, cast-shadow hulls, wall faces, and the matrix that lays text onto a wall |
-| `public/building/catalog.js` | Building types and their presets, palettes, logos, and the saved-state shape |
-| `public/building/scene.js` | Site layout in feet, then the whole drawing — masses, materials, roofs, ground marking, signage, props, and the day/night palette |
-| `public/building/game.js` | Screens, the control panel, click-to-edit surfaces, PNG export |
+| `public/building/iso.js` | Projection with free yaw/pitch/zoom and unprojection, lit prisms, cast-shadow hulls, wall faces, overlap tests |
+| `public/building/catalog.js` | The object model, item catalogues, presets, save migration, and the rule that nothing stands inside a building |
+| `public/building/parts.js` | Every drawable piece: wall openings, the 18 machines, the 10 booths, props and vehicles |
+| `public/building/scene.js` | Site assembly, ground and marking, depth sort, hit shapes, day/night palette |
+| `public/building/game.js` | The editor: camera, selection, dragging, placement, wall and roof editors, undo |
 
 Every site in it is invented. It is a toy for sketching a layout, not a set of
 construction documents.
