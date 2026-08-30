@@ -5,7 +5,7 @@
 
 import {
   SITE_PRESETS, BUILDING_STYLES, ROOF_KIT, BOOTHS, PROPS, PROP_BY_ID, ROOF_BY_ID, BOOTH_BY_ID,
-  CELLS, WALL_COLORS, SIGN_COLORS, LOGOS, FLOOR_HEIGHT, freshState, normalize, makeBuilding,
+  CELLS, CLADDINGS, ROOF_TYPES, WALL_COLORS, SIGN_COLORS, LOGOS, FLOOR_HEIGHT, freshState, normalize, makeBuilding,
   buildingHeight, wallCols, newId,
 } from './catalog.js';
 import { render, frame, fitCamera, footprint, objHeight, isClear, bounds, buildingsOf } from './scene.js';
@@ -341,6 +341,12 @@ function buildingPanel(b) {
     </div></div>
     <div class="field"><label>Trim colour</label><div class="chips">
       ${SIGN_COLORS.map((c) => `<button class="chip swatch${b.band === c.hex ? ' on' : ''}" style="background:${c.hex}" title="${c.name}" data-act="set" data-key="band" data-value="${c.hex}"></button>`).join('')}
+    </div></div>
+    <div class="field"><label>Cladding</label><div class="chips">
+      ${CLADDINGS.map((c) => `<button class="chip${(b.cladding || 'precast') === c.id ? ' on' : ''}" data-act="set" data-key="cladding" data-value="${c.id}">${c.name}</button>`).join('')}
+    </div></div>
+    <div class="field"><label>Roof</label><div class="chips">
+      ${ROOF_TYPES.map((c) => `<button class="chip${(b.roofType || 'flat') === c.id ? ' on' : ''}" data-act="set" data-key="roofType" data-value="${c.id}">${c.name}</button>`).join('')}
     </div></div>
     <div class="toggles"><button class="toggle${b.parapet !== false ? ' on' : ''}" data-act="toggle" data-key="parapet">
       <span>Parapet band</span><span class="pill">${b.parapet !== false ? 'On' : 'Off'}</span></button></div>

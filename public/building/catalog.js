@@ -49,6 +49,7 @@ export const CELLS = [
   { id: 'door', name: 'Entrance', icon: '🚪', ground: true, upper: false },
   { id: 'louvre', name: 'Louvre', icon: '≡', ground: true, upper: true },
   { id: 'vent', name: 'Vent', icon: '◍', ground: true, upper: true },
+  { id: 'open', name: 'Open deck', icon: '▤', ground: true, upper: true },
 ];
 
 export const CELL_IDS = CELLS.map((c) => c.id);
@@ -149,6 +150,19 @@ export const BOOTH_BY_ID = Object.fromEntries(BOOTHS.map((p) => [p.id, p]));
 
 /* -------------------------------------------------------------- buildings */
 
+export const CLADDINGS = [
+  { id: 'precast', name: 'Precast panels' },
+  { id: 'rib', name: 'Ribbed metal' },
+  { id: 'brick', name: 'Brick courses' },
+  { id: 'plain', name: 'Plain render' },
+];
+
+export const ROOF_TYPES = [
+  { id: 'flat', name: 'Flat roof' },
+  { id: 'gable', name: 'Pitched roof' },
+  { id: 'saw', name: 'Sawtooth' },
+];
+
 export const BUILDING_STYLES = {
   shed: { name: 'Warehouse shell', icon: '🏭', w: 380, d: 150, floors: 1, height: 34, cell: 12, blurb: 'Clear-span box. Put loading bays where you want them.' },
   office: { name: 'Office block', icon: '🏢', w: 110, d: 90, floors: 3, height: null, cell: 11, blurb: 'Two to six floors of offices.' },
@@ -156,6 +170,36 @@ export const BUILDING_STYLES = {
   tower: { name: 'Tower', icon: '🏙️', w: 150, d: 110, floors: 12, height: null, cell: 11, blurb: 'Glass high-rise.' },
   row: { name: 'Storage row', icon: '🔒', w: 300, d: 40, floors: 1, height: 11, cell: 10, blurb: 'Single-storey units with roll-up doors both sides.' },
   strip: { name: 'Retail strip', icon: '🛒', w: 300, d: 90, floors: 1, height: 20, cell: 15, blurb: 'Storefront block with a deep sign band.' },
+  workshop: {
+    name: 'Workshop', icon: '🔧', w: 100, d: 62, floors: 1, height: 24, cell: 12,
+    cladding: 'rib', wall: '#b9c2c9', band: '#3f4a57',
+    blurb: 'Maintenance shop with roll-up doors and ribbed cladding.',
+  },
+  pitched: {
+    name: 'Pitched unit', icon: '🏘️', w: 84, d: 52, floors: 1, height: 16, cell: 10,
+    cladding: 'brick', roofType: 'gable', wall: '#9c5b47', band: '#6d4034', roofColor: '#5d646d',
+    blurb: 'Brick unit under a pitched roof.',
+  },
+  deck: {
+    name: 'Car park deck', icon: '🅿️', w: 190, d: 122, floors: 4, height: null, cell: 12,
+    cladding: 'plain', wall: '#c6cbd1', band: '#5a636e',
+    blurb: 'Open-sided multi-storey parking.',
+  },
+  cold: {
+    name: 'Cold store', icon: '🧊', w: 170, d: 120, floors: 1, height: 46, cell: 12,
+    cladding: 'rib', wall: '#eef1f4', band: '#2f5f8a',
+    blurb: 'Tall insulated box, almost no openings.',
+  },
+  pavilion: {
+    name: 'Glass pavilion', icon: '🪟', w: 76, d: 54, floors: 1, height: 17, cell: 9,
+    cladding: 'plain', wall: '#e7eef3', band: '#4a5a68',
+    blurb: 'Fully glazed showroom or reception.',
+  },
+  plant: {
+    name: 'Plant room', icon: '⚙️', w: 64, d: 42, floors: 1, height: 27, cell: 10,
+    cladding: 'precast', wall: '#a7adb6', band: '#40484f',
+    blurb: 'Louvred energy centre for the back of the site.',
+  },
 };
 
 let seq = 1;
@@ -186,9 +230,12 @@ export function makeBuilding(style, over = {}) {
     w: p.w, d: p.d,
     floors: p.floors,
     height: p.height,          // null = floors * FLOOR_HEIGHT
-    wall: '#d8dde3',
-    band: '#1f3a63',
+    wall: p.wall || '#d8dde3',
+    band: p.band || '#1f3a63',
+    roofColor: p.roofColor || null,
     parapet: true,
+    cladding: p.cladding || 'precast',
+    roofType: p.roofType || 'flat',
     sign: { on: true, face: 'N', text: '', sub: '', color: '#1f4f9c', logo: '' },
     roofItems: [],
     walls: {},
@@ -224,6 +271,38 @@ export function makeBuilding(style, over = {}) {
       for (const face of ['E', 'W']) fill(face, f, 0, cd, 'glass');
     }
     fill('N', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'door');
+  } else if (style === 'workshop') {
+    fill('N', 0, 1, cw - 1, 'roll');
+    fill('N', 0, 0, 1, 'door');
+    fill('S', 0, 1, 3, 'roll');
+    fill('E', 0, 1, cd - 1, 'window');
+  } else if (style === 'pitched') {
+    fill('N', 0, 0, cw, 'window');
+    fill('N', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'door');
+    fill('S', 0, 1, cw - 1, 'window');
+    fill('E', 0, 1, cd - 1, 'window');
+    fill('W', 0, 1, cd - 1, 'window');
+    b.parapet = false;
+  } else if (style === 'deck') {
+    for (let f = 0; f < floors; f++) {
+      for (const face of ['N', 'S']) fill(face, f, 0, cw, 'open');
+      for (const face of ['E', 'W']) fill(face, f, 0, cd, 'open');
+    }
+    fill('N', 0, 0, 1, 'door');
+    fill('N', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'roll');
+    b.parapet = true;
+  } else if (style === 'cold') {
+    fill('N', 0, 2, Math.min(cw - 2, 8), 'dock');
+    fill('E', 0, 1, 2, 'door');
+    fill('W', 0, cd - 3, cd - 2, 'louvre');
+  } else if (style === 'pavilion') {
+    for (const face of ['N', 'S']) fill(face, 0, 0, cw, 'glass');
+    for (const face of ['E', 'W']) fill(face, 0, 0, cd, 'glass');
+    fill('N', 0, Math.floor(cw / 2), Math.floor(cw / 2) + 1, 'door');
+  } else if (style === 'plant') {
+    for (const face of ['N', 'S']) fill(face, 0, 1, cw - 1, 'louvre');
+    for (const face of ['E', 'W']) fill(face, 0, 1, cd - 1, 'louvre');
+    fill('N', 0, 0, 1, 'door');
   } else {
     // Office-ish: windows everywhere, a door in the middle of the front.
     for (let f = 0; f < floors; f++) {
@@ -385,6 +464,8 @@ export function normalize(state) {
       o.walls = o.walls || {};
       o.roofItems = Array.isArray(o.roofItems) ? o.roofItems : [];
       o.sign = { on: true, face: 'N', text: '', sub: '', color: '#1f4f9c', logo: '', ...(o.sign || {}) };
+      o.cladding = o.cladding || (BUILDING_STYLES[o.style] || {}).cladding || 'precast';
+      o.roofType = o.roofType || (BUILDING_STYLES[o.style] || {}).roofType || 'flat';
       for (const f of ['N', 'E', 'S', 'W']) {
         if (!Array.isArray(o.walls[f]) || !o.walls[f].length) o.walls[f] = grid(4, o.floors || 1);
       }

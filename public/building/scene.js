@@ -4,10 +4,10 @@
  * whole scene is painted back to front from the camera's own depth. */
 
 import {
-  makeCamera, drawBox, boxFaces, poly, line, pad, ellipse, faceText, topFace,
-  mixHex, rgba, lum, clamp, corners, hull, shadowOf, overlaps, contains, facing, SUN,
+  makeCamera, drawBox, boxFaces, poly, line, pad, ellipse, faceText, topFace, gableRoof,
+  mixHex, rgba, lum, clamp, corners, hull, shadowOf, overlaps, contains, facing, SUN, DEG,
 } from './iso.js';
-import { drawCell, drawRoofItem, drawBooth, drawProp } from './parts.js';
+import { drawCell, drawRoofItem, drawBooth, drawProp, ribs } from './parts.js';
 import {
   FLOOR_HEIGHT, STALL, PROP_BY_ID, ROOF_BY_ID, BOOTH_BY_ID, buildingHeight, wallCols,
   footprint, objHeight,
@@ -137,11 +137,20 @@ function drawBuilding(cam, b, ctx) {
     decorate: (f) => {
       const g = b.walls[f.id];
       let s = '';
-      // Precast joints, unless the whole wall is glass.
+      // Cladding: what the wall is actually made of.
+      const clad = b.cladding || 'precast';
       if (detail && b.style !== 'tower') {
-        for (let t = 25; t < f.len - 1; t += 25) {
-          s += f.quad(t - 0.18, t + 0.18, 0, f.height, { fill: 'rgba(20,28,40,.16)', stroke: 'none' });
-          s += f.quad(t + 0.18, t + 0.5, 0, f.height, { fill: 'rgba(255,255,255,.14)', stroke: 'none' });
+        if (clad === 'precast') {
+          for (let t = 25; t < f.len - 1; t += 25) {
+            s += f.quad(t - 0.18, t + 0.18, 0, f.height, { fill: 'rgba(20,28,40,.16)', stroke: 'none' });
+            s += f.quad(t + 0.18, t + 0.5, 0, f.height, { fill: 'rgba(255,255,255,.14)', stroke: 'none' });
+          }
+        } else if (clad === 'rib') {
+          s += ribs(f, { step: 3.6, detail });
+        } else if (clad === 'brick') {
+          for (let h = 0.9; h < f.height - 0.3; h += 0.9) {
+            s += f.quad(0, f.len, h, h + 0.12, { fill: 'rgba(255,255,255,.13)', stroke: 'none' });
+          }
         }
       }
       if (g) {
@@ -172,6 +181,35 @@ function drawBuilding(cam, b, ctx) {
     },
   });
 
+  const roofType = b.roofType || 'flat';
+  if (roofType === 'gable') {
+    const along = b.w >= b.d ? 'w' : 'd';
+    svg += gableRoof(cam, box, {
+      color: b.roofColor || (night ? '#3a3138' : '#8d5a45'),
+      rise: clamp(Math.min(b.w, b.d) * 0.22, 4, 16),
+      along,
+    });
+    return svg + signSvg;
+  }
+  if (roofType === 'saw') {
+    // Sawtooth: a run of low monitors, each glazed on one side.
+    const n = clamp(Math.round(b.d / 34), 1, 8);
+    const pitchD = b.d / n;
+    const rise = clamp(pitchD * 0.42, 4, 12);
+    for (let i = 0; i < n; i++) {
+      const strip = localBox(b, 1.5, i * pitchD + pitchD * 0.12, b.w - 3, pitchD * 0.42, H, H + rise);
+      svg += drawBox(cam, strip, {
+        color: night ? '#2b313a' : '#9aa2ac',
+        roof: night ? '#333a44' : '#aab2bb',
+        stroke: 'rgba(20,28,40,.4)',
+        decorate: (q) => (q.id === 'N'
+          ? q.quad(0.6, q.len - 0.6, 0.5, q.height - 0.5, { fill: night ? 'rgba(255,214,150,.4)' : 'url(#glassDay)', stroke: 'none' })
+          : ''),
+      });
+    }
+    return svg + signSvg;
+  }
+
   // Roof: membrane inside the coping, then whatever the player put up there.
   const inset = 1.6;
   const rk = corners(box);
@@ -192,6 +230,20 @@ function drawBuilding(cam, b, ctx) {
     }
   }
   return svg + signSvg;
+}
+
+/** A rectangle given in a building's own unrotated frame, placed in the world. */
+export function localBox(b, lx, ly, lw, ld, z0, z1) {
+  const a = (b.rot || 0) * DEG;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const cx = lx + lw / 2 - b.w / 2;
+  const cy = ly + ld / 2 - b.d / 2;
+  return {
+    x: b.x + b.w / 2 + cx * ca - cy * sa - lw / 2,
+    y: b.y + b.d / 2 + cx * sa + cy * ca - ld / 2,
+    w: lw, d: ld, rot: b.rot || 0, z0, z1,
+  };
 }
 
 /** Roof machines in building-local coordinates, turned with the building. */

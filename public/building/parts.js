@@ -17,6 +17,19 @@ const rand = (seed) => {
   };
 };
 
+/* ------------------------------------------------------------ wall cladding */
+
+/** Ribbed metal siding — profiled sheet, for sheds, cold stores and trailers. */
+export function ribs(face, { step = 3.5, detail }) {
+  if (!detail) return '';
+  let out = '';
+  for (let t = step; t < face.len - 0.5; t += step) {
+    out += face.quad(t, t + 0.28, 0, face.height, { fill: 'rgba(255,255,255,.13)', stroke: 'none' });
+    out += face.quad(t + 0.28, t + 0.5, 0, face.height, { fill: 'rgba(20,28,40,.1)', stroke: 'none' });
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------ wall openings */
 
 /** One cell of a wall grid. `t0..t1` is its slice of the wall, `h0..h1` its floor. */
@@ -108,6 +121,16 @@ export function drawCell(face, o) {
     for (let h = lo + 0.4; h < hi - 0.2; h += 1.1) {
       s += face.quad(a, b, h, h + 0.55, { fill: 'rgba(255,255,255,.22)', stroke: 'none' });
     }
+  } else if (type === 'open') {
+    // An open-sided deck: the void, its upstand and the slab edge above it.
+    const up = Math.min(3.4, fh * 0.3);
+    s += face.quad(t0, t1, h0 + up, h1 - 1.3, { fill: night ? '#0d121b' : '#2a313b', stroke: 'none' });
+    if (night) s += face.quad(t0, t1, h0 + up, h1 - 1.3, { fill: 'url(#wallLamp)', stroke: 'none' });
+    if (detail) {
+      s += face.quad(t0, t1, h0 + up - 0.45, h0 + up, { fill: 'rgba(255,255,255,.32)', stroke: 'none' });
+      s += face.quad(t0, t1, h0 + up + 1.4, h0 + up + 1.7, { fill: 'rgba(255,255,255,.18)', stroke: 'none' });
+    }
+    s += face.quad(t0, t1, h1 - 1.3, h1, { fill: band, stroke: 'none' });
   } else if (type === 'vent') {
     const r = Math.min(w * 0.22, fh * 0.22, 2.4);
     s += face.quad(mid - r, mid + r, h0 + fh * 0.45 - r, h0 + fh * 0.45 + r, { fill: night ? '#252c37' : '#8e969f', stroke: 'rgba(16,24,36,.5)', 'stroke-width': 0.4 });

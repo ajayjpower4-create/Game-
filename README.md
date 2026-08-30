@@ -203,8 +203,12 @@ the footprint drawn in red.
 The Add tab holds the catalogue. Pick a thing, then click the ground to drop
 it; shift-click keeps the tool armed for a run of fence or bollards.
 
-- **Buildings** — warehouse shell, office block, small 2–3 storey building,
-  tower, storage row, retail strip. Put as many on the lot as you like.
+- **Buildings** — twelve models: warehouse shell, office block, small 2–3
+  storey building, tower, storage row, retail strip, workshop, pitched unit,
+  car park deck, cold store, glass pavilion and plant room. Put as many on the
+  lot as you like. Each one also takes a cladding (precast panels, ribbed
+  metal, brick courses, plain render) and a roof (flat, pitched, sawtooth), so
+  the same box can read as a shed, a brick unit or a glazed showroom.
 - **Roof plant** — 18 machines: packaged AC units, large rooftop units, a
   chiller, cooling tower, exhaust fan, mushroom vent, flue stack, skylight,
   skylight monitor, solar array, satellite dish, antenna mast, water tank,
