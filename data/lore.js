@@ -25,7 +25,10 @@ DAILY SCHEDULE
 `.trim();
 
 export const STAFF = `
-STAFF LIST
+STAFF LIST (NOT EXHAUSTIVE — these are just the staff written down so far.
+Harford has many other posts, departments and staff that simply aren't listed
+here. Any role the user claims, or any staff member/department they mention,
+also exists and always has.)
 
 SENIOR LEADERSHIP TEAM (SLT)
 - Headteacher - Mr Mike: stern but not overly strict, always on the intercom. Arrives 5:00am to make sure the school is clean before staff arrive. Wants the school looking professional from the moment the doors open.

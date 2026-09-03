@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Harford Secondary — School Simulator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎓%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,6 +20,7 @@
             <span class="status-role" id="statusRole"></span>
             <span class="status-day" id="statusDay">Day 1</span>
           </div>
+          <button class="icon-btn" id="editCharBtn" title="Edit your character" hidden>👤</button>
           <button class="new-chat-btn" id="newChatBtn" title="Restart simulation">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="1 4 1 10 7 10"></polyline>
@@ -30,20 +32,22 @@
       </div>
     </header>
 
-    <!-- Setup: pick rank + name before play begins -->
+    <!-- Setup: build your character -->
     <div class="setup-overlay" id="setup">
       <div class="setup-card">
         <div class="setup-icon">🎓</div>
         <h1>Harford Secondary</h1>
         <p class="setup-tag">East London • 987 students • UK Board of Education</p>
-        <p class="setup-blurb">You're a member of staff at Harford Secondary. Pick who you are and step into the building. Everyone else — students, parents, colleagues — is played around you. Use <code>*asterisks*</code> or <code>(brackets)</code> to make anything true.</p>
+        <p class="setup-blurb">You're a member of staff at Harford Secondary. Build your character and step into the building. Everyone else — students, parents, colleagues — is played around you. Use <code>*asterisks*</code> or <code>(brackets)</code> to make anything true.</p>
 
-        <label class="setup-label" for="rankInput">Your rank</label>
-        <input class="setup-input" id="rankInput" list="rankList" placeholder="e.g. Headteacher, Head of Year 10, SENDCo, classroom teacher…" maxlength="60" autocomplete="off">
+        <label class="setup-label" for="rankInput">Your rank <span class="req">required</span></label>
+        <input class="setup-input" id="rankInput" list="rankList" placeholder="Any title — invent your own if you like" maxlength="120" autocomplete="off">
+        <p class="field-note">Any role works, listed or not — e.g. “Head of Student Grades and Advanced Classes”. The school accepts it as real.</p>
         <datalist id="rankList">
           <option value="Headteacher"></option>
           <option value="Deputy Headteacher"></option>
-          <option value="Assistant Headteacher (Behaviour & Attendance)"></option>
+          <option value="Assistant Headteacher (Behaviour &amp; Attendance)"></option>
+          <option value="Head of Student Grades and Advanced Classes"></option>
           <option value="Head of Year 11"></option>
           <option value="Head of Year 10"></option>
           <option value="Head of Year 9"></option>
@@ -55,11 +59,44 @@
           <option value="Attendance Officer"></option>
         </datalist>
 
-        <label class="setup-label" for="nameInput">Your name</label>
-        <input class="setup-input" id="nameInput" placeholder="e.g. Mr Osei, Miss Adeyemi…" maxlength="60" autocomplete="off">
+        <label class="setup-label" for="nameInput">Your name <span class="req">required</span></label>
+        <input class="setup-input" id="nameInput" placeholder="e.g. Mr Osei, Miss Adeyemi…" maxlength="80" autocomplete="off">
+
+        <button class="detail-toggle" id="detailToggle" type="button">
+          <span class="chev">▸</span> Add more character detail <span class="opt">optional</span>
+        </button>
+
+        <div class="detail-fields" id="detailFields" hidden>
+          <label class="setup-label" for="yearsInput">Years at Harford</label>
+          <input class="setup-input" id="yearsInput" placeholder="e.g. 12 years — started in 2013" maxlength="80" autocomplete="off">
+
+          <label class="setup-label" for="subjectInput">Subject / department</label>
+          <input class="setup-input" id="subjectInput" placeholder="e.g. Maths, Pastoral, SEND, Senior Leadership" maxlength="80" autocomplete="off">
+
+          <label class="setup-label" for="ageInput">Age</label>
+          <input class="setup-input" id="ageInput" placeholder="e.g. 43" maxlength="40" autocomplete="off">
+
+          <label class="setup-label" for="baseInput">Based in</label>
+          <input class="setup-input" id="baseInput" list="baseList" placeholder="e.g. Building 1, office next to reception" maxlength="120" autocomplete="off">
+          <datalist id="baseList">
+            <option value="Building 1 — Main / Admin"></option>
+            <option value="Building 1 — Pastoral/SLT offices"></option>
+            <option value="Building 1 — SEN offices"></option>
+            <option value="Building 2 — Science / Maths / Dining"></option>
+            <option value="Building 3 — Sports"></option>
+            <option value="Building 4 — Teaching block"></option>
+          </datalist>
+
+          <label class="setup-label" for="reputationInput">Reputation with staff &amp; students</label>
+          <input class="setup-input" id="reputationInput" placeholder="e.g. Feared but respected / everyone's favourite" maxlength="120" autocomplete="off">
+
+          <label class="setup-label" for="aboutInput">Background &amp; personality</label>
+          <textarea class="setup-input setup-textarea" id="aboutInput" rows="3" placeholder="Anything else that's true about you — history at the school, who you clash with, how you run your office…" maxlength="1200"></textarea>
+        </div>
 
         <button class="setup-btn" id="setupBtn">Start the day</button>
-        <p class="setup-hint"><code>/nextday</code> moves to the next school day · <code>/computerstudent [name]</code> looks up a pupil. Your game saves automatically.</p>
+        <button class="setup-cancel" id="setupCancel" hidden>Cancel</button>
+        <p class="setup-hint"><code>/nextday</code> moves to the next school day · <code>/computerstudent</code> opens the student system. Your game saves automatically.</p>
       </div>
     </div>
 
@@ -69,8 +106,8 @@
 
     <footer class="input-area" id="inputArea" hidden>
       <div class="quick-actions" id="quickActions">
-        <button class="quick" data-text="/nextday">⏭ /nextday</button>
-        <button class="quick" data-text="/computerstudent">💻 Look up student</button>
+        <button class="quick" data-action="nextday">⏭ /nextday</button>
+        <button class="quick" data-action="lookup">💻 Student system</button>
         <button class="quick" data-text="*I get on the intercom*">📢 Intercom</button>
         <button class="quick" data-text="*I call the parents of the last student mentioned*">📞 Phone home</button>
       </div>
@@ -91,6 +128,85 @@
       </div>
       <p class="disclaimer">Fiction. Characters are played by AI; you're in control of the world.</p>
     </footer>
+  </div>
+
+  <!-- Student information system -->
+  <div class="modal-overlay" id="lookupModal" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title">💻 Harford SIS <span class="modal-sub">Student Information System</span></div>
+        <button class="modal-close" id="lookupClose" title="Close">✕</button>
+      </div>
+
+      <div class="modal-controls">
+        <input class="sis-search" id="sisSearch" placeholder="Search by name, ID or form…" autocomplete="off">
+
+        <div class="preset-row" id="presetRow">
+          <button class="preset" data-preset="top">🏆 Top sets (7+)</button>
+          <button class="preset" data-preset="y11maths">📐 Y11 top Maths</button>
+          <button class="preset" data-preset="attendance">📉 Attendance concerns</button>
+          <button class="preset" data-preset="send">🧩 EHCP / SEND</button>
+          <button class="preset" data-preset="behaviour">⚠️ Behaviour: poor</button>
+          <button class="preset" data-preset="pp">🎯 Pupil Premium</button>
+        </div>
+
+        <button class="filters-toggle" id="filtersToggle" type="button">
+          <span class="chev">▸</span> Filters <span class="filters-count" id="filtersCount" hidden>0</span>
+        </button>
+
+        <div class="filter-panel" id="filterPanel" hidden>
+          <div class="filter-group">
+            <span class="filter-label">Year group</span>
+            <div class="chip-row" id="fYear"></div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Attainment (working grade)</span>
+            <div class="chip-row" id="fGrade"></div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Attendance</span>
+            <div class="chip-row" id="fAtt"></div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Behaviour tier</span>
+            <div class="chip-row" id="fBeh"></div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">SEN status</span>
+            <div class="chip-row" id="fSen"></div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Flags</span>
+            <div class="chip-row" id="fFlags"></div>
+          </div>
+          <div class="filter-selects">
+            <label class="sel-wrap"><span>Best subject</span><select id="fBest"></select></label>
+            <label class="sel-wrap"><span>Weakest subject</span><select id="fWeak"></select></label>
+            <label class="sel-wrap"><span>House</span><select id="fHouse"></select></label>
+            <label class="sel-wrap"><span>Form</span><select id="fForm"></select></label>
+          </div>
+        </div>
+
+        <div class="results-bar">
+          <span class="results-count" id="resultsCount">Loading…</span>
+          <div class="results-actions">
+            <label class="sel-wrap inline"><span>Sort</span>
+              <select id="fSort">
+                <option value="name">Name A–Z</option>
+                <option value="grade_desc">Grade (high → low)</option>
+                <option value="grade_asc">Grade (low → high)</option>
+                <option value="att_asc">Attendance (low → high)</option>
+                <option value="beh_desc">Behaviour points (high → low)</option>
+                <option value="year">Year group</option>
+              </select>
+            </label>
+            <button class="clear-btn" id="clearFilters">Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-results" id="sisResults"></div>
+    </div>
   </div>
 
   <script src="app.js"></script>
