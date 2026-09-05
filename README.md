@@ -52,7 +52,11 @@ should make the 53, the QB situation, whatever — or write your own segments.
 **On the air.** You open the show and it's a conversation from there. The hosts talk in
 short radio lines, talk over each other, and the two against you push back every time.
 Tap 📋 to pull up the stat sheet mid-argument and throw a line straight in their face —
-it gets quoted above your message.
+it gets quoted above your message. The sheet filters itself: search it by any words,
+and tap the chips to narrow it to a section of your paste or to a bucket the game
+picked out of it — QB, run game, pass catchers, O-line, defense, special teams,
+injuries, rookies, roster moves. Chips stack as an OR, search narrows whatever the
+chips left, and a chip that would just repeat a section you pasted doesn't show up.
 
 **Next week.** End the episode and you get show notes: how it went, the takes that
 actually got made, and threads to pick up. Start the next episode, paste the new stat

@@ -417,24 +417,177 @@ async function runTurn() {
 function openDrawer(node) { node.hidden = false; }
 function closeDrawer(node) { node.hidden = true; }
 
-$('#btn-sheet').addEventListener('click', () => {
+// Buckets a pasted sheet gets filed into. A chip only shows up if the sheet
+// actually has lines in that bucket, so a receiving-only sheet doesn't offer a
+// "Special teams" filter that returns nothing.
+const SHEET_GROUPS = [
+  { key: 'qb', label: 'QB', re: /\bq\.?b\b|quarterback|pass(ing|er|es)?\b|comp(letion|s)?\b|\btd\b.*\bint\b/i },
+  { key: 'rb', label: 'Run game', re: /\br\.?b\b|running back|rush(ing|es|er)?\b|carr(y|ies)\b|\bypc\b|fullback/i },
+  { key: 'rec', label: 'Pass catchers', re: /\bw\.?r\b|\bt\.?e\b|wide receiver|tight end|rec(eption|eiving|s)\b|target(s|ed)?\b|drop(s|ped)?\b/i },
+  { key: 'ol', label: 'O-line', re: /\bo\.?l\b|o-?line|offensive line|\b[lr][tg]\b|center\b|guard\b|tackle allowed|pressure(s)? allowed|sack(s)? allowed|penalt/i },
+  { key: 'def', label: 'Defense', re: /\bd\.?[lb]\b|\bl\.?b\b|\bc\.?b\b|\bd\.?e\b|\bd\.?t\b|safet(y|ies)|defen(se|sive)|sack(s)?\b|tackle(s)?\b|\bint(erception)?s?\b|coverage|blitz|forced fumble|\bpbu\b|takeaway/i },
+  { key: 'st', label: 'Special teams', re: /special teams|kicker|\bpunt|\bf\.?g\b|field goal|extra point|\bxp\b|kickoff|return(er|s|ed)?\b|long snap/i },
+  { key: 'inj', label: 'Injuries', re: /injur|\bi\.?r\b|hamstring|questionable|doubtful|\bout\b.*(week|game|season)|\bacl\b|concussion|ankle|groin|strain|surger/i },
+  { key: 'rook', label: 'Rookies', re: /rookie|\budfa\b|draft(ed)? pick|\b[1-7](st|nd|rd|th) round|undrafted/i },
+  { key: 'cut', label: 'Roster moves', re: /\bcut\b|wa[iy]ve|released?\b|\b53\b|practice squad|depth chart|trade|signed?\b|claim/i },
+  { key: 'num', label: 'Has numbers', re: /\d/ },
+];
+
+// A heading is a label, not a stat — it files the lines under it and can't be
+// quoted at the desk.
+function isHeading(line) {
+  if (/^[#=\-*_\s]+$/.test(line)) return true;
+  const bare = line.replace(/^[#>*\-\s]+/, '').replace(/[:\-=]+$/, '').trim();
+  if (!bare || bare.length > 40) return false;
+  if (/^[#>]/.test(line)) return true;
+  if (/:$/.test(line.trim()) && !/\d/.test(bare)) return true;
+  return bare === bare.toUpperCase() && /[A-Z]/.test(bare) && !/\d/.test(bare);
+}
+
+function indexSheet(text) {
+  const rows = [];
+  let section = '';
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (isHeading(line)) {
+      section = line.replace(/^[#>*\-\s]+/, '').replace(/[:\-=]+$/, '').trim();
+      continue;
+    }
+    rows.push({
+      line,
+      section,
+      groups: SHEET_GROUPS.filter((g) => g.re.test(line) || (section && g.re.test(section)))
+        .map((g) => g.key),
+    });
+  }
+  return rows;
+}
+
+let sheetFilters = { search: '', picked: new Set(), sheet: '' };
+
+function resetSheetFilters() { sheetFilters = { search: '', picked: new Set(), sheet: ep().stats }; }
+
+function sheetChipDefs(rows) {
+  const sections = [];
+  for (const r of rows) {
+    if (r.section && !sections.includes(r.section)) sections.push(r.section);
+  }
+  const defs = sections.length > 1
+    ? sections.map((name) => ({ id: `s:${name}`, label: name }))
+    : [];
+
+  const setOf = (test) => rows.reduce((acc, r, i) => (test(r) ? acc.add(i) : acc), new Set());
+  const sectionSets = defs.map((d) => setOf((r) => r.section === d.id.slice(2)));
+  const same = (a, b) => a.size === b.size && [...a].every((i) => b.has(i));
+
+  for (const g of SHEET_GROUPS) {
+    const hits = setOf((r) => r.groups.includes(g.key));
+    // A group that catches nothing, catches everything, or catches exactly what
+    // a section chip already catches is a chip nobody needs.
+    if (!hits.size || hits.size === rows.length) continue;
+    if (sectionSets.some((sec) => same(sec, hits))) continue;
+    defs.push({ id: `g:${g.key}`, label: g.label });
+  }
+  return defs;
+}
+
+function matchesFilters(row) {
+  const terms = sheetFilters.search.toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = `${row.line} ${row.section}`.toLowerCase();
+  if (!terms.every((t) => hay.includes(t))) return false;
+  if (!sheetFilters.picked.size) return true;
+  // Chips are an OR: any picked bucket the line belongs to keeps it.
+  for (const id of sheetFilters.picked) {
+    if (id.startsWith('s:') && row.section === id.slice(2)) return true;
+    if (id.startsWith('g:') && row.groups.includes(id.slice(2))) return true;
+  }
+  return false;
+}
+
+function renderSheet() {
+  const rows = indexSheet(ep().stats);
+  const chipBox = $('#sheet-chips');
+  chipBox.replaceChildren();
+  for (const def of sheetChipDefs(rows)) {
+    const chip = el('button', 'chip', def.label);
+    chip.type = 'button';
+    chip.classList.toggle('on', sheetFilters.picked.has(def.id));
+    chip.addEventListener('click', () => {
+      if (sheetFilters.picked.has(def.id)) sheetFilters.picked.delete(def.id);
+      else sheetFilters.picked.add(def.id);
+      renderSheet();
+    });
+    chipBox.append(chip);
+  }
+  if (sheetFilters.picked.size || sheetFilters.search) {
+    const clear = el('button', 'chip clear', 'Clear filters');
+    clear.type = 'button';
+    clear.addEventListener('click', () => {
+      sheetFilters.picked.clear();
+      sheetFilters.search = '';
+      $('#in-sheet-search').value = '';
+      $('#btn-search-clear').hidden = true;
+      renderSheet();
+    });
+    chipBox.append(clear);
+  }
+
   const box = $('#sheet-lines');
   box.replaceChildren();
-  const lines = ep().stats.split('\n').map((l) => l.trim()).filter(Boolean);
-  if (!lines.length) box.append(el('p', 'hint', 'Nothing on the sheet yet.'));
-  for (const line of lines) {
-    const btn = el('button', null, line);
+  const hits = rows.filter(matchesFilters);
+  const filtered = sheetFilters.picked.size || sheetFilters.search;
+
+  $('#sheet-count').textContent = !rows.length
+    ? 'Nothing on the sheet yet.'
+    : filtered
+      ? `${hits.length} of ${rows.length} lines`
+      : 'Tap a line to throw it in their face.';
+
+  if (!hits.length) {
+    box.append(el('p', 'hint', rows.length ? 'Nothing on the sheet matches that.' : 'Nothing on the sheet yet.'));
+    return;
+  }
+
+  let section = null;
+  for (const row of hits) {
+    if (row.section !== section) {
+      section = row.section;
+      if (section) box.append(el('div', 'sheet-section', section));
+    }
+    const btn = el('button', null, row.line);
     btn.type = 'button';
     btn.addEventListener('click', () => {
-      pendingCite = line;
-      $('#quote-text').textContent = line;
+      pendingCite = row.line;
+      $('#quote-text').textContent = row.line;
       $('#quote-bar').hidden = false;
       closeDrawer($('#drawer'));
       say.focus();
     });
     box.append(btn);
   }
+}
+
+$('#btn-sheet').addEventListener('click', () => {
+  // A new episode means a new sheet, so old filters don't carry over.
+  if (sheetFilters.sheet !== ep().stats) resetSheetFilters();
+  $('#in-sheet-search').value = sheetFilters.search;
+  $('#btn-search-clear').hidden = !sheetFilters.search;
+  renderSheet();
   openDrawer($('#drawer'));
+});
+
+$('#in-sheet-search').addEventListener('input', (e) => {
+  sheetFilters.search = e.target.value.trim();
+  $('#btn-search-clear').hidden = !e.target.value;
+  renderSheet();
+});
+$('#btn-search-clear').addEventListener('click', () => {
+  sheetFilters.search = '';
+  $('#in-sheet-search').value = '';
+  $('#btn-search-clear').hidden = true;
+  renderSheet();
+  $('#in-sheet-search').focus();
 });
 
 $('#btn-drawer-close').addEventListener('click', () => closeDrawer($('#drawer')));

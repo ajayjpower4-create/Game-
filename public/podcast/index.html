@@ -148,7 +148,14 @@
       <strong>Stat sheet</strong>
       <button class="icon-btn" id="btn-drawer-close" aria-label="Close">✕</button>
     </header>
-    <p class="hint">Tap a line to throw it in their face.</p>
+    <div class="sheet-filters">
+      <div class="search">
+        <input id="in-sheet-search" type="search" placeholder="Search the sheet…" autocomplete="off">
+        <button class="icon-btn" id="btn-search-clear" aria-label="Clear search" hidden>✕</button>
+      </div>
+      <div class="chips small" id="sheet-chips"></div>
+      <p class="hint" id="sheet-count">Tap a line to throw it in their face.</p>
+    </div>
     <div class="sheet" id="sheet-lines"></div>
     <div class="drawer-foot">
       <button class="ghost" id="btn-edit-stats">Edit the sheet</button>
