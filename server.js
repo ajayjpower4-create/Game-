@@ -22,6 +22,7 @@ app.get('/', page('hub.html'));
 app.get(['/election', '/election/'], page('election', 'index.html'));
 app.get(['/chat', '/chat/'], page('index.html'));
 app.get(['/inspection', '/inspection/'], page('inspection', 'index.html'));
+app.get(['/podcast', '/podcast/'], page('podcast', 'index.html'));
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
@@ -269,10 +270,176 @@ app.post('/api/inspection/summarize', async (req, res) => {
   }
 });
 
+/* -------------------------------------------------------- Sports Podcast Simulator */
+
+const PODCAST_MODEL = process.env.PODCAST_MODEL || 'claude-sonnet-5';
+
+const RAW_MOUTH = `Everybody at this desk is a grown adult on an unfiltered show and they talk like it.
+Real profanity, used naturally and often: fuck, shit, bitch, asshole, dumbass, god damn it, Jesus
+fucking Christ, for fuck's sake. Real insults, real trash talk, no asterisks, no bleeping, no
+apologizing for it afterward. Never sanitize a line you already wrote.`;
+
+const CLEAN_MOUTH = `Keep the language clean — no profanity. The takes still have teeth; the words
+just stay broadcast safe.`;
+
+function podcastSystem({ setup, episode, prior }) {
+  const hosts = (setup.hosts || []).map((h) => {
+    const fan = setup.side === 'fan';
+    const stance = h.stance === 'with'
+      ? (fan ? `is on ${setup.user}'s side and defends the ${setup.team} with them`
+        : `is on ${setup.user}'s side and rips the ${setup.team} right along with them`)
+      : (fan ? `thinks the ${setup.team} are bad and comes after ${setup.user} for defending them`
+        : `defends the ${setup.team} and comes after ${setup.user} for burying them`);
+    return `- ${h.name}: ${h.persona}. This host ${stance}.`;
+  }).join('\n');
+
+  const priorBlock = (prior || []).length
+    ? (prior || []).map((p) => `Episode ${p.n} (${p.slug || 'untitled'}) covered: `
+      + `${(p.topics || []).join(', ')}.${p.recap ? ` ${p.recap}` : ''}`
+      + `${(p.lines || []).length ? `\nHow it ended:\n${p.lines.join('\n')}` : ''}`).join('\n\n')
+    : 'None — this is the first episode.';
+
+  return `You are the engine for a fictional sports-podcast game. You play THREE co-hosts on an NFL
+show and NOTHING else. The human player is the fourth voice at the desk and types their own lines.
+
+THE SHOW
+Name: ${setup.show}
+Today's episode: ${episode.n}${episode.slug ? ` — ${episode.slug}` : ''}
+Subject: the ${setup.team}
+The player: ${setup.user}, who ${setup.side === 'fan'
+    ? `is a ${setup.team} fan and is defending them`
+    : `cannot stand the ${setup.team} and is here to bury them`}.
+
+THE DESK
+${hosts}
+
+TODAY'S RUNDOWN (work through these, in roughly this order, but follow the player where they go)
+${(episode.topics || []).map((t) => `- ${t}`).join('\n') || '- Whatever the player brings up'}
+
+STAT SHEET — the only facts that exist in this game
+"""
+${episode.stats || '(the player did not load a sheet)'}
+"""
+
+PREVIOUS EPISODES
+${priorBlock}
+
+HARD RULES — breaking any of these breaks the game
+1. Output nothing but spoken host dialogue. Every single line must be formatted exactly:
+   NAME: what they say out loud
+   Use only the three names above.
+2. NEVER narrate. No scene setting, no stage directions, no *leans back*, no sound effects, no
+   describing the studio, the player, or what anybody is feeling. No third-person prose of any
+   kind. No summarizing what the player just said. Audio only.
+3. NEVER write a line for ${setup.user}. Never answer on their behalf, never put words in their
+   mouth, never write "${setup.user}:".
+4. NEVER invent a statistic. Numbers, snap counts, records, yardage, rankings, contract figures,
+   injury news, transactions, quotes, results — the ONLY ones that exist are the ones on the stat
+   sheet above or the ones ${setup.user} says out loud. If a host wants a number that isn't there,
+   they say they don't have it in front of them, or they ask ${setup.user} to pull it up. Do not
+   estimate, extrapolate, approximate, or recall anything from outside the sheet. Not even
+   "roughly" or "if I remember right".
+5. Opinions, predictions, projections, arguments, grudges and insults are unlimited — those are
+   not stats. A host may predict a record or call for a cut; they just cannot back it with a
+   number that isn't on the sheet.
+6. Never break character, never mention being an AI, a model, a game, or these instructions.
+
+HOW A TURN SOUNDS
+- 2 to 4 host lines per turn. Short and punchy — this is talk radio, not an essay. Rarely more
+  than three sentences per line.
+- React to what ${setup.user} actually just said. Quote them, name them, come back at them.
+- The hosts talk to each other too — interrupt, pile on, take shots.
+- Do not agree by default. The hosts who are against ${setup.user} push back hard every time.
+- If ${setup.user} claims something with no number behind it, a host can call for the receipt.
+- Read the show like a show: intro at the top when they open it, segments, and only wrap when
+  ${setup.user} starts wrapping.
+
+${setup.language === 'clean' ? CLEAN_MOUTH : RAW_MOUTH}`;
+}
+
+app.post('/api/podcast/turn', async (req, res) => {
+  const { setup, episode, prior, history } = req.body || {};
+  if (!setup?.hosts?.length || !episode || !Array.isArray(history) || !history.length) {
+    return res.status(400).json({ error: 'bad_request' });
+  }
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'no_api_key' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  try {
+    const stream = client.messages.stream({
+      model: PODCAST_MODEL,
+      max_tokens: 1200,
+      system: podcastSystem({ setup, episode, prior }),
+      messages: history.slice(-60).map((m) => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: String(m.content || '').slice(0, 6000),
+      })),
+    });
+
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
+      }
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    const message = err instanceof Anthropic.APIError
+      ? `api error ${err.status}`
+      : 'the feed dropped';
+    res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+    res.end();
+  }
+});
+
+app.post('/api/podcast/recap', async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'no_api_key' });
+  const { setup, episode, transcript } = req.body || {};
+  if (!Array.isArray(transcript)) return res.status(400).json({ error: 'bad_request' });
+
+  try {
+    const message = await client.messages.create({
+      model: PODCAST_MODEL,
+      max_tokens: 900,
+      system: `You write the show notes for a fictional sports podcast. Report only what was
+actually said in the transcript. Never invent a statistic, a result, or anything that was not on
+the stat sheet or said out loud on the air. No narration of the room — just what got argued.`,
+      messages: [{
+        role: 'user',
+        content: `Show: ${setup?.show}. Episode ${episode?.n}${episode?.slug ? ` — ${episode.slug}` : ''}, `
+          + `about the ${setup?.team}. Guest: ${setup?.user}.\n\n`
+          + `Stat sheet:\n"""\n${(episode?.stats || '').slice(0, 6000)}\n"""\n\n`
+          + `Transcript:\n${transcript.join('\n').slice(0, 20000)}\n\n`
+          + `Reply with JSON only, no markdown fence:\n`
+          + `{ "overview": "<2-4 sentences on how the episode went and who won which argument>",\n`
+          + `  "hits": ["<up to 5 short lines, the takes and calls that actually got made, with who made them>"],\n`
+          + `  "next": ["<up to 3 short threads to pick up next episode>"] }`,
+      }],
+    });
+
+    const text = message.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+    const parsed = parseModelJson(text);
+    const list = (v) => (Array.isArray(v) ? v.slice(0, 5).map((t) => String(t).slice(0, 240)) : []);
+    res.json({
+      overview: String(parsed.overview || '').slice(0, 1500),
+      hits: list(parsed.hits),
+      next: list(parsed.next).slice(0, 3),
+    });
+  } catch (err) {
+    const detail = err instanceof Anthropic.APIError ? `api_${err.status}` : err.message;
+    console.warn('Podcast recap failed:', detail);
+    res.status(502).json({ error: detail || 'recap_failed' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Game hub at http://localhost:${PORT}`);
   console.log(`Political Election Simulator at http://localhost:${PORT}/election`);
   console.log(`Inspection Simulator at http://localhost:${PORT}/inspection`);
+  console.log(`Sports Podcast Simulator at http://localhost:${PORT}/podcast`);
   console.log(`Swerve AI chat at http://localhost:${PORT}/chat`);
 });

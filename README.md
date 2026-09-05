@@ -14,6 +14,7 @@ npm start
 ```
 
 - Game hub: <http://localhost:3000/> — lists every game
+- Sports Podcast Simulator: <http://localhost:3000/podcast>
 - Inspection Simulator: <http://localhost:3000/inspection>
 - Election game: <http://localhost:3000/election>
 - The original Swerve chatbot: <http://localhost:3000/chat>
@@ -27,6 +28,38 @@ ANTHROPIC_API_KEY=sk-ant-... npm start
 ```
 
 `ELECTION_MODEL` overrides the model (default `claude-opus-4-6`).
+`PODCAST_MODEL` overrides the podcast co-hosts' model (default `claude-sonnet-5`).
+
+## Sports Podcast Simulator (`/podcast`)
+
+A chat game where you're the guest on an NFL podcast. Claude plays the other three
+chairs and nothing else.
+
+**Setup.** Your on-air name, the show name, the team you're there to talk about, and
+which side you're on — fan or hater. The desk is then drafted for you: three co-hosts
+with their own personalities, exactly one of whom is guaranteed to ride with you. The
+other two pick their own side, so you can end up 2-on-2 or buried 3-on-1. Reroll until
+you like the room. You also choose whether the show is unfiltered or broadcast safe.
+
+**The stat sheet.** Paste in whatever you've got — preseason box scores, snap counts,
+depth chart, camp notes. This is the whole point: the co-hosts are forbidden from
+inventing a single number. Anything they cite has to be on your sheet or out of your
+mouth. If they want a stat you didn't give them, they have to ask you for it.
+
+**The rundown.** Pick what the episode is about — record prediction, who gets cut, who
+should make the 53, the QB situation, whatever — or write your own segments.
+
+**On the air.** You open the show and it's a conversation from there. The hosts talk in
+short radio lines, talk over each other, and the two against you push back every time.
+Tap 📋 to pull up the stat sheet mid-argument and throw a line straight in their face —
+it gets quoted above your message.
+
+**Next week.** End the episode and you get show notes: how it went, the takes that
+actually got made, and threads to pick up. Start the next episode, paste the new stat
+sheet, set a new rundown — the hosts remember who said what last time.
+
+Everything saves to the browser as you go, so a dead phone doesn't cost you the
+episode. The whole thing is built for a phone first and works the same on a desktop.
 
 ## How a game runs
 

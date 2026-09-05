@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sports Podcast Simulator</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>">
+<link rel="stylesheet" href="/podcast/style.css">
+</head>
+<body>
+
+<!-- ------------------------------------------------------------ setup -->
+<section class="screen" id="screen-setup">
+  <div class="wrap">
+    <a class="back" href="/">← games</a>
+    <h1>Sports Podcast Simulator</h1>
+    <p class="sub">You're the guest chair on an NFL show. Three co-hosts, one of them has your back,
+      the other two might come after you. Bring your own stats.</p>
+
+    <label class="field">
+      <span>Your name</span>
+      <input id="in-name" type="text" placeholder="What they call you on the air" maxlength="40" autocomplete="off">
+    </label>
+
+    <label class="field">
+      <span>Show name</span>
+      <input id="in-show" type="text" placeholder="The Snap Count" maxlength="60" autocomplete="off">
+    </label>
+
+    <label class="field">
+      <span>The team you're here to talk about</span>
+      <select id="in-team"></select>
+    </label>
+
+    <div class="field">
+      <span>Where do you stand?</span>
+      <div class="picks" id="pick-side">
+        <button type="button" class="pick" data-side="fan">
+          <strong>I'm a fan</strong><small>You're defending them all episode.</small>
+        </button>
+        <button type="button" class="pick" data-side="hater">
+          <strong>I can't stand them</strong><small>You're here to bury them.</small>
+        </button>
+      </div>
+    </div>
+
+    <label class="field">
+      <span>Language</span>
+      <select id="in-lang">
+        <option value="raw">Unfiltered — they cuss like grown adults</option>
+        <option value="clean">Keep it clean</option>
+      </select>
+    </label>
+
+    <div class="row-btns">
+      <button class="primary" id="btn-to-draft" disabled>Meet the co-hosts →</button>
+    </div>
+    <p class="err" id="err-setup"></p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------ hosts -->
+<section class="screen" id="screen-draft" hidden>
+  <div class="wrap">
+    <button class="back" data-goto="setup">← back</button>
+    <h1>The desk</h1>
+    <p class="sub">One of them is riding with you. The other two picked their own side —
+      you'll find out how hard.</p>
+    <div id="host-cards"></div>
+    <div class="row-btns">
+      <button class="ghost" id="btn-reroll">Reroll the desk</button>
+      <button class="primary" id="btn-to-stats">Load the stat sheet →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------ stats -->
+<section class="screen" id="screen-stats" hidden>
+  <div class="wrap">
+    <button class="back" data-goto="draft">← back</button>
+    <h1 id="stats-title">The stat sheet</h1>
+    <p class="sub">Paste in whatever you've got — box scores, snap counts, depth chart, camp notes.
+      This is the only thing anybody on this show is allowed to quote as fact.</p>
+    <label class="field">
+      <span>What is this episode about?</span>
+      <input id="in-slug" type="text" placeholder="Jets preseason wrap" maxlength="70" autocomplete="off">
+    </label>
+    <label class="field">
+      <span>Stats</span>
+      <textarea id="in-stats" rows="12" placeholder="Paste your stats here."></textarea>
+    </label>
+    <div class="row-btns">
+      <button class="primary" id="btn-to-topics" disabled>Pick the rundown →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ----------------------------------------------------------- topics -->
+<section class="screen" id="screen-topics" hidden>
+  <div class="wrap">
+    <button class="back" data-goto="stats">← back</button>
+    <h1>The rundown</h1>
+    <p class="sub">What are you actually arguing about today? Pick as many as you want.</p>
+    <div class="chips" id="topic-chips"></div>
+    <label class="field">
+      <span>Add your own</span>
+      <div class="inline">
+        <input id="in-topic" type="text" placeholder="e.g. Cut the punter" maxlength="60" autocomplete="off">
+        <button class="ghost" id="btn-add-topic">Add</button>
+      </div>
+    </label>
+    <div class="row-btns">
+      <button class="primary" id="btn-go-live" disabled>We're live →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ----------------------------------------------------------- studio -->
+<section class="screen studio" id="screen-studio" hidden>
+  <header class="bar">
+    <button class="icon-btn" id="btn-menu" aria-label="Show menu">☰</button>
+    <div class="bar-title">
+      <strong id="bar-show">The Snap Count</strong>
+      <small id="bar-ep">Episode 1</small>
+    </div>
+    <button class="icon-btn" id="btn-sheet" aria-label="Stat sheet">📋</button>
+  </header>
+
+  <div class="rundown-strip" id="rundown-strip"></div>
+
+  <div class="feed" id="feed"></div>
+
+  <div class="quote-bar" id="quote-bar" hidden>
+    <span id="quote-text"></span>
+    <button class="icon-btn" id="btn-quote-clear" aria-label="Drop the quote">✕</button>
+  </div>
+
+  <form class="composer" id="composer">
+    <textarea id="in-say" rows="1" placeholder="Say it into the mic…" autocomplete="off"></textarea>
+    <button class="send" id="btn-send" type="submit" aria-label="Send">▶</button>
+  </form>
+</section>
+
+<!-- ------------------------------------------------------- stat drawer -->
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-panel">
+    <header>
+      <strong>Stat sheet</strong>
+      <button class="icon-btn" id="btn-drawer-close" aria-label="Close">✕</button>
+    </header>
+    <p class="hint">Tap a line to throw it in their face.</p>
+    <div class="sheet" id="sheet-lines"></div>
+    <div class="drawer-foot">
+      <button class="ghost" id="btn-edit-stats">Edit the sheet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- menu -->
+<div class="drawer left" id="menu" hidden>
+  <div class="drawer-panel">
+    <header>
+      <strong id="menu-show">The show</strong>
+      <button class="icon-btn" id="btn-menu-close" aria-label="Close">✕</button>
+    </header>
+    <div class="menu-body" id="menu-body"></div>
+    <div class="drawer-foot col">
+      <button class="ghost" id="btn-end-ep">End the episode</button>
+      <button class="ghost danger" id="btn-reset">Delete the show and start over</button>
+    </div>
+  </div>
+</div>
+
+<!-- ----------------------------------------------------------- recap -->
+<section class="screen" id="screen-recap" hidden>
+  <div class="wrap">
+    <h1 id="recap-title">That's the episode</h1>
+    <p class="sub" id="recap-sub"></p>
+    <div class="recap-box" id="recap-box"></div>
+    <div class="row-btns">
+      <button class="primary" id="btn-next-ep">Start the next episode →</button>
+      <button class="ghost" id="btn-back-studio">Back to the tape</button>
+    </div>
+  </div>
+</section>
+
+<script type="module" src="/podcast/game.js"></script>
+</body>
+</html>
