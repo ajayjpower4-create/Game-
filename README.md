@@ -37,9 +37,9 @@ chairs and nothing else.
 
 **Setup.** Your on-air name, the show name, the team you're there to talk about, and
 which side you're on — fan or hater. The desk is then drafted for you: three co-hosts
-with their own personalities, exactly one of whom is guaranteed to ride with you. The
-other two pick their own side, so you can end up 2-on-2 or buried 3-on-1. Reroll until
-you like the room. You also choose whether the show is unfiltered or broadcast safe.
+with their own personalities. It's always 1-on-2 — exactly one of them rides with you,
+and the other two are against you, whichever way you lean. Reroll until you like the
+room. You also choose whether the show is unfiltered or broadcast safe.
 
 **The stat sheet.** Paste in whatever you've got — preseason box scores, snap counts,
 depth chart, camp notes. This is the whole point: the co-hosts are forbidden from

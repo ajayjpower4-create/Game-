@@ -96,18 +96,31 @@ $('#btn-to-draft').addEventListener('click', () => {
 
 /* ---------------------------------------------------------------- hosts */
 
-// Exactly one co-host always rides with the player; the other two pick their
-// own side, so the desk can be 2-on-2 or a 3-on-1 pile-on.
+// The desk is always 1-on-2: exactly one co-host rides with the player and the
+// other two are against them, whichever chair they end up sitting in.
 function rollHosts() {
   const pool = [...HOSTS].sort(() => Math.random() - 0.5).slice(0, 3);
+  const ally = Math.floor(Math.random() * pool.length);
   state.hosts = pool.map((h, i) => ({
     ...h,
     color: HOST_COLORS[i % HOST_COLORS.length],
-    stance: i === 0 ? 'with' : (Math.random() < 0.5 ? 'with' : 'against'),
+    stance: i === ally ? 'with' : 'against',
   }));
-  // Guarantee at least one voice on the other side of the table.
-  if (state.hosts.every((h) => h.stance === 'with')) state.hosts[2].stance = 'against';
   save();
+}
+
+// Older saved shows were drafted before the desk was locked to one ally, so
+// straighten out anything that doesn't match.
+function normalizeHosts() {
+  if (!state.hosts.length) return;
+  let ally = state.hosts.findIndex((h) => h.stance === 'with');
+  if (ally < 0) ally = 0;
+  let changed = false;
+  state.hosts.forEach((h, i) => {
+    const stance = i === ally ? 'with' : 'against';
+    if (h.stance !== stance) { h.stance = stance; changed = true; }
+  });
+  if (changed) save();
 }
 
 function stanceLabel(host) {
@@ -701,6 +714,8 @@ for (const btn of document.querySelectorAll('[data-goto]')) {
 }
 
 /* ----------------------------------------------------------------- boot */
+
+normalizeHosts();
 
 $('#in-name').value = state.name;
 $('#in-show').value = state.show;
