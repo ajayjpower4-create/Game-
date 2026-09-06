@@ -121,7 +121,7 @@ you would rather drag the street furniture around.
 
 ## Download
 
-`dist/WinchMod-v1.0.zip` is the built mod, compiled from this source by the
+`dist/WinchMod-v1.1.zip` is the built mod, compiled from this source by the
 `Build Winch Mod` GitHub Actions workflow. Unzip it and copy the `scripts`
 folder into your GTA V directory so you end up with:
 
