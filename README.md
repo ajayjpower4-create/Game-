@@ -28,6 +28,11 @@ ANTHROPIC_API_KEY=sk-ant-... npm start
 
 `ELECTION_MODEL` overrides the model (default `claude-opus-4-6`).
 
+## Also in this repo
+
+`gtav-winch-mod/` is a separate thing entirely: a ScriptHookVDotNet 3 winch and
+towing mod for single-player GTA V. It has its own README and build steps.
+
 ## How a game runs
 
 **1 · Draft your candidates.** Pick from the roster of famous names and the
