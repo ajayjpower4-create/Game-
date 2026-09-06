@@ -1,0 +1,59 @@
+name: Build Winch Mod
+
+on:
+  push:
+    branches:
+      - claude/gtav-winch-mod-txk45w
+      - main
+    paths:
+      - 'gtav-winch-mod/src/**'
+      - 'gtav-winch-mod/WinchMod.ini'
+      - '.github/workflows/build-winch-mod.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build
+        run: dotnet build gtav-winch-mod/src/WinchMod.csproj -c Release
+
+      - name: Stage the drop-in folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/scripts | Out-Null
+          Copy-Item gtav-winch-mod/src/bin/Release/WinchMod.dll dist/scripts/
+          Copy-Item gtav-winch-mod/WinchMod.ini dist/scripts/
+          Copy-Item gtav-winch-mod/README.md dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinchMod
+          path: dist
+
+      - name: Commit the built dll back to the branch
+        if: github.ref_name == 'claude/gtav-winch-mod-txk45w'
+        shell: bash
+        run: |
+          mkdir -p gtav-winch-mod/dist
+          cp dist/scripts/WinchMod.dll gtav-winch-mod/dist/WinchMod.dll
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f gtav-winch-mod/dist/WinchMod.dll
+          if git diff --cached --quiet; then
+            echo "dll unchanged"
+          else
+            git commit -m "Build WinchMod.dll [skip ci]"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
