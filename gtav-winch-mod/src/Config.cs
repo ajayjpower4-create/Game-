@@ -11,13 +11,13 @@ namespace WinchMod
     internal static class Config
     {
         // ---- keys ----------------------------------------------------------
-        public static Keys AttachKey = Keys.NumPad0;
-        public static Keys CutKey = Keys.NumPad1;
-        public static Keys CutAllKey = Keys.NumPad2;
-        public static Keys StrapKey = Keys.NumPad3;
-        public static Keys SpoolInKey = Keys.NumPad8;
-        public static Keys SpoolOutKey = Keys.NumPad5;
-        public static Keys ReloadConfigKey = Keys.NumPad9;
+        public static Keys AttachKey = Keys.J;
+        public static Keys CutKey = Keys.K;
+        public static Keys CutAllKey = Keys.Delete;
+        public static Keys StrapKey = Keys.U;
+        public static Keys SpoolInKey = Keys.PageUp;
+        public static Keys SpoolOutKey = Keys.PageDown;
+        public static Keys ReloadConfigKey = Keys.End;
 
         // ---- aiming --------------------------------------------------------
         public static float AimRange = 60f;
@@ -138,6 +138,39 @@ namespace WinchMod
             if (TorqueAssist > 1f) TorqueAssist = 1f;
             if (MaxDeltaV < 0.1f) MaxDeltaV = 0.1f;
             if (MaxLines < 1) MaxLines = 1;
+        }
+
+        /// <summary>
+        /// Readable key names for the on-screen prompts. The Keys enum shares values
+        /// between members, so PageUp prints as "Prior" and brackets print as
+        /// "OemOpenBrackets" unless they are spelled out here.
+        /// </summary>
+        public static string KeyName(Keys key)
+        {
+            switch (key)
+            {
+                case Keys.PageUp: return "Page Up";
+                case Keys.PageDown: return "Page Down";
+                case Keys.Delete: return "Delete";
+                case Keys.Back: return "Backspace";
+                case Keys.Return: return "Enter";
+                case Keys.Space: return "Space";
+                case Keys.OemOpenBrackets: return "[";
+                case Keys.OemCloseBrackets: return "]";
+                case Keys.OemMinus: return "-";
+                case Keys.Oemplus: return "=";
+                case Keys.OemSemicolon: return ";";
+                case Keys.OemQuotes: return "'";
+                case Keys.Oemcomma: return ",";
+                case Keys.OemPeriod: return ".";
+                case Keys.OemQuestion: return "/";
+                case Keys.OemPipe: return "\\";
+            }
+
+            string name = key.ToString();
+            if (name.StartsWith("NumPad"))
+                return "Num " + name.Substring(6);
+            return name;
         }
 
         private static Keys Key(ScriptSettings s, string section, string name, Keys fallback)

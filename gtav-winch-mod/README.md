@@ -14,13 +14,19 @@ All rebindable in `WinchMod.ini`.
 
 | Key | What it does |
 | --- | --- |
-| `NumPad0` | Aim at something, press once for the first point, again for the second |
-| `NumPad1` | Cut the rope you are looking at (or clear a half-set point) |
-| `NumPad2` | Cut every rope |
-| `NumPad3` | Strap the load to a tow bed / release it |
-| `NumPad8` | Hold to reel in |
-| `NumPad5` | Hold to pay out |
-| `NumPad9` | Reload the config without restarting the game |
+| `J` | Aim at something, press once for the first point, again for the second |
+| `K` | Cut the rope you are looking at (or clear a half-set point) |
+| `Delete` | Cut every rope |
+| `U` | Strap the load to a tow bed / release it |
+| `Page Up` | Hold to reel in |
+| `Page Down` | Hold to pay out |
+| `End` | Reload the config without restarting the game |
+
+No numpad needed — none of these collide with GTA V's own bindings. To change
+them, put any `System.Windows.Forms` key name in the `[Keys]` section of the
+ini: letters (`J`), F keys (`F7`), `NumPad0`-`NumPad9`, `PageUp`, `PageDown`,
+`Home`, `End`, `Delete`, `OemOpenBrackets` (`[`), `OemMinus` (`-`) and so on.
+Steer clear of `Insert` — ScriptHookVDotNet opens its own console with it.
 
 The spool keys act on the line tied to the vehicle you are sitting in; on foot
 they act on the line tied to you, otherwise the nearest one. Up to six lines can
@@ -28,14 +34,14 @@ be out at once, so you can bridle a load with two ropes and it behaves.
 
 ## Towing with it
 
-1. Aim at the back of your tow truck and press `NumPad0`. Aim near a tow hook or
-   a bumper and the point snaps to the hook.
-2. Aim at the car you want and press `NumPad0` again. The rope appears between
-   the exact two points you picked.
+1. Aim at the back of your tow truck and press `J`. Aim near a tow hook or a
+   bumper and the point snaps to the hook.
+2. Aim at the car you want and press `J` again. The rope appears between the
+   exact two points you picked.
 3. Drive. The car follows, swings in behind you through corners, and drags on
    its own tyres.
-4. To load it: back the truck up to the car, hold `NumPad8` to winch it in, and
-   once it is sitting on the deck it straps itself down. `NumPad3` releases it.
+4. To load it: back the truck up to the car, hold `Page Up` to winch it in, and
+   once it is sitting on the deck it straps itself down. `U` releases it.
    Turn off `AutoLockToBed` in the ini if you would rather strap manually.
 
 On foot the same rope works for anything else: anchor a car to a lamppost and

@@ -22,11 +22,12 @@ namespace WinchMod
             if (pending != null)
             {
                 Line("Winch: first point set - aim at the second point and press "
-                     + Config.AttachKey, ref y, Hot);
+                     + Config.KeyName(Config.AttachKey), ref y, Hot);
             }
             else if (lines.Count == 0)
             {
-                Line("Winch: aim at something and press " + Config.AttachKey + " to set the first point", ref y, Dim);
+                Line("Winch: aim at something and press " + Config.KeyName(Config.AttachKey)
+                     + " to set the first point", ref y, Dim);
             }
 
             if (active != null && active.EndsAlive)
@@ -35,7 +36,9 @@ namespace WinchMod
                 Line(string.Format("Line: {0} <-> {1}   {2:0.0} m   {3}",
                     active.A.Describe(), active.B.Describe(), active.Length, state), ref y, Dim);
                 Line(string.Format("{0}/{1} spool   {2} cut   {3} strap/unstrap   {4} cut all",
-                    Config.SpoolInKey, Config.SpoolOutKey, Config.CutKey, Config.StrapKey, Config.CutAllKey), ref y, Dim);
+                    Config.KeyName(Config.SpoolInKey), Config.KeyName(Config.SpoolOutKey),
+                    Config.KeyName(Config.CutKey), Config.KeyName(Config.StrapKey),
+                    Config.KeyName(Config.CutAllKey)), ref y, Dim);
             }
 
             if (lines.Count > 1)
