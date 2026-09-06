@@ -98,7 +98,21 @@ becomes an infinite-mass anchor (a point on bare ground gets an invisible frozen
 prop so the rope has something to hold). Set `TreatPropsAsAnchors = false` if
 you would rather drag the street furniture around.
 
-## Building
+## Download
+
+`dist/WinchMod-v1.0.zip` is the built mod, compiled from this source by the
+`Build Winch Mod` GitHub Actions workflow. Unzip it and copy the `scripts`
+folder into your GTA V directory so you end up with:
+
+```
+GTAV\scripts\WinchMod.dll
+GTAV\scripts\WinchMod.ini
+```
+
+Every push to `src/` rebuilds it and commits a fresh `dist/WinchMod.dll`, so
+the binary in the repo always matches the source next to it.
+
+## Building it yourself
 
 Requires the .NET SDK (or Visual Studio) targeting .NET Framework 4.8.
 
@@ -110,20 +124,14 @@ dotnet build -c Release
 `ScriptHookVDotNet3` comes from NuGet, so nothing else needs to be on your
 machine to compile.
 
-## Installing
+## What you need installed first
 
-You need [ScriptHookV](http://www.dev-c.com/gtav/scripthookv/) and
-[ScriptHookVDotNet 3](https://github.com/scripthookvdotnet/scripthookvdotnet/releases)
-installed first.
+- [ScriptHookV](http://www.dev-c.com/gtav/scripthookv/)
+- [ScriptHookVDotNet 3](https://github.com/scripthookvdotnet/scripthookvdotnet/releases)
+  (v3.6 or newer), which also needs .NET Framework 4.8
 
-Copy into your GTA V folder:
-
-```
-GTAV\scripts\WinchMod.dll      (from src\bin\Release)
-GTAV\scripts\WinchMod.ini
-```
-
-Load a save and the hint shows up bottom-left.
+Both go in your GTA V folder. Then drop in `scripts\WinchMod.dll` and
+`scripts\WinchMod.ini`, load a save, and the hint shows up bottom-left.
 
 ## Tuning
 
