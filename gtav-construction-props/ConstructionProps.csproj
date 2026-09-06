@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ConstructionProps</AssemblyName>
+    <RootNamespace>ConstructionProps</RootNamespace>
+    <LangVersion>7.3</LangVersion>
+    <OutputType>Library</OutputType>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>Construction Props</Product>
+    <Description>Menu-driven construction prop placement for GTA V, with a streaming budget so big scenes do not tank the frame rate.</Description>
+    <Version>1.0.0</Version>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Drop ScriptHookVDotNet3.dll into lib\ (it ships with SHVDN, or sits next
+      to your GTA5.exe). It is deliberately not redistributed here.
+    -->
+    <Reference Include="ScriptHookVDotNet3">
+      <HintPath>lib\ScriptHookVDotNet3.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+</Project>

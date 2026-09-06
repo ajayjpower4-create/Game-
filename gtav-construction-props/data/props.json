@@ -1,0 +1,24 @@
+{
+  "_comment": [
+    "Optional. Copy this file to  <GTA V>\\scripts\\ConstructionProps\\props.json  to",
+    "extend or replace the built-in catalog. Categories that already exist are",
+    "extended; set \"replace\": true to wipe the built-in entries in that category.",
+    "A prop can be written as a bare model name string or as an object with a label."
+  ],
+  "categories": [
+    {
+      "name": "Barriers & Fencing",
+      "props": [
+        { "label": "Chainlink Panel", "model": "prop_fnclink_02a" },
+        { "label": "Chainlink Panel Tall", "model": "prop_fnclink_03a" }
+      ]
+    },
+    {
+      "name": "My Custom Kit",
+      "props": [
+        "prop_rub_wheel_01",
+        { "label": "Traffic Barrel", "model": "prop_barrier_wat_04a" }
+      ]
+    }
+  ]
+}

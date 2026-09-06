@@ -167,3 +167,13 @@ report says so on screen — every screen still works offline.
 
 Nothing in this report is real. It is a simulator for practicing and drafting,
 not a substitute for an inspection by a licensed inspector.
+
+---
+
+## Also in this repo
+
+**[`gtav-construction-props/`](gtav-construction-props/)** — a GTA V mod
+(ScriptHookVDotNet 3, C#). Brings up every construction prop in a menu, places
+them by clicking the mouse, and saves scenes to JSON. It streams props in and
+out around the camera on a budget so a few thousand of them don't lag the game
+out. Not part of the web app — it builds separately.

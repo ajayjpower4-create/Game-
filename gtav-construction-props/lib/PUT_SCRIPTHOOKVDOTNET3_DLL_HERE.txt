@@ -1,0 +1,5 @@
+Copy ScriptHookVDotNet3.dll into this folder before building.
+
+It ships with ScriptHookVDotNet (https://github.com/scripthookvdotnet/scripthookvdotnet/releases)
+and also sits next to GTA5.exe once you have installed it. It is not
+redistributed in this repository.
