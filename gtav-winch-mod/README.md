@@ -12,15 +12,35 @@ beyond ScriptHookV and SHVDN.
 
 All rebindable in `WinchMod.ini`.
 
+**Mouse first.** Press `J` to turn the winch on, then:
+
+| Input | What it does |
+| --- | --- |
+| Left click | Set the first point, click again for the second |
+| Right click | Cut the rope you are looking at |
+| Mouse wheel | Spool in and out |
+| `J` again | Turn the winch off |
+
+While the winch is on it takes the mouse, so clicking hooks the rope instead of
+firing your weapon and the wheel spools instead of switching weapons. A white
+dot marks what you are aiming at, and once the first point is down a line
+previews where the rope will go.
+
+Everything is still on the keyboard too, and works whether the winch is on or
+off:
+
 | Key | What it does |
 | --- | --- |
-| `J` | Aim at something, press once for the first point, again for the second |
+| `J` | Turn the winch on and off (sets the points directly if you set `MouseSelect = false`) |
 | `K` | Cut the rope you are looking at (or clear a half-set point) |
 | `Delete` | Cut every rope |
 | `U` | Strap the load to a tow bed / release it |
 | `Page Up` | Hold to reel in |
 | `Page Down` | Hold to pay out |
 | `End` | Reload the config without restarting the game |
+
+Prefer the old keyboard-only flow? Set `MouseSelect = false` in the `[Mouse]`
+section and `J` goes back to setting the two points itself.
 
 No numpad needed — none of these collide with GTA V's own bindings. To change
 them, put any `System.Windows.Forms` key name in the `[Keys]` section of the
@@ -34,14 +54,15 @@ be out at once, so you can bridle a load with two ropes and it behaves.
 
 ## Towing with it
 
-1. Aim at the back of your tow truck and press `J`. Aim near a tow hook or a
-   bumper and the point snaps to the hook.
-2. Aim at the car you want and press `J` again. The rope appears between the
-   exact two points you picked.
+1. Press `J` to turn the winch on, then click the back of your tow truck. Aim
+   near a tow hook or a bumper and the point snaps to the hook.
+2. Click the car you want. The rope appears between the exact two points you
+   picked.
 3. Drive. The car follows, swings in behind you through corners, and drags on
    its own tyres.
-4. To load it: back the truck up to the car, hold `Page Up` to winch it in, and
-   once it is sitting on the deck it straps itself down. `U` releases it.
+4. To load it: back the truck up to the car, roll the wheel (or hold `Page Up`)
+   to winch it in, and once it is sitting on the deck it straps itself down.
+   `U` releases it.
    Turn off `AutoLockToBed` in the ini if you would rather strap manually.
 
 On foot the same rope works for anything else: anchor a car to a lamppost and
@@ -132,6 +153,12 @@ machine to compile.
 
 Both go in your GTA V folder. Then drop in `scripts\WinchMod.dll` and
 `scripts\WinchMod.ini`, load a save, and the hint shows up bottom-left.
+
+## When something goes wrong
+
+The mod writes failures to `scripts\WinchMod.log` with the full stack trace,
+and keeps running instead of letting ScriptHookVDotNet kill the script. If
+anything misbehaves, that file says what and where.
 
 ## Tuning
 

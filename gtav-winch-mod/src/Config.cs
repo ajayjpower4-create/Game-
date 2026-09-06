@@ -19,6 +19,10 @@ namespace WinchMod
         public static Keys SpoolOutKey = Keys.PageDown;
         public static Keys ReloadConfigKey = Keys.End;
 
+        // ---- mouse ---------------------------------------------------------
+        public static bool MouseSelect = true;
+        public static float WheelSpoolStep = 0.35f;   // metres per wheel notch
+
         // ---- aiming --------------------------------------------------------
         public static float AimRange = 60f;
         public static float SnapToHookDistance = 0.75f;
@@ -77,6 +81,9 @@ namespace WinchMod
             SpoolInKey = Key(s, "Keys", "SpoolInKey", SpoolInKey);
             SpoolOutKey = Key(s, "Keys", "SpoolOutKey", SpoolOutKey);
             ReloadConfigKey = Key(s, "Keys", "ReloadConfigKey", ReloadConfigKey);
+
+            MouseSelect = s.GetValue("Mouse", "MouseSelect", MouseSelect);
+            WheelSpoolStep = s.GetValue("Mouse", "WheelSpoolStep", WheelSpoolStep);
 
             AimRange = s.GetValue("Aiming", "AimRange", AimRange);
             SnapToHookDistance = s.GetValue("Aiming", "SnapToHookDistance", SnapToHookDistance);

@@ -12,11 +12,12 @@ namespace WinchMod
     {
         private readonly List<WinchLine> _lines = new List<WinchLine>();
         private AttachPoint _pending;
+        private bool _mouseMode;
         private int _lastTextureRequest;
 
         public WinchMain()
         {
-            Config.Load();
+            Log.Try("loading the config", Config.Load);
             Interval = 0;
             Tick += OnTick;
             KeyDown += OnKeyDown;
@@ -25,10 +26,18 @@ namespace WinchMod
 
         private void OnTick(object sender, EventArgs e)
         {
+            Log.Try("the update loop", Update);
+        }
+
+        private void Update()
+        {
             EnsureRopeTextures();
 
             float dt = Game.LastFrameTime;
             PruneLines();
+
+            if (_mouseMode)
+                MouseModeInput();
 
             WinchLine active = ActiveLine();
             if (active != null)
@@ -43,38 +52,98 @@ namespace WinchMod
                 _pending = null;
             }
 
-            Hud.Draw(_lines, _pending, active);
+            Hud.Draw(_lines, _pending, active, _mouseMode, AimPoint());
         }
 
         private void OnKeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Config.AttachKey)
-                Attach();
-            else if (e.KeyCode == Config.CutKey)
-                CutAimed();
-            else if (e.KeyCode == Config.CutAllKey)
-                CutAll(true);
-            else if (e.KeyCode == Config.StrapKey)
-                ToggleStrap();
-            else if (e.KeyCode == Config.ReloadConfigKey)
             {
-                Config.Load();
-                Notification.Show("~y~Winch~s~: config reloaded");
+                // With mouse select on, this key is the mode toggle and the clicks do
+                // the picking; with it off the key sets the points on its own.
+                if (Config.MouseSelect)
+                    Log.Try("toggling winch mode", ToggleMouseMode);
+                else
+                    Log.Try("setting an attach point", Attach);
             }
+            else if (e.KeyCode == Config.CutKey)
+                Log.Try("cutting a rope", CutAimed);
+            else if (e.KeyCode == Config.CutAllKey)
+                Log.Try("cutting every rope", delegate { CutAll(true); });
+            else if (e.KeyCode == Config.StrapKey)
+                Log.Try("strapping the load", ToggleStrap);
+            else if (e.KeyCode == Config.ReloadConfigKey)
+                Log.Try("reloading the config", ReloadConfig);
         }
 
         private void OnAborted(object sender, EventArgs e)
         {
-            CutAll(false);
-            if (_pending != null)
+            Log.Try("shutting down", delegate
+            {
+                CutAll(false);
+                if (_pending != null)
+                {
+                    _pending.Cleanup();
+                    _pending = null;
+                }
+                Function.Call(Hash.ROPE_UNLOAD_TEXTURES);
+            });
+        }
+
+        // ---- mouse -------------------------------------------------------------
+
+        private void ToggleMouseMode()
+        {
+            _mouseMode = !_mouseMode;
+
+            if (!_mouseMode && _pending != null)
             {
                 _pending.Cleanup();
                 _pending = null;
             }
-            Function.Call(Hash.ROPE_UNLOAD_TEXTURES);
+
+            Notification.Show(_mouseMode
+                ? "~g~Winch~s~: on. Left click sets a point, right click cuts, wheel spools."
+                : "~y~Winch~s~: off");
         }
 
-        // -------------------------------------------------------------------
+        private void MouseModeInput()
+        {
+            // Hold the mouse for the winch so clicking does not also fire your weapon.
+            Controls.BlockThisFrame();
+
+            if (Controls.JustPressed(Controls.Attack) || Controls.JustPressed(Controls.VehicleAttack))
+                Attach();
+
+            if (Controls.JustPressed(Controls.Aim) || Controls.JustPressed(Controls.VehicleAim))
+                CutAimed();
+
+            int wheel = Controls.WheelDelta();
+            if (wheel != 0)
+            {
+                WinchLine line = ActiveLine();
+                if (line != null)
+                    line.Spool(wheel > 0 ? -Config.WheelSpoolStep : Config.WheelSpoolStep);
+            }
+        }
+
+        /// <summary>Where the player is looking, for the crosshair and the preview line.</summary>
+        private Vector3 AimPoint()
+        {
+            if (!_mouseMode && _pending == null)
+                return Vector3.Zero;
+
+            Aiming.Hit hit = Aiming.AimRay();
+            return hit.DidHit ? hit.Position : Vector3.Zero;
+        }
+
+        // ---- actions -----------------------------------------------------------
+
+        private void ReloadConfig()
+        {
+            Config.Load();
+            Notification.Show("~y~Winch~s~: config reloaded");
+        }
 
         private void EnsureRopeTextures()
         {
@@ -143,7 +212,7 @@ namespace WinchMod
 
         private static bool SamePoint(AttachPoint a, AttachPoint b)
         {
-            if (!a.IsValid || !b.IsValid)
+            if (a == null || b == null || !a.IsValid || !b.IsValid)
                 return false;
             if (a.Entity.Handle != b.Entity.Handle)
                 return false;
@@ -167,19 +236,25 @@ namespace WinchMod
                 return;
             }
 
-            line.Cut();
+            // Off the list first: whatever happens in Cut, the line is not coming back.
             _lines.Remove(line);
+            line.Cut();
             Notification.Show("~y~Winch~s~: rope cut");
         }
 
         private void CutAll(bool notify)
         {
-            for (int i = 0; i < _lines.Count; i++)
-                _lines[i].Cut();
-            int count = _lines.Count;
+            WinchLine[] doomed = _lines.ToArray();
             _lines.Clear();
-            if (notify && count > 0)
-                Notification.Show("~y~Winch~s~: cut " + count + (count == 1 ? " rope" : " ropes"));
+
+            for (int i = 0; i < doomed.Length; i++)
+            {
+                try { doomed[i].Cut(); }
+                catch (Exception ex) { Log.Write("cutting every rope", ex); }
+            }
+
+            if (notify && doomed.Length > 0)
+                Notification.Show("~y~Winch~s~: cut " + doomed.Length + (doomed.Length == 1 ? " rope" : " ropes"));
         }
 
         private void ToggleStrap()
@@ -213,16 +288,19 @@ namespace WinchMod
                     continue;
 
                 bool broke = line.Broken;
-                line.Cut();
                 _lines.RemoveAt(i);
+
+                try { line.Cut(); }
+                catch (Exception ex) { Log.Write("tidying up a dead line", ex); }
+
                 if (broke)
                     Notification.Show("~r~Winch~s~: the rope snapped under the load");
             }
         }
 
         /// <summary>
-        /// The line the spool keys act on: whatever is tied to the vehicle you are in,
-        /// then whatever is tied to you, then the closest line.
+        /// The line the spool controls act on: whatever is tied to the vehicle you are
+        /// in, then whatever is tied to you, then the closest line.
         /// </summary>
         private WinchLine ActiveLine()
         {
@@ -230,8 +308,10 @@ namespace WinchMod
                 return null;
 
             Ped player = Game.Player.Character;
-            Vehicle inside = player.CurrentVehicle;
+            if (player == null || !player.Exists())
+                return null;
 
+            Vehicle inside = player.CurrentVehicle;
             if (inside != null && inside.Exists())
             {
                 for (int i = 0; i < _lines.Count; i++)

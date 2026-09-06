@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using GTA;
 using GTA.Math;
+using GTA.Native;
 using GTA.UI;
 
 namespace WinchMod
@@ -12,22 +13,32 @@ namespace WinchMod
         private static readonly Color Dim = Color.FromArgb(190, 235, 235, 235);
         private static readonly Color Hot = Color.FromArgb(230, 255, 190, 90);
 
-        public static void Draw(List<WinchLine> lines, AttachPoint pending, WinchLine active)
+        public static void Draw(List<WinchLine> lines, AttachPoint pending, WinchLine active,
+                                bool mouseMode, Vector3 aimPoint)
         {
             if (!Config.ShowHud)
                 return;
 
             float y = 470f;
 
-            if (pending != null)
+            if (mouseMode)
+            {
+                Line(pending != null
+                        ? "WINCH ON - left click the second point"
+                        : "WINCH ON - left click the first point",
+                     ref y, Hot);
+                Line("right click cuts   wheel spools   " + Config.KeyName(Config.AttachKey)
+                     + " turns it off", ref y, Dim);
+            }
+            else if (pending != null)
             {
                 Line("Winch: first point set - aim at the second point and press "
                      + Config.KeyName(Config.AttachKey), ref y, Hot);
             }
             else if (lines.Count == 0)
             {
-                Line("Winch: aim at something and press " + Config.KeyName(Config.AttachKey)
-                     + " to set the first point", ref y, Dim);
+                Line("Winch: press " + Config.KeyName(Config.AttachKey)
+                     + (Config.MouseSelect ? " to aim the winch" : " to set the first point"), ref y, Dim);
             }
 
             if (active != null && active.EndsAlive)
@@ -45,6 +56,19 @@ namespace WinchMod
                 Line(lines.Count + " lines out", ref y, Dim);
 
             DrawMarkers(lines, pending);
+
+            bool hasAim = aimPoint != Vector3.Zero;
+            if (mouseMode && hasAim)
+                Sphere(aimPoint, Color.FromArgb(200, 255, 255, 255));
+
+            // Preview of the rope you are about to make.
+            if (pending != null && pending.IsValid && hasAim)
+                DrawLine(pending.WorldPosition, aimPoint, 255, 190, 90, 150);
+        }
+
+        private static void DrawLine(Vector3 a, Vector3 b, int r, int g, int bl, int alpha)
+        {
+            Function.Call(Hash.DRAW_LINE, a.X, a.Y, a.Z, b.X, b.Y, b.Z, r, g, bl, alpha);
         }
 
         private static void Line(string text, ref float y, Color color)

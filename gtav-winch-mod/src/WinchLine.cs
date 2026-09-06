@@ -24,6 +24,7 @@ namespace WinchMod
 
         private int _rope;
         private float _lastTension;
+        private bool _cut;
 
         public float Tension { get { return _lastTension; } }
         public bool Strapped { get { return Bed.Engaged; } }
@@ -95,7 +96,7 @@ namespace WinchMod
 
         public void Update(float dt)
         {
-            if (dt <= 0f || !EndsAlive)
+            if (_cut || dt <= 0f || !EndsAlive)
                 return;
 
             SyncRopeVisual();
@@ -243,20 +244,52 @@ namespace WinchMod
             return false;
         }
 
+        /// <summary>
+        /// Tearing a line down has to survive every order things can go wrong in: the
+        /// rope already gone, an end deleted by the game, or a second cut on the same
+        /// line. Each step is isolated so one failure cannot strand the others.
+        /// </summary>
         public void Cut()
         {
-            if (Bed.Engaged)
-                Bed.Release();
+            if (_cut)
+                return;
+            _cut = true;
 
-            if (_rope != 0)
+            try
             {
-                OutputArgument handle = new OutputArgument(_rope);
-                Function.Call(Hash.DELETE_ROPE, handle);
-                _rope = 0;
+                if (Bed.Engaged)
+                    Bed.Release();
             }
+            catch (Exception ex) { Log.Write("Cut: releasing the bed lock", ex); }
 
-            if (A != null) A.Cleanup();
-            if (B != null) B.Cleanup();
+            DeleteRope();
+
+            try { if (A != null) A.Cleanup(); }
+            catch (Exception ex) { Log.Write("Cut: cleaning up the first end", ex); }
+
+            try { if (B != null) B.Cleanup(); }
+            catch (Exception ex) { Log.Write("Cut: cleaning up the second end", ex); }
+        }
+
+        private void DeleteRope()
+        {
+            int rope = _rope;
+            _rope = 0;                       // never hand the same handle to the game twice
+            if (rope == 0)
+                return;
+
+            try
+            {
+                // A rope whose attached entity has already been destroyed can leave a
+                // stale handle behind, and DELETE_ROPE on one of those is not survivable.
+                OutputArgument check = new OutputArgument(rope);
+                if (!Function.Call<bool>(Hash.DOES_ROPE_EXIST, check))
+                    return;
+
+                OutputArgument handle = new OutputArgument(rope);
+                Function.Call(Hash.DELETE_ROPE, handle);
+            }
+            catch (Exception ex) { Log.Write("Cut: deleting the rope", ex); }
         }
     }
 }
