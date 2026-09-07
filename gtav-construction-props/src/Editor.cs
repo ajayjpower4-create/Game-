@@ -8,6 +8,7 @@ using GTA;
 using GTA.Math;
 using GTA.UI;
 using Font = GTA.UI.Font;
+using Control = GTA.Control;   // System.Windows.Forms.Control collides
 
 namespace ConstructionProps
 {

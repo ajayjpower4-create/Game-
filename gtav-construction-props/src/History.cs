@@ -9,8 +9,7 @@ namespace ConstructionProps
     internal class EditAction
     {
         public EditKind Kind;
-        public PlacedProp Target;          // live reference for Remove/Transform
-        public PlacedProp Snapshot;        // data copy for Add/Remove
+        public PlacedProp Target;          // the prop the action applies to
         public Vector3 OldPosition, NewPosition;
         public Vector3 OldRotation, NewRotation;
     }

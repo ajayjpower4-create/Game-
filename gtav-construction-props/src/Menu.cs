@@ -63,7 +63,6 @@ namespace ConstructionProps
         static readonly Color TextCol = Color.FromArgb(235, 235, 235, 235);
         static readonly Color TextSel = Color.FromArgb(255, 15, 15, 15);
         static readonly Color TextDim = Color.FromArgb(140, 190, 190, 190);
-        static readonly Color BarBg = Color.FromArgb(220, 20, 20, 22);
 
         readonly List<MenuPanel> stack = new List<MenuPanel>();
 

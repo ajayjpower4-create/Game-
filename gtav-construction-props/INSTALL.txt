@@ -1,0 +1,42 @@
+CONSTRUCTION PROPS - GTA V
+==========================
+
+WHAT YOU NEED FIRST
+-------------------
+  1. Script Hook V            http://www.dev-c.com/gtav/scripthookv/
+  2. ScriptHookVDotNet 3      https://github.com/scripthookvdotnet/scripthookvdotnet/releases
+Both go next to GTA5.exe. If you already run C# mods, you have them.
+
+
+BUILD IT (about 5 seconds)
+--------------------------
+  Double-click  build.bat
+
+That is it. It uses the C# compiler already built into Windows - no Visual
+Studio, no SDK, nothing to install. It finds your ScriptHookVDotNet3.dll
+automatically, builds ConstructionProps.dll, and offers to drop it straight
+into your GTA V \scripts\ folder.
+
+If it says it cannot find ScriptHookVDotNet3.dll, copy that file out of your
+GTA V folder into the lib\ folder here and run build.bat again.
+
+
+THEN
+----
+  Start GTA V. Press F5.
+
+  Left click        place the prop
+  Scroll            rotate       (Ctrl+scroll raises/lowers)
+  E                 grab a placed prop and move it
+  Delete            delete the prop under the cursor
+  G                 grid snap
+  Ctrl+Z / Ctrl+Y   undo / redo
+  Right click       cancel / back
+
+Save and load your sites from the Scenes menu. Scenes are written to
+  GTA V\scripts\ConstructionProps\Scenes\*.json
+
+Frames dipping? Menu > Performance > lower Stream Radius, or pick the
+"Potato" preset. It shows you Live / Scene counts live while you build.
+
+Full documentation is in README.md.
