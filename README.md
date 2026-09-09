@@ -90,11 +90,35 @@ Texas. All 538 electoral votes are the 2024–2030 apportionment.
 
 # Inspection Simulator
 
-Write a sixty-page home inspection report without writing sixty paragraphs. At
+Write a sixty-page inspection report without writing sixty paragraphs. At
 `/inspection`.
 
-You type the address, the client, the company and the year built. Everything
-else in the report is a click.
+You type what is being inspected and who it is for. Everything else in the
+report is a click.
+
+## Five things to inspect
+
+Pick one on the start screen. Each is a self-contained report — its own intake
+form, its own sections and standing narrative, its own defect menu, its own
+severity wording, its own cost bands.
+
+| | Type | Report | Menu |
+| --- | --- | --- | --- |
+| 🏚️ | **Home** | Home Inspection Report | 247 defects · 16 sections |
+| 🚗 | **Used Car** | Pre-Purchase Vehicle Inspection Report | 152 defects · 16 sections |
+| 🖥️ | **Gaming PC** | Computer System Inspection Report | 105 defects · 13 sections |
+| 📱 | **Used Phone** | Device Inspection & Grading Report | 61 defects · 10 sections |
+| 🍽️ | **Restaurant** | Food Service Establishment Inspection Report | 99 defects · 12 sections |
+
+The three severity tiers are shared, but each trade names them the way that
+trade does: a home inspector writes *Significant / Marginal / Minor*, a
+mechanic writes *Major / Repair / Advisory*, a technician writes *Critical /
+Attention / Note*, a phone buyer writes *Fails / Deduct / Note*, and a health
+inspector writes *Priority / Priority Foundation / Core*. The scoring, the
+numbering and the report layout are the same everywhere.
+
+Adding a sixth is one file in `public/inspection/domains/` plus a line in
+`domains/index.js` — nothing else in the app knows what is being inspected.
 
 ## Phone or computer
 
@@ -114,26 +138,29 @@ choosing "computer" on a phone can't strand you in a two-column form.
 
 ## How a report gets built
 
-**1 · Intake.** Four screens of buttons and counters: house type, floors,
-basement or slab, bedrooms, bathrooms, living rooms, kitchens, garage bays,
-attic access, cladding, roof covering, heating, water heater, service amperage,
-pipe materials, weather, occupancy, shutoff locations. Those answers fill the
-Information table and the standing narrative of all sixteen report sections, and
-they generate the room list a defect can be attached to (three bedrooms means
-Master, Bedroom 2, Bedroom 3).
+**1 · Intake.** Three or four screens of buttons and counters. For a home:
+house type, floors, basement or slab, bedrooms, bathrooms, cladding, roof,
+heating, service amperage, pipe materials. For a car: year, make, model, VIN,
+mileage, drivetrain, title status — and how you inspected it, because a report
+with no lift and no road test has to say so. For a PC: the parts list plus
+which tests you actually ran. Those answers fill the Information table and the
+standing narrative of every section, and they generate the list of places a
+finding can be attached to (three bedrooms means Master, Bedroom 2, Bedroom 3;
+a car means Front Left, Engine Bay, Undercarriage — Rear).
 
-**2 · The walkthrough.** *Add defect* → pick the severity (Significant,
-Marginal, Minor/FYI) → pick the section → pick the defect off the menu. The
-report paragraph and the contractor recommendation come attached. Optionally
-choose a location and type your own note; you don't have to type anything.
-There are 247 defects in the menu across fourteen inspectable sections, filtered
-by severity and searchable by keyword.
+**2 · The walkthrough.** *Add finding* → pick the severity → pick the section
+→ pick the defect off the menu. The report paragraph and the recommendation
+come attached. Optionally choose a location and type your own note; you don't
+have to type anything. 664 defects across the five menus, filtered by severity
+and searchable by keyword.
 
 **3 · Anything not on the menu.** *Not on the menu…* takes a short title and a
-sentence about what you saw, and Claude Sonnet writes the defect paragraph and
-the recommendation in the same voice as the rest of the document — third person,
-past tense, observation then consequence then recommended correction, no prices,
-no guarantees.
+sentence about what you saw, and Claude Sonnet writes the paragraph and the
+recommendation in the same voice as the rest of the document — third person,
+past tense, observation then consequence then recommended correction, no
+prices, no guarantees. The server carries a separate voice per inspection type,
+so a health inspection comes back in food code language and a car comes back
+recommending the right specialist.
 
 **4 · Generate.** Claude summarizes the whole inspection into an overview and a
 "what to address first" list, the findings get numbered the way an inspection
@@ -159,11 +186,17 @@ report says so on screen — every screen still works offline.
 
 | Path | What it is |
 | --- | --- |
-| `public/inspection/data.js` | The intake form, the sixteen sections, their Information blocks and standing narrative |
-| `public/inspection/defects.js` | The defect menu — every canned write-up and recommendation |
-| `public/inspection/report.js` | Numbering, summary, cost range, scoring, plain-text rendering. Pure functions |
+| `public/inspection/domains/index.js` | The list of inspection types, and the lookups over them |
+| `public/inspection/domains/home.js` | Home: intake, sections, Information blocks, standing narrative (defects in `home-defects.js`) |
+| `public/inspection/domains/vehicle.js` | Used car: the same, for a pre-purchase vehicle inspection |
+| `public/inspection/domains/gamingpc.js` | Gaming PC: the same, for a used build or new build QC |
+| `public/inspection/domains/phone.js` | Used phone: the same, for grading a handset |
+| `public/inspection/domains/restaurant.js` | Restaurant: the same, for a health inspection |
+| `public/inspection/severity.js` | The three severity tiers and each domain's wording for them |
+| `public/inspection/report.js` | Numbering, summary, cost range, scoring, plain-text rendering. Pure functions, domain-agnostic |
 | `public/inspection/game.js` | Screen flow, the defect picker, the rendered document |
 | `server.js` | `POST /api/inspection/defect` (writes a custom defect) and `POST /api/inspection/summarize` (writes the overview) |
 
-Nothing in this report is real. It is a simulator for practicing and drafting,
-not a substitute for an inspection by a licensed inspector.
+Nothing produced here is real. It is a simulator for practicing and drafting,
+not a substitute for an inspection by a licensed inspector, mechanic,
+technician or health officer.

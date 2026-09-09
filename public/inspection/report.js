@@ -1,67 +1,35 @@
 /* Turns the intake answers plus a list of findings into a finished report.
- * Pure functions — no DOM, so the server can use them too. */
+ * Pure functions, and domain-agnostic: everything specific to what is being
+ * inspected arrives in the domain argument. */
 
-import { SECTIONS, SEVERITY_BY_ID } from './data.js';
-import { DEFECTS_BY_ID } from './defects.js';
+import { severityMap } from './severity.js';
+import { sectionById, itemById } from './domains/index.js';
 
-/* The rooms a finding can be attached to, generated from the intake so the
- * inspector picks a location instead of typing one. */
-export function locationsFor(p) {
-  const out = [];
-  const n = (v) => Number(v) || 0;
-  if (n(p.bedrooms) > 0) out.push('Master Bedroom');
-  for (let i = 2; i <= n(p.bedrooms); i += 1) out.push(`Bedroom ${i}`);
-  if (n(p.fullBaths) > 0) out.push('Master Bathroom');
-  for (let i = 2; i <= n(p.fullBaths); i += 1) out.push(`Bathroom ${i}`);
-  for (let i = 1; i <= n(p.halfBaths); i += 1) out.push(n(p.halfBaths) > 1 ? `Half Bathroom ${i}` : 'Half Bathroom');
-  if (n(p.livingRooms) > 0) out.push('Living Room');
-  if (n(p.livingRooms) > 1) out.push('Family Room');
-  if (n(p.livingRooms) > 2) out.push('Den / Bonus Room');
-  for (let i = 1; i <= n(p.diningRooms); i += 1) out.push(i === 1 ? 'Dining Room' : `Dining Room ${i}`);
-  for (let i = 1; i <= n(p.kitchens); i += 1) out.push(i === 1 ? 'Kitchen' : `Kitchen ${i}`);
-  out.push('Hallway', 'Stairway', 'Entry / Foyer');
-  if (p.laundry && p.laundry !== 'Not Present') out.push(`Laundry (${p.laundry})`);
-  if (n(p.garageBays) > 0) out.push('Garage');
-  if (String(p.foundation || '').includes('Basement')) out.push('Basement');
-  if (String(p.foundation || '').includes('Crawl')) out.push('Crawl Space');
-  if (p.attic !== 'No Accessible Attic') out.push('Attic');
-  out.push(
-    'Exterior Front', 'Exterior Rear', 'Exterior Left Side', 'Exterior Right Side',
-    'Roof', 'Perimeter of Home', 'Throughout the Home', 'Multiple Locations',
-  );
-  return out;
-}
+const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
 
-const money = (n) => `$${n.toLocaleString('en-US')}`;
-
-/* Rough repair-cost bands, used for the client-facing budget estimate. Broad on
- * purpose — a home inspection is qualitative, and the report says so. */
-const COST_BANDS = { significant: [1500, 9000], marginal: [200, 1200], minor: [0, 300] };
-
-export function estimateCost(findings) {
+export function estimateCost(domain, findings) {
+  const bands = domain.costBands;
+  if (!bands) return null;
   let low = 0;
   let high = 0;
   for (const f of findings) {
-    const band = COST_BANDS[f.sev] || COST_BANDS.minor;
+    const band = bands[f.sev] || bands.minor;
     low += band[0];
     high += band[1];
   }
-  return { low, high, label: `${money(low)} - ${money(high)}` };
-}
-
-export function propertyLine(p) {
-  return [p.address, p.city, p.state].filter(Boolean).join(', ') + (p.zip ? ` ${p.zip}` : '');
+  return { low, high, label: `${money(low)} - ${money(high)}`, note: domain.costNote || '' };
 }
 
 /* Number findings the way an inspection report does: section.item.occurrence
  * (3.1.1 = section three, first item in that section, first finding on it). */
-export function buildReport(state) {
+export function buildReport(domain, state) {
   const p = state.profile;
   const findings = state.findings || [];
+  const sevs = severityMap(domain);
   const sections = [];
   const summary = [];
 
-  SECTIONS.forEach((section, sIdx) => {
+  domain.sections.forEach((section, sIdx) => {
     const num = sIdx + 1;
     const mine = findings.filter((f) => f.section === section.id);
     const counters = {};
@@ -70,13 +38,12 @@ export function buildReport(state) {
     section.items.forEach((item, iIdx) => {
       mine.filter((f) => f.item === item.id).forEach((f) => {
         counters[item.id] = (counters[item.id] || 0) + 1;
-        const ref = `${num}.${iIdx + 1}.${counters[item.id]}`;
         const entry = {
           ...f,
-          ref,
+          ref: `${num}.${iIdx + 1}.${counters[item.id]}`,
           itemName: item.name,
           sectionTitle: section.title,
-          severity: SEVERITY_BY_ID[f.sev],
+          severity: sevs[f.sev],
         };
         numbered.push(entry);
         summary.push(entry);
@@ -100,48 +67,66 @@ export function buildReport(state) {
   };
 
   return {
+    domainId: domain.id,
     meta: {
-      address: propertyLine(p),
+      docTitle: domain.docTitle,
+      subjectLabel: domain.subjectLabel,
+      subject: domain.subjectLine(p),
+      subjectSub: domain.subjectSub ? domain.subjectSub(p) : '',
+      clientLabel: domain.clientLabel,
       client: p.client,
       inspector: p.inspector,
       company: p.company,
       date: p.date,
-      yearBuilt: p.yearBuilt,
-      type: p.houseType,
     },
     profile: p,
+    severities: sevs,
     sections,
     summary,
     counts,
     total: summary.length,
-    cost: estimateCost(summary),
+    cost: estimateCost(domain, summary),
+    standardsTitle: domain.standardsTitle,
+    standards: domain.standards(p),
     narrative: state.narrative || null,
   };
 }
 
-/* The score is the game part: coverage across the sections that carry defects,
- * plus credit for catching the safety items and for writing your own notes. */
-export function scoreReport(report) {
-  const inspectable = report.sections.filter((s) => s.findings.length > 0 || s.id !== 'info');
+/* The score is the game part: coverage across the sections that carry findings,
+ * plus credit for locating them and for writing your own notes. */
+export function scoreReport(domain, report) {
+  const inspectable = domain.sections.filter((s) => s.items.length).length;
   const covered = report.sections.filter((s) => s.findings.length > 0).length;
   const withNotes = report.summary.filter((f) => f.note && f.note.trim()).length;
   const located = report.summary.filter((f) => f.location).length;
 
-  const coverage = Math.min(1, covered / 10);
-  const depth = Math.min(1, report.total / 25);
+  const target = Math.max(4, Math.round(inspectable * 0.6));
+  const coverage = Math.min(1, covered / target);
+  const depth = Math.min(1, report.total / Math.max(8, inspectable * 1.5));
   const detail = report.total ? (located * 0.6 + withNotes * 0.4) / report.total : 0;
-  const raw = coverage * 45 + depth * 35 + detail * 20;
-  const score = Math.round(raw);
+  const score = Math.round(coverage * 45 + depth * 35 + detail * 20);
 
   const grade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F';
   const notes = [];
-  if (covered < 6) notes.push(`Only ${covered} of ${inspectable.length} sections carry a finding — a real report on a home this age usually touches more.`);
-  if (report.counts.significant === 0) notes.push('No significant defects were called out. That happens, but re-check the panel, the roof and the areas below grade before you send it.');
-  if (located < report.total) notes.push(`${report.total - located} finding(s) have no location attached. Clients and contractors need to know where.`);
-  if (withNotes === 0 && report.total > 0) notes.push('None of your findings carry your own note. The boilerplate covers the defect; your note covers what you actually saw.');
+  if (covered < target) {
+    notes.push(`Only ${covered} of ${inspectable} sections carry a finding — a thorough `
+      + `${domain.name.toLowerCase()} report usually touches more.`);
+  }
+  if (report.counts.significant === 0 && report.total > 0) {
+    notes.push('Nothing was called out at the top severity. That happens, but it is worth a second '
+      + 'pass over the safety items before you send it.');
+  }
+  if (located < report.total) {
+    notes.push(`${report.total - located} finding(s) have no location attached. Whoever fixes this `
+      + 'needs to know where.');
+  }
+  if (withNotes === 0 && report.total > 0) {
+    notes.push('None of your findings carry your own note. The boilerplate covers the defect; your '
+      + 'note covers what you actually saw.');
+  }
   if (!notes.length) notes.push('Thorough, located and annotated. This one is ready to send.');
 
-  return { score, grade, covered, sections: inspectable.length, withNotes, located, notes };
+  return { score, grade, covered, sections: inspectable, withNotes, located, notes };
 }
 
 /* --------------------------------------------------------- text rendering */
@@ -160,13 +145,15 @@ const wrap = (text, width = 92) => {
 export function reportToText(report) {
   const L = [];
   const rule = (c = '=') => L.push(c.repeat(92));
+  const m = report.meta;
 
   rule();
-  L.push(`HOME INSPECTION REPORT`);
-  L.push(report.meta.address);
-  L.push(`Prepared for: ${report.meta.client}`);
-  L.push(`Inspected by: ${report.meta.inspector}, ${report.meta.company}`);
-  L.push(`Date of inspection: ${report.meta.date}`);
+  L.push(m.docTitle.toUpperCase());
+  L.push(m.subject);
+  if (m.subjectSub) L.push(m.subjectSub);
+  L.push(`${m.clientLabel}: ${m.client}`);
+  L.push(`Inspected by: ${m.inspector}, ${m.company}`);
+  L.push(`Date of inspection: ${m.date}`);
   rule();
   L.push('');
 
@@ -186,42 +173,44 @@ export function reportToText(report) {
     }
   }
 
+  const s = report.severities;
   L.push(`SUMMARY — ${report.total} findings `
-    + `(${report.counts.significant} significant, ${report.counts.marginal} marginal, ${report.counts.minor} minor/FYI)`);
+    + `(${report.counts.significant} ${s.significant.short.toLowerCase()}, `
+    + `${report.counts.marginal} ${s.marginal.short.toLowerCase()}, `
+    + `${report.counts.minor} ${s.minor.short.toLowerCase()})`);
   rule('-');
   report.summary.forEach((f) => {
     L.push(`${f.ref} ${f.sectionTitle} - ${f.itemName}: ${f.title}${f.location ? `  [${f.location}]` : ''}`);
   });
   L.push('');
-  L.push(`Estimated repair budget range: ${report.cost.label}. This is a planning range only; `
-    + 'quotes from the recommended tradespeople govern.');
-  L.push('');
+  if (report.cost) {
+    L.push(`Estimated repair budget range: ${report.cost.label}. ${report.cost.note}`);
+    L.push('');
+  }
 
-  report.sections.forEach((s) => {
+  report.sections.forEach((sec) => {
     rule();
-    L.push(`${s.num}: ${s.title.toUpperCase()}`);
+    L.push(`${sec.num}: ${sec.title.toUpperCase()}`);
     rule();
-    if (s.info.length) {
+    if (sec.info.length) {
       L.push('');
       L.push('Information');
-      s.info.forEach(([k, v]) => L.push(`  ${k}: ${v}`));
+      sec.info.forEach(([k, v]) => L.push(`  ${k}: ${v}`));
     }
-    s.narrative.forEach((n) => {
+    sec.narrative.forEach((n) => {
       L.push('');
       L.push(n.title);
       L.push(wrap(n.text));
     });
-    if (s.findings.length) {
+    if (sec.findings.length) {
       L.push('');
-      L.push('Recommendations');
-      s.findings.forEach((f) => {
+      L.push('Findings');
+      sec.findings.forEach((f) => {
         L.push('');
         L.push(`${f.ref}  ${f.itemName} — ${f.severity.label}`);
         L.push(`${f.title.toUpperCase()}${f.location ? `  |  ${f.location.toUpperCase()}` : ''}`);
         L.push(wrap(f.body));
-        if (f.note && f.note.trim()) {
-          L.push(wrap(`Inspector's note: ${f.note.trim()}`));
-        }
+        if (f.note && f.note.trim()) L.push(wrap(`Inspector's note: ${f.note.trim()}`));
         L.push(`Recommendation: ${f.rec}`);
       });
     }
@@ -229,8 +218,8 @@ export function reportToText(report) {
   });
 
   rule();
-  L.push('This report is the property of the inspection company named above and is provided for the');
-  L.push('exclusive use of the client named above. It is not a warranty or guarantee of any kind.');
+  L.push(report.standardsTitle.toUpperCase());
+  L.push(wrap(report.standards));
   rule();
   return L.join('\n');
 }

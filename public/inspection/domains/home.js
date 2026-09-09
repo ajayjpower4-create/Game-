@@ -1,39 +1,10 @@
-/* Inspection Simulator — static content library.
+/* Home inspection.
  *
  * Everything the report can say is in here so the inspector never has to type a
  * paragraph: sections carry their standing narrative, items carry the defects,
  * and each defect carries its own write-up and recommendation. */
 
-export const SEVERITIES = [
-  {
-    id: 'significant',
-    label: 'Significant Defect',
-    short: 'Significant',
-    color: '#c0392b',
-    blurb: 'Not functional, a serious safety concern, and/or a major expense to correct. '
-      + 'Further evaluation and repair by a qualified contractor before the end of the '
-      + 'contingency period.',
-  },
-  {
-    id: 'marginal',
-    label: 'Marginal Defect',
-    short: 'Marginal',
-    color: '#d97706',
-    blurb: 'A safety hazard, or a functional or installation-related deficiency. It may have '
-      + 'worked at the time of inspection, but the defect can lead to further problems. Most '
-      + 'defects land here.',
-  },
-  {
-    id: 'minor',
-    label: 'Minor Defect, Maintenance Item, or FYI Item',
-    short: 'Minor / FYI',
-    color: '#2563eb',
-    blurb: 'Minor repairs that improve function, recurring maintenance, observations, and '
-      + 'recommended upgrades.',
-  },
-];
-
-export const SEVERITY_BY_ID = Object.fromEntries(SEVERITIES.map((s) => [s.id, s]));
+import { DEFECTS } from './home-defects.js';
 
 /* ---------------------------------------------------------------- intake */
 
@@ -1032,3 +1003,67 @@ export const SECTIONS = [
 ];
 
 export const SECTION_BY_ID = Object.fromEntries(SECTIONS.map((s) => [s.id, s]));
+
+/* Rooms a finding can be attached to, generated from the intake so the
+ * inspector picks a location instead of typing one. */
+function locations(p) {
+  const out = [];
+  const n = (v) => Number(v) || 0;
+  if (n(p.bedrooms) > 0) out.push('Master Bedroom');
+  for (let i = 2; i <= n(p.bedrooms); i += 1) out.push(`Bedroom ${i}`);
+  if (n(p.fullBaths) > 0) out.push('Master Bathroom');
+  for (let i = 2; i <= n(p.fullBaths); i += 1) out.push(`Bathroom ${i}`);
+  for (let i = 1; i <= n(p.halfBaths); i += 1) out.push(n(p.halfBaths) > 1 ? `Half Bathroom ${i}` : 'Half Bathroom');
+  if (n(p.livingRooms) > 0) out.push('Living Room');
+  if (n(p.livingRooms) > 1) out.push('Family Room');
+  if (n(p.livingRooms) > 2) out.push('Den / Bonus Room');
+  for (let i = 1; i <= n(p.diningRooms); i += 1) out.push(i === 1 ? 'Dining Room' : `Dining Room ${i}`);
+  for (let i = 1; i <= n(p.kitchens); i += 1) out.push(i === 1 ? 'Kitchen' : `Kitchen ${i}`);
+  out.push('Hallway', 'Stairway', 'Entry / Foyer');
+  if (p.laundry && p.laundry !== 'Not Present') out.push(`Laundry (${p.laundry})`);
+  if (n(p.garageBays) > 0) out.push('Garage');
+  if (String(p.foundation || '').includes('Basement')) out.push('Basement');
+  if (String(p.foundation || '').includes('Crawl')) out.push('Crawl Space');
+  if (p.attic !== 'No Accessible Attic') out.push('Attic');
+  out.push(
+    'Exterior Front', 'Exterior Rear', 'Exterior Left Side', 'Exterior Right Side',
+    'Roof', 'Perimeter of Home', 'Throughout the Home', 'Multiple Locations',
+  );
+  return out;
+}
+
+export default {
+  id: 'home',
+  name: 'Home',
+  icon: '🏚️',
+  tagline: 'Pre-purchase home inspection',
+  blurb: 'The full residential report — sixteen sections from the grounds to the roof, '
+    + 'with every standing paragraph and limitation a real report carries.',
+  docTitle: 'Home Inspection Report',
+  subjectLabel: 'Property',
+  subjectLine: (p) => [p.address, p.city, p.state].filter(Boolean).join(', ') + (p.zip ? ` ${p.zip}` : ''),
+  subjectSub: (p) => `${p.houseType} · built ${p.yearBuilt} · ${p.bedrooms} bed / ${p.fullBaths} bath · ${p.foundation}`,
+  clientLabel: 'Client',
+  costBands: { significant: [1500, 9000], marginal: [200, 1200], minor: [0, 300] },
+  costNote: 'This is a planning range only; quotes from the recommended tradespeople govern.',
+  standardsTitle: 'Standards of Practice',
+  standards: (p) => `This inspection was performed in substantial compliance with the `
+    + `${p.standards} Standards of Practice. It is a visual, non-invasive examination of the readily `
+    + `accessible installed systems and components of the home, and it is neither technically `
+    + `exhaustive nor quantitative. This report is not a warranty or guarantee of any kind, and it is `
+    + `provided for the exclusive use of the client named above.`,
+  sample: {
+    address: '8329 Newtown Rd', city: 'Pikesville', state: 'MD', zip: '21208',
+    client: 'Liam Powell', inspector: 'A. Inspector', company: 'Chesapeake Inspection Associates',
+    yearBuilt: '1966', houseType: 'Single Family, Detached', floors: '2',
+    foundation: 'Partially Finished Basement', bedrooms: 3, fullBaths: 2, halfBaths: 1,
+    cladding: 'Fiber Cement', roofCovering: '3-Tab Composition Shingles', roofMethod: 'Aerial Drone',
+    heating: 'Gas Forced Air Furnace', hvacYear: '1997', waterHeater: 'Gas', whYear: '1992',
+    whCapacity: '50 Gallons', service: '100amps 120/240VAC', waterPipes: 'Copper',
+    dwv: 'Cast Iron and PVC', occupancy: 'Vacant', weather: 'Overcast, Dry',
+  },
+  intake: INTAKE,
+  sections: SECTIONS,
+  defects: DEFECTS,
+  locations,
+};

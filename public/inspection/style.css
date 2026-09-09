@@ -251,6 +251,19 @@ button:active { transform: translateY(1px); }
   color: var(--accent); background: #fff; border: 1px solid #a7cfda;
   border-radius: 999px; padding: 3px 9px;
 }
+.pick.domain { padding: 16px; }
+.pick.domain .dom-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.pick.domain .dom-icon { font-size: 22px; }
+.pick.domain strong { font-size: 16px; margin: 0; }
+.pick.domain.on { border-color: var(--accent); background: var(--accent-soft); }
+.pick.domain .tag {
+  display: inline-block; margin-top: 8px; font-style: normal; font-size: 11px;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft);
+}
+.sev-text-significant { color: var(--sig); }
+.sev-text-marginal { color: var(--marg); }
+.sev-text-minor { color: var(--minor); }
+
 ol.how { color: var(--ink-soft); font-size: 14px; line-height: 1.9; padding-left: 20px; margin: 0; }
 
 /* ------------------------------------------------------ floating add button */

@@ -178,37 +178,88 @@ app.post('/api/election/simulate', async (req, res) => {
 
 const INSPECTION_MODEL = process.env.INSPECTION_MODEL || 'claude-sonnet-5';
 
-const INSPECTION_VOICE = `You write for a residential home inspection report.
+const INSPECTION_VOICE_BASE = `You write findings for a professional inspection report.
 
 House style, follow it exactly:
-- Third person, past tense, plain and factual. "Damaged receptacle(s) were present at the
-  referenced area(s)." Never "I think", never marketing language, never alarmist language.
-- State the observation, then why it matters in one clause, then the recommended correction.
-- Recommend evaluation and repair by the applicable trade. Never quote a price, never estimate
-  remaining service life in years for a specific component, never state a cause as certain.
-- A home inspection is visual, non-invasive, qualitative and not technically exhaustive. Do not
-  claim anything that would require invasive access or testing that was not performed.
-- Prefix safety items with "SFTY - " and age-related items with "AGED - " when it fits.`;
+- Third person, past tense, plain and factual. State the observation, then why it matters in one
+  clause, then the recommended correction. Never "I think", never marketing language, never
+  alarmist language.
+- Recommend evaluation and correction by the applicable trade or specialist. Never quote a price,
+  never state a cause as certain, never guarantee anything about the future.
+- The inspection was visual, non-invasive and qualitative. Do not claim anything that would require
+  disassembly or testing that was not performed.
+- Prefix safety items with "SFTY - " and end-of-service-life items with "AGED - " when it fits.`;
+
+/* What the model is writing about, per inspection type. */
+const INSPECTION_DOMAINS = {
+  home: {
+    name: 'home',
+    voice: 'This is a residential home inspection report, written to the state Standards of Practice. '
+      + 'Recommend qualified trades — a licensed plumber, electrician, HVAC contractor, roofer, '
+      + 'structural engineer. Refer to the client contingency period where a defect needs resolving '
+      + 'before closing.',
+    rec: 'Contact a qualified plumbing contractor.',
+  },
+  vehicle: {
+    name: 'used vehicle',
+    voice: 'This is a pre-purchase vehicle inspection report written by a technician for a buyer. '
+      + 'Recommend a qualified mechanic or the relevant specialist — transmission, brake, tire, '
+      + 'exhaust, body shop, or a franchise dealer where the work is make-specific. Where a fault '
+      + 'affects whether the vehicle should be bought at all, say so plainly.',
+    rec: 'Contact a qualified mechanic.',
+  },
+  gamingpc: {
+    name: 'computer system',
+    voice: 'This is a computer system inspection report — a used build being bought, or QC on a new '
+      + 'one. Write for a buyer who knows what the parts are but not what to look for. Recommend a '
+      + 'qualified technician, an RMA where warranty may apply, a clean OS install, or a firmware '
+      + 'change as appropriate. Be concrete about what the fault costs in performance, stability or '
+      + 'component life.',
+    rec: 'Have a qualified technician address this.',
+  },
+  phone: {
+    name: 'used handset',
+    voice: 'This is a used phone inspection and grading report. Write for a buyer or a trade-in '
+      + 'counter. Be blunt about the checks that decide whether the device is worth anything at all '
+      + '— blacklist, carrier lock, activation lock, finance status — and about what a repair costs '
+      + 'relative to the value of the handset.',
+    rec: 'Quote a repair before agreeing a price.',
+  },
+  restaurant: {
+    name: 'food service establishment',
+    voice: 'This is a food service health inspection report written by a health department '
+      + 'inspector. Use food code language: time and temperature control for safety foods, '
+      + 'ready-to-eat, person in charge, priority and priority foundation items, corrected on site. '
+      + 'Cite the hazard the requirement controls. Recommend correction timeframes rather than '
+      + 'contractors, and note where a follow-up inspection is warranted.',
+    rec: 'Correct immediately; a follow-up inspection will verify.',
+  },
+};
+
+const domainVoice = (id) => INSPECTION_DOMAINS[id] || INSPECTION_DOMAINS.home;
+
+const inspectionSystem = (id) => `${INSPECTION_VOICE_BASE}\n\n${domainVoice(id).voice}`;
 
 app.post('/api/inspection/defect', async (req, res) => {
   if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'no_api_key' });
-  const { section, item, severity, title, observation, property } = req.body || {};
+  const { domain, section, item, severity, title, observation, subject, subjectDetail } = req.body || {};
   if (!title || !observation) return res.status(400).json({ error: 'bad_request' });
+  const voice = domainVoice(domain);
 
   try {
     const message = await client.messages.create({
       model: INSPECTION_MODEL,
       max_tokens: 700,
-      system: INSPECTION_VOICE,
+      system: inspectionSystem(domain),
       messages: [{
         role: 'user',
-        content: `Write one defect comment for an inspection report.\n\n`
+        content: `Write one finding for a ${voice.name} inspection report.\n\n`
           + `Section: ${section}\nItem: ${item}\nSeverity: ${severity}\n`
-          + `Property: ${property?.type || 'single family home'}, built ${property?.yearBuilt || 'unknown'}\n`
+          + `Subject: ${subject || 'not stated'}${subjectDetail ? ` (${subjectDetail})` : ''}\n`
           + `Title the inspector gave it: ${title}\n`
           + `What the inspector saw: ${observation}\n\n`
           + `Reply with JSON only, no markdown fence:\n`
-          + `{ "body": "<3-6 sentences in house style>", "rec": "<one line, e.g. Contact a qualified plumbing contractor.>" }`,
+          + `{ "body": "<3-6 sentences in house style>", "rec": "<one line, e.g. ${voice.rec}>" }`,
       }],
     });
 
@@ -216,7 +267,7 @@ app.post('/api/inspection/defect', async (req, res) => {
     const parsed = parseModelJson(text);
     res.json({
       body: String(parsed.body || '').slice(0, 2000),
-      rec: String(parsed.rec || 'Contact a qualified professional.').slice(0, 200),
+      rec: String(parsed.rec || voice.rec).slice(0, 200),
     });
   } catch (err) {
     const detail = err instanceof Anthropic.APIError ? `api_${err.status}` : err.message;
@@ -234,21 +285,22 @@ app.post('/api/inspection/summarize', async (req, res) => {
     const message = await client.messages.create({
       model: INSPECTION_MODEL,
       max_tokens: 1500,
-      system: INSPECTION_VOICE,
+      system: inspectionSystem(body.domain),
       messages: [{
         role: 'user',
-        content: `Summarize a completed home inspection for the client.\n\n`
-          + `Property: ${JSON.stringify(body.property)}\n`
-          + `Systems: ${JSON.stringify(body.profile)}\n`
+        content: `Summarize a completed ${domainVoice(body.domain).name} inspection for the client.\n\n`
+          + `Report: ${body.docTitle || 'Inspection Report'}\n`
+          + `Subject: ${body.subject || 'not stated'}\n`
+          + `Detail: ${body.subjectDetail || ''}\n`
           + `Finding counts: ${JSON.stringify(body.counts)}\n`
           + `Findings:\n${body.findings.map((f) => `${f.ref} [${f.severity}] ${f.section} - ${f.item}: `
             + `${f.title}${f.location ? ` (${f.location})` : ''}${f.note ? ` | inspector note: ${f.note}` : ''}`).join('\n')}\n\n`
           + `Group what you see into themes rather than restating the list. Reply with JSON only, no `
           + `markdown fence:\n`
-          + `{ "overview": "<2 short paragraphs, separated by a blank line, on the overall condition of `
-          + `the home and the themes running through the findings>",\n`
+          + `{ "overview": "<2 short paragraphs, separated by a blank line, on the overall condition `
+          + `and the themes running through the findings>",\n`
           + `  "priorities": ["<up to 5 items, each starting with the finding reference number>"],\n`
-          + `  "closing": "<1-2 sentences on next steps within the contingency period>" }`,
+          + `  "closing": "<1-2 sentences on what the client should do next>" }`,
       }],
     });
 
