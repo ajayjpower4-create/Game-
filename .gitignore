@@ -1,2 +1,4 @@
 node_modules/
 .env
+beamng/build/
+__pycache__/
