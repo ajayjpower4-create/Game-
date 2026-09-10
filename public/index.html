@@ -70,7 +70,12 @@
             <div class="call-status" id="callStatus">Connecting…</div>
           </div>
         </div>
-        <button class="end-call-btn" id="endCallBtn" title="End call and start over">End Call</button>
+        <div class="call-header-actions">
+          <button class="truths-btn" id="openPanelBtn" title="Established truths">
+            📓<span class="truth-count" id="truthCount">0</span>
+          </button>
+          <button class="end-call-btn" id="endCallBtn" title="End call and start over">End Call</button>
+        </div>
       </header>
 
       <main class="transcript" id="transcript">
@@ -97,6 +102,44 @@
         <p class="command-hint hidden" id="holdHint">Type <b>/Holdtheline</b> to put them on hold</p>
       </footer>
     </section>
+
+    <!-- TRUTHS SIDE PANEL -->
+    <div class="panel-backdrop hidden" id="panelBackdrop"></div>
+    <aside class="truth-panel hidden" id="truthPanel" aria-label="Established truths">
+      <div class="truth-panel-head">
+        <h3>📓 Established truths</h3>
+        <button class="panel-close" id="closePanelBtn" aria-label="Close panel">✕</button>
+      </div>
+      <p class="truth-intro">
+        Whatever you write here is absolute fact. They have to believe it, they can
+        never argue with it — and they can't make up anything that isn't here.
+      </p>
+      <div class="truth-list" id="truthList"></div>
+      <div class="truth-add">
+        <textarea id="truthInput" class="truth-input" rows="2" maxlength="300"
+                  placeholder="e.g. He signed the contract last March"></textarea>
+        <button class="primary-btn small" id="addTruthBtn" disabled>Make it true</button>
+      </div>
+    </aside>
+
+    <!-- RULING POPUP -->
+    <div class="modal-backdrop hidden" id="askModal">
+      <div class="modal">
+        <h3>⚖️ They need a ruling</h3>
+        <p class="modal-sub">They want this to be true. You decide — nothing is real until you say so.</p>
+        <div class="ask-claim" id="askClaim"></div>
+        <div class="ask-actions">
+          <button class="ruling-btn yes" id="askTrueBtn">✓ True</button>
+          <button class="ruling-btn no" id="askFalseBtn">✕ Not true</button>
+        </div>
+        <label class="setup-label" for="askCustomInput">…or say what's actually true instead</label>
+        <textarea id="askCustomInput" class="truth-input" rows="2" maxlength="300"
+                  placeholder="e.g. He never signed anything — there's no paperwork at all"></textarea>
+        <div class="modal-actions">
+          <button class="primary-btn small" id="askCustomBtn" disabled>Rule it</button>
+        </div>
+      </div>
+    </div>
 
     <!-- HOLD MUSIC PICKER -->
     <div class="modal-backdrop hidden" id="musicModal">

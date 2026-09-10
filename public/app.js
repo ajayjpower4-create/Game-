@@ -31,16 +31,38 @@ const customMusicInput = document.getElementById('customMusicInput');
 const confirmMusicBtn = document.getElementById('confirmMusicBtn');
 const cancelMusicBtn = document.getElementById('cancelMusicBtn');
 
+const openPanelBtn = document.getElementById('openPanelBtn');
+const closePanelBtn = document.getElementById('closePanelBtn');
+const truthPanel = document.getElementById('truthPanel');
+const panelBackdrop = document.getElementById('panelBackdrop');
+const truthList = document.getElementById('truthList');
+const truthInput = document.getElementById('truthInput');
+const addTruthBtn = document.getElementById('addTruthBtn');
+const truthCount = document.getElementById('truthCount');
+
+const askModal = document.getElementById('askModal');
+const askClaim = document.getElementById('askClaim');
+const askTrueBtn = document.getElementById('askTrueBtn');
+const askFalseBtn = document.getElementById('askFalseBtn');
+const askCustomInput = document.getElementById('askCustomInput');
+const askCustomBtn = document.getElementById('askCustomBtn');
+
 // ---------- State ----------
 const SAVE_KEY = 'callsim.save.v1';
 
-let state = {
-  scenario: null,          // { mode, callee?, playerRole?, callerWants? }
-  history: [],             // API messages: { role, content }
-  display: [],             // UI log: { kind: 'them'|'you'|'event', text }
-  onHold: false,
-  holdMusic: '',
-};
+function blankState() {
+  return {
+    scenario: null,        // { mode, callee?, playerRole?, callerWants? }
+    history: [],           // API messages: { role, content }
+    display: [],           // UI log: { kind: 'them'|'you'|'event'|'ruling', text }
+    facts: [],             // established truths — the only reality they get
+    pendingAsk: null,      // a claim waiting on the player's ruling
+    onHold: false,
+    holdMusic: '',
+  };
+}
+
+let state = blankState();
 let isStreaming = false;
 
 // Detect iPhone/iPad so the Return key never sends messages there
@@ -70,6 +92,8 @@ function loadCall() {
       scenario: saved.scenario,
       history: saved.history,
       display: Array.isArray(saved.display) ? saved.display : [],
+      facts: Array.isArray(saved.facts) ? saved.facts : [],
+      pendingAsk: typeof saved.pendingAsk === 'string' ? saved.pendingAsk : null,
       onHold: !!saved.onHold,
       holdMusic: saved.holdMusic || '',
     };
@@ -104,17 +128,21 @@ function refreshCallHeader() {
 
 function refreshHoldUI() {
   const answering = state.scenario && state.scenario.mode === 'answering';
-  holdHint.classList.toggle('hidden', !answering || state.onHold);
+  const blocked = state.onHold || !!state.pendingAsk;
+  holdHint.classList.toggle('hidden', !answering || blocked);
   holdBanner.classList.toggle('hidden', !state.onHold);
   holdMusicLabel.textContent = state.holdMusic;
-  input.disabled = state.onHold;
-  input.placeholder = state.onHold ? 'They’re on hold…' : 'Say something…';
+  input.disabled = blocked;
+  if (state.pendingAsk) input.placeholder = 'Waiting on your ruling…';
+  else if (state.onHold) input.placeholder = 'They’re on hold…';
+  else input.placeholder = 'Say something…';
   refreshSendBtn();
   refreshCallHeader();
 }
 
 function refreshSendBtn() {
-  sendBtn.disabled = !input.value.trim() || isStreaming || state.onHold;
+  sendBtn.disabled = !input.value.trim() || isStreaming || state.onHold || !!state.pendingAsk;
+  refreshPanelBusy();
 }
 
 // ---------- Rendering ----------
@@ -132,10 +160,32 @@ function renderLine(text) {
   return escapeHtml(text).replace(/\*([^*\n]+)\*/g, '<em class="action">$1</em>');
 }
 
+// ---------- Ruling requests ----------
+// They can't invent facts, so instead they emit [[ASK: ...]] at the end of a
+// message. The marker is never shown on the call — it becomes a popup.
+const ASK_RE = /\[\[ASK:\s*([\s\S]*?)\]\]/;
+const ASK_OPEN = '[[';
+
+// What the player actually hears: everything before the marker starts. Cutting
+// at the first "[[" also hides a marker that is still mid-stream.
+function spokenPart(text) {
+  const i = text.indexOf(ASK_OPEN);
+  return (i === -1 ? text : text.slice(0, i)).trim();
+}
+
+function extractAsk(text) {
+  const m = text.match(ASK_RE);
+  if (m) return m[1].trim();
+  // Ran out of tokens mid-marker — salvage the claim anyway
+  const i = text.indexOf('[[ASK:');
+  if (i !== -1) return text.slice(i + 6).replace(/\]+$/, '').trim();
+  return null;
+}
+
 function appendBubble(kind, text) {
   const div = document.createElement('div');
-  if (kind === 'event') {
-    div.className = 'event-line';
+  if (kind === 'event' || kind === 'ruling') {
+    div.className = kind === 'ruling' ? 'event-line ruling' : 'event-line';
     div.textContent = text;
   } else {
     div.className = `line ${kind === 'you' ? 'you' : 'them'}`;
@@ -185,7 +235,10 @@ async function requestReply() {
         res = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scenario: state.scenario, messages: state.history }),
+          body: JSON.stringify({
+            scenario: { ...state.scenario, facts: state.facts },
+            messages: state.history,
+          }),
         });
         break;
       } catch (e) {
@@ -214,7 +267,7 @@ async function requestReply() {
           if (parsed.error) throw new Error(parsed.error);
           if (parsed.text) {
             text += parsed.text;
-            bubble.innerHTML = renderLine(text);
+            bubble.innerHTML = renderLine(spokenPart(text));
             bubble.appendChild(cursor);
             scrollToBottom();
           }
@@ -226,13 +279,25 @@ async function requestReply() {
     }
 
     cursor.remove();
-    if (text) {
-      bubble.innerHTML = renderLine(text);
-      state.history.push({ role: 'assistant', content: text });
-      state.display.push({ kind: 'them', text });
-      saveCall();
+    const raw = text.trim();
+    const spoken = spokenPart(raw);
+    const ask = extractAsk(raw);
+
+    if (spoken) {
+      bubble.innerHTML = renderLine(spoken);
+      state.display.push({ kind: 'them', text: spoken });
     } else {
       line.remove();
+    }
+    // The marker stays in history so they remember what they asked
+    if (raw) state.history.push({ role: 'assistant', content: raw });
+
+    if (ask) {
+      state.pendingAsk = ask;
+      saveCall();
+      openAskModal();
+    } else {
+      saveCall();
     }
   } catch (err) {
     cursor.remove();
@@ -268,9 +333,10 @@ function pushEvent(text, { silent = false } = {}) {
 }
 
 async function startCall(scenario) {
-  state = { scenario, history: [], display: [], onHold: false, holdMusic: '' };
+  state = { ...blankState(), scenario };
   showScreen('call');
   messagesEl.innerHTML = '';
+  renderTruths();
   refreshHoldUI();
 
   if (scenario.mode === 'calling') {
@@ -343,6 +409,124 @@ async function takeOffHold() {
   await requestReply();
 }
 
+// ---------- Established truths ----------
+function renderTruths() {
+  truthCount.textContent = state.facts.length;
+  truthList.innerHTML = '';
+
+  if (state.facts.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'truth-empty';
+    empty.textContent = 'Nothing is true yet. Add something below and it becomes fact — or wait for them to ask you for a ruling.';
+    truthList.appendChild(empty);
+    return;
+  }
+
+  state.facts.forEach((fact, i) => {
+    const item = document.createElement('div');
+    item.className = 'truth-item';
+
+    const text = document.createElement('div');
+    text.className = 'truth-text';
+    text.textContent = fact;
+
+    const del = document.createElement('button');
+    del.className = 'truth-del';
+    del.textContent = '✕';
+    del.title = 'Take this back';
+    del.addEventListener('click', () => removeFact(i));
+
+    item.append(text, del);
+    truthList.appendChild(item);
+  });
+}
+
+// Facts live in the system prompt, so they apply from the next reply onward.
+// A history note pins them to this moment in the call as well.
+function addFact(fact, { announce } = { announce: true }) {
+  state.facts.push(fact);
+  renderTruths();
+  if (announce) {
+    logRuling(`New truth: ${fact}`);
+    state.history.push({ role: 'user', content: `[DIRECTOR: From now on this is absolutely true, and always was — ${fact}]` });
+  }
+  saveCall();
+}
+
+function removeFact(i) {
+  const [fact] = state.facts.splice(i, 1);
+  renderTruths();
+  if (fact && state.history.length > 0) {
+    logRuling(`Taken back: ${fact}`);
+    state.history.push({ role: 'user', content: `[DIRECTOR: Strike this from reality — it is not true and never was: ${fact}. Never refer to it again.]` });
+  }
+  saveCall();
+}
+
+function logRuling(text) {
+  state.display.push({ kind: 'ruling', text });
+  appendBubble('ruling', text);
+}
+
+function openPanel() {
+  renderTruths();
+  truthPanel.classList.remove('hidden');
+  panelBackdrop.classList.remove('hidden');
+  refreshPanelBusy();
+}
+
+function closePanel() {
+  truthPanel.classList.add('hidden');
+  panelBackdrop.classList.add('hidden');
+}
+
+function refreshPanelBusy() {
+  truthPanel.classList.toggle('busy', isStreaming);
+  addTruthBtn.disabled = !truthInput.value.trim() || isStreaming;
+}
+
+// ---------- Ruling popup ----------
+function openAskModal() {
+  askClaim.textContent = state.pendingAsk;
+  askCustomInput.value = '';
+  askCustomBtn.disabled = true;
+  askModal.classList.remove('hidden');
+  refreshHoldUI();
+}
+
+function closeAskModal() {
+  askModal.classList.add('hidden');
+}
+
+async function applyRuling(kind, customText) {
+  const claim = state.pendingAsk;
+  if (!claim) return;
+  state.pendingAsk = null;
+  closeAskModal();
+
+  let fact, note, label;
+  if (kind === 'true') {
+    fact = claim;
+    note = `[DIRECTOR RULING — this is TRUE, permanently and always was: ${claim}]`;
+    label = `Ruled true: ${claim}`;
+  } else if (kind === 'false') {
+    fact = `It is NOT true that: ${claim}`;
+    note = `[DIRECTOR RULING — this is FALSE. It is not real and never happened: ${claim}. Drop it and never bring it up again.]`;
+    label = `Ruled false: ${claim}`;
+  } else {
+    fact = customText;
+    note = `[DIRECTOR RULING — what you asked about is not how it is. This is what is actually true, permanently: ${customText}]`;
+    label = `Ruled: ${customText}`;
+  }
+
+  addFact(fact, { announce: false });
+  logRuling(label);
+  state.history.push({ role: 'user', content: note });
+  saveCall();
+  refreshHoldUI();
+  await requestReply();
+}
+
 // ---------- Setup wiring ----------
 chooseCalling.addEventListener('click', () => { showScreen('calling'); calleeInput.focus(); });
 chooseAnswering.addEventListener('click', () => { showScreen('answering'); wantsInput.focus(); });
@@ -374,7 +558,10 @@ startAnsweringBtn.addEventListener('click', () => {
 endCallBtn.addEventListener('click', () => {
   if (!confirm('End this call? The saved call will be deleted.')) return;
   clearSave();
-  state = { scenario: null, history: [], display: [], onHold: false, holdMusic: '' };
+  state = blankState();
+  closePanel();
+  closeAskModal();
+  renderTruths();
   messagesEl.innerHTML = '';
   calleeInput.value = '';
   wantsInput.value = '';
@@ -425,6 +612,32 @@ musicModal.addEventListener('click', (e) => {
   if (e.target === musicModal) closeMusicModal();
 });
 
+// ---------- Truths panel wiring ----------
+openPanelBtn.addEventListener('click', openPanel);
+closePanelBtn.addEventListener('click', closePanel);
+panelBackdrop.addEventListener('click', closePanel);
+
+truthInput.addEventListener('input', refreshPanelBusy);
+addTruthBtn.addEventListener('click', () => {
+  const fact = truthInput.value.trim();
+  if (!fact || isStreaming) return;
+  truthInput.value = '';
+  addFact(fact);
+  refreshPanelBusy();
+});
+
+// ---------- Ruling wiring ----------
+// No dismiss: they're waiting on a ruling, and every option settles it.
+askTrueBtn.addEventListener('click', () => applyRuling('true'));
+askFalseBtn.addEventListener('click', () => applyRuling('false'));
+askCustomInput.addEventListener('input', () => {
+  askCustomBtn.disabled = !askCustomInput.value.trim();
+});
+askCustomBtn.addEventListener('click', () => {
+  const custom = askCustomInput.value.trim();
+  if (custom) applyRuling('custom', custom);
+});
+
 // Keep the server awake while the game is open: free-tier hosts spin down
 // after ~15 idle minutes and the next request fails with "Load failed".
 setInterval(() => {
@@ -443,7 +656,11 @@ document.addEventListener('visibilitychange', () => {
 if (loadCall()) {
   showScreen('call');
   renderFullTranscript();
+  renderTruths();
   refreshHoldUI();
+  // A ruling they were waiting on survives a reload
+  if (state.pendingAsk) openAskModal();
 } else {
+  renderTruths();
   showScreen('side');
 }

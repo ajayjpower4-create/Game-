@@ -14,6 +14,7 @@
   --hold: #ffd60a;
   --you-bubble: #0a84ff;
   --them-bubble: #26303f;
+  --truth: #ff9f0a;
   --radius: 18px;
 }
 
@@ -235,6 +236,41 @@ body {
 }
 
 .call-status.status-hold { color: var(--hold); }
+
+.call-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.truths-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color .12s ease;
+}
+
+.truths-btn:hover { border-color: var(--truth); }
+
+.truth-count {
+  background: var(--truth);
+  color: #14100a;
+  border-radius: 999px;
+  min-width: 18px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
 
 .end-call-btn {
   background: var(--danger);
@@ -494,4 +530,178 @@ body {
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
+}
+
+/* ---------- Ruling popup ---------- */
+.ask-claim {
+  background: rgba(255, 159, 10, .12);
+  border: 1px solid rgba(255, 159, 10, .4);
+  border-left: 4px solid var(--truth);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.ask-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ruling-btn {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--surface-2);
+  transition: filter .12s ease;
+}
+
+.ruling-btn:hover { filter: brightness(1.15); }
+.ruling-btn.yes { background: var(--accent); color: #04140a; border-color: transparent; }
+.ruling-btn.no { background: var(--danger); color: #fff; border-color: transparent; }
+
+/* ---------- Truths side panel ---------- */
+.panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .55);
+  z-index: 60;
+}
+
+.truth-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 90vw);
+  background: var(--bg-soft);
+  border-left: 1px solid var(--border);
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top)) 16px
+           calc(16px + env(safe-area-inset-bottom));
+  gap: 12px;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, .5);
+}
+
+.truth-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.truth-panel-head h3 { font-size: 18px; }
+
+.panel-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.panel-close:hover { color: var(--text); }
+
+.truth-intro {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+.truth-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.truth-empty {
+  color: var(--text-dim);
+  font-size: 14px;
+  font-style: italic;
+  text-align: center;
+  padding: 24px 8px;
+  line-height: 1.5;
+}
+
+.truth-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--truth);
+  border-radius: 12px;
+  padding: 11px 13px;
+}
+
+.truth-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.45;
+  word-wrap: break-word;
+  min-width: 0;
+}
+
+.truth-del {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  flex-shrink: 0;
+}
+
+.truth-del:hover { color: var(--danger); }
+
+.truth-add {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.truth-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+  transition: border-color .12s ease;
+}
+
+.truth-input:focus { border-color: var(--truth); }
+.truth-input::placeholder { color: #5c6b82; }
+
+/* Mid-reply the history is in flux, so freeze edits until they finish talking */
+.truth-panel.busy .truth-del,
+.truth-panel.busy .truth-add {
+  opacity: .4;
+  pointer-events: none;
+}
+
+.event-line.ruling {
+  color: var(--truth);
+  font-style: normal;
+  font-weight: 600;
 }
