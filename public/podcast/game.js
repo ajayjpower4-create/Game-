@@ -8,6 +8,7 @@ const HOST_COLORS = ['#8fe3c0', '#ffd479', '#ff9ec4', '#9fd0ff', '#d6b3ff'];
 const blank = () => ({
   v: 1,
   name: '', show: '', team: TEAMS[24], side: '', lang: 'raw',
+  selfPlayedBy: 'user',
   hosts: [],
   episodes: [],
   screen: 'setup',
@@ -43,6 +44,63 @@ const ep = () => state.episodes[state.episodes.length - 1];
 const hostByName = (name) =>
   state.hosts.find((h) => h.name.toLowerCase() === String(name).toLowerCase());
 const initials = (name) => name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+
+/* ----------------------------------------------------------------- cast */
+
+// Every chair at the desk, the player's own included, and who is currently
+// working it. The player can hold as many chairs as they want, on either side,
+// and can hand their own chair to the desk and go play somebody else.
+function cast() {
+  return [
+    {
+      id: '_me', name: state.name || 'You', color: '#6f7cff', self: true,
+      playedBy: state.selfPlayedBy || 'user',
+      role: state.side === 'fan' ? `${state.team} fan` : `can't stand the ${state.team}`,
+    },
+    ...state.hosts.map((h) => ({
+      id: h.name, name: h.name, color: h.color, self: false,
+      playedBy: h.playedBy || 'ai', role: stanceLabel(h), persona: h.persona,
+    })),
+  ];
+}
+
+const castById = (id) => cast().find((c) => c.id === id);
+const userCast = () => cast().filter((c) => c.playedBy === 'user');
+const aiCast = () => cast().filter((c) => c.playedBy === 'ai');
+const spokenByUser = (m) => (m.who === '_me' ? m.byUser !== false : m.byUser === true);
+
+// Everything the model needs to know about who holds which mic.
+function castBrief() {
+  const named = (list) => list.map((c) => (c.self ? `${c.name} (the guest chair)` : c.name)).join(', ') || 'nobody';
+  return `You play: ${named(aiCast())}. The human plays: ${named(userCast())}.`;
+}
+
+function setPlayer(id, playedBy) {
+  const seat = castById(id);
+  if (!seat || seat.playedBy === playedBy) return false;
+  if (playedBy === 'ai' && userCast().length <= 1) return 'last';
+
+  if (id === '_me') state.selfPlayedBy = playedBy;
+  else {
+    const host = hostByName(id);
+    if (host) host.playedBy = playedBy;
+  }
+
+  const who = seat.self ? `${seat.name}, the guest chair` : seat.name;
+  const feedText = playedBy === 'user'
+    ? `You took over ${seat.name}. The desk stops playing ${seat.self ? 'them' : seat.name}.`
+    : `You handed ${seat.name} back to the desk.`;
+  const control = playedBy === 'user'
+    ? `${who} is played by the human from this line on. Stop writing lines for `
+      + `${seat.name} immediately — never write "${seat.name}:" again unless the producer says `
+      + `otherwise. ${castBrief()}`
+    : `${who} is yours to play again from this line on. Write ${seat.name}'s lines yourself now, `
+      + `in character. ${castBrief()}`;
+
+  ep().messages.push({ who: '_sys', text: feedText, control });
+  save();
+  return true;
+}
 
 /* -------------------------------------------------------------- screens */
 
@@ -105,6 +163,7 @@ function rollHosts() {
     ...h,
     color: HOST_COLORS[i % HOST_COLORS.length],
     stance: i === ally ? 'with' : 'against',
+    playedBy: 'ai',
   }));
   save();
 }
@@ -113,6 +172,8 @@ function rollHosts() {
 // straighten out anything that doesn't match.
 function normalizeHosts() {
   if (!state.hosts.length) return;
+  for (const h of state.hosts) if (h.playedBy !== 'user') h.playedBy = 'ai';
+  if (state.selfPlayedBy !== 'ai') state.selfPlayedBy = 'user';
   let ally = state.hosts.findIndex((h) => h.stance === 'with');
   if (ally < 0) ally = 0;
   let changed = false;
@@ -246,18 +307,20 @@ function renderFeed() {
 }
 
 function lineNode(m) {
-  if (m.who === '_note') {
-    const note = el('div', 'note-line');
+  if (m.who === '_note' || m.who === '_sys') {
+    const note = el('div', `note-line${m.who === '_sys' ? ' sys' : ''}`);
     note.append(el('span', null, m.text));
     return note;
   }
-  const mine = m.who === '_me';
+  const seat = castById(m.who);
+  const mine = spokenByUser(m);
   const row = el('div', `line ${mine ? 'me' : ''}`);
-  const who = mine ? state.name : m.who;
+  const who = seat?.name || (m.who === '_me' ? state.name : m.who);
   const av = el('div', 'av', initials(who || '??'));
-  av.style.background = mine ? '#6f7cff' : (hostByName(m.who)?.color || '#9fb0c9');
+  av.style.background = seat?.color || '#9fb0c9';
   const body = el('div', 'body');
-  body.append(el('div', 'who', who));
+  // When the player is working somebody else's mic, say so on the line.
+  body.append(el('div', 'who', mine && m.who !== '_me' ? `${who} — you` : who));
   const bubble = el('div', 'bubble');
   if (m.cite) bubble.append(el('span', 'cite', m.cite));
   bubble.append(document.createTextNode(m.text));
@@ -276,11 +339,34 @@ say.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !coarse) { e.preventDefault(); $('#composer').requestSubmit(); }
 });
 
+function renderSpeaker() {
+  const seats = userCast();
+  const picker = $('#in-as');
+  const wrap = $('#speaker-wrap');
+  wrap.hidden = seats.length < 2;
+  const keep = picker.value;
+  picker.replaceChildren();
+  for (const seat of seats) {
+    picker.append(new Option(seat.self ? `${seat.name} (you)` : seat.name, seat.id));
+  }
+  picker.value = seats.some((c) => c.id === keep) ? keep : (seats[0]?.id || '');
+  const live = seats.length > 0;
+  $('#btn-send').disabled = !live || streaming;
+  say.disabled = !live;
+  say.placeholder = live
+    ? (seats.length > 1 ? `Say it as ${castById(picker.value)?.name}…` : 'Say it into the mic…')
+    : 'You gave up every chair — take one back in the menu.';
+}
+
+$('#in-as').addEventListener('change', renderSpeaker);
+
 $('#composer').addEventListener('submit', (e) => {
   e.preventDefault();
   const text = say.value.trim();
   if ((!text && !pendingCite) || streaming) return;
-  const msg = { who: '_me', text };
+  const speaker = $('#in-as').value || userCast()[0]?.id;
+  if (!speaker) return;
+  const msg = { who: speaker, text, byUser: true };
   if (pendingCite) msg.cite = pendingCite;
   ep().messages.push(msg);
   pendingCite = '';
@@ -289,28 +375,34 @@ $('#composer').addEventListener('submit', (e) => {
   autosize();
   save();
   renderFeed();
-  runTurn();
+  // With every chair in the player's hands there is nobody left for the model
+  // to play, so the line just goes on the tape.
+  if (aiCast().length) runTurn();
 });
 
 /* ------------------------------------------------------------ the turn */
 
-// The model only ever writes host dialogue. Anything that shows up without a
-// "NAME:" prefix gets glued onto whoever spoke last, and stage directions get
-// thrown out — this show is audio only.
+// The model only ever writes dialogue for the chairs it still holds. Anything
+// without a "NAME:" prefix gets glued onto whoever spoke last, stage directions
+// are thrown out, and a line for a chair the player took over is dropped on the
+// floor — the producer note already told it to stop.
 function parseHostLines(raw) {
-  const names = state.hosts.map((h) => h.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const seats = cast();
+  const names = seats.map((c) => c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).filter(Boolean).join('|');
   const re = new RegExp(`(?:^|\\n)\\s*(${names})\\s*:\\s*`, 'gi');
+  const seatFor = (name) => seats.find((c) => c.name.toLowerCase() === String(name).toLowerCase());
   const out = [];
   let match, last = null, cursor = 0;
   while ((match = re.exec(raw)) !== null) {
-    if (last) out.push({ who: last, text: raw.slice(cursor, match.index) });
-    last = hostByName(match[1])?.name || match[1];
+    if (last) out.push({ seat: last, text: raw.slice(cursor, match.index) });
+    last = seatFor(match[1]);
     cursor = re.lastIndex;
   }
-  if (last) out.push({ who: last, text: raw.slice(cursor) });
-  else if (raw.trim()) out.push({ who: state.hosts[0].name, text: raw });
+  if (last) out.push({ seat: last, text: raw.slice(cursor) });
+  else if (raw.trim()) out.push({ seat: aiCast()[0], text: raw });
   return out
-    .map((m) => ({ who: m.who, text: cleanLine(m.text) }))
+    .filter((m) => m.seat && m.seat.playedBy === 'ai')
+    .map((m) => ({ who: m.seat.id, text: cleanLine(m.text), byUser: false }))
     .filter((m) => m.text);
 }
 
@@ -322,22 +414,27 @@ function cleanLine(text) {
     .trim();
 }
 
-// Host turns collapse into one assistant message so the model sees the show
-// the same way it wrote it.
+// The model sees the show the way it wrote it: its own chairs as assistant
+// turns, everything else — the player's chairs and the producer's off-air notes
+// — as user turns. Same-role turns get merged so the transcript stays clean.
 function apiHistory() {
   const turns = [];
+  const push = (role, content) => {
+    const prev = turns[turns.length - 1];
+    if (prev && prev.role === role) prev.content += `\n${content}`;
+    else turns.push({ role, content });
+  };
+
   for (const m of ep().messages) {
     if (m.who === '_note') continue;
-    if (m.who === '_me') {
-      const said = m.cite ? `[pulls up the stat sheet] "${m.cite}"\n${m.text}` : m.text;
-      turns.push({ role: 'user', content: said });
-    } else {
-      const line = `${m.who}: ${m.text}`;
-      const prev = turns[turns.length - 1];
-      if (prev && prev.role === 'assistant') prev.content += `\n${line}`;
-      else turns.push({ role: 'assistant', content: line });
-    }
+    if (m.who === '_sys') { push('user', `[PRODUCER — off air] ${m.control}`); continue; }
+    const seat = castById(m.who);
+    const name = seat?.name || (m.who === '_me' ? state.name : m.who);
+    const said = m.cite ? `[pulls up the stat sheet] "${m.cite}"\n${m.text}` : m.text;
+    if (spokenByUser(m)) push('user', `${name}: ${said}`);
+    else push('assistant', `${name}: ${said}`);
   }
+
   if (!turns.length || turns[0].role !== 'user') {
     turns.unshift({ role: 'user', content: `${state.name} settles into the guest chair.` });
   }
@@ -357,7 +454,7 @@ function priorEpisodes() {
 
 async function runTurn() {
   streaming = true;
-  $('#btn-send').disabled = true;
+  renderSpeaker();
   const feed = $('#feed');
   const typing = el('div', 'typing', 'the desk is talking…');
   feed.append(typing);
@@ -381,6 +478,7 @@ async function runTurn() {
         setup: {
           user: state.name, show: state.show, team: state.team,
           side: state.side, language: state.lang, hosts: state.hosts,
+          cast: cast().map((c) => ({ name: c.name, playedBy: c.playedBy, self: !!c.self })),
         },
         episode: { n: ep().n, slug: ep().slug, stats: ep().stats, topics: ep().topics },
         prior: priorEpisodes(),
@@ -420,7 +518,7 @@ async function runTurn() {
     typing.remove();
     live.remove();
     streaming = false;
-    $('#btn-send').disabled = false;
+    renderSpeaker();
     renderFeed();
   }
 }
@@ -619,20 +717,60 @@ for (const d of [$('#drawer'), $('#menu')]) {
 
 /* ----------------------------------------------------------------- menu */
 
-$('#btn-menu').addEventListener('click', () => {
+function renderMenu() {
   $('#menu-show').textContent = state.show;
   const body = $('#menu-body');
   body.replaceChildren();
+
+  body.append(el('h4', null, 'Who plays who'));
+  body.append(el('p', 'menu-note', 'Take any chair at the desk, hold as many as you want on '
+    + 'either side, and hand your own chair over if you\'d rather play somebody else. The desk '
+    + 'is told the moment you switch.'));
+
+  for (const seat of cast()) {
+    const row = el('div', 'seat-row');
+    const av = el('div', 'av', initials(seat.name || '??'));
+    av.style.background = seat.color;
+    const info = el('div', 'seat-info');
+    info.append(el('strong', null, seat.self ? `${seat.name} (your chair)` : seat.name));
+    info.append(el('small', null, seat.role || ''));
+    const toggle = el('div', 'seat-toggle');
+    for (const side of ['user', 'ai']) {
+      const btn = el('button', `seg${seat.playedBy === side ? ' on' : ''}`, side === 'user' ? 'You' : 'Desk');
+      btn.type = 'button';
+      btn.addEventListener('click', () => {
+        const done = setPlayer(seat.id, side);
+        if (done === 'last') {
+          $('#menu-warn').textContent = 'Keep at least one chair — you need a mic to talk.';
+          return;
+        }
+        if (!done) return;
+        $('#menu-warn').textContent = '';
+        renderMenu();
+        renderSpeaker();
+        renderFeed();
+      });
+      toggle.append(btn);
+    }
+    row.append(av, info, toggle);
+    body.append(row);
+  }
+  const warn = el('p', 'menu-warn', '');
+  warn.id = 'menu-warn';
+  body.append(warn);
+
   body.append(el('h4', null, 'You'));
   body.append(el('p', null, `${state.name} — ${state.side === 'fan'
     ? `${state.team} fan` : `can't stand the ${state.team}`}`));
-  body.append(el('h4', null, 'The desk'));
-  for (const h of state.hosts) body.append(el('p', null, `${h.name} — ${stanceLabel(h)}`));
   body.append(el('h4', null, 'Episodes'));
   for (const e of state.episodes) {
     body.append(el('div', 'ep-row',
       `Ep ${e.n} — ${e.slug || 'untitled'}${e.ended ? '' : ' (live)'}`));
   }
+}
+
+$('#btn-menu').addEventListener('click', () => {
+  renderMenu();
   openDrawer($('#menu'));
 });
 $('#btn-menu-close').addEventListener('click', () => closeDrawer($('#menu')));
@@ -725,6 +863,7 @@ for (const b of document.querySelectorAll('#pick-side .pick')) b.classList.toggl
 syncSetupButton();
 
 if (state.episodes.length) {
+  renderSpeaker();
   fillStatsScreen();
   const resume = ep().ended && state.screen === 'recap' ? 'recap' : state.screen;
   show(SCREENS.includes(resume) ? resume : 'studio');

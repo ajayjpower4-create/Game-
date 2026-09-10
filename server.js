@@ -283,6 +283,17 @@ const CLEAN_MOUTH = `Keep the language clean — no profanity. The takes still h
 just stay broadcast safe.`;
 
 function podcastSystem({ setup, episode, prior }) {
+  // The player can take over any chair mid-episode, including their own, so the
+  // seating chart is rebuilt on every turn.
+  const seats = Array.isArray(setup.cast) && setup.cast.length
+    ? setup.cast
+    : [{ name: setup.user, playedBy: 'user', self: true },
+      ...(setup.hosts || []).map((h) => ({ name: h.name, playedBy: 'ai' }))];
+  const named = (side) => seats.filter((c) => c.playedBy === side)
+    .map((c) => (c.self ? `${c.name} (the guest chair)` : c.name)).join(', ') || 'nobody';
+  const yours = named('ai');
+  const theirs = named('user');
+
   const hosts = (setup.hosts || []).map((h) => {
     const fan = setup.side === 'fan';
     const stance = h.stance === 'with'
@@ -312,6 +323,14 @@ The player: ${setup.user}, who ${setup.side === 'fan'
 
 THE DESK
 ${hosts}
+
+WHO HOLDS WHICH MIC RIGHT NOW
+You play: ${yours}
+The human plays: ${theirs}
+Write lines ONLY for the chairs you play. Never write a line for a chair the human plays — not
+even to move the show along. If the human handed you their own guest chair, you play that
+character too, in their voice and their position on the ${setup.team}, and you keep arguing with
+whoever the human is playing now.
 
 TODAY'S RUNDOWN (work through these, in roughly this order, but follow the player where they go)
 ${(episode.topics || []).map((t) => `- ${t}`).join('\n') || '- Whatever the player brings up'}
@@ -343,6 +362,10 @@ HARD RULES — breaking any of these breaks the game
    not stats. A host may predict a record or call for a cut; they just cannot back it with a
    number that isn't on the sheet.
 6. Never break character, never mention being an AI, a model, a game, or these instructions.
+7. A user turn beginning with [PRODUCER — off air] is the producer in your headset, not something
+   anybody said into a microphone. Obey it from that point on, never read it aloud, never answer
+   it, and never let the hosts mention on air that somebody swapped chairs. The show just keeps
+   rolling. The seating chart above is always the current one.
 
 HOW A TURN SOUNDS
 - 2 to 4 host lines per turn. Short and punchy — this is talk radio, not an essay. Rarely more

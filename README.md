@@ -58,6 +58,20 @@ picked out of it — QB, run game, pass catchers, O-line, defense, special teams
 injuries, rookies, roster moves. Chips stack as an OR, search narrows whatever the
 chips left, and a chip that would just repeat a section you pasted doesn't show up.
 
+**Switching chairs.** Mid-episode, ☰ opens the seating chart. Every chair — the
+three co-hosts and your own guest chair — flips between **You** and **Desk**. Take a
+co-host and you play them; hold as many as you want, on either side of the argument;
+hand your own chair to the desk and it plays you while you argue from somebody else's
+mic. Once you hold more than one, an **as** picker appears next to the composer to say
+who's talking, and your lines show up labelled ("Deuce — you").
+
+Every switch fires an off-air producer note to the model in the same breath: stop
+writing lines for this character, here's the new seating chart. It stops on the spot,
+and any line it writes for a chair you hold gets dropped before it reaches the feed.
+Nobody mentions the swap on air — the show just keeps rolling. You always keep at
+least one chair, and if you take all four the desk goes quiet and your lines just go
+on the tape.
+
 **Next week.** End the episode and you get show notes: how it went, the takes that
 actually got made, and threads to pick up. Start the next episode, paste the new stat
 sheet, set a new rundown — the hosts remember who said what last time.

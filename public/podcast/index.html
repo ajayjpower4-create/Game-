@@ -136,6 +136,10 @@
   </div>
 
   <form class="composer" id="composer">
+    <label class="speaker" id="speaker-wrap" hidden>
+      <span class="speaker-tag">as</span>
+      <select id="in-as" aria-label="Speaking as"></select>
+    </label>
     <textarea id="in-say" rows="1" placeholder="Say it into the mic…" autocomplete="off"></textarea>
     <button class="send" id="btn-send" type="submit" aria-label="Send">▶</button>
   </form>
