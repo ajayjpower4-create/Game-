@@ -88,34 +88,36 @@ export const THEMES = [
 
 export const THEME_BY_ID = Object.fromEntries(THEMES.map((t) => [t.id, t]));
 
-// Well-known figures you can draft without writing a description.
-// `star` is name recognition (0-100), `axis` is where the public already
-// places them on the same -1..+1 cultural axis. All of this is a game.
+// Well-known figures you can draft without writing a description — for the top
+// of the ticket or as a running mate. `star` is name recognition (0-100),
+// `axis` is where the public already places them on the same -1..+1 cultural
+// axis, and `home` is the state they are publicly associated with, which the
+// game turns into a home-state advantage. All of it is editable in-game.
 export const FAMOUS = [
-  { name: 'Taylor Swift',        role: 'Musician',              star: 95, axis: 0.55 },
-  { name: 'Charlie Kirk',        role: 'Political commentator',  star: 72, axis: -0.80 },
-  { name: 'Dwayne Johnson',      role: 'Actor & former wrestler', star: 88, axis: 0.15 },
-  { name: 'Oprah Winfrey',       role: 'Media mogul',            star: 90, axis: 0.45 },
-  { name: 'Elon Musk',           role: 'Entrepreneur',           star: 86, axis: -0.20 },
-  { name: 'MrBeast',             role: 'YouTuber',               star: 84, axis: 0.05 },
-  { name: 'LeBron James',        role: 'Athlete',                star: 85, axis: 0.40 },
-  { name: 'Joe Rogan',           role: 'Podcaster',              star: 80, axis: -0.25 },
-  { name: 'Beyoncé',             role: 'Musician',               star: 92, axis: 0.50 },
-  { name: 'Michelle Obama',      role: 'Author & former FLOTUS', star: 88, axis: 0.60 },
-  { name: 'Tucker Carlson',      role: 'Commentator',            star: 73, axis: -0.85 },
-  { name: 'Ben Shapiro',         role: 'Commentator',            star: 70, axis: -0.75 },
-  { name: 'Jon Stewart',         role: 'Comedian',               star: 74, axis: 0.50 },
-  { name: 'Tom Hanks',           role: 'Actor',                  star: 79, axis: 0.35 },
-  { name: 'Keanu Reeves',        role: 'Actor',                  star: 78, axis: 0.10 },
-  { name: 'Ryan Reynolds',       role: 'Actor',                  star: 80, axis: 0.20 },
-  { name: 'Snoop Dogg',          role: 'Rapper',                 star: 77, axis: 0.30 },
-  { name: 'Kim Kardashian',      role: 'Media personality',      star: 82, axis: 0.20 },
-  { name: 'Mark Cuban',          role: 'Investor',               star: 71, axis: 0.05 },
-  { name: 'Bill Gates',          role: 'Philanthropist',         star: 70, axis: 0.30 },
-  { name: 'Serena Williams',     role: 'Athlete',                star: 76, axis: 0.35 },
-  { name: 'Arnold Schwarzenegger', role: 'Actor & ex-governor',  star: 81, axis: -0.10 },
-  { name: 'Gordon Ramsay',       role: 'Chef',                   star: 78, axis: -0.05 },
-  { name: 'Simone Biles',        role: 'Gymnast',                star: 74, axis: 0.35 },
+  { name: 'Taylor Swift',        role: 'Musician',              star: 95, axis: 0.55, home: 'PA' },
+  { name: 'Charlie Kirk',        role: 'Political commentator',  star: 72, axis: -0.80, home: 'AZ' },
+  { name: 'Dwayne Johnson',      role: 'Actor & former wrestler', star: 88, axis: 0.15, home: 'FL' },
+  { name: 'Oprah Winfrey',       role: 'Media mogul',            star: 90, axis: 0.45, home: 'IL' },
+  { name: 'Elon Musk',           role: 'Entrepreneur',           star: 86, axis: -0.20, home: 'TX' },
+  { name: 'MrBeast',             role: 'YouTuber',               star: 84, axis: 0.05, home: 'NC' },
+  { name: 'LeBron James',        role: 'Athlete',                star: 85, axis: 0.40, home: 'OH' },
+  { name: 'Joe Rogan',           role: 'Podcaster',              star: 80, axis: -0.25, home: 'TX' },
+  { name: 'Beyoncé',             role: 'Musician',               star: 92, axis: 0.50, home: 'TX' },
+  { name: 'Michelle Obama',      role: 'Author & former FLOTUS', star: 88, axis: 0.60, home: 'IL' },
+  { name: 'Tucker Carlson',      role: 'Commentator',            star: 73, axis: -0.85, home: 'ME' },
+  { name: 'Ben Shapiro',         role: 'Commentator',            star: 70, axis: -0.75, home: 'TN' },
+  { name: 'Jon Stewart',         role: 'Comedian',               star: 74, axis: 0.50, home: 'NJ' },
+  { name: 'Tom Hanks',           role: 'Actor',                  star: 79, axis: 0.35, home: 'CA' },
+  { name: 'Keanu Reeves',        role: 'Actor',                  star: 78, axis: 0.10, home: 'CA' },
+  { name: 'Ryan Reynolds',       role: 'Actor',                  star: 80, axis: 0.20, home: 'NY' },
+  { name: 'Snoop Dogg',          role: 'Rapper',                 star: 77, axis: 0.30, home: 'CA' },
+  { name: 'Kim Kardashian',      role: 'Media personality',      star: 82, axis: 0.20, home: 'CA' },
+  { name: 'Mark Cuban',          role: 'Investor',               star: 71, axis: 0.05, home: 'TX' },
+  { name: 'Bill Gates',          role: 'Philanthropist',         star: 70, axis: 0.30, home: 'WA' },
+  { name: 'Serena Williams',     role: 'Athlete',                star: 76, axis: 0.35, home: 'FL' },
+  { name: 'Arnold Schwarzenegger', role: 'Actor & ex-governor',  star: 81, axis: -0.10, home: 'CA' },
+  { name: 'Gordon Ramsay',       role: 'Chef',                   star: 78, axis: -0.05, home: 'CA' },
+  { name: 'Simone Biles',        role: 'Gymnast',                star: 74, axis: 0.35, home: 'TX' },
 ];
 
 export const PARTY_COLORS = [

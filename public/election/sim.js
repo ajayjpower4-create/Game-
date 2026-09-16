@@ -69,12 +69,66 @@ export function candidateRatings(cand) {
 // Where the candidate ends up once their rally message is taken into account:
 // themes drag their public image toward whatever they keep talking about.
 export function effectiveAxis(cand) {
-  const base = candidateRatings(cand).axis;
+  const base = ticketRatings(cand).axis;
   const themes = (cand.themes || []).map((id) => THEME_BY_ID[id]).filter(Boolean);
   if (!themes.length) return base;
   const themeAxis = themes.reduce((n, t) => n + t.axis, 0) / themes.length;
   return clamp(base * 0.55 + themeAxis * 0.45, -1, 1);
 }
+
+/* --------------------------------------------------------------- the ticket */
+
+// A running mate is rated exactly the way the top of the ticket is.
+function vpAsCandidate(cand) {
+  const vp = cand.vp || {};
+  return {
+    name: vp.name || '',
+    party: cand.party,
+    famous: vp.kind ? vp.kind === 'famous' : !!vp.famous,
+    star: vp.star,
+    axis: vp.axis,
+    description: vp.description,
+  };
+}
+
+export function hasRunningMate(cand) {
+  return Boolean(cand.vp && (cand.vp.name || '').trim());
+}
+
+// Where the whole ticket sits. The running mate pulls it and, if they reach
+// across the axis, widens the coalition the ticket can win from.
+export function ticketRatings(cand) {
+  const top = candidateRatings(cand);
+  if (!hasRunningMate(cand)) {
+    return { star: top.star, axis: top.axis, top, vp: null, balance: 0, balanceBonus: 0 };
+  }
+  const vp = candidateRatings(vpAsCandidate(cand));
+  const balance = clamp(Math.abs(top.axis - vp.axis), 0, 1.4);
+  return {
+    star: clamp(top.star * 0.85 + vp.star * 0.15, 0, 1),
+    axis: clamp(top.axis * 0.78 + vp.axis * 0.22, -1, 1),
+    top,
+    vp,
+    balance,
+    // Peaks on a genuinely complementary pick: a clone of yourself adds
+    // nothing, and a wildly mismatched pair just reads as incoherent.
+    balanceBonus: 0.09 * Math.sin((balance / 1.4) * Math.PI),
+  };
+}
+
+// Home-state advantage — the top of the ticket is worth more of it than the
+// running mate, and the running mate's region warms a little too.
+function homeBonus(cand, st) {
+  let bonus = 0;
+  if (cand.homeState === st.code) bonus += 0.10;
+  const vpHome = cand.vp && cand.vp.homeState;
+  if (vpHome && hasRunningMate(cand)) {
+    if (vpHome === st.code) bonus += 0.06;
+    else if (STATE_BY_CODE[vpHome]?.region === st.region) bonus += 0.02;
+  }
+  return bonus;
+}
+
 
 // How much a message lands: length, specificity and theme reach all help.
 export function messageStrength(cand) {
@@ -91,7 +145,10 @@ export function messageStrength(cand) {
 /* ------------------------------------------------------------ rally effects */
 
 // Rallies help most where they happen, spill over into the region, and matter
-// more the closer they land to election day.
+// more the closer they land to election day. A running mate on the stump draws
+// a smaller crowd than the top of the ticket, but covers ground the top can't.
+const VP_RALLY_WEIGHT = 0.62;
+
 function rallyMap(cand, game) {
   const start = game.campaignStart;
   const end = game.electionDate;
@@ -99,20 +156,23 @@ function rallyMap(cand, game) {
   const local = {};
   const regional = {};
   let national = 0;
+  const bySpeaker = { top: 0, vp: 0 };
 
   for (const rally of cand.rallies || []) {
     const st = STATE_BY_CODE[rally.state];
     if (!st) continue;
+    const speaker = rally.who === 'vp' && hasRunningMate(cand) ? 'vp' : 'top';
     const progress = clamp(daysBetween(start, rally.date) / span, 0, 1);
     const recency = 0.65 + progress * 0.7; // late rallies hit harder
     const crowdPull = rally.note && rally.note.trim().length > 12 ? 1.12 : 1;
-    const weight = recency * crowdPull;
+    const weight = recency * crowdPull * (speaker === 'vp' ? VP_RALLY_WEIGHT : 1);
+    bySpeaker[speaker] += 1;
     local[st.code] = (local[st.code] || 0) + weight;
     regional[st.region] = (regional[st.region] || 0) + weight;
     national += weight;
   }
 
-  return { local, regional, national };
+  return { local, regional, national, bySpeaker };
 }
 
 /* ---------------------------------------------------------------- scoring */
@@ -124,8 +184,8 @@ export function scoreCampaign(game) {
   const b = game.candidates.b;
   const axisA = effectiveAxis(a);
   const axisB = effectiveAxis(b);
-  const starA = candidateRatings(a).star;
-  const starB = candidateRatings(b).star;
+  const ticketA = ticketRatings(a);
+  const ticketB = ticketRatings(b);
   const msgA = messageStrength(a);
   const msgB = messageStrength(b);
   const rA = rallyMap(a, game);
@@ -136,7 +196,7 @@ export function scoreCampaign(game) {
 
   const diffs = {};
   for (const st of STATES) {
-    // Alignment: how close each candidate sits to the state's culture.
+    // Alignment: how close each ticket sits to the state's culture.
     const alignA = 1 - Math.abs(axisA - st.lean) / 2;
     const alignB = 1 - Math.abs(axisB - st.lean) / 2;
 
@@ -147,20 +207,30 @@ export function scoreCampaign(game) {
       + Math.sqrt(rB.regional[st.region] || 0) * 0.022
       + Math.sqrt(rB.national) * 0.012;
 
-    const scoreA = alignA * 1.45 + starA * 0.5 + msgA * 0.35 + groundA;
-    const scoreB = alignB * 1.45 + starB * 0.5 + msgB * 0.35 + groundB;
+    const scoreA = alignA * 1.45 + ticketA.star * 0.5 + msgA * 0.35
+      + groundA + ticketA.balanceBonus + homeBonus(a, st);
+    const scoreB = alignB * 1.45 + ticketB.star * 0.5 + msgB * 0.35
+      + groundB + ticketB.balanceBonus + homeBonus(b, st);
 
     // A fixed quirk per state, so two similar candidates still get a textured map.
     const localNoise = (mulberry32(hash32(`${game.id}|${st.code}`))() - 0.5) * 0.30;
     diffs[st.code] = scoreA - scoreB + nationalSwing + localNoise;
   }
 
+  const side = (cand, ticket, rallies) => ({
+    axis: effectiveAxis(cand),
+    star: ticket.star,
+    message: messageStrength(cand),
+    rallies: (cand.rallies || []).length,
+    ground: rallies,
+    ticket,
+    homeState: cand.homeState || null,
+    vpHomeState: (hasRunningMate(cand) && cand.vp.homeState) || null,
+  });
+
   return {
     diffs,
-    profile: {
-      a: { axis: axisA, star: starA, message: msgA, rallies: (a.rallies || []).length, ground: rA },
-      b: { axis: axisB, star: starB, message: msgB, rallies: (b.rallies || []).length, ground: rB },
-    },
+    profile: { a: side(a, ticketA, rA), b: side(b, ticketB, rB) },
     nationalSwing,
   };
 }
@@ -293,6 +363,12 @@ export function applyAiResult(game, ai) {
 
 /* ---------------------------------------------------------------- narrative */
 
+// "Ohio", "Ohio and Michigan", "Ohio, Michigan and Iowa"
+function listOf(items) {
+  if (items.length < 2) return items[0] || '';
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
 export function localNarrative(game, result, profile) {
   const a = game.candidates.a;
   const b = game.candidates.b;
@@ -301,46 +377,67 @@ export function localNarrative(game, result, profile) {
   const evWin = result.winner === 'tie' ? 269 : result.ev[result.winner];
   const gap = Math.abs(result.popular.a - result.popular.b);
 
+  const ticketOf = (c) => (hasRunningMate(c) ? `${c.name} and ${c.vp.name}` : c.name);
+
   const headline = result.winner === 'tie'
     ? `Deadlock: ${a.name} and ${b.name} split the Electoral College 269–269`
-    : `${win.name} wins the presidency with ${evWin} electoral votes`;
+    : hasRunningMate(win)
+      ? `${win.name} and ${win.vp.name} win with ${evWin} electoral votes`
+      : `${win.name} wins the presidency with ${evWin} electoral votes`;
 
   const summary = result.winner === 'tie'
     ? `After three months of rallies, neither ${a.name} nor ${b.name} could clear ${EV_TO_WIN}. The election goes to the House.`
-    : `${win.name} beat ${lose.name} ${result.ev[result.winner]}–${result.ev[result.winner === 'a' ? 'b' : 'a']} in the Electoral College`
+    : `${ticketOf(win)} beat ${ticketOf(lose)} ${result.ev[result.winner]}–${result.ev[result.winner === 'a' ? 'b' : 'a']} in the Electoral College`
       + `${result.splitDecision
         ? `, despite losing the popular vote by ${gap.toLocaleString('en-US')} ballots`
         : ` and by ${gap.toLocaleString('en-US')} votes nationally`}. `
       + `The campaign turned on ${result.closest.slice(0, 2).map((s) => s.name).join(' and ')}, `
       + `where the margin came in under ${Math.max(0.1, result.closest[1]?.marginPct || 1).toFixed(1)}%.`;
 
+  const homes = homeStateReport(game, result);
   const moments = [];
   const allRallies = [
-    ...(a.rallies || []).map((r) => ({ ...r, who: 'a' })),
-    ...(b.rallies || []).map((r) => ({ ...r, who: 'b' })),
+    ...(a.rallies || []).map((r) => ({ ...r, side: 'a' })),
+    ...(b.rallies || []).map((r) => ({ ...r, side: 'b' })),
   ].sort((x, y) => x.date.localeCompare(y.date));
+
+  const speakerName = (r) => {
+    const c = game.candidates[r.side];
+    return r.who === 'vp' && hasRunningMate(c) ? c.vp.name : c.name;
+  };
 
   if (allRallies[0]) {
     const r = allRallies[0];
     moments.push({
       date: r.date,
-      text: `${game.candidates[r.who].name} opens the campaign in ${STATE_BY_CODE[r.state]?.name || r.state}.`,
+      text: `${speakerName(r)} opens the campaign in ${STATE_BY_CODE[r.state]?.name || r.state}.`,
     });
   }
   const mid = allRallies[Math.floor(allRallies.length / 2)];
   if (mid) {
     moments.push({
       date: mid.date,
-      text: `Midway through, ${game.candidates[mid.who].name} draws a crowd in ${STATE_BY_CODE[mid.state]?.name || mid.state} and the race tightens.`,
+      text: `Midway through, ${speakerName(mid)} draws a crowd in ${STATE_BY_CODE[mid.state]?.name || mid.state} and the race tightens.`,
     });
   }
   const last = allRallies[allRallies.length - 1];
   if (last) {
     moments.push({
       date: last.date,
-      text: `The final rally lands in ${STATE_BY_CODE[last.state]?.name || last.state} — ${game.candidates[last.who].name} closes on "${(game.candidates[last.who].slogan || 'the message').trim()}".`,
+      text: `The final rally lands in ${STATE_BY_CODE[last.state]?.name || last.state} — ${speakerName(last)} closes on "${(game.candidates[last.side].slogan || 'the message').trim()}".`,
     });
   }
+  // Losing your own home state is the humiliation the papers lead with.
+  for (const side of ['a', 'b']) {
+    for (const home of homes[side]) {
+      if (home.won) continue;
+      moments.push({
+        date: game.electionDate,
+        text: `${home.who} loses ${home.name} — their own home state — by ${home.marginPct.toFixed(1)}%.`,
+      });
+    }
+  }
+
   if (result.closest[0]) {
     moments.push({
       date: game.electionDate,
@@ -352,15 +449,66 @@ export function localNarrative(game, result, profile) {
     const c = game.candidates[side];
     const p = profile[side];
     const states = result.margins.filter((m) => m.winner === side);
-    return `${c.name} held ${p.rallies} ${p.rallies === 1 ? 'rally' : 'rallies'} and carried ${states.length} `
-      + `${states.length === 1 ? 'state' : 'states'} for ${result.ev[side]} electoral votes. `
-      + `Name recognition ${Math.round(p.star * 100)}/100, message strength ${Math.round(p.message * 100)}/100.`;
+    const stops = p.ground.bySpeaker;
+    let text = `${ticketOf(c)} held ${p.rallies} ${p.rallies === 1 ? 'rally' : 'rallies'}`;
+    if (hasRunningMate(c) && stops.vp) {
+      text += ` — ${stops.top} with ${c.name} on stage, ${stops.vp} with ${c.vp.name} —`;
+    }
+    text += ` and carried ${states.length} ${states.length === 1 ? 'state' : 'states'} `
+      + `for ${result.ev[side]} electoral votes. `;
+    const mine = homes[side];
+    if (mine.length) {
+      const label = (hm) => hm.name + (hm.role === 'vp' ? ` (${hm.who}'s home state)` : '');
+      const held = mine.filter((hm) => hm.won).map(label);
+      const lost = mine.filter((hm) => !hm.won).map(label);
+      const clauses = [
+        held.length ? `held ${listOf(held)}` : null,
+        lost.length ? `lost ${listOf(lost)}` : null,
+      ].filter(Boolean);
+      text += `They ${clauses.join(' but ')}. `;
+    }
+    text += `Name recognition ${Math.round(p.star * 100)}/100, message strength ${Math.round(p.message * 100)}/100`;
+    if (hasRunningMate(c) && p.ticket.balance > 0.45) {
+      text += `, and the ticket reached across the aisle to pick up moderates`;
+    }
+    return `${text}.`;
   };
 
   return { headline, summary, keyMoments: moments, notes: { a: note('a'), b: note('b') } };
 }
 
 /* --------------------------------------------------- rigged-mode projections */
+
+// Did each ticket hold the states it came from? The recap and the narrative
+// both lead with this, because losing your own home state is a story.
+export function homeStateReport(game, result) {
+  const out = { a: [], b: [] };
+  for (const side of ['a', 'b']) {
+    const cand = game.candidates[side];
+    const entries = [
+      { role: 'top', who: cand.name, code: cand.homeState },
+      hasRunningMate(cand)
+        ? { role: 'vp', who: cand.vp.name, code: cand.vp.homeState }
+        : null,
+    ].filter((e) => e && e.code && STATE_BY_CODE[e.code]);
+
+    const seen = new Set();
+    for (const entry of entries) {
+      if (seen.has(entry.code)) continue; // same home state for both halves
+      seen.add(entry.code);
+      const margin = result.margins.find((m) => m.code === entry.code);
+      if (!margin) continue;
+      out[side].push({
+        ...entry,
+        name: STATE_BY_CODE[entry.code].name,
+        ev: STATE_BY_CODE[entry.code].ev,
+        won: margin.winner === side,
+        marginPct: margin.marginPct,
+      });
+    }
+  }
+  return out;
+}
 
 // What the vote totals "should" look like given the states the player handed
 // out — shown as guidance before they type their own numbers.

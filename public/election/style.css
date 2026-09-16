@@ -199,6 +199,12 @@ input:focus, select:focus, textarea:focus {
 .rally-date { font-size: 12.5px; color: var(--muted); min-width: 100px; }
 .rally-state { font-weight: 600; font-size: 14px; }
 .rally-note { font-size: 13px; color: var(--muted); font-style: italic; width: 100%; }
+.rally-who {
+  font-size: 11px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px;
+}
+.rally-item.is-vp { border-left-style: dashed; }
+.rally-item.is-vp .rally-who { color: var(--text); border-color: var(--accent); }
 .x-btn {
   background: none; border: none; color: var(--muted);
   font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px;
@@ -234,27 +240,88 @@ input:focus, select:focus, textarea:focus {
 /* ---------------------------------------------------------------------- map */
 
 .map { margin: 18px 0; overflow-x: auto; }
-.map-grid {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(52px, 1fr));
-  grid-auto-rows: 52px;
-  gap: 5px; min-width: 700px;
+
+/* Real state outlines. The viewBox does the scaling, and a min-width keeps the
+   labels readable on a phone — you pan the map instead of squinting at it. */
+.us-map { display: block; width: 100%; min-width: 620px; height: auto; }
+
+.state-shape {
+  fill: #1b2549;
+  stroke: #0a0f22;
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+  transition: fill-opacity .2s, filter .15s;
 }
-.state {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: #101a3c; border: 1px solid var(--line); border-radius: 9px;
-  color: var(--muted); font: inherit; padding: 0; cursor: default;
-  transition: .15s;
+.us-map.is-interactive .state-shape { cursor: pointer; }
+.us-map.is-interactive .state-shape:hover,
+.us-map.is-interactive .callout:hover .callout-box {
+  filter: brightness(1.25);
+  stroke: #fff;
+  stroke-width: 1.4;
 }
-button.state { cursor: pointer; }
-button.state:hover { transform: scale(1.07); border-color: #fff; z-index: 2; }
-.state.is-called { background: var(--fill); color: #08122e; border-color: transparent; }
-.state-code { font-size: 13px; font-weight: 700; letter-spacing: .02em; }
-.state-ev { font-size: 10.5px; opacity: .75; }
+.state-shape:focus-visible, .callout:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+.map-labels { pointer-events: none; }
+.state-label {
+  fill: #c9d4ff;
+  font-size: 11px;
+  font-weight: 700;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: rgba(7, 12, 30, .55);
+  stroke-width: 2.4;
+}
+.state-label.is-called { fill: #0a1330; stroke: rgba(255, 255, 255, .35); }
+.state-label .state-ev { font-size: 9px; font-weight: 600; opacity: .8; }
+
+/* Leader-line labels for the states too small to write inside. */
+.us-map.is-interactive .callout { cursor: pointer; }
+.callout-line { stroke: #46568f; stroke-width: 0.9; fill: none; }
+.callout-box { fill: #1b2549; stroke: #46568f; stroke-width: 0.9; }
+.callout-text {
+  fill: #c9d4ff; font-size: 11.5px; font-weight: 700;
+  letter-spacing: .04em; pointer-events: none;
+}
+.callout.is-called .callout-text { fill: #0a1330; }
 
 .map-tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
-.legend { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: 13px; }
+.legend { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: 13px; flex-wrap: wrap; }
 .legend-item { display: inline-flex; align-items: center; gap: 7px; }
+
+/* ------------------------------------------------------------- home states */
+
+.home-hints { margin: 6px 0 18px; }
+.home-hints h4 { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.home-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.home-list li {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: #0d1430; border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 9px; padding: 7px 11px; font-size: 13.5px;
+}
+.home-list li.is-held { border-left-color: var(--ok); }
+.home-list li.is-lost { border-left-color: var(--danger); }
+
+/* ----------------------------------------------------------- running mates */
+
+.vp-block, .vp-recap {
+  margin-top: 16px; padding: 14px;
+  background: rgba(13, 20, 48, .6);
+  border: 1px dashed var(--line); border-radius: 12px;
+}
+.vp-recap { border-style: solid; }
+.vp-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 8px; }
+.vp-head h4 { margin: 0; font-size: 15px; }
+.vp-head .hint { margin: 0; }
+.notes-fold { margin: -4px 0 14px; }
+.notes-fold summary { font-size: 12.5px; }
+.notes-fold textarea { margin-top: 8px; }
+
+.vp-badge {
+  background: var(--accent); color: #07102b;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .08em;
+  padding: 2px 7px; border-radius: 5px;
+}
 
 /* ------------------------------------------------------------------- ev bar */
 
@@ -319,6 +386,7 @@ summary:hover { color: var(--text); }
 .winner-banner.tie { --accent: #8b93b8; }
 .winner-kicker { text-transform: uppercase; letter-spacing: .18em; font-size: 12px; color: var(--muted); margin: 0; }
 .winner-banner h2 { font-size: 42px; letter-spacing: -.02em; margin: 6px 0; }
+.winner-vp { color: var(--text); margin: 0 0 6px; font-size: 16px; opacity: .9; }
 .winner-sub { color: var(--muted); margin: 0; }
 .engine-badge { text-align: center; color: var(--muted); font-size: 13px; }
 
@@ -390,6 +458,7 @@ summary:hover { color: var(--text); }
   .brand-sub { display: none; }
   main, .steps { padding-left: 14px; padding-right: 14px; }
   .hero h2 { font-size: 32px; }
+  .us-map { min-width: 560px; }
   .rally-form { grid-template-columns: 1fr; }
   .screen-nav { flex-direction: column-reverse; }
   .screen-nav button { width: 100%; }
