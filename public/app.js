@@ -10,6 +10,8 @@
 
   const STORAGE_KEY = 'layout-maker:project:v1';
   const CELL = 24; // world pixels per grid cell (before zoom)
+  const FEET_PER_CELL = 2;                          // each grid cell is 2 ft square
+  const SQFT_PER_CELL = FEET_PER_CELL * FEET_PER_CELL; // → 4 sq ft per cell
 
   const LOT_SIZES = [
     // Standard lots
@@ -204,6 +206,21 @@
     }
     return { x: r.x, y: r.y, w: r.w, h: r.h };
   }
+
+  // true floor area of a room (rect = w×h, poly = shoelace), in grid cells²
+  function roomAreaCells(r) {
+    if (r.type === 'poly') {
+      const pts = r.points;
+      let a = 0;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        a += (pts[j].x + pts[i].x) * (pts[j].y - pts[i].y);
+      }
+      return Math.abs(a / 2) / (CELL * CELL);
+    }
+    return (r.w / CELL) * (r.h / CELL);
+  }
+  // area rounded to whole square feet
+  const roomAreaSqft = (r) => Math.round(roomAreaCells(r) * SQFT_PER_CELL);
 
   function pointInRoom(r, wx, wy) {
     if (r.type === 'poly') return pointInPoly(r.points, wx, wy);
@@ -596,6 +613,7 @@
       if (!drag.moved) popUndo();
       else { markDirty(); save(); }
     } else if (drag.type === 'resize') {
+      renderRoomList(); // area changed — keep the list's ft² current
       markDirty(); save();
     }
     if (drag.type !== 'poly-cursor') drag = null;
@@ -879,7 +897,10 @@
       const label = document.createElement('span');
       label.className = 'room-name-label';
       label.textContent = r.name || 'Room';
-      li.appendChild(sw); li.appendChild(label);
+      const area = document.createElement('span');
+      area.className = 'room-area';
+      area.textContent = `${roomAreaSqft(r).toLocaleString()} ft²`;
+      li.appendChild(sw); li.appendChild(label); li.appendChild(area);
       li.addEventListener('click', () => { setTool('select'); selectRoom(r.id); });
       list.appendChild(li);
     });
@@ -895,9 +916,10 @@
     renderSwatches(r.color);
     const b = roomBounds(r);
     const cw = Math.round(b.w / CELL), ch = Math.round(b.h / CELL);
+    const sqft = roomAreaSqft(r).toLocaleString();
     $('room-dims').textContent = r.type === 'poly'
-      ? `Polygon · ${r.points.length} points · ${cw}×${ch} cells`
-      : `${cw} × ${ch} cells`;
+      ? `Polygon · ${r.points.length} points · ${sqft} ft²`
+      : `${cw} × ${ch} cells · ${sqft} ft²`;
   }
 
   function renderSwatches(active) {

@@ -41,6 +41,8 @@ or serve the folder with any static server).
 - Rectangle and polygon room tools
 - Auto-assigned colors + full palette / custom color picker
 - Move, resize, duplicate, delete rooms
+- Each room's floor area (in ft²) shown right in the room list — no clicking
+  needed. Each grid cell is 2 ft square (4 ft² per cell).
 - Multiple floors you can switch between and rename
 - Undo / redo (`Ctrl+Z` / `Ctrl+Y`)
 - Pan (drag empty space or middle-mouse) and zoom (wheel, or the zoom buttons)
