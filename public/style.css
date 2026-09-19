@@ -317,7 +317,104 @@ button, input { font-family: inherit; }
 .panel::-webkit-scrollbar { width: 8px; }
 .panel::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
 
-@media (max-width: 820px) {
-  .panel { width: 220px; }
-  .tools { width: 64px; }
+/* elements that only appear in the mobile layout */
+.mobile-only { display: none; }
+.file-actions-group { display: flex; align-items: center; gap: 10px; }
+.panel-drawer-head { display: none; }
+.panel-backdrop { display: none; }
+
+/* floating "finish shape" button (polygon tool) */
+.poly-finish {
+  position: absolute;
+  bottom: 56px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 11px 20px;
+  border-radius: 24px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  z-index: 6;
+}
+
+/* Tablet: just narrow the rails a little */
+@media (max-width: 900px) and (min-width: 761px) {
+  .panel { width: 224px; }
+  .tools { width: 66px; }
+}
+
+/* ================= MOBILE (phones / narrow) ================= */
+@media (max-width: 760px) {
+  .mobile-only { display: inline-flex; }
+
+  /* --- Top bar: condense to name + menu --- */
+  .topbar { height: 50px; padding: 0 8px; gap: 6px; }
+  .project-name { font-size: 15px; min-width: 0; flex: 1 1 auto; }
+  .lot-badge, .save-status { display: none; }
+  .topbar .file-actions-group { display: none; }        /* relocated into the drawer */
+  #menu-btn { font-size: 18px; }
+
+  /* --- Workspace becomes vertical: canvas on top, tools as a bottom bar --- */
+  .workspace { flex-direction: column; }
+  .canvas-wrap { order: 1; flex: 1 1 auto; min-height: 0; }
+  .tools {
+    order: 2;
+    width: 100%;
+    flex-direction: row;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tool { flex: 0 0 auto; min-width: 60px; padding: 8px 6px; }
+  .tool .ti { font-size: 22px; }
+  .tool-sep { width: 1px; height: auto; margin: 6px 4px; align-self: stretch; }
+
+  /* --- Right panel becomes a bottom-sheet drawer --- */
+  .panel {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    width: auto;
+    max-height: 80vh;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    transform: translateY(110%);
+    transition: transform .26s cubic-bezier(.2,.7,.2,1);
+    z-index: 40;
+    box-shadow: 0 -12px 44px rgba(0,0,0,.55);
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+  .panel.open { transform: translateY(0); }
+  .panel-drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 1;
+    margin: -12px -12px 4px; padding: 12px;
+    background: var(--bg-2);
+    border-radius: 16px 16px 0 0;
+  }
+  .panel-drawer-head h3 { margin: 0; font-size: 15px; }
+  .panel-backdrop {
+    display: block;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 39;
+  }
+  /* file actions, once moved into the drawer, stack full-width */
+  .panel .file-actions-group { display: flex; flex-direction: column; gap: 8px; }
+  .panel .file-actions-group .bar-btn { width: 100%; text-align: center; padding: 12px; }
+
+  /* --- bigger touch targets --- */
+  .mini-btn { padding: 10px 13px; }
+  .floor-item, .room-item { padding: 12px; }
+  .icon-btn { width: 38px; height: 38px; }
+  .swatches { grid-template-columns: repeat(8, 1fr); gap: 7px; }
+  .poly-finish { bottom: 20px; }
 }

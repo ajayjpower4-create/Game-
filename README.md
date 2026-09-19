@@ -47,8 +47,22 @@ or serve the folder with any static server).
 - Autosaves to your browser (`localStorage`) — reload and **Resume**
 - Save / open layouts as `.json` files
 - Export the current floor as a `.png` image
+- **Works on phones and tablets** — see Mobile controls below
 
-## Keyboard shortcuts
+## Mobile controls
+
+The layout adapts to small screens: the tools move to a scrollable bar along the
+bottom, and the Floors / Room / file panel becomes a slide-up sheet you open
+with the **☰** button (top-right).
+
+- **Draw / move** — one finger, just like a mouse.
+- **Zoom** — pinch with two fingers.
+- **Pan** — drag with two fingers (or one finger on empty space in Select mode).
+- **Finish a shape** — tap the floating **✓ Finish shape** button (the polygon
+  tool has no double-click on touch).
+- **Rename / recolor / floors / export** — tap **☰** to open the panel.
+
+## Keyboard shortcuts (desktop)
 
 | Key | Action |
 | --- | --- |

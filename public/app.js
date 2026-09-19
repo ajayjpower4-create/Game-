@@ -64,6 +64,9 @@
   let drag = null;         // active drag descriptor
   let polyPoints = null;   // array of {x,y} while drawing a polygon
   let hoverHandle = null;
+  let pointers = new Map(); // pointerId -> {x,y} (canvas coords) — for multitouch
+  let gesture = null;       // active pinch-zoom / two-finger pan
+  const mqMobile = window.matchMedia('(max-width: 760px)');
 
   // undo/redo — snapshots of floors+activeFloor JSON
   let undoStack = [];
@@ -444,9 +447,16 @@
     cancelPoly();
     document.querySelectorAll('.tool[data-tool]').forEach((el) =>
       el.classList.toggle('active', el.dataset.tool === t));
-    $('poly-hint').hidden = t !== 'poly';
+    updatePolyUI();
     canvas.style.cursor = t === 'select' ? 'default' : 'crosshair';
     draw();
+  }
+
+  // shows the polygon hint, and the floating Finish button once a shape can close
+  function updatePolyUI() {
+    const active = tool === 'poly';
+    $('poly-hint').hidden = !active;
+    $('poly-finish').hidden = !(active && polyPoints && polyPoints.length >= 3);
   }
 
   // =====================================================================
@@ -459,11 +469,20 @@
   }
 
   canvas.addEventListener('pointerdown', (e) => {
-    canvas.setPointerCapture(e.pointerId);
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* pointer may already be gone */ }
     const p = getPos(e);
     const w = toWorld(p.x, p.y);
 
-    // pan with middle mouse or space-less right? use middle button
+    // track pointers for multitouch; a second finger starts a pinch/pan gesture
+    pointers.set(e.pointerId, p);
+    if (pointers.size >= 2) {
+      if (drag) { if (drag.type === 'draw-rect') popUndo(); drag = null; }
+      startGesture();
+      draw();
+      return;
+    }
+
+    // pan with middle mouse
     if (e.button === 1) {
       drag = { type: 'pan', startX: p.x, startY: p.y, offX: view.offX, offY: view.offY };
       return;
@@ -504,6 +523,7 @@
       }
       polyPoints.push({ x: sx, y: sy });
       drag = { type: 'poly-cursor', cur: { x: sx, y: sy } };
+      updatePolyUI();
       draw();
     } else if (tool === 'erase') {
       const hit = roomAt(w.x, w.y);
@@ -512,6 +532,10 @@
   });
 
   canvas.addEventListener('pointermove', (e) => {
+    // keep the tracked position current, and drive the pinch/pan gesture
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, getPos(e));
+    if (gesture) { updateGesture(); return; }
+
     const p = getPos(e);
     const w = toWorld(p.x, p.y);
 
@@ -551,6 +575,14 @@
   });
 
   canvas.addEventListener('pointerup', (e) => {
+    pointers.delete(e.pointerId);
+    if (gesture) {
+      // ended a pinch: drop the gesture and don't resume a stray one-finger drag
+      if (pointers.size < 2) { gesture = null; drag = null; }
+      else startGesture();
+      draw();
+      return;
+    }
     if (!drag) return;
     if (drag.type === 'draw-rect') {
       const x = Math.min(drag.x0, drag.x1), y = Math.min(drag.y0, drag.y1);
@@ -569,6 +601,33 @@
     if (drag.type !== 'poly-cursor') drag = null;
     draw();
   });
+
+  canvas.addEventListener('pointercancel', (e) => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) gesture = null;
+  });
+
+  // ----- pinch-zoom / two-finger pan -----
+  function twoPointerData() {
+    const pts = [...pointers.values()].slice(0, 2);
+    const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+    return {
+      dist: Math.hypot(dx, dy) || 1,
+      mid: { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 },
+    };
+  }
+  function startGesture() {
+    const d = twoPointerData();
+    gesture = { startDist: d.dist, startScale: view.scale, worldAtMid: toWorld(d.mid.x, d.mid.y) };
+  }
+  function updateGesture() {
+    const d = twoPointerData();
+    const ns = clamp(gesture.startScale * (d.dist / gesture.startDist), 0.02, 6);
+    view.scale = ns;
+    view.offX = d.mid.x - gesture.worldAtMid.x * ns;
+    view.offY = d.mid.y - gesture.worldAtMid.y * ns;
+    draw();
+  }
 
   canvas.addEventListener('dblclick', () => { if (tool === 'poly') finishPoly(); });
 
@@ -643,11 +702,13 @@
     addRoom({ type: 'poly', points: polyPoints.slice() });
     polyPoints = null;
     drag = null;
+    updatePolyUI();
     draw();
   }
   function cancelPoly() {
     polyPoints = null;
     if (drag && drag.type === 'poly-cursor') drag = null;
+    updatePolyUI();
     draw();
   }
 
@@ -668,10 +729,14 @@
     selectRoom(room.id);
     setTool('select');
     renderRoomList();
+    renderFloors();
     markDirty(); save();
-    // focus name input for quick naming
-    const ni = $('room-name');
-    if (ni) { ni.focus(); ni.select(); }
+    // focus name input for quick naming (desktop only — on mobile the field
+    // lives in the closed drawer, so auto-focus would pop the keyboard oddly)
+    if (!mqMobile.matches) {
+      const ni = $('room-name');
+      if (ni) { ni.focus(); ni.select(); }
+    }
   }
 
   function deleteRoom(id) {
@@ -680,6 +745,7 @@
     rooms().splice(i, 1);
     if (selectedId === id) selectRoom(null);
     renderRoomList();
+    renderFloors();
     markDirty(); save(); draw();
   }
 
@@ -695,6 +761,7 @@
     rooms().push(copy);
     selectRoom(copy.id);
     renderRoomList();
+    renderFloors();
     markDirty(); save(); draw();
   }
 
@@ -1023,6 +1090,33 @@
   }
 
   // =====================================================================
+  //  MOBILE LAYOUT (drawer + relocating the file actions)
+  // =====================================================================
+
+  function toggleDrawer(open) {
+    $('panel').classList.toggle('open', open);
+    $('panel-backdrop').hidden = !open;
+  }
+
+  // Keep a single copy of the file actions (Export/Save/Open) and move it
+  // between the top bar and the drawer depending on viewport width.
+  function syncMobileLayout() {
+    const fileActions = $('file-actions');
+    if (!fileActions) return;
+    const panel = $('panel');
+    const topbarRight = document.querySelector('.topbar-right');
+    if (mqMobile.matches) {
+      if (fileActions.parentElement !== panel) {
+        const head = panel.querySelector('.panel-drawer-head');
+        panel.insertBefore(fileActions, head ? head.nextSibling : panel.firstChild);
+      }
+    } else if (fileActions.parentElement !== topbarRight) {
+      topbarRight.insertBefore(fileActions, $('menu-btn'));
+      toggleDrawer(false);
+    }
+  }
+
+  // =====================================================================
   //  EVENT WIRING
   // =====================================================================
 
@@ -1068,7 +1162,15 @@
     });
     $('load-saved-btn').addEventListener('click', () => loadSaved());
 
+    // mobile: drawer toggle, poly finish button, and layout syncing
+    $('menu-btn').addEventListener('click', () => toggleDrawer(true));
+    $('panel-close').addEventListener('click', () => toggleDrawer(false));
+    $('panel-backdrop').addEventListener('click', () => toggleDrawer(false));
+    $('poly-finish').addEventListener('click', finishPoly);
+
     window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('resize', syncMobileLayout);
+    syncMobileLayout();
 
     // keyboard shortcuts
     window.addEventListener('keydown', (e) => {

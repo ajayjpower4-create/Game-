@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Layout Maker</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -37,11 +37,14 @@
       </div>
       <div class="topbar-right">
         <span id="save-status" class="save-status">Saved</span>
-        <button id="export-png-btn" class="bar-btn">Export PNG</button>
-        <button id="export-json-btn" class="bar-btn">Save file</button>
-        <label class="bar-btn file-btn">Open file
-          <input id="import-file" type="file" accept="application/json" hidden />
-        </label>
+        <div id="file-actions" class="file-actions-group">
+          <button id="export-png-btn" class="bar-btn">Export PNG</button>
+          <button id="export-json-btn" class="bar-btn">Save file</button>
+          <label class="bar-btn file-btn">Open file
+            <input id="import-file" type="file" accept="application/json" hidden />
+          </label>
+        </div>
+        <button id="menu-btn" class="icon-btn mobile-only" title="Panels" aria-label="Open panels">☰</button>
       </div>
     </header>
 
@@ -64,11 +67,17 @@
       <!-- Canvas -->
       <main class="canvas-wrap" id="canvas-wrap">
         <canvas id="canvas"></canvas>
-        <div id="poly-hint" class="poly-hint" hidden>Click to add points · double-click or Enter to finish · Esc to cancel</div>
+        <div id="poly-hint" class="poly-hint" hidden>Tap to add points · tap the first point, or Finish, to close · Esc cancels</div>
+        <button id="poly-finish" class="poly-finish" hidden>✓ Finish shape</button>
       </main>
 
-      <!-- Right panel: floors + selected room -->
-      <aside class="panel">
+      <!-- Right panel: floors + selected room (slides up as a drawer on mobile) -->
+      <div id="panel-backdrop" class="panel-backdrop" hidden></div>
+      <aside class="panel" id="panel">
+        <div class="panel-drawer-head mobile-only">
+          <h3>Layout</h3>
+          <button id="panel-close" class="icon-btn" aria-label="Close panels">✕</button>
+        </div>
         <div class="panel-block">
           <div class="panel-head">
             <h3>Floors</h3>
