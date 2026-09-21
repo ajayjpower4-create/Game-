@@ -68,6 +68,7 @@ const menu = Menu.buildFromTemplate([
 ]);
 
 app.whenReady().then(() => {
+  require('./tracker.js').setBaseDir(app.getPath('userData'));
   serveUi();
   Menu.setApplicationMenu(menu);
   createWindow();
@@ -310,6 +311,14 @@ async function openMaddenFile(filePath) {
   try {
     const result = await openFranchiseFile(filePath);
     openFranchise = { file: result.file, path: filePath, data: result.data };
+    // Record this read into the tracker's own history before anything else
+    // touches the file.
+    try {
+      const tracked = await trackFranchise(result);
+      result.report.notes.push(`Tracker holds ${tracked.counts.games} games and ${tracked.counts.lines} player game lines.`);
+    } catch (err) {
+      result.report.notes.push(`Tracker could not record this read: ${err.message}`);
+    }
     return {
       madden: true,
       name: path.basename(filePath),
@@ -331,6 +340,27 @@ async function backupFranchise(filePath) {
   await fs.copyFile(filePath, backup);
   return backup;
 }
+
+/**
+ * Read every per-game line out of the save and fold it into the tracker's
+ * history. Madden ages games out of the file; the history does not.
+ */
+async function trackFranchise(result) {
+  const { readGameLines, readTeamGameStats } = require('./madden-file.js');
+  const tracker = require('./tracker.js');
+  const { lines } = await readGameLines(result.file, result.data);
+  const teamGames = await readTeamGameStats(result.file, result.data.teams);
+  const history = await tracker.loadHistory(openFranchise.path);
+  tracker.foldIn(history, { lines, teamGames, week: result.data.week, year: result.data.year });
+  await tracker.saveHistory(openFranchise.path, history);
+  return tracker.readOut(history);
+}
+
+ipcMain.handle('tracker:read', async () => {
+  if (!openFranchise) return { error: 'No franchise file is open.' };
+  const tracker = require('./tracker.js');
+  return tracker.readOut(await tracker.loadHistory(openFranchise.path));
+});
 
 ipcMain.handle('franchise:injuries', async () => {
   const { INJURIES } = require('./madden-file.js');

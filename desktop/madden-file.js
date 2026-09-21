@@ -39,6 +39,18 @@ const GAME_FIELDS = [
   'HomeScore', 'AwayScore', 'GameStatus', 'IsPractice', 'IsSimmed',
 ];
 
+const GAME_STAT_TABLES = {
+  oline: { table: 'GameOLineStats', fields: ['DOWNSPLAYED', 'GAMESSTARTED', 'GAMERATING', 'OLINEPANCAKES', 'OLINESACKSALLOWED', 'SeasonGame', 'OpposingTeam'] },
+  offense: { table: 'GameOffensiveStats', fields: ['DOWNSPLAYED', 'GAMESSTARTED', 'GAMERATING', 'RECEIVECATCHES', 'RECEIVEDROPS', 'RECEIVEYARDS', 'RECEIVETDS', 'RECEIVEYARDSAFTER', 'RUSHATTEMPTS', 'RUSHYARDS', 'RUSHBROKENTACKLES', 'PASSATTEMPTS', 'PASSCOMPLETED', 'PASSSACKED', 'SeasonGame', 'OpposingTeam'] },
+  defense: { table: 'GameDefensiveStats', fields: ['DOWNSPLAYED', 'GAMESSTARTED', 'GAMERATING', 'DEFTACKLES', 'ASSDEFTACKLES', 'DEFTACKLESFORLOSS', 'DLINESACKS', 'DLINEHALFSACK', 'DEFPASSDEFLECTIONS', 'DSECINTS', 'BIGHITS', 'CTHALLOWED', 'SeasonGame', 'OpposingTeam'] },
+};
+
+const TEAM_GAME_FIELDS = [
+  'PENALTIES', 'PENALTYYARDS', 'SACKS', 'SACKSALLOWED', 'OFFYARDS', 'OFFPASSYARDS', 'OFFRUSHYARDS',
+  'PASSATTEMPTS', 'RUSHATTEMPTS', 'THIRDDOWNS', 'THIRDDOWNCONV', 'TACKLESFORLOSS', 'FORCEDFUMBLES',
+  'GIVEAWAYS', 'TAKEAWAYS', 'POSSESSIONTIME', 'FIRSTDOWNS', 'WINS', 'LOSSES',
+];
+
 const STAT_TABLES = {
   oline: { table: 'SeasonOLineStats', fields: ['DOWNSPLAYED', 'GAMESPLAYED', 'GAMESSTARTED', 'GAMERATING', 'OLINEPANCAKES', 'OLINESACKSALLOWED', 'SEAS_YEAR'] },
   offense: { table: 'SeasonOffensiveStats', fields: ['DOWNSPLAYED', 'GAMESPLAYED', 'GAMESSTARTED', 'GAMERATING', 'RECEIVECATCHES', 'RECEIVEDROPS', 'RECEIVEYARDS', 'RECEIVETDS', 'RECEIVEYARDSAFTER', 'RECEIVELONGEST', 'RUSHATTEMPTS', 'RUSHYARDS', 'RUSHTDS', 'RUSHBROKENTACKLES', 'RUSHFUMBLES', 'PASSATTEMPTS', 'PASSCOMPLETED', 'PASSYARDS', 'PASSTDS', 'PASSINTS', 'PASSSACKED', 'SEAS_YEAR'] },
@@ -84,7 +96,7 @@ async function resolveStatRows(file, record, key, cache) {
     const table = file.getTableById(tableId);
     if (!table) return;
     const name = table.name || (table.header && table.header.name) || '';
-    const spec = Object.values(STAT_TABLES).find((s) => s.table === name);
+    const spec = [...Object.values(STAT_TABLES), ...Object.values(GAME_STAT_TABLES)].find((s) => s.table === name);
     if (spec) {
       if (!cache.read.has(name)) { await table.readRecords(spec.fields); cache.read.add(name); }
       const row = table.records[rowNumber];
@@ -409,3 +421,130 @@ async function clearInjury(file, playerRow) {
 module.exports.INJURIES = INJURIES;
 module.exports.writeInjury = writeInjury;
 module.exports.clearInjury = clearInjury;
+
+/* --------------------------------------------------------- per-game reading */
+
+/**
+ * Every game line in the file, player by player. Madden keeps these in
+ * GameOLineStats / GameOffensiveStats / GameDefensiveStats, one row per player
+ * per game, each pointing back at the SeasonGame it belongs to. This is what
+ * the tracker records against; it does not rely on the season totals.
+ */
+async function readGameLines(file, { teams, rosters }) {
+  const cache = { read: new Set() };
+  const playerTable = file.getTableByName('Player');
+  await playerTable.readRecords(PLAYER_FIELDS);
+
+  // Which SeasonGame row a stat line belongs to, so lines can be grouped by game.
+  const gameOf = (row) => {
+    const ref = reference(row, 'SeasonGame');
+    return ref ? ref.rowNumber : null;
+  };
+
+  const lines = [];
+  let resolved = 0;
+  for (const team of teams) {
+    for (const player of rosters[team.id] || []) {
+      const rec = playerTable.records[player.row];
+      if (!rec || rec.isEmpty) continue;
+      let rows;
+      try { rows = await resolveStatRows(file, rec, 'GameStats', cache); }
+      catch { continue; }
+      if (!rows.length) continue;
+      resolved++;
+      for (const { table, row } of rows) {
+        const gameRow = gameOf(row);
+        const line = {
+          playerId: player.id,
+          playerRow: player.row,
+          name: player.name,
+          pos: player.pos,
+          team: team.id,
+          gameRow,
+          snaps: num(val(row, 'DOWNSPLAYED', 0)),
+          started: num(val(row, 'GAMESSTARTED', 0)),
+          grade: num(val(row, 'GAMERATING', 0)),
+        };
+        if (table === 'GameOLineStats') {
+          line.kind = 'blocking';
+          line.pancakes = num(val(row, 'OLINEPANCAKES', 0));
+          line.sacksAllowed = num(val(row, 'OLINESACKSALLOWED', 0));
+        } else if (table === 'GameOffensiveStats') {
+          line.kind = 'offense';
+          line.catches = num(val(row, 'RECEIVECATCHES', 0));
+          line.drops = num(val(row, 'RECEIVEDROPS', 0));
+          line.recYards = num(val(row, 'RECEIVEYARDS', 0));
+          line.recTds = num(val(row, 'RECEIVETDS', 0));
+          line.yac = num(val(row, 'RECEIVEYARDSAFTER', 0));
+          line.rushAtt = num(val(row, 'RUSHATTEMPTS', 0));
+          line.rushYards = num(val(row, 'RUSHYARDS', 0));
+          line.brokenTackles = num(val(row, 'RUSHBROKENTACKLES', 0));
+          line.passAtt = num(val(row, 'PASSATTEMPTS', 0));
+          line.passSacked = num(val(row, 'PASSSACKED', 0));
+        } else if (table === 'GameDefensiveStats') {
+          line.kind = 'defense';
+          line.tackles = num(val(row, 'DEFTACKLES', 0));
+          line.assists = num(val(row, 'ASSDEFTACKLES', 0));
+          line.tfl = num(val(row, 'DEFTACKLESFORLOSS', 0));
+          line.sacks = num(val(row, 'DLINESACKS', 0)) + num(val(row, 'DLINEHALFSACK', 0)) / 2;
+          line.pbu = num(val(row, 'DEFPASSDEFLECTIONS', 0));
+          line.ints = num(val(row, 'DSECINTS', 0));
+          line.bigHits = num(val(row, 'BIGHITS', 0));
+          line.catchesAllowed = num(val(row, 'CTHALLOWED', 0));
+        } else continue;
+        lines.push(line);
+      }
+    }
+  }
+  return { lines, resolved };
+}
+
+/**
+ * Per-game team stats — including the penalty counts Madden only keeps at team
+ * level. TeamGameStatsRegSeason is an array of TeamStats rows, one per game.
+ */
+async function readTeamGameStats(file, teams) {
+  const teamTable = file.getTableByName('Team');
+  await teamTable.readRecords(['TeamGameStatsRegSeason', 'TeamIndex']);
+  const cache = { read: new Set() };
+  const out = {};
+
+  for (const team of teams) {
+    const rec = teamTable.records[team.row];
+    if (!rec || rec.isEmpty) continue;
+    const ref = reference(rec, 'TeamGameStatsRegSeason');
+    if (!ref) continue;
+    const arrayTable = file.getTableById(ref.tableId);
+    if (!arrayTable) continue;
+    try {
+      if (!cache.read.has(`arr:${ref.tableId}`)) { await arrayTable.readRecords(); cache.read.add(`arr:${ref.tableId}`); }
+      const arrayRow = arrayTable.records[ref.rowNumber];
+      if (!arrayRow || !arrayRow.fields) continue;
+      const games = [];
+      for (const field of Object.values(arrayRow.fields)) {
+        if (!field.isReference) continue;
+        const r = field.referenceData;
+        if (!r || !r.tableId) continue;
+        const statTable = file.getTableById(r.tableId);
+        if (!statTable) continue;
+        if (!cache.read.has(`ts:${r.tableId}`)) { await statTable.readRecords(TEAM_GAME_FIELDS); cache.read.add(`ts:${r.tableId}`); }
+        const statRow = statTable.records[r.rowNumber];
+        if (!statRow || statRow.isEmpty) continue;
+        const game = { week: games.length + 1 };
+        let any = false;
+        for (const key of TEAM_GAME_FIELDS) {
+          const v = num(val(statRow, key, 0));
+          game[key] = v;
+          if (v) any = true;
+        }
+        if (any) games.push(game);
+      }
+      if (games.length) out[team.id] = games;
+    } catch { /* this team's per-game stats stay out of the tracker */ }
+  }
+  return out;
+}
+
+module.exports.readGameLines = readGameLines;
+module.exports.readTeamGameStats = readTeamGameStats;
+module.exports.GAME_STAT_TABLES = GAME_STAT_TABLES;

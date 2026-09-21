@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('gcc', {
   injurePlayer: (payload) => ipcRenderer.invoke('franchise:injure', payload),
   healPlayer: (playerRow) => ipcRenderer.invoke('franchise:heal', playerRow),
   reloadFranchise: () => ipcRenderer.invoke('franchise:reload'),
+  trackerRead: () => ipcRenderer.invoke('tracker:read'),
   saveFile: (name, text) => ipcRenderer.invoke('file:save', { name, text }),
   onMenu: (handler) => {
     for (const channel of ['menu:open', 'menu:save', 'menu:injury-script']) {

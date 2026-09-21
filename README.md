@@ -263,6 +263,33 @@ Madden does not record, the app leaves out instead of inventing:
 | **Defense** | `DEFTACKLES`, `ASSDEFTACKLES`, `DEFTACKLESFORLOSS`, `DLINESACKS`, `CTHALLOWED`, `BIGHITS`, `DSECINTS`. Missed tackles and missed sacks are not in the file |
 | **Penalties** | Team totals only (`TeamStats.PENALTIES`, `PENALTYYARDS`). Madden never records which player drew the flag |
 
+## The tracker
+
+The app keeps its own record instead of leaning on Madden's season totals.
+
+Madden writes a line for every player in every game — `GameOLineStats`,
+`GameOffensiveStats`, `GameDefensiveStats`, each pointing back at the game it
+belongs to — plus the team's own line for that game. Every time a save is
+opened, the app reads all of it and folds it into a history file in its own
+data folder, keyed by game and player. Open the same save twice and nothing
+doubles. Madden ages old games out of the save; the tracker keeps them.
+
+From those game lines it works out what Madden never writes down:
+
+| Tracked | How |
+| --- | --- |
+| **Pass reps** | The offense's dropbacks (pass attempts + sacks taken, both real) times his share of the snaps |
+| **Sack rate** | Sacks allowed ÷ pass reps |
+| **Pancake rate** | Pancakes ÷ run reps |
+| **Protection score** | 88 − sack rate × 350 + pancake credit (capped at 10) + (game grade − 70) ÷ 4 |
+| **Thrown at** | Catches + drops — Madden stores both, but not targets |
+| **Missed tackles** | The broken tackles the opposing ball carriers racked up that game — that total is exact — split across the defenders by (tackles × 2 + snaps ÷ 10) |
+| **Penalties per game** | The team's own line, week by week, kept for every week the tracker has seen |
+
+Every table says which columns came out of the file and which the tracker
+worked out, and the formula is printed under the table. Nothing is a guess
+dressed up as a stat.
+
 ## Injuring a player for real
 
 Pick the team, the player and the injury, set the weeks out, and the app writes

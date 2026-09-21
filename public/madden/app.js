@@ -4,6 +4,7 @@
 import { TEAMS, teamLabel, generateFranchise, simulateGame, seasonTotals } from './league.js';
 import { INJURY_TYPES, resolveInjury, scriptInjury, unscriptInjury, applyInjuriesForGame, advanceHealing, exportInjuryScript } from './injury.js';
 import { importFranchise, exportFranchise } from './franchise-file.js';
+import { trackGame, accumulate, bucketLines } from './tracked.js';
 
 const SAVE_KEY = 'gcc.franchise.v1';
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -47,6 +48,8 @@ const state = {
   scanning: false,
   searchNote: null,       // what the last search covered
   maddenInjuries: null,   // the real InjuryType list, when a save is open
+  tracker: null,          // the tracker's own history for this franchise
+  trackerGames: null,     // that history chewed into per-game tracked rows
   extraDirs: [],          // folders the user pointed at by hand
 };
 
@@ -378,6 +381,76 @@ function viewSchedule() {
   ];
 }
 
+// Columns the tracker computes itself. Exact numbers out of the file sit
+// beside them; the header says which is which.
+const TRACKED_COLS = {
+  blocking: [
+    { key: 'games', label: 'G', get: (r) => r.games },
+    { key: 'snaps', label: 'Snaps', get: (r) => r.snaps },
+    { key: 'passReps', label: 'Pass reps', get: (r) => r.passReps, title: 'Tracked: his share of the offense\'s dropbacks' },
+    { key: 'sacksAllowed', label: 'Sacks allowed', get: (r) => r.sacksAllowed, cls: (r) => (r.sacksAllowed >= 5 ? 'bad' : r.sacksAllowed >= 2 ? 'mid' : 'good') },
+    { key: 'sackRate', label: 'Sack rate', get: (r) => r.sackRate, fmt: (r) => `${r.sackRate}%`, cls: (r) => (r.sackRate >= 5 ? 'bad' : r.sackRate >= 2 ? 'mid' : 'good'), title: 'Tracked: sacks allowed ÷ pass reps' },
+    { key: 'pancakes', label: 'Pancakes', get: (r) => r.pancakes },
+    { key: 'pancakeRate', label: 'Pancake rate', get: (r) => r.pancakeRate, fmt: (r) => `${r.pancakeRate}%` },
+    { key: 'score', label: 'Protection score', get: (r) => r.score, cls: (r) => (r.score >= 85 ? 'good' : r.score >= 70 ? 'mid' : 'bad'), title: 'Tracked: 88 − sack rate × 350 + pancake credit + grade nudge' },
+  ],
+  receiving: [
+    { key: 'games', label: 'G', get: (r) => r.games },
+    { key: 'thrownAt', label: 'Thrown at', get: (r) => r.thrownAt, title: 'Tracked: catches + drops' },
+    { key: 'catches', label: 'Catches', get: (r) => r.catches },
+    { key: 'drops', label: 'Drops', get: (r) => r.drops, cls: (r) => (r.drops >= 5 ? 'bad' : r.drops >= 3 ? 'mid' : '') },
+    { key: 'dropRate', label: 'Drop %', get: (r) => r.dropRate, fmt: (r) => `${r.dropRate}%`, cls: (r) => (r.dropRate >= 12 ? 'bad' : r.dropRate >= 7 ? 'mid' : 'good') },
+    { key: 'yards', label: 'Yards', get: (r) => r.yards },
+    { key: 'yac', label: 'YAC', get: (r) => r.yac },
+    { key: 'yardsPerCatch', label: 'Yds/catch', get: (r) => r.yardsPerCatch },
+    { key: 'tds', label: 'TD', get: (r) => r.tds },
+  ],
+  defense: [
+    { key: 'games', label: 'G', get: (r) => r.games },
+    { key: 'snaps', label: 'Snaps', get: (r) => r.snaps },
+    { key: 'combined', label: 'Tackles', get: (r) => r.combined },
+    { key: 'missedTackles', label: 'Missed tackles', get: (r) => r.missedTackles, cls: (r) => (r.missedTackles >= 6 ? 'bad' : r.missedTackles >= 3 ? 'mid' : ''), title: 'Tracked: his share of the broken tackles the defense gave up' },
+    { key: 'missRate', label: 'Miss %', get: (r) => r.missRate, fmt: (r) => `${r.missRate}%`, cls: (r) => (r.missRate >= 20 ? 'bad' : r.missRate >= 12 ? 'mid' : 'good') },
+    { key: 'sacks', label: 'Sacks', get: (r) => r.sacks },
+    { key: 'tfl', label: 'TFL', get: (r) => r.tfl },
+    { key: 'catchesAllowed', label: 'Catches allowed', get: (r) => r.catchesAllowed, cls: (r) => (r.catchesAllowed >= 40 ? 'bad' : '') },
+    { key: 'bigHits', label: 'Big hits', get: (r) => r.bigHits },
+    { key: 'ints', label: 'INT', get: (r) => r.ints },
+  ],
+};
+
+const trackedPlayerCol = {
+  key: 'name', label: 'Player', wide: true, get: (r) => r.name,
+  fmt: (r) => el('span', {}, r.name, el('span', { class: 'pos' }, r.pos)),
+};
+
+/**
+ * A category table built from the tracker's own history rather than from
+ * Madden's season totals. Falls back to the file's numbers when the tracker
+ * has not seen a game yet.
+ */
+function trackedTable(category, fallbackCols) {
+  const games = trackedFor(state.team);
+  if (!games.length) {
+    return el('div', { class: 'card' },
+      el('h3', {}, 'Tracker'),
+      el('p', { class: 'hint' },
+        'The tracker has not recorded a game for this team yet. Play or sim a week, save, and open the file again — '
+        + 'every game it sees is kept from then on, even after Madden drops it from the save.'),
+      table(`real-${category}`, feed(category), [playerCol, ...fallbackCols], { empty: 'Nothing in the save yet either.' }));
+  }
+  const rows = accumulate(games, category);
+  const sample = games[games.length - 1][category][0];
+  return el('div', { class: 'card' },
+    el('div', { class: 'spread' },
+      el('div', {},
+        el('h3', {}, 'Tracked'),
+        el('p', { class: 'hint' }, `${games.length} game${games.length === 1 ? '' : 's'} recorded for this team.`)),
+      el('span', { class: 'pill on' }, `${rows.length} players`)),
+    table(`tracked-${category}`, rows, [trackedPlayerCol, ...TRACKED_COLS[category]], { empty: 'No rows for this category yet.' }),
+    sample && sample.formula ? el('p', { class: 'note', style: 'margin-top:12px' }, `How the tracked columns are worked out — ${sample.formula}.`) : null);
+}
+
 const REAL_COLS = {
   blocking: [
     { key: 'games', label: 'G', get: (r) => r.games },
@@ -466,7 +539,7 @@ function viewRealSchedule() {
 }
 
 function viewBlocking() {
-  if (state.fr.real) return [scopeBar(null), ...realTable('blocking', REAL_COLS.blocking, 'No blocking stats in this save yet — play or sim a week.')];
+  if (state.fr.real) return [scopeBar(null), trackedTable('blocking', REAL_COLS.blocking)];
   const rows = feed('blocking');
   const cols = [
     playerCol,
@@ -519,7 +592,7 @@ function viewSnaps() {
 }
 
 function viewReceiving() {
-  if (state.fr.real) return [scopeBar(null), ...realTable('receiving', REAL_COLS.receiving, 'Nothing recorded in this save yet.')];
+  if (state.fr.real) return [scopeBar(null), trackedTable('receiving', REAL_COLS.receiving)];
   const rows = feed('receiving');
   const cols = [
     playerCol,
@@ -541,7 +614,7 @@ function viewReceiving() {
 }
 
 function viewDefense() {
-  if (state.fr.real) return [scopeBar(null), ...realTable('defense', REAL_COLS.defense, 'Nothing recorded in this save yet.')];
+  if (state.fr.real) return [scopeBar(null), trackedTable('defense', REAL_COLS.defense)];
   const rows = feed('defense');
   const cols = [
     playerCol,
@@ -571,12 +644,29 @@ function viewDefense() {
 
 function viewPenalties() {
   if (state.fr.real) {
+    const weeks = ((state.tracker && state.tracker.teamGames) || {})[state.team] || [];
+    const total = weeks.reduce((a, w) => a + (w.PENALTIES || 0), 0);
+    const yards = weeks.reduce((a, w) => a + (w.PENALTYYARDS || 0), 0);
     return [
+      scopeBar(null),
       el('div', { class: 'card' },
-        el('h2', {}, 'Penalties'),
+        el('h3', {}, 'Penalties, game by game'),
         el('p', { class: 'hint' },
-          'Madden keeps penalties as a team total — PENALTIES and PENALTYYARDS on the team stat table — and does not record who committed them. '
-          + 'There is no per-player penalty data in the save to show, so this tab does not invent any.')),
+          'Straight off the team line in your save. Madden records the count and the yards but never which player drew the flag, '
+          + 'so this is the team, week by week — the tracker keeps every week it has seen.'),
+        weeks.length ? el('div', { class: 'tablewrap' }, el('table', {},
+          el('thead', {}, el('tr', {}, ['Week', 'Flags', 'Yards', 'Yds/flag', 'Sacks allowed', 'Giveaways'].map((h, i) =>
+            el('th', { class: i === 0 ? 'left' : '' }, h)))),
+          el('tbody', {}, weeks.map((w) => el('tr', {},
+            el('td', { class: 'left' }, `Week ${w.week}`),
+            el('td', { class: 'num' }, w.PENALTIES || 0),
+            el('td', { class: 'num' }, w.PENALTYYARDS || 0),
+            el('td', { class: 'num' }, w.PENALTIES ? Math.round((w.PENALTYYARDS / w.PENALTIES) * 10) / 10 : 0),
+            el('td', { class: 'num' }, w.SACKSALLOWED || 0),
+            el('td', { class: 'num' }, w.GIVEAWAYS || 0))))))
+          : el('div', { class: 'empty' }, 'No team game lines recorded yet. Save after a game and open the file again.'),
+        weeks.length ? el('p', { class: 'note', style: 'margin-top:12px' },
+          `${total} flags for ${yards} yards across ${weeks.length} games — ${Math.round(total / weeks.length * 10) / 10} a game.`) : null),
     ];
   }
   const rows = penaltyRows();
@@ -1019,6 +1109,42 @@ function download(name, data) {
 const downloadInjuryScript = () => download('injury_script.json', exportInjuryScript(state.fr));
 
 /**
+ * Pull the tracker's history and run it through the tracking math: one tracked
+ * game per team per game, which the tabs then roll up.
+ */
+async function loadTracker() {
+  if (!window.gcc || !window.gcc.trackerRead) return;
+  let history;
+  try { history = await window.gcc.trackerRead(); } catch { return; }
+  if (!history || history.error) return;
+  state.tracker = history;
+
+  const weekOf = new Map((history.games || []).map((g) => [String(g.gameRow), g.week]));
+  const games = [];
+  for (const [gameKey, teams] of bucketLines(history.lines)) {
+    const teamIds = [...teams.keys()];
+    const week = weekOf.get(gameKey);
+    for (const teamId of teamIds) {
+      const opp = teamIds.find((t) => t !== teamId);
+      // The team's own line for that week, when the tracker has it: that is
+      // where the penalties and team sack counts live.
+      const weeks = (history.teamGames || {})[teamId] || [];
+      const teamStat = weeks.find((w) => w.week === week) || null;
+      const tracked = trackGame({
+        lines: teams.get(teamId),
+        oppLines: opp ? teams.get(opp) : [],
+        teamStat,
+      });
+      games.push({ ...tracked, key: `${gameKey}:${teamId}`, gameKey, week, team: teamId, opponent: opp || null });
+    }
+  }
+  state.trackerGames = games;
+  render();
+}
+
+const trackedFor = (teamId) => (state.trackerGames || []).filter((g) => g.team === teamId);
+
+/**
  * A real Madden franchise file just came back from the parser. Everything the
  * app shows from here is what is actually in that save — real teams, real
  * rosters, the real schedule, and the stats Madden itself keeps.
@@ -1050,6 +1176,7 @@ function connectMadden(payload) {
   if (window.gcc && window.gcc.injuryList) {
     window.gcc.injuryList().then((list) => { state.maddenInjuries = list; }).catch(() => {});
   }
+  loadTracker();
   save();
   render();
 }
