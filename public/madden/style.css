@@ -44,6 +44,12 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0 0 .5em; }
 .brand strong { display: block; font-size: 15px; letter-spacing: .02em; }
 .brand em { display: block; font-style: normal; font-size: 11px; color: var(--ink-dim); }
 .topbar .status { font-size: 12px; color: var(--ink-dim); }
+.teampick {
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 8px; padding: 7px 10px; font-size: 13px; font-weight: 600;
+  max-width: 260px;
+}
+.teampick:hover { border-color: var(--accent); }
 .topbar .status b { color: var(--accent); font-weight: 600; }
 
 nav.tabs {

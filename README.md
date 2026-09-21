@@ -272,9 +272,17 @@ filtered out of the team pickers and the schedule. The schedule itself keeps
 `RegularSeason` and the four playoff rounds; preseason, Pro Bowl and offseason
 weeks are dropped.
 
-The schedule shows one team at a time, defaulting to the team the save opens
-on: `vs`/`at` instead of both names, and W/L with your score first. **The whole
-league** is in the same picker when it is wanted.
+There is one team picker, in the top bar, and it drives the whole app: the
+dashboard, every stat tab and the schedule all follow it. It only ever lists
+real teams — a name that looks like a practice squad, free agency or the Pro
+Bowl is dropped even when `TEAM_TYPE` cannot be read, so the picker can never
+get stuck on one — and the app lands on a team with a full roster behind it.
+
+The schedule follows that team: `vs`/`at` instead of both names, and W/L with
+your score first. **The whole league** is one button away.
+
+Each stat tab only lists the positions that belong in it, so a stray stat line
+can never put a quarterback in the defensive table.
 
 ## The tracker
 

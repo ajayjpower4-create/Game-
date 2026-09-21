@@ -23,6 +23,39 @@ const el = (tag, attrs = {}, ...kids) => {
   return n;
 };
 
+
+// A franchise file's team table is full of things that are not teams: practice
+// squads (PRA / PBA), free agency, the Pro Bowl, conference and template
+// shells. TEAM_TYPE weeds them out when it reads cleanly; this catches the
+// rest by name so a picker can never get stuck on one.
+const NOT_A_TEAM = /^(pra|pba|prb|fa|free ?agen|pro ?bowl|afc|nfc|practice|custom|template|placeholder|test|secret|hall of fame|old ?time|college)/i;
+
+function realTeams(fr) {
+  const teams = (fr.teams || []).filter((t) => {
+    if (NOT_A_TEAM.test(String(t.id))) return false;
+    if (NOT_A_TEAM.test(String(t.name))) return false;
+    if (NOT_A_TEAM.test(String(t.city))) return false;
+    return Boolean((t.city || t.name || '').trim());
+  });
+  return teams.sort((a, b) => `${a.city} ${a.name}`.localeCompare(`${b.city} ${b.name}`));
+}
+
+// The team the app should land on: the one the user last picked if it is still
+// there, otherwise the first real team with a full roster behind it.
+function defaultTeam(fr) {
+  const teams = realTeams(fr);
+  if (!teams.length) return (fr.teams[0] || {}).id;
+  const remembered = teams.find((t) => t.id === state.team);
+  if (remembered) return remembered.id;
+  const stocked = teams.find((t) => (fr.rosters[t.id] || []).length >= 40);
+  return (stocked || teams[0]).id;
+}
+
+const teamLabelOf = (fr, id) => {
+  const t = (fr.teams || []).find((x) => x.id === id);
+  return t ? `${t.city} ${t.name}`.trim() : id;
+};
+
 const TABS = [
   ['dashboard', 'Dashboard'],
   ['schedule', 'Schedule & Injury Control'],
@@ -126,9 +159,19 @@ const gradeCls = (good, mid) => (val) => (val >= good ? 'good' : val >= mid ? 'm
 // stores — the derived columns the simulated league has (pressures, almost
 // sacks, missed tackles) are not in the save and are left out rather than
 // made up.
+// Which positions belong in which table. A stray stat line should never put a
+// quarterback in the defensive table.
+const CATEGORY_POS = {
+  blocking: /^(LT|LG|C|RG|RT|TE|FB)$/i,
+  receiving: /^(WR|TE|HB|RB|FB)$/i,
+  defense: /^(LE|RE|DT|NT|LOLB|MLB|ROLB|OLB|ILB|LB|CB|FS|SS|S|SUBLB|RLE|RRE|RDT|SLCB)$/i,
+  snaps: /./,
+};
+
 function realFeed(category) {
   const roster = state.fr.rosters[state.team] || [];
-  const withStats = roster.filter((p) => p.stats);
+  const fits = CATEGORY_POS[category] || /./;
+  const withStats = roster.filter((p) => p.stats && fits.test(p.pos));
   const rows = [];
   for (const p of withStats) {
     const st = p.stats;
@@ -208,14 +251,7 @@ const teamGames = (teamId) => state.fr.schedule.filter((g) => !g.bye && (g.home 
 
 function scopeBar(note) {
   const fr = state.fr;
-  if (fr.real) {
-    return el('div', { class: 'card' },
-      el('div', { class: 'row' },
-        el('label', { class: 'field grow' }, 'Team',
-          el('select', { onchange: (e) => { state.team = e.target.value; save(); render(); } },
-            fr.teams.map((t) => el('option', { value: t.id, selected: t.id === state.team || null }, `${t.city} ${t.name}`)))),
-        el('p', { class: 'note' }, `Season totals from ${fr.source}.`)));
-  }
+  if (fr.real) return null;     // the team picker lives in the top bar
   const games = teamGames(state.team).filter((g) => g.played);
   const sel = el('select', {
     onchange: (e) => {
@@ -231,13 +267,8 @@ function scopeBar(note) {
     })
   );
 
-  const teamSel = el('select', {
-    onchange: (e) => { state.team = e.target.value; state.scope = 'season'; state.gameId = null; save(); render(); },
-  }, fr.teams.map((t) => el('option', { value: t.id, selected: t.id === state.team || null }, teamLabel(t))));
-
   return el('div', { class: 'card' },
     el('div', { class: 'row' },
-      el('label', { class: 'field grow' }, 'Team', teamSel),
       el('label', { class: 'field grow' }, 'Scope', sel),
       games.length ? null : el('p', { class: 'note' }, 'No games played yet — play a week on the Schedule tab and the numbers fill in.')
     ),
@@ -267,10 +298,7 @@ function viewRealDashboard() {
           el('h2', {}, t ? `${t.city} ${t.name}` : 'Your team'),
           el('p', { class: 'hint' },
             `${fr.source} · Madden ${fr.gameYear || '26'} · ${fr.year || ''} season, week ${fr.week} · ${roster.length} players`)),
-        el('div', { class: 'row' },
-          el('select', { onchange: (e) => { state.team = e.target.value; save(); render(); } },
-            fr.teams.map((x) => el('option', { value: x.id, selected: x.id === state.team || null }, `${x.city} ${x.name}`))),
-          el('button', { class: 'btn', onclick: () => openMaddenInjuryModal(state.team) }, 'Injure a player')))),
+        el('button', { class: 'btn', onclick: () => openMaddenInjuryModal(state.team) }, 'Injure a player'))),
     el('div', { class: 'grid' },
       stat('Injured', injured.length, injured.length ? injured.slice(0, 4).map((p) => p.last).join(', ') : 'nobody hurt'),
       stat('Pancake leader', pancake ? pancake.player.name : '—', pancake ? `${pancake.pancakes} pancakes` : 'no blocking stats yet'),
@@ -320,10 +348,7 @@ function viewDashboard() {
         el('div', {},
           el('h2', {}, teamLabel(t)),
           el('p', { class: 'hint' }, `${t.conf} ${t.div} · Week ${fr.week} · ${played} games in the books · source: ${fr.source}`)),
-        el('div', { class: 'row' },
-          el('select', { onchange: (e) => { state.team = e.target.value; save(); render(); } },
-            fr.teams.map((x) => el('option', { value: x.id, selected: x.id === state.team || null }, teamLabel(x)))),
-          el('button', { class: 'btn', onclick: () => { state.view = 'schedule'; render(); } }, 'Injury Control')))),
+        el('button', { class: 'btn', onclick: () => { state.view = 'schedule'; render(); } }, 'Injury Control'))),
 
     el('div', { class: 'grid' },
       stat('Best blocker', bestBlock ? bestBlock.player.name : '—', bestBlock ? `${bestBlock.winRate}% win rate · ${bestBlock.pancakes} pancakes · ${bestBlock.holdSeconds}s held` : 'no games played'),
@@ -440,7 +465,8 @@ function trackedTable(category, fallbackCols) {
         + 'every game it sees is kept from then on, even after Madden drops it from the save.'),
       table(`real-${category}`, feed(category), [playerCol, ...fallbackCols], { empty: 'Nothing in the save yet either.' }));
   }
-  const rows = accumulate(games, category);
+  const fits = CATEGORY_POS[category] || /./;
+  const rows = accumulate(games, category).filter((r) => fits.test(r.pos));
   const sample = games[games.length - 1][category][0];
   return el('div', { class: 'card' },
     el('div', { class: 'spread' },
@@ -546,13 +572,14 @@ function viewRealSchedule() {
             `${fr.source} · ${fr.year || ''} regular season and playoffs · injuries are written straight into this file.`)),
         el('button', { class: 'btn', onclick: () => openMaddenInjuryModal(mine || state.team) }, 'Injure a player')),
       el('div', { class: 'row', style: 'margin-bottom:12px' },
-        el('label', { class: 'field grow' }, 'Whose schedule',
-          el('select', {
-            onchange: (e) => { state.scheduleTeam = e.target.value; if (e.target.value !== '*') state.team = e.target.value; save(); render(); },
-          },
-            el('option', { value: '*', selected: !onlyMine || null }, 'The whole league'),
-            fr.teams.slice().sort((a, b) => a.city.localeCompare(b.city)).map((t) =>
-              el('option', { value: t.id, selected: (onlyMine && t.id === mine) || null }, `${t.city} ${t.name}`))))),
+        el('button', {
+          class: `btn small ${onlyMine ? '' : 'ghost'}`,
+          onclick: () => { state.scheduleTeam = state.team; save(); render(); },
+        }, 'Just my team'),
+        el('button', {
+          class: `btn small ${onlyMine ? 'ghost' : ''}`,
+          onclick: () => { state.scheduleTeam = '*'; save(); render(); },
+        }, 'The whole league')),
       el('div', { class: 'row' }, weeks.map((w) =>
         el('button', { class: `btn small ${w === week ? '' : 'ghost'}`, onclick: () => { state.week = w; render(); } }, `W${w}`)))),
     el('div', { class: 'card' }, games.length ? games.map((g) => el('div', { class: `game ${g.played ? 'played' : ''}` },
@@ -1199,8 +1226,8 @@ function connectMadden(payload) {
   state.week = fr.week;
   state.scope = 'season';
   state.gameId = null;
-  if (!fr.rosters[state.team]) state.team = fr.teams[0] ? fr.teams[0].id : state.team;
-  if (!state.scheduleTeam) state.scheduleTeam = state.team;
+  state.team = defaultTeam(fr);
+  state.scheduleTeam = state.team;
   state.flash = report.notes.join(' ');
   state.view = 'dashboard';
   // The real injury list comes from the file's own InjuryType enum.
@@ -1271,6 +1298,13 @@ function render() {
     defense: 'Defense',
     blocking: 'Blocking',
   };
+  // One team picker, in the top bar, for the whole app.
+  const teams = realTeams(fr);
+  const picker = $('#teamPicker');
+  picker.replaceChildren(...teams.map((t) =>
+    el('option', { value: t.id, selected: t.id === state.team || null }, `${t.city} ${t.name}`)));
+  picker.classList.toggle('hidden', teams.length < 2);
+
   $('#tabs').replaceChildren(...TABS.map(([id, label]) =>
     el('button', { class: state.view === id ? 'on' : '', onclick: () => { state.view = id; render(); } },
       (fr.real && realLabels[id]) || label)));
@@ -1291,6 +1325,14 @@ state.week = state.fr.week;
 if (!state.fr.rosters[state.team]) state.team = TEAMS[0].id;
 
 $('#fileBtn').addEventListener('click', () => { state.view = 'file'; render(); });
+$('#teamPicker').addEventListener('change', (e) => {
+  state.team = e.target.value;
+  if (state.scheduleTeam && state.scheduleTeam !== '*') state.scheduleTeam = e.target.value;
+  state.scope = 'season';
+  state.gameId = null;
+  save();
+  render();
+});
 
 // Desktop menu: Franchise ▸ Connect / Save / Export injury script.
 if (window.gcc && window.gcc.onMenu) {
