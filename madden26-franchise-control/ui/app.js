@@ -119,7 +119,7 @@
     }).join('');
     return `<div class="card">
       <h3>1 · Sign in with EA</h3>
-      <p><span class="pill win">Signed in</span> <b>${esc(ea.profile.displayName)}</b> <span class="muted">· ${esc(ea.profile.consoleLabel)} · Madden ${ea.year}${ea.encrypted ? ' · sign-in sealed with the Windows keychain' : ''}</span></p>
+      <p><span class="pill win">Signed in</span> <b>${esc(ea.profile.displayName)}</b> <span class="muted">· ${esc(ea.profile.consoleLabel)} · Madden ${ea.year} · ${ea.encrypted ? 'sign-in sealed with the Windows keychain' : 'sign-in saved unencrypted (no keychain on this system)'}</span></p>
       <div class="toolbar"><button id="ea-refresh" class="small">Refresh franchise list</button><button id="ea-signout" class="small danger">Sign out</button></div>
       <h3>Franchises on this account (${(ea.leagues || []).length})</h3>
       ${leagues ? `<ul class="list">${leagues}</ul>` : '<div class="muted">No franchises found on this EA account. Refresh after you create or join one.</div>'}
