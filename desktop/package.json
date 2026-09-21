@@ -1,0 +1,34 @@
+{
+  "name": "gridiron-control-center",
+  "productName": "Gridiron Control Center",
+  "version": "1.0.0",
+  "description": "Madden 26 franchise mod — injury control and advanced franchise stats",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64",
+    "dist:portable": "electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.gridiron.controlcenter",
+    "productName": "Gridiron Control Center",
+    "files": ["main.js", "preload.js", "ui/**/*"],
+    "directories": { "output": "release" },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Gridiron Control Center"
+    }
+  }
+}

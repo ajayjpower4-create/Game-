@@ -167,3 +167,125 @@ report says so on screen — every screen still works offline.
 
 Nothing in this report is real. It is a simulator for practicing and drafting,
 not a substitute for an inspection by a licensed inspector.
+
+---
+
+# Gridiron Control Center — Madden 26 franchise mod
+
+A franchise control panel. Connect a franchise file, then script injuries onto
+any game on the schedule and dig through the stat categories Madden does not
+show you: advanced blocking, snap counts, targets and drops, missed sacks and
+missed tackles, and penalties. Every category is its own tab.
+
+Two ways to run it: in the browser at `/madden`, or as a Windows desktop app —
+the user downloads the installer, opens the exe, connects their franchise file
+and everything is there.
+
+**What it is not:** this does not reach into a running copy of Madden and does
+not read EA's encrypted save files directly. It works on a franchise *export*
+(JSON or CSV) and writes an injury script file back out. Nothing is uploaded
+anywhere — the whole thing runs on the machine it's installed on.
+
+## The injury tool
+
+Schedule & Injury Control is the schedule, week by week. Pick a game, hit
+**Pick an injury**, and you choose three things:
+
+1. **Who** — either roster, any healthy player, sorted by position.
+2. **What** — sixteen injuries from Cramps up to a torn ACL, each with its own
+   severity band and a typical number of weeks out.
+3. **When** — a quarter, or leave it on Random.
+
+You do *not* pick the play. The engine rolls it: a quarter, a game clock, a
+drive number, a play number, a down and distance, and a description built out
+of the injury and the player's position — `Q2 07:41 — 3rd & 8, drive 6, play
+31: LT Nolan Hasselback goes down anchoring a bull rush. Hit on the outside of
+the knee while the foot is stuck in the turf.` Don't like the play? **Roll a
+different play** until you do, then **Script it**.
+
+How long he's out comes from the injury type's window narrowed by the player's
+durability rating, so the same torn ACL is a season for everybody but a high
+ankle sprain is three weeks for one guy and six for another.
+
+Scripted injuries sit on the game until it's played. Play the game and they
+fire: the player is stamped OUT, he drops out of the snap counts and every
+other stat page, and the play shows up in the injury log. Script one onto a
+game that's already final and it fires immediately. **Export injury script**
+writes `injury_script.json` — just the scripts, nothing else.
+
+## The stat categories
+
+| Tab | What's in it |
+| --- | --- |
+| **Advanced Blocking** | Pressures and sacks allowed per blocker, **almost sacks** (beaten clean, QB got it out anyway), hurries, blown blocks, pancakes, average time he keeps his man off the quarterback, and a win rate. Tiles at the top call out the best blocker, the one giving up the most pressure, the one holding them longest, and the pancake leader |
+| **Snap Counts** | Who's actually on the field, split offense and defense, with a per-game average |
+| **Targets & Drops** | Targets, catches, drops, drop rate, catch rate, yards, YAC, contested catches, TDs |
+| **Missed Sacks & Tackles** | Pressures, sacks, **missed sacks** (had him dead and let him go), finish rate, QB hits, tackles, missed tackles, miss rate, TFL, PBU, INT |
+| **Penalties** | Flags and yards per player, declined flags, yards per flag — and in a single game, every flag with its quarter, drive and penalty |
+| **Injury Report** | Everything queued and everything that's already happened |
+
+Every table sorts by any column. Every tab has a team picker and a scope
+picker: season to date, or one specific game.
+
+## Connecting a franchise file
+
+The **Franchise File** tab (or the button in the top bar) takes a drop or a
+file picker:
+
+- **A Control Center save** — comes back whole: rosters, schedule, what's been
+  played, scripted injuries, the log.
+- **A franchise export** — JSON from a franchise exporter, in a few common
+  shapes: `{ players: [...] }`, `{ teams: [{ abbr, roster: [...] }] }`, or a
+  bare array. Field names are matched loosely, so `firstName`/`lastName` or
+  `name`, `pos` or `position`, `ovr` or `overall` all read.
+- **A CSV roster** — a header row plus a row per player.
+
+See `samples/franchise-export-example.json` and `samples/roster-example.csv`.
+Teams the file leaves thin get topped up with generated depth so the schedule
+isn't full of ghost matchups; imported players always sit above filler on the
+depth chart. The import tells you exactly what came across.
+
+With no file connected it opens on a generated 32-team demo league, so it works
+the second it launches.
+
+## Building the exe
+
+```
+cd desktop
+./build.sh
+```
+
+That copies the UI in, installs Electron and electron-builder, and drops both
+an NSIS installer and a portable single-file exe in `desktop/release/`. The
+desktop build adds native Open/Save dialogs and a Franchise menu
+(Ctrl+O connect, Ctrl+S save, export injury script); the page itself is the
+same one the website serves.
+
+## Saving
+
+The browser build autosaves the whole franchise to `localStorage` after every
+change, so closing the tab doesn't lose the week. **Save franchise** writes a
+file you can move between machines or keep as a backup.
+
+## How the numbers work
+
+Nothing is stored per-play. A game's full box score is a pure function of the
+franchise seed and the game id, so any game expands to the same numbers every
+time it's opened, and season totals are just those games rolled up. Injured
+players are pulled out of the units before a game is expanded, which is how a
+scripted injury changes the stats that follow it.
+
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `public/madden/league.js` | Teams, roster generation, the schedule, the stat engine and season aggregation |
+| `public/madden/injury.js` | Injury types, picking the play it happens on, scripting, firing, healing |
+| `public/madden/franchise-file.js` | Importing franchise exports and CSVs, and the native save format |
+| `public/madden/app.js` | The tabs, the tables, the injury tool |
+| `desktop/main.js` | Electron window, Franchise menu, the Open/Save bridge |
+| `desktop/build.sh` | Builds the Windows installer and portable exe |
+
+This is a companion tool for a franchise you're already playing. It isn't
+affiliated with EA, and team names are used the way any franchise tracker uses
+them.

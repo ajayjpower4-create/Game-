@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gridiron Control Center — Madden 26 franchise mod</title>
+<link rel="stylesheet" href="/madden/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏈</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">🏈</span>
+    <span>
+      <strong>Gridiron Control Center</strong>
+      <em>Madden 26 franchise mod</em>
+    </span>
+  </div>
+  <div class="status" id="status"></div>
+  <button class="btn ghost small" id="fileBtn">Franchise file</button>
+</header>
+
+<nav class="tabs" id="tabs"></nav>
+<main id="app"></main>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <button class="modal-close" data-close>&times;</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script type="module" src="/madden/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,566 @@
+{
+  "exportedBy": "example franchise exporter",
+  "year": 2026,
+  "players": [
+    {
+      "firstName": "Pierce",
+      "lastName": "Wooten",
+      "position": "QB",
+      "team": "KC",
+      "overall": 88,
+      "age": 21,
+      "jerseyNum": 46,
+      "durability": 56
+    },
+    {
+      "firstName": "Vince",
+      "lastName": "Nwosu",
+      "position": "QB",
+      "team": "KC",
+      "overall": 78,
+      "age": 27,
+      "jerseyNum": 98,
+      "durability": 70
+    },
+    {
+      "firstName": "Finn",
+      "lastName": "Nwosu",
+      "position": "QB",
+      "team": "KC",
+      "overall": 73,
+      "age": 34,
+      "jerseyNum": 14,
+      "durability": 84
+    },
+    {
+      "firstName": "Tavon",
+      "lastName": "Hargrove",
+      "position": "RB",
+      "team": "KC",
+      "overall": 90,
+      "age": 25,
+      "jerseyNum": 20,
+      "durability": 71
+    },
+    {
+      "firstName": "Marcus",
+      "lastName": "Hargrove",
+      "position": "RB",
+      "team": "KC",
+      "overall": 80,
+      "age": 29,
+      "jerseyNum": 78,
+      "durability": 83
+    },
+    {
+      "firstName": "Lamar",
+      "lastName": "Mabry",
+      "position": "RB",
+      "team": "KC",
+      "overall": 74,
+      "age": 34,
+      "jerseyNum": 66,
+      "durability": 88
+    },
+    {
+      "firstName": "Zion",
+      "lastName": "Mixon",
+      "position": "RB",
+      "team": "KC",
+      "overall": 73,
+      "age": 33,
+      "jerseyNum": 42,
+      "durability": 96
+    },
+    {
+      "firstName": "Cooper",
+      "lastName": "Ledbetter",
+      "position": "FB",
+      "team": "KC",
+      "overall": 78,
+      "age": 34,
+      "jerseyNum": 68,
+      "durability": 74
+    },
+    {
+      "firstName": "Jax",
+      "lastName": "Tatum",
+      "position": "WR",
+      "team": "KC",
+      "overall": 88,
+      "age": 24,
+      "jerseyNum": 35,
+      "durability": 95
+    },
+    {
+      "firstName": "Hollis",
+      "lastName": "Oglesby",
+      "position": "WR",
+      "team": "KC",
+      "overall": 79,
+      "age": 30,
+      "jerseyNum": 39,
+      "durability": 83
+    },
+    {
+      "firstName": "Evan",
+      "lastName": "Ulmer",
+      "position": "WR",
+      "team": "KC",
+      "overall": 65,
+      "age": 31,
+      "jerseyNum": 91,
+      "durability": 86
+    },
+    {
+      "firstName": "Hollis",
+      "lastName": "Hasselback",
+      "position": "WR",
+      "team": "KC",
+      "overall": 72,
+      "age": 23,
+      "jerseyNum": 28,
+      "durability": 96
+    },
+    {
+      "firstName": "Finn",
+      "lastName": "Nwosu",
+      "position": "WR",
+      "team": "KC",
+      "overall": 73,
+      "age": 31,
+      "jerseyNum": 82,
+      "durability": 59
+    },
+    {
+      "firstName": "Xavier",
+      "lastName": "Jessup",
+      "position": "WR",
+      "team": "KC",
+      "overall": 66,
+      "age": 31,
+      "jerseyNum": 32,
+      "durability": 76
+    },
+    {
+      "firstName": "Ibrahim",
+      "lastName": "Lockridge",
+      "position": "QB",
+      "team": "BUF",
+      "overall": 87,
+      "age": 24,
+      "jerseyNum": 77,
+      "durability": 89
+    },
+    {
+      "firstName": "Braxton",
+      "lastName": "Kmet",
+      "position": "QB",
+      "team": "BUF",
+      "overall": 80,
+      "age": 31,
+      "jerseyNum": 6,
+      "durability": 82
+    },
+    {
+      "firstName": "Otis",
+      "lastName": "Dunbar",
+      "position": "QB",
+      "team": "BUF",
+      "overall": 64,
+      "age": 23,
+      "jerseyNum": 10,
+      "durability": 69
+    },
+    {
+      "firstName": "Moses",
+      "lastName": "Castillo",
+      "position": "RB",
+      "team": "BUF",
+      "overall": 92,
+      "age": 30,
+      "jerseyNum": 99,
+      "durability": 86
+    },
+    {
+      "firstName": "Kai",
+      "lastName": "Hasselback",
+      "position": "RB",
+      "team": "BUF",
+      "overall": 74,
+      "age": 31,
+      "jerseyNum": 5,
+      "durability": 84
+    },
+    {
+      "firstName": "Wyatt",
+      "lastName": "Ledbetter",
+      "position": "RB",
+      "team": "BUF",
+      "overall": 76,
+      "age": 21,
+      "jerseyNum": 72,
+      "durability": 77
+    },
+    {
+      "firstName": "Evan",
+      "lastName": "Lockridge",
+      "position": "RB",
+      "team": "BUF",
+      "overall": 68,
+      "age": 27,
+      "jerseyNum": 26,
+      "durability": 71
+    },
+    {
+      "firstName": "Preston",
+      "lastName": "Okafor",
+      "position": "FB",
+      "team": "BUF",
+      "overall": 81,
+      "age": 33,
+      "jerseyNum": 21,
+      "durability": 83
+    },
+    {
+      "firstName": "Damon",
+      "lastName": "Pruitt",
+      "position": "WR",
+      "team": "BUF",
+      "overall": 89,
+      "age": 34,
+      "jerseyNum": 24,
+      "durability": 91
+    },
+    {
+      "firstName": "Malik",
+      "lastName": "Ulmer",
+      "position": "WR",
+      "team": "BUF",
+      "overall": 83,
+      "age": 21,
+      "jerseyNum": 77,
+      "durability": 60
+    },
+    {
+      "firstName": "Tavon",
+      "lastName": "Sandoval",
+      "position": "WR",
+      "team": "BUF",
+      "overall": 69,
+      "age": 23,
+      "jerseyNum": 10,
+      "durability": 77
+    },
+    {
+      "firstName": "Preston",
+      "lastName": "Kmet",
+      "position": "WR",
+      "team": "BUF",
+      "overall": 72,
+      "age": 23,
+      "jerseyNum": 82,
+      "durability": 81
+    },
+    {
+      "firstName": "Hollis",
+      "lastName": "Ellington",
+      "position": "WR",
+      "team": "BUF",
+      "overall": 67,
+      "age": 31,
+      "jerseyNum": 36,
+      "durability": 82
+    },
+    {
+      "firstName": "Levi",
+      "lastName": "Quarles",
+      "position": "WR",
+      "team": "BUF",
+      "overall": 73,
+      "age": 29,
+      "jerseyNum": 99,
+      "durability": 68
+    },
+    {
+      "firstName": "Jax",
+      "lastName": "Ingram",
+      "position": "QB",
+      "team": "PHI",
+      "overall": 80,
+      "age": 24,
+      "jerseyNum": 78,
+      "durability": 97
+    },
+    {
+      "firstName": "Marcus",
+      "lastName": "Ingram",
+      "position": "QB",
+      "team": "PHI",
+      "overall": 75,
+      "age": 30,
+      "jerseyNum": 98,
+      "durability": 61
+    },
+    {
+      "firstName": "Tavon",
+      "lastName": "McAllister",
+      "position": "QB",
+      "team": "PHI",
+      "overall": 65,
+      "age": 30,
+      "jerseyNum": 49,
+      "durability": 86
+    },
+    {
+      "firstName": "Elijah",
+      "lastName": "Ingram",
+      "position": "RB",
+      "team": "PHI",
+      "overall": 87,
+      "age": 31,
+      "jerseyNum": 54,
+      "durability": 87
+    },
+    {
+      "firstName": "Trey",
+      "lastName": "Pruitt",
+      "position": "RB",
+      "team": "PHI",
+      "overall": 79,
+      "age": 28,
+      "jerseyNum": 15,
+      "durability": 74
+    },
+    {
+      "firstName": "Carlos",
+      "lastName": "Yancey",
+      "position": "RB",
+      "team": "PHI",
+      "overall": 76,
+      "age": 33,
+      "jerseyNum": 13,
+      "durability": 75
+    },
+    {
+      "firstName": "Hollis",
+      "lastName": "Gainey",
+      "position": "RB",
+      "team": "PHI",
+      "overall": 62,
+      "age": 21,
+      "jerseyNum": 21,
+      "durability": 90
+    },
+    {
+      "firstName": "Wyatt",
+      "lastName": "McAllister",
+      "position": "FB",
+      "team": "PHI",
+      "overall": 82,
+      "age": 28,
+      "jerseyNum": 26,
+      "durability": 92
+    },
+    {
+      "firstName": "Finn",
+      "lastName": "Pettiford",
+      "position": "WR",
+      "team": "PHI",
+      "overall": 87,
+      "age": 30,
+      "jerseyNum": 54,
+      "durability": 90
+    },
+    {
+      "firstName": "Hunter",
+      "lastName": "Fontenot",
+      "position": "WR",
+      "team": "PHI",
+      "overall": 72,
+      "age": 31,
+      "jerseyNum": 32,
+      "durability": 56
+    },
+    {
+      "firstName": "Omar",
+      "lastName": "Dupree",
+      "position": "WR",
+      "team": "PHI",
+      "overall": 65,
+      "age": 34,
+      "jerseyNum": 62,
+      "durability": 79
+    },
+    {
+      "firstName": "Zion",
+      "lastName": "Pettiford",
+      "position": "WR",
+      "team": "PHI",
+      "overall": 84,
+      "age": 25,
+      "jerseyNum": 13,
+      "durability": 93
+    },
+    {
+      "firstName": "Lamar",
+      "lastName": "Dunbar",
+      "position": "WR",
+      "team": "PHI",
+      "overall": 73,
+      "age": 29,
+      "jerseyNum": 88,
+      "durability": 74
+    },
+    {
+      "firstName": "Marcus",
+      "lastName": "Ingram",
+      "position": "WR",
+      "team": "PHI",
+      "overall": 71,
+      "age": 26,
+      "jerseyNum": 16,
+      "durability": 56
+    },
+    {
+      "firstName": "Evan",
+      "lastName": "Mabry",
+      "position": "QB",
+      "team": "SF",
+      "overall": 80,
+      "age": 25,
+      "jerseyNum": 83,
+      "durability": 69
+    },
+    {
+      "firstName": "Levi",
+      "lastName": "Zeller",
+      "position": "QB",
+      "team": "SF",
+      "overall": 80,
+      "age": 30,
+      "jerseyNum": 23,
+      "durability": 95
+    },
+    {
+      "firstName": "Kai",
+      "lastName": "Whitfield",
+      "position": "QB",
+      "team": "SF",
+      "overall": 74,
+      "age": 32,
+      "jerseyNum": 24,
+      "durability": 63
+    },
+    {
+      "firstName": "Shane",
+      "lastName": "Fairchild",
+      "position": "RB",
+      "team": "SF",
+      "overall": 90,
+      "age": 22,
+      "jerseyNum": 36,
+      "durability": 72
+    },
+    {
+      "firstName": "Tyrell",
+      "lastName": "Iverson",
+      "position": "RB",
+      "team": "SF",
+      "overall": 91,
+      "age": 28,
+      "jerseyNum": 72,
+      "durability": 76
+    },
+    {
+      "firstName": "Tyrell",
+      "lastName": "Holloway",
+      "position": "RB",
+      "team": "SF",
+      "overall": 65,
+      "age": 26,
+      "jerseyNum": 18,
+      "durability": 74
+    },
+    {
+      "firstName": "Shane",
+      "lastName": "Lockridge",
+      "position": "RB",
+      "team": "SF",
+      "overall": 66,
+      "age": 26,
+      "jerseyNum": 70,
+      "durability": 94
+    },
+    {
+      "firstName": "Ibrahim",
+      "lastName": "Fontenot",
+      "position": "FB",
+      "team": "SF",
+      "overall": 82,
+      "age": 25,
+      "jerseyNum": 88,
+      "durability": 62
+    },
+    {
+      "firstName": "Kai",
+      "lastName": "Stroud",
+      "position": "WR",
+      "team": "SF",
+      "overall": 79,
+      "age": 29,
+      "jerseyNum": 8,
+      "durability": 76
+    },
+    {
+      "firstName": "Braxton",
+      "lastName": "Hargrove",
+      "position": "WR",
+      "team": "SF",
+      "overall": 75,
+      "age": 32,
+      "jerseyNum": 86,
+      "durability": 96
+    },
+    {
+      "firstName": "Omar",
+      "lastName": "Hasselback",
+      "position": "WR",
+      "team": "SF",
+      "overall": 74,
+      "age": 31,
+      "jerseyNum": 27,
+      "durability": 91
+    },
+    {
+      "firstName": "Hollis",
+      "lastName": "Okafor",
+      "position": "WR",
+      "team": "SF",
+      "overall": 73,
+      "age": 27,
+      "jerseyNum": 95,
+      "durability": 94
+    },
+    {
+      "firstName": "Micah",
+      "lastName": "Fontenot",
+      "position": "WR",
+      "team": "SF",
+      "overall": 64,
+      "age": 24,
+      "jerseyNum": 36,
+      "durability": 80
+    },
+    {
+      "firstName": "Pierce",
+      "lastName": "Quarles",
+      "position": "WR",
+      "team": "SF",
+      "overall": 67,
+      "age": 33,
+      "jerseyNum": 94,
+      "durability": 66
+    }
+  ]
+}

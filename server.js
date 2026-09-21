@@ -22,6 +22,7 @@ app.get('/', page('hub.html'));
 app.get(['/election', '/election/'], page('election', 'index.html'));
 app.get(['/chat', '/chat/'], page('index.html'));
 app.get(['/inspection', '/inspection/'], page('inspection', 'index.html'));
+app.get(['/madden', '/madden/'], page('madden', 'index.html'));
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
@@ -274,5 +275,6 @@ app.listen(PORT, () => {
   console.log(`Game hub at http://localhost:${PORT}`);
   console.log(`Political Election Simulator at http://localhost:${PORT}/election`);
   console.log(`Inspection Simulator at http://localhost:${PORT}/inspection`);
+  console.log(`Gridiron Control Center at http://localhost:${PORT}/madden`);
   console.log(`Swerve AI chat at http://localhost:${PORT}/chat`);
 });
