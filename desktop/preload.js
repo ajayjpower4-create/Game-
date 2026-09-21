@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('gcc', {
   listSaves: (extraDirs) => ipcRenderer.invoke('saves:scan', extraDirs),
   readSave: (filePath) => ipcRenderer.invoke('saves:read', filePath),
   pickSaveFolder: () => ipcRenderer.invoke('saves:pickFolder'),
+  searchSaves: (extraRoots) => ipcRenderer.invoke('saves:search', extraRoots),
+  searchEverywhere: () => ipcRenderer.invoke('saves:searchEverywhere'),
   saveFile: (name, text) => ipcRenderer.invoke('file:save', { name, text }),
   onMenu: (handler) => {
     for (const channel of ['menu:open', 'menu:save', 'menu:injury-script']) {

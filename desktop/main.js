@@ -78,19 +78,24 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 
 /* ------------------------------------------------------------- save finder */
 
-// Where Madden keeps its saves on a PC. Documents can be redirected into
-// OneDrive, and people keep last year's copy around, so check all of it and
-// let the list sort itself out by date.
+// Where Madden saves end up on a PC. Documents is only one of them: with EA's
+// cloud saves the copy on disk lives in the EA app's sync cache, Steam keeps
+// its own cloud mirror, and the Game Pass build hides saves under a folder of
+// GUIDs. So check all of it, and when that still comes up empty, search.
 const MADDEN_YEARS = ['26', '25', '24'];
 
 function saveDirCandidates() {
   const home = os.homedir();
+  const env = process.env;
+  const localAppData = env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+  const appData = env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  const dirs = [];
+
   const docRoots = [
     path.join(home, 'Documents'),
     path.join(home, 'OneDrive', 'Documents'),
     path.join(home, 'OneDrive - Personal', 'Documents'),
   ];
-  const dirs = [];
   for (const root of docRoots) {
     for (const year of MADDEN_YEARS) {
       dirs.push({ dir: path.join(root, `Madden NFL ${year}`, 'settings'), label: `Madden NFL ${year}` });
@@ -98,18 +103,61 @@ function saveDirCandidates() {
     }
     dirs.push({ dir: path.join(root, 'Gridiron Control Center'), label: 'Control Center saves' });
   }
+
+  // EA cloud sync — the EA app and, on older installs, Origin.
+  dirs.push({ dir: path.join(localAppData, 'Electronic Arts', 'EA Desktop', 'CloudSyncCache'), label: 'EA cloud sync' });
+  dirs.push({ dir: path.join(appData, 'Electronic Arts', 'EA Desktop', 'CloudSyncCache'), label: 'EA cloud sync' });
+  dirs.push({ dir: path.join(localAppData, 'Origin', 'CloudSync'), label: 'Origin cloud sync' });
+  dirs.push({ dir: path.join(appData, 'Origin', 'LocalContent'), label: 'Origin' });
+  dirs.push({ dir: path.join(home, 'Saved Games'), label: 'Saved Games' });
+
   dirs.push({ dir: path.join(home, 'Downloads'), label: 'Downloads' });
   dirs.push({ dir: path.join(home, 'Desktop'), label: 'Desktop' });
   return dirs;
 }
 
+// Roots worth walking when the known folders come up empty. Ordered: the
+// likely places first, so a time-limited search spends its budget well.
+function searchRoots() {
+  const home = os.homedir();
+  const env = process.env;
+  const localAppData = env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+  const appData = env.APPDATA || path.join(home, 'AppData', 'Roaming');
+  const roots = [
+    { dir: path.join(localAppData, 'Electronic Arts'), label: 'EA app', depth: 7 },
+    { dir: path.join(appData, 'Electronic Arts'), label: 'EA app', depth: 7 },
+    { dir: path.join(localAppData, 'Origin'), label: 'Origin', depth: 7 },
+    { dir: path.join(localAppData, 'Packages'), label: 'Game Pass / Xbox app', depth: 8 },
+    { dir: path.join(home, 'Documents'), label: 'Documents', depth: 5 },
+    { dir: path.join(home, 'OneDrive'), label: 'OneDrive', depth: 6 },
+    { dir: path.join(home, 'Saved Games'), label: 'Saved Games', depth: 5 },
+    { dir: path.join(home, 'Downloads'), label: 'Downloads', depth: 3 },
+  ];
+  // Steam's cloud mirror, on whatever drive Steam landed on.
+  for (const drive of ['C:', 'D:', 'E:', 'F:']) {
+    roots.push({ dir: path.join(drive + path.sep, 'Program Files (x86)', 'Steam', 'userdata'), label: 'Steam cloud', depth: 6 });
+    roots.push({ dir: path.join(drive + path.sep, 'Steam', 'userdata'), label: 'Steam cloud', depth: 6 });
+    roots.push({ dir: path.join(drive + path.sep, 'SteamLibrary', 'userdata'), label: 'Steam cloud', depth: 6 });
+  }
+  return roots;
+}
+
+// Folders that never hold a save and cost real time to walk.
+const SKIP_DIRS = /^(windows|\$recycle\.bin|system volume information|node_modules|program files|programdata|temp|tmp|cache2|inetcache|webcache|\.git)$/i;
+
 // What kind of file this is, and whether this build can actually read it.
-function classify(name) {
+function classify(name, fullPath = '') {
   const lower = name.toLowerCase();
   if (/^careersave/i.test(name)) return { kind: 'Franchise save', readable: false, binary: true };
   if (/^rostersave/i.test(name)) return { kind: 'Roster save', readable: false, binary: true };
   if (lower.endsWith('.json')) return { kind: 'Export (JSON)', readable: true, binary: false };
   if (lower.endsWith('.csv')) return { kind: 'Export (CSV)', readable: true, binary: false };
+  // Game Pass and the cloud caches rename saves to GUIDs, so in those folders
+  // judge by where the file is rather than what it's called.
+  const p = fullPath.toLowerCase();
+  if (/[\\/]wgs[\\/]/.test(p) || p.includes('cloudsynccache') || p.includes('cloudsync')) {
+    return { kind: 'Possible cloud save', readable: false, binary: true, guess: true };
+  }
   return null;
 }
 
@@ -125,7 +173,7 @@ async function scanDir({ dir, label }, { exportsOnly = false, limit = 40 } = {})
   const out = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    const info = classify(entry.name);
+    const info = classify(entry.name, path.join(dir, entry.name));
     if (!info) continue;
     if (exportsOnly && info.binary) continue;
     const full = path.join(dir, entry.name);
@@ -151,6 +199,87 @@ ipcMain.handle('saves:scan', async (_e, extraDirs = []) => {
   return found
     .filter((f) => (seen.has(f.path) ? false : seen.add(f.path)))
     .sort((a, b) => b.modified - a.modified);
+});
+
+/**
+ * Walk the likely roots looking for saves. Bounded by a clock and a folder
+ * budget rather than by faith in any one path, because where EA puts a cloud
+ * save moves around between the EA app, Steam and Game Pass.
+ */
+async function deepSearch({ roots, budgetMs = 25000, maxDirs = 20000, minSize = 64 * 1024 }) {
+  const deadline = Date.now() + budgetMs;
+  const found = [];
+  const seenDirs = new Set();
+  let dirsWalked = 0;
+  let stoppedEarly = false;
+
+  for (const root of roots) {
+    // Breadth-first per root, so the shallow, likely folders come first.
+    let queue = [{ dir: root.dir, depth: 0 }];
+    while (queue.length) {
+      if (Date.now() > deadline || dirsWalked >= maxDirs) { stoppedEarly = true; break; }
+      const { dir, depth } = queue.shift();
+      const key = dir.toLowerCase();
+      if (seenDirs.has(key)) continue;
+      seenDirs.add(key);
+
+      let entries;
+      try { entries = await fs.readdir(dir, { withFileTypes: true }); }
+      catch { continue; }                   // no permission, or gone: move on
+      dirsWalked++;
+
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (depth >= root.depth || SKIP_DIRS.test(entry.name)) continue;
+          queue.push({ dir: full, depth: depth + 1 });
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        const info = classify(entry.name, full);
+        if (!info) continue;
+        let stat;
+        try { stat = await fs.stat(full); } catch { continue; }
+        // A franchise is megabytes. Anything tiny in a cloud cache is
+        // bookkeeping, not a save.
+        if (info.guess && stat.size < minSize) continue;
+        allowedDirs.add(dir);
+        found.push({ ...info, name: entry.name, path: full, dir, label: root.label, size: stat.size, modified: stat.mtimeMs });
+      }
+    }
+    if (Date.now() > deadline || dirsWalked >= maxDirs) { stoppedEarly = true; break; }
+  }
+
+  const seen = new Set();
+  return {
+    stoppedEarly,
+    dirsWalked,
+    files: found
+      .filter((f) => (seen.has(f.path) ? false : seen.add(f.path)))
+      .sort((a, b) => b.modified - a.modified)
+      .slice(0, 200),
+  };
+}
+
+ipcMain.handle('saves:search', async (_e, extraRoots = []) => {
+  const roots = [
+    ...searchRoots(),
+    ...extraRoots.map((dir) => ({ dir, label: path.basename(dir) || dir, depth: 6 })),
+  ];
+  return deepSearch({ roots });
+});
+
+// Every drive on the machine, walked shallowly. This is the last resort, and
+// it is slow, so the page only offers it after the targeted search finds
+// nothing.
+ipcMain.handle('saves:searchEverywhere', async () => {
+  const drives = [];
+  for (const letter of 'CDEFGHIJ') {
+    const dir = `${letter}:${path.sep}`;
+    try { await fs.access(dir); drives.push({ dir, label: `${letter}: drive`, depth: 6 }); }
+    catch { /* no such drive */ }
+  }
+  return deepSearch({ roots: drives, budgetMs: 90000, maxDirs: 120000 });
 });
 
 ipcMain.handle('saves:read', async (_e, filePath) => {

@@ -45,6 +45,7 @@ const state = {
   flash: null,
   saves: null,            // what the save scan found, newest first
   scanning: false,
+  searchNote: null,       // what the last search covered
   extraDirs: [],          // folders the user pointed at by hand
 };
 
@@ -477,11 +478,49 @@ function whenSaved(ms) {
   return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+const mergeSaves = (...lists) => {
+  const seen = new Set();
+  return lists.flat()
+    .filter((f) => (seen.has(f.path) ? false : seen.add(f.path)))
+    .sort((a, b) => b.modified - a.modified);
+};
+
+/**
+ * The quick pass over the known folders lands first so there's something on
+ * screen, then the search runs behind it — with EA's cloud saves the file is
+ * usually not in any folder worth guessing at, so the search is what actually
+ * finds it.
+ */
 async function scanSaves() {
   if (!window.gcc || !window.gcc.listSaves) return;
-  state.scanning = true; render();
+  state.scanning = true; state.searchNote = null; render();
   try { state.saves = await window.gcc.listSaves(state.extraDirs); }
   catch { state.saves = []; }
+  render();
+
+  if (window.gcc.searchSaves) {
+    try {
+      const res = await window.gcc.searchSaves(state.extraDirs);
+      state.saves = mergeSaves(state.saves || [], res.files || []);
+      state.searchNote = res.stoppedEarly
+        ? `Searched ${res.dirsWalked} folders and ran out of time. If yours isn't here, try Search every drive.`
+        : `Searched ${res.dirsWalked} folders, including the EA app and Steam cloud caches.`;
+    } catch { /* the quick scan's results stand */ }
+  }
+  state.scanning = false;
+  render();
+}
+
+async function searchEverywhere() {
+  if (!window.gcc || !window.gcc.searchEverywhere) return;
+  state.scanning = true;
+  state.searchNote = 'Walking every drive. This takes a minute or two.';
+  render();
+  try {
+    const res = await window.gcc.searchEverywhere();
+    state.saves = mergeSaves(state.saves || [], res.files || []);
+    state.searchNote = `Walked ${res.dirsWalked} folders across every drive${res.stoppedEarly ? ' before running out of time' : ''}.`;
+  } catch { state.searchNote = 'That search could not finish.'; }
   state.scanning = false;
   render();
 }
@@ -490,8 +529,9 @@ async function openSave(save) {
   const res = await window.gcc.readSave(save.path);
   if (!res || res.error) { state.flash = res ? res.error : 'Could not read that file.'; render(); return; }
   if (res.binary) {
-    state.flash = `${res.name} is Madden's own save file (${fileSize(res.size)}), not an export. `
-      + 'This build can read exports — JSON or CSV — not the packed save, so the rosters in it cannot be pulled out yet.';
+    state.flash = `${res.name} is Madden's own save (${fileSize(res.size)}) — the packed binary, not an export. `
+      + 'The app found it, but this build does not unpack that format yet, so the rosters inside it cannot be read. '
+      + 'Send this file to Claude and the reader can be written against it.';
     render();
     return;
   }
@@ -523,9 +563,10 @@ function saveBrowser() {
     el('div', { class: 'spread' },
       el('div', {},
         el('h3', {}, 'Your saves'),
-        el('p', { class: 'hint' }, 'Everything found on this PC, newest first. Click the top one.')),
+        el('p', { class: 'hint' }, 'Everything found on this PC, newest first — the Madden folders, and the EA app, Steam and Game Pass cloud caches. Click the top one.')),
       el('div', { class: 'row' },
         el('button', { class: 'btn ghost small', onclick: scanSaves }, state.scanning ? 'Looking…' : 'Rescan'),
+        el('button', { class: 'btn ghost small', disabled: state.scanning || null, onclick: searchEverywhere }, 'Search every drive'),
         el('button', {
           class: 'btn ghost small',
           onclick: async () => {
@@ -537,7 +578,11 @@ function saveBrowser() {
         }, 'Add a folder'))),
     state.scanning && !state.saves ? el('div', { class: 'empty' }, 'Looking through your Madden folders…')
       : rows.length ? rows
-        : el('div', { class: 'empty' }, 'Nothing found. If your saves live somewhere else, use Add a folder.'));
+        : el('div', { class: 'empty' }, 'Nothing found yet. Try Search every drive, or point it at a folder.'),
+    state.scanning && state.saves ? el('p', { class: 'note' }, 'Still searching the cloud-save caches…') : null,
+    state.searchNote ? el('p', { class: 'note' }, state.searchNote) : null,
+    el('p', { class: 'note' },
+      'Playing on PlayStation or Xbox? Then the save is on the console, not on this PC, and nothing here will find it.'));
 }
 
 function viewFile() {

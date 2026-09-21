@@ -229,13 +229,19 @@ picker: season to date, or one specific game.
 
 ## Finding your saves
 
-The desktop app opens on a **save list**, the way other Madden tools do: it
-looks through the places Madden keeps saves on a PC —
-`Documents\\Madden NFL 26\\settings` and the 25 and 24 folders, the same paths
-again under OneDrive when Documents is redirected there, plus Downloads and
-Desktop for exports — and lists everything it finds newest first, with the top
-one tagged **Most recent**. One click loads it. **Add a folder** points it
-somewhere else and it remembers.
+The desktop app opens on a **save list**, the way other Madden tools do, and
+lists what it finds newest first with the top one tagged **Most recent**.
+
+Guessing folder paths isn't enough, because with EA's cloud saves the copy on
+disk usually isn't in the Madden folder at all. So there are two passes. The
+quick one checks the obvious places — `Documents\\Madden NFL 26\\settings` and
+the 25 and 24 folders, the same paths again under OneDrive, Downloads and
+Desktop. Then a search runs behind it through the EA app's `CloudSyncCache`,
+Origin's cloud folder, Steam's `userdata` mirror on every drive, and the Game
+Pass `wgs` folder where saves are named as GUIDs — there it judges a file by
+where it sits and how big it is rather than by its name. That search is bounded
+by a clock, and **Search every drive** is the last resort when it still comes
+up short. **Add a folder** points it somewhere specific and is remembered.
 
 One limit, stated plainly: Madden's own `CAREERSAVE` files are a packed binary
 format this build does not parse. They still show up in the list, tagged
