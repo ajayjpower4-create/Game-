@@ -13,6 +13,16 @@ sed -e 's#"/madden/#"./madden/#g' ui/madden/index.html > ui/index.html
 rm ui/madden/index.html
 
 npm install
-npm run dist
+
+# Stamping the exe's icon and version strings runs a 32-bit Windows tool, so
+# off Windows it needs wine. Without it, build anyway and skip that step — the
+# app is identical, it just carries Electron's default icon.
+if [ "$(uname -s)" != "Linux" ] || command -v wine >/dev/null 2>&1; then
+  npx electron-builder --win portable nsis --x64
+else
+  echo "No wine found — building without the icon/version stamp."
+  npx electron-builder --win portable --x64 -c.win.signAndEditExecutable=false
+fi
+
 echo
-echo "Installer and portable .exe are in desktop/release/"
+echo "Built into desktop/release/"
