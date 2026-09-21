@@ -48,6 +48,7 @@ const state = {
   scanning: false,
   searchNote: null,       // what the last search covered
   maddenInjuries: null,   // the real InjuryType list, when a save is open
+  scheduleTeam: null,     // whose schedule the Schedule tab shows ('*' = everyone)
   tracker: null,          // the tracker's own history for this franchise
   trackerGames: null,     // that history chewed into per-game tracked rows
   extraDirs: [],          // folders the user pointed at by hand
@@ -512,28 +513,53 @@ function realTable(category, cols, empty) {
 // A real franchise's schedule, grouped by week, straight out of SeasonGame.
 function viewRealSchedule() {
   const fr = state.fr;
-  const weeks = [...new Set(fr.schedule.map((g) => g.week))].sort((a, b) => a - b);
-  const week = weeks.includes(state.week) ? state.week : (weeks[0] || 1);
-  const games = fr.schedule.filter((g) => g.week === week);
   const teamName = (id) => {
     const t = fr.teams.find((x) => x.id === id);
     return t ? `${t.city} ${t.name}` : id;
+  };
+  // One team at a time by default — a whole league week is noise when you are
+  // running one franchise. "The whole league" is there if it's wanted.
+  const onlyMine = state.scheduleTeam !== '*';
+  const mine = onlyMine ? (state.scheduleTeam || state.team) : null;
+  const visible = fr.schedule.filter((g) => !mine || g.home === mine || g.away === mine);
+  const weeks = [...new Set(visible.map((g) => g.week))].sort((a, b) => a - b);
+  const week = weeks.includes(state.week) ? state.week : (weeks[0] || 1);
+  const games = visible.filter((g) => g.week === week);
+  const label = (g) => {
+    if (!mine) return `${teamName(g.away)} at ${teamName(g.home)}`;
+    return g.home === mine ? `vs ${teamName(g.away)}` : `at ${teamName(g.home)}`;
+  };
+  const result = (g) => {
+    if (!g.played) return 'Not played yet';
+    if (!mine) return `Final ${g.awayScore}–${g.homeScore}`;
+    const ours = g.home === mine ? g.homeScore : g.awayScore;
+    const theirs = g.home === mine ? g.awayScore : g.homeScore;
+    return `${ours > theirs ? 'W' : ours < theirs ? 'L' : 'T'} ${ours}–${theirs}`;
   };
 
   return [
     el('div', { class: 'card' },
       el('div', { class: 'spread' },
         el('div', {},
-          el('h2', {}, `Week ${week}`),
-          el('p', { class: 'hint' }, `${fr.source} · ${fr.year || ''} season · injuries are written straight into this file.`)),
-        el('button', { class: 'btn', onclick: () => openMaddenInjuryModal(state.team) }, 'Injure a player')),
+          el('h2', {}, mine ? `${teamName(mine)} — week ${week}` : `Week ${week}, around the league`),
+          el('p', { class: 'hint' },
+            `${fr.source} · ${fr.year || ''} regular season and playoffs · injuries are written straight into this file.`)),
+        el('button', { class: 'btn', onclick: () => openMaddenInjuryModal(mine || state.team) }, 'Injure a player')),
+      el('div', { class: 'row', style: 'margin-bottom:12px' },
+        el('label', { class: 'field grow' }, 'Whose schedule',
+          el('select', {
+            onchange: (e) => { state.scheduleTeam = e.target.value; if (e.target.value !== '*') state.team = e.target.value; save(); render(); },
+          },
+            el('option', { value: '*', selected: !onlyMine || null }, 'The whole league'),
+            fr.teams.slice().sort((a, b) => a.city.localeCompare(b.city)).map((t) =>
+              el('option', { value: t.id, selected: (onlyMine && t.id === mine) || null }, `${t.city} ${t.name}`))))),
       el('div', { class: 'row' }, weeks.map((w) =>
         el('button', { class: `btn small ${w === week ? '' : 'ghost'}`, onclick: () => { state.week = w; render(); } }, `W${w}`)))),
     el('div', { class: 'card' }, games.length ? games.map((g) => el('div', { class: `game ${g.played ? 'played' : ''}` },
       el('div', {},
-        el('div', { class: 'match' }, `${teamName(g.away)} at ${teamName(g.home)}`),
-        el('div', { class: 'meta' }, g.played ? `Final ${g.awayScore}–${g.homeScore}` : g.status || 'Not played')),
-      el('button', { class: 'btn small', onclick: () => openMaddenInjuryModal(g.home) }, 'Injure a player')))
+        el('div', { class: 'match' }, label(g)),
+        el('div', { class: 'meta' }, result(g))),
+      el('button', { class: 'btn small', onclick: () => openMaddenInjuryModal(mine || g.home) }, 'Injure a player')))
       : el('div', { class: 'empty' }, 'No games listed for this week.')),
   ];
 }
@@ -887,7 +913,11 @@ function viewFile() {
   const box = el('div', { class: 'filebox' },
     el('p', {}, el('strong', {}, 'Connect your franchise file')),
     el('p', { class: 'note' }, 'Drop a franchise export here, or pick one. JSON or CSV. A Control Center save loads back whole, scripted injuries and all.'),
-    el('p', {}, el('button', { class: 'btn', onclick: chooseFile }, 'Choose a file')),
+    el('p', { class: 'row', style: 'justify-content:center' },
+      el('button', { class: 'btn', onclick: chooseFile }, 'Open a file myself'),
+      el('button', { class: 'btn ghost', onclick: scanSaves }, 'Look again')),
+    el('p', { class: 'note' },
+      'Any file works here, whatever it is called — point it straight at the save another franchise tool is showing you.'),
     el('input', { type: 'file', id: 'fileInput', accept: '.json,.csv,.txt', class: 'hidden', onchange: (e) => e.target.files[0] && readFile(e.target.files[0]) }));
 
   box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drag'); });
@@ -1170,6 +1200,7 @@ function connectMadden(payload) {
   state.scope = 'season';
   state.gameId = null;
   if (!fr.rosters[state.team]) state.team = fr.teams[0] ? fr.teams[0].id : state.team;
+  if (!state.scheduleTeam) state.scheduleTeam = state.team;
   state.flash = report.notes.join(' ');
   state.view = 'dashboard';
   // The real injury list comes from the file's own InjuryType enum.
@@ -1185,7 +1216,10 @@ function connectMadden(payload) {
 async function chooseFile() {
   if (window.gcc && window.gcc.desktop) {
     const picked = await window.gcc.openFranchiseFile();
-    if (picked) connect(picked.text, picked.name);
+    if (!picked) return;
+    if (picked.madden) { connectMadden(picked); return; }
+    if (picked.error) { state.flash = picked.error; render(); return; }
+    connect(picked.text, picked.name);
     return;
   }
   $('#fileInput').click();

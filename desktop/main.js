@@ -410,15 +410,29 @@ ipcMain.handle('saves:pickFolder', async () => {
 
 ipcMain.handle('file:open', async () => {
   const res = await dialog.showOpenDialog(win, {
-    title: 'Connect your franchise file',
+    title: 'Open your franchise file',
+    // Madden's saves have no extension at all, so All files comes first —
+    // filtering by extension is exactly what hides CAREER-… from the picker.
     filters: [
-      { name: 'Franchise exports', extensions: ['json', 'csv', 'txt'] },
       { name: 'All files', extensions: ['*'] },
+      { name: 'Exports', extensions: ['json', 'csv', 'txt'] },
     ],
     properties: ['openFile'],
   });
   if (res.canceled || !res.filePaths.length) return null;
   const file = res.filePaths[0];
+
+  // Whatever it is called, try it as a franchise file first: a save the user
+  // picked by hand is the one case where the name tells us nothing.
+  const stat = await fs.stat(file);
+  const info = classify(path.basename(file), file, stat.size);
+  if (!info || info.madden || info.binary) {
+    allowedDirs.add(path.dirname(file));
+    const opened = await openMaddenFile(file);
+    if (!opened.error) return opened;
+    if (info && !info.binary) return { name: path.basename(file), text: await fs.readFile(file, 'utf8') };
+    return opened;                                    // carries the reason it failed
+  }
   return { name: path.basename(file), text: await fs.readFile(file, 'utf8') };
 });
 

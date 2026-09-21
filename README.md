@@ -263,6 +263,19 @@ Madden does not record, the app leaves out instead of inventing:
 | **Defense** | `DEFTACKLES`, `ASSDEFTACKLES`, `DEFTACKLESFORLOSS`, `DLINESACKS`, `CTHALLOWED`, `BIGHITS`, `DSECINTS`. Missed tackles and missed sacks are not in the file |
 | **Penalties** | Team totals only (`TeamStats.PENALTIES`, `PENALTYYARDS`). Madden never records which player drew the flag |
 
+## Teams, practice squads, and one schedule at a time
+
+A franchise file carries far more "teams" than the 32 clubs: practice squads
+(the `PRA` rows), free agency, the Pro Bowl, and template shells. They are told
+apart by `TEAM_TYPE`, and only `Current` is a real NFL team — everything else is
+filtered out of the team pickers and the schedule. The schedule itself keeps
+`RegularSeason` and the four playoff rounds; preseason, Pro Bowl and offseason
+weeks are dropped.
+
+The schedule shows one team at a time, defaulting to the team the save opens
+on: `vs`/`at` instead of both names, and W/L with your score first. **The whole
+league** is in the same picker when it is wanted.
+
 ## The tracker
 
 The app keeps its own record instead of leaning on Madden's season totals.

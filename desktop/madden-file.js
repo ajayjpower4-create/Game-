@@ -32,7 +32,12 @@ const PLAYER_FIELDS = [
   'ContractStatus', 'SeasonStats', 'GameStats',
 ];
 
-const TEAM_FIELDS = ['TeamIndex', 'DisplayName', 'LongName', 'ShortName', 'NickName', 'TEAM_PREFIX_NAME'];
+const TEAM_FIELDS = ['TeamIndex', 'DisplayName', 'LongName', 'ShortName', 'NickName', 'TEAM_PREFIX_NAME', 'TEAM_TYPE'];
+
+// A franchise file carries far more "teams" than the 32 clubs: practice
+// squads (the PRA rows), free agency, the Pro Bowl, old-time and template
+// shells. Only TEAM_TYPE 'Current' is a real NFL team.
+const REAL_TEAM_TYPE = 'Current';
 
 const GAME_FIELDS = [
   'SeasonWeek', 'SeasonWeekType', 'SeasonYear', 'SeasonGameNum', 'HomeTeam', 'AwayTeam',
@@ -163,8 +168,11 @@ async function openFranchiseFile(filePath, { withStats = true } = {}) {
     const nick = String(val(rec, 'NickName', '') || val(rec, 'ShortName', '') || '').trim();
     const long = String(val(rec, 'LongName', '') || '').trim();
     const index = num(val(rec, 'TeamIndex', -1));
-    // The file carries Pro Bowl and free-agent shells alongside the 32 clubs.
+    const type = String(val(rec, 'TEAM_TYPE', ''));
+    if (type && type !== REAL_TEAM_TYPE) continue;      // practice, free agency, Pro Bowl…
     if (index < 0 || (!display && !nick)) continue;
+    // Without a readable type, fall back on the name: practice rows are PRA.
+    if (!type && /^pra/i.test(String(val(rec, 'ShortName', '')))) continue;
     const team = {
       id: (val(rec, 'ShortName', '') || nick || display || `T${index}`).toString().toUpperCase().slice(0, 4),
       index,
@@ -290,7 +298,9 @@ async function openFranchiseFile(filePath, { withStats = true } = {}) {
       const awayRef = reference(rec, 'AwayTeam');
       if (!homeRef || !awayRef) continue;
       const weekType = String(val(rec, 'SeasonWeekType', 'RegularSeason'));
-      if (weekType && !/regular|preseason|playoff/i.test(weekType)) continue;
+      // RegularSeason and the playoff rounds. Preseason, the Pro Bowl and
+      // offseason weeks are not games anybody wants in a schedule.
+      if (!/^(RegularSeason|WildcardPlayoff|DivisionalPlayoff|ConferencePlayoff|SuperBowl)$/i.test(weekType)) continue;
       const homeTeam = teamByRow.get(homeRef.rowNumber);
       const awayTeam = teamByRow.get(awayRef.rowNumber);
       if (!homeTeam || !awayTeam) continue;      // Pro Bowl and other odd slates
@@ -304,7 +314,7 @@ async function openFranchiseFile(filePath, { withStats = true } = {}) {
         homeScore: num(val(rec, 'HomeScore', 0)),
         awayScore: num(val(rec, 'AwayScore', 0)),
         status: String(val(rec, 'GameStatus', '')),
-        played: /played|complete|final/i.test(String(val(rec, 'GameStatus', ''))),
+        played: /^(AwayWon|HomeWon|Tied|StatsReported)$/i.test(String(val(rec, 'GameStatus', ''))),
       });
     }
     notes.push(`${schedule.length} games on the schedule.`);
