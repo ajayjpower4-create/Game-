@@ -343,6 +343,17 @@ depth chart. The import tells you exactly what came across.
 With no file connected it opens on a generated 32-team demo league, so it works
 the second it launches.
 
+## Why the desktop build needs a recent Electron
+
+Madden 26 and 27 saves are zstd-compressed, and the parser decompresses them
+with Node's own `zlib.zstdDecompressSync`, which only exists from **Node
+22.15**. Electron 31 ships Node 20, where that function is simply absent — a
+build on it cannot read a Madden 26 file at all. The desktop app is therefore
+pinned to Electron 38 (Node 22.22), and it checks for zstd before opening a
+file so a missing runtime says so in one line instead of surfacing as
+`zstdDecompressSync is not a function`.
+
+
 ## Building the exe
 
 ```

@@ -24,6 +24,19 @@ async function getLib() {
   return lib;
 }
 
+/**
+ * Madden 26 and 27 saves are zstd-compressed, and the parser decompresses them
+ * with Node's own zlib.zstd… functions, which only exist from Node 22.15. A
+ * runtime without them cannot read a 26 file at all, so say that plainly
+ * rather than letting it surface as "zstdDecompressSync is not a function".
+ */
+function checkZstd() {
+  const zlib = require('zlib');
+  if (typeof zlib.zstdDecompressSync === 'function') return null;
+  return `This build runs Node ${process.versions.node}, which has no zstd support. `
+    + 'Madden 26 saves are zstd-compressed and cannot be read without it (Node 22.15 or newer).';
+}
+
 const PLAYER_FIELDS = [
   'FirstName', 'LastName', 'Position', 'OverallRating', 'Age', 'JerseyNum',
   'TeamIndex', 'InjuryRating', 'InjuryStatus', 'InjuryType', 'InjurySeverity',
@@ -135,6 +148,8 @@ const pickStats = (rows, tableName, year) => {
  * nothing has to be taken on faith.
  */
 async function openFranchiseFile(filePath, { withStats = true } = {}) {
+  const missing = checkZstd();
+  if (missing) throw new Error(missing);
   const { create } = await getLib();
   const file = await create(filePath);
 

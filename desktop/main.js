@@ -328,7 +328,17 @@ async function openMaddenFile(filePath) {
       report: result.report,
     };
   } catch (err) {
-    return { error: `Could not read that franchise file: ${err.message}` };
+    // Say what actually failed, and enough about the file to act on it.
+    let detail = '';
+    try {
+      const stat = await fs.stat(filePath);
+      const handle = await fs.open(filePath, 'r');
+      const head = Buffer.alloc(8);
+      await handle.read(head, 0, 8, 0);
+      await handle.close();
+      detail = ` (${path.basename(filePath)}, ${(stat.size / 1048576).toFixed(1)} MB, starts ${head.toString('hex')})`;
+    } catch { /* the message alone will have to do */ }
+    return { error: `Could not read that franchise file: ${err.message}${detail}` };
   }
 }
 
