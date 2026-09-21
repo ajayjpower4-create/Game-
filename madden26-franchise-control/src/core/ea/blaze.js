@@ -19,11 +19,13 @@ export class BlazeError extends EAError {
 }
 
 export class BlazeClient {
-  constructor({ year, console: consoleKey, token, session = null, log = () => {} }) {
+  constructor({ year, console: consoleKey, token, session = null, getAuthCode = null, log = () => {} }) {
     this.year = year;
     this.console = consoleKey;
     this.token = token; // { accessToken, refreshToken, expiresAt }
     this.session = session; // { sessionKey, blazeId, requestId }
+    this.getAuthCode = getAuthCode; // optional: mints a game client code
+    this.serviceId = null;
     this.log = log;
   }
 
@@ -39,13 +41,13 @@ export class BlazeClient {
     };
   }
 
-  // One attempt against one named cluster.
-  async loginOnce(serviceId) {
+  // One attempt: one named cluster, one sign-in shape.
+  async loginOnce(serviceId, body) {
     this.serviceId = serviceId;
     const res = await request(`${WAL_HOST}/wal/authentication/login`, {
       method: 'POST',
       headers: this.headers(),
-      body: JSON.stringify({ accessToken: this.token.accessToken, productName: blazeProductName(this.year, this.console) }),
+      body: JSON.stringify(body),
     });
     let data = null;
     try { data = parseJson(res.text); } catch { data = null; }
@@ -60,35 +62,56 @@ export class BlazeClient {
     return { failed: true, status: res.status, serviceId, wanted: named ? named[1] : null, body: (res.text || '').slice(0, 400) };
   }
 
+  // EA accepts two sign-in shapes: the phone app presents a token and a
+  // product name, the game client presents a one-shot code. Which one a given
+  // cluster wants has changed between Madden years, so try both.
+  async loginShapes() {
+    const shapes = [{ name: 'phone app', body: { accessToken: this.token.accessToken, productName: blazeProductName(this.year, this.console) } }];
+    if (this.getAuthCode) {
+      try {
+        const authCode = await this.getAuthCode();
+        if (authCode) shapes.push({ name: 'game client', body: { authCode } });
+      } catch (e) {
+        this.log(`could not get a game client code: ${e.message}`);
+      }
+    }
+    return shapes;
+  }
+
   async login() {
     const candidates = blazeServiceCandidates(this.year, this.console);
+    const shapes = await this.loginShapes();
     const failures = [];
-    for (const serviceId of candidates) {
-      // A 503 is often EA being briefly busy, so give each cluster a second go.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        let result;
-        try {
-          result = await this.loginOnce(serviceId);
-        } catch (e) {
-          result = { failed: true, status: 0, serviceId, wanted: null, body: e.message };
+    for (const shape of shapes) {
+      for (const serviceId of candidates) {
+        // A 503 is often EA being briefly busy, so give each one a second go.
+        for (let attempt = 0; attempt < 2; attempt++) {
+          let result;
+          try {
+            result = await this.loginOnce(serviceId, shape.body);
+          } catch (e) {
+            result = { failed: true, status: 0, serviceId, wanted: null, body: e.message };
+          }
+          if (!result.failed) {
+            this.log(`signed in to the game server as the ${shape.name} on ${serviceId}`);
+            return this.session;
+          }
+          const transient = result.status === 503 || result.status === 0 || result.status === 429;
+          if (transient && attempt === 0) {
+            await new Promise((r) => setTimeout(r, 1200));
+            continue;
+          }
+          failures.push({ ...result, shape: shape.name });
+          this.log(`${shape.name} on ${serviceId}: ${result.status || 'no reply'}${result.wanted ? `, EA wanted ${result.wanted}` : ''}${result.body ? ` — ${String(result.body).replace(/\s+/g, ' ').slice(0, 140)}` : ''}`);
+          break;
         }
-        if (!result.failed) return this.session;
-        const transient = result.status === 503 || result.status === 0 || result.status === 429;
-        if (transient && attempt === 0) {
-          this.log(`game server ${serviceId} answered ${result.status}; retrying once`);
-          await new Promise((r) => setTimeout(r, 1500));
-          continue;
-        }
-        failures.push(result);
-        this.log(`game server ${serviceId} unavailable (${result.status}${result.wanted ? `, wanted ${result.wanted}` : ''})`);
-        break;
       }
     }
     this.serviceId = null;
     const y = yearConfig(this.year).year;
     const allDown = failures.every((f) => f.status === 503 || f.status === 0);
     const wanted = failures.map((f) => f.wanted).find(Boolean);
-    const detail = failures.map((f) => `${f.serviceId} → ${f.status || 'no reply'}`).join(', ');
+    const detail = failures.map((f) => `${f.shape}/${f.serviceId} → ${f.status || 'no reply'}`).join(', ');
     if (allDown) {
       throw new EAError(
         `EA's Madden ${y} game servers are not accepting connections right now (tried ${detail}${wanted ? `; EA reported ${wanted} unreachable` : ''}).`,

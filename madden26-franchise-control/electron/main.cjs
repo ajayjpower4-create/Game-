@@ -8,13 +8,17 @@ const os = require('node:os');
 let serverInfo = null;
 let mainWindow = null;
 
-function maddenSettingsDir() {
+// Start the file picker where the franchises actually are. Documents moves
+// around on Windows (OneDrive especially), so ask the locator rather than
+// guessing one path.
+async function maddenSettingsDir() {
+  try {
+    const { settingsDirs } = await import('../src/core/franchise/locate.js');
+    const found = settingsDirs();
+    if (found.length) return found[0].dir;
+  } catch { /* fall through to the plain guess */ }
   const docs = path.join(os.homedir(), 'Documents');
-  for (const name of ['Madden NFL 26', 'Madden NFL 27', 'Madden NFL 25']) {
-    const p = path.join(docs, name, 'settings');
-    if (fs.existsSync(p)) return p;
-  }
-  return docs;
+  return fs.existsSync(docs) ? docs : os.homedir();
 }
 
 async function startBackend() {
@@ -62,7 +66,7 @@ function createWindow() {
 ipcMain.handle('pick-franchise-file', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Open a Madden NFL 26 franchise file',
-    defaultPath: maddenSettingsDir(),
+    defaultPath: await maddenSettingsDir(),
     properties: ['openFile'],
     filters: [{ name: 'Madden franchise files', extensions: ['*'] }],
   });

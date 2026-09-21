@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { loginUrl, DEFAULT_YEAR, YEARS, CONSOLES } from './constants.js';
-import { codeFromRedirect, discoverAccount, personaToken, refreshPersonaToken, EAError } from './auth.js';
+import { codeFromRedirect, discoverAccount, personaToken, refreshPersonaToken, gameAuthCode, EAError } from './auth.js';
 import { BlazeClient } from './blaze.js';
 import { importLeague, leagueKeyFor } from './importer.js';
 
@@ -114,15 +114,28 @@ export class EAAccountService {
     if (consoleOverride && CONSOLES[consoleOverride]) profile = { ...profile, console: consoleOverride, consoleLabel: CONSOLES[consoleOverride].label, namespace: CONSOLES[consoleOverride].namespace };
     const token = await personaToken(p.accountToken.access_token, profile, p.year);
     this.note(`game sign-in issued for ${profile.displayName} on ${profile.console}`);
-    const client = new BlazeClient({ year: p.year, console: profile.console, token, log: (m) => this.note(m) });
+    // Kept so the game-client sign-in shape can be offered too.
+    const accountToken = p.accountToken.access_token;
+    const client = this.makeClient({ year: p.year, profile, token, accountToken });
     await client.login();
     const leagues = await client.getMyLeagues();
-    this.state = { version: 1, year: p.year, profile, token, session: client.session, leagues: leagues.map(publicLeague), leaguesAt: new Date().toISOString(), signedInAt: new Date().toISOString() };
+    this.state = { version: 1, year: p.year, profile, token, accountToken, session: client.session, leagues: leagues.map(publicLeague), leaguesAt: new Date().toISOString(), signedInAt: new Date().toISOString() };
     this.client = client;
     this.pending.delete(handle);
     this.save();
     this.note(`signed in; ${leagues.length} franchise(s) on the account`);
     return { profile, leagues: this.state.leagues };
+  }
+
+  makeClient({ year, profile, token, accountToken, session = null }) {
+    return new BlazeClient({
+      year,
+      console: profile.console,
+      token,
+      session,
+      getAuthCode: accountToken ? () => gameAuthCode(accountToken, profile, year) : null,
+      log: (m) => this.note(m),
+    });
   }
 
   async getClient() {
@@ -142,7 +155,7 @@ export class EAAccountService {
       this.client = null;
       this.save();
     }
-    if (!this.client) this.client = new BlazeClient({ year: s.year, console: s.profile.console, token: s.token, session: s.session || null, log: (m) => this.note(m) });
+    if (!this.client) this.client = this.makeClient({ year: s.year, profile: s.profile, token: s.token, accountToken: s.accountToken, session: s.session || null });
     return this.client;
   }
 

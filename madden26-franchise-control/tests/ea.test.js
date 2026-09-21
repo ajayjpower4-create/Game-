@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { messageAuth, AUTH_TYPE } from '../src/core/ea/signing.js';
 import { codeFromRedirect } from '../src/core/ea/auth.js';
-import { loginUrl, blazeServiceId, blazeServiceCandidates, blazeProductName, entitlementGroup, consoleForEntitlement, yearConfig, EXPORT_KINDS, COMMANDS } from '../src/core/ea/constants.js';
+import { loginUrl, blazeServiceId, blazeServiceCandidates, blazeProductName, entitlementGroup, consoleForEntitlement, gameClientId, yearConfig, EXPORT_KINDS, COMMANDS } from '../src/core/ea/constants.js';
 import { weeksFor, importLeague, leagueKeyFor } from '../src/core/ea/importer.js';
 import { Store } from '../src/core/store.js';
 import { buildLeagueFromCompanion } from '../src/core/companion/league.js';
@@ -50,6 +50,10 @@ test('Madden 26 constants match the companion app naming', () => {
   assert.throws(() => yearConfig(24));
   assert.equal(COMMANDS.getMyLeagues.commandId, 801);
   assert.equal(EXPORT_KINDS.roster, 'CareerMode_GetTeamRostersExport');
+  // The game client signs in under its own name, not the phone app's.
+  assert.equal(gameClientId(26, 'pc'), 'MADDEN_26_PC_BLZ_SERVER');
+  assert.equal(gameClientId(26, 'ps5'), 'MADDEN_26_PS5_BLZ_SERVER');
+  assert.equal(gameClientId(27, 'xbsx'), 'MADDEN_27_XBSX_BLZ_SERVER');
 });
 
 test('game server naming falls back the way EA has renamed these clusters', () => {

@@ -15,6 +15,7 @@ import { INJURY_TYPES, BODY_PARTS, injuryTypesByPart } from '../core/franchise/i
 import { planInjury } from '../core/franchise/injuries.js';
 import { addEvent, removeEvent, EVENT_TYPES } from '../core/tracker/tracker.js';
 import { BUNDLED_SCHEMA_DIR } from '../core/franchise/reader.js';
+import { findFranchiseFiles } from '../core/franchise/locate.js';
 import { hashString } from '../core/rng.js';
 import { EAAccountService } from '../core/ea/account.js';
 import { DEFAULT_YEAR } from '../core/ea/constants.js';
@@ -83,6 +84,18 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     const leagues = store.listLeagues().filter((l) => l.source !== 'franchise').map((l) => ({ leagueKey: l.leagueKey, name: l.name || `${l.platform || ''} league ${l.companionLeagueId || ''}`.trim(), source: 'companion', via: l.via || 'companion-app', lastExportAt: l.lastImportAt || l.lastExportAt || null, platform: l.platform || null }));
     if (franchise.isOpen) leagues.unshift({ leagueKey: franchise.league.leagueId, name: franchise.league.name, source: 'franchise', filePath: franchise.filePath, openedAt: franchise.openedAt, schema: franchise.league.schema, gameYear: franchise.league.gameYear });
     res.json({ ok: true, leagues, franchiseOpen: franchise.isOpen, filePath: franchise.filePath, dataDir: store.dataDir, settings: store.getSettings(), version: process.env.M26FC_VERSION || 'dev', ea: { signedIn: ea.signedIn, profile: ea.signedIn ? ea.state.profile : null } });
+  });
+
+  // Every franchise save already on this PC, found automatically.
+  api.get('/franchise/detect', (req, res) => {
+    const settings = store.getSettings();
+    const extraDirs = [...new Set((settings.recentFiles || []).map((f) => path.dirname(f)))];
+    try {
+      const { files, searched } = findFranchiseFiles({ extraDirs });
+      res.json({ ok: true, files, searched });
+    } catch (e) {
+      res.json({ ok: true, files: [], searched: [], error: e.message });
+    }
   });
 
   api.post('/franchise/open', async (req, res) => {

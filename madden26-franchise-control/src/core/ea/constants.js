@@ -78,6 +78,15 @@ export function blazeProductName(year, consoleKey) {
   return `madden-${yearConfig(year).fullYear}-${consoleKey}-mca`;
 }
 
+// The Madden game client signs in to the game servers under its own name,
+// which is not the phone app's. Used as a second way in when the phone app's
+// route is refused.
+const GAME_CLIENT_CONSOLE = { pc: 'PC', ps5: 'PS5', xbsx: 'XBSX', ps4: 'PS4', xone: 'XONE', stadia: 'SDA' };
+
+export function gameClientId(year, consoleKey) {
+  return `MADDEN_${yearConfig(year).year}_${GAME_CLIENT_CONSOLE[consoleKey] || 'PC'}_BLZ_SERVER`;
+}
+
 export function loginUrl(year = DEFAULT_YEAR) {
   const cfg = yearConfig(year);
   const q = new URLSearchParams({

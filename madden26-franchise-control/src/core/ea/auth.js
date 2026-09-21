@@ -7,7 +7,7 @@
 //   4. a second, persona-scoped code becomes the JWS token Blaze accepts
 
 import { request, parseJson } from './http.js';
-import { ACCOUNTS_HOST, GATEWAY_HOST, REDIRECT_URL, AUTH_SOURCE, MACHINE_KEY, APP_USER_AGENT, WEBVIEW_USER_AGENT, CONSOLES, YEARS, yearConfig, consoleForEntitlement, NAMESPACE_LABEL } from './constants.js';
+import { ACCOUNTS_HOST, GATEWAY_HOST, REDIRECT_URL, AUTH_SOURCE, MACHINE_KEY, APP_USER_AGENT, WEBVIEW_USER_AGENT, CONSOLES, YEARS, yearConfig, consoleForEntitlement, gameClientId, NAMESPACE_LABEL } from './constants.js';
 
 export class EAError extends Error {
   constructor(message, help) {
@@ -120,6 +120,20 @@ export async function personaToken(accountAccessToken, profile, year) {
   if (!tokenRes.ok) throw new EAError(`Could not create the game token (${tokenRes.status}): ${tokenRes.text.slice(0, 300)}`);
   const t = parseJson(tokenRes.text);
   return { accessToken: t.access_token, refreshToken: t.refresh_token, expiresAt: Date.now() + (Number(t.expires_in) || 3600) * 1000 };
+}
+
+// A one-shot code issued to the Madden game client rather than the phone app.
+// The game servers accept this directly in place of a token.
+export async function gameAuthCode(accountAccessToken, profile, year) {
+  const q = new URLSearchParams({ response_type: 'code', release_type: 'prod', access_token: accountAccessToken, persona_id: String(profile.personaId), client_id: gameClientId(year, profile.console) });
+  const res = await request(`${ACCOUNTS_HOST}/connect/auth?${q.toString()}`, {
+    headers: { 'Upgrade-Insecure-Requests': '1', 'User-Agent': WEBVIEW_USER_AGENT, Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9' },
+  });
+  const location = res.headers.location;
+  if (!location) throw new EAError(`EA did not issue a game client code (${res.status}): ${res.text.slice(0, 200)}`);
+  const code = new URLSearchParams(location.slice(location.indexOf('?') + 1)).get('code');
+  if (!code) throw new EAError(`EA game client redirect had no code: ${location.slice(0, 200)}`);
+  return code;
 }
 
 export async function refreshPersonaToken(token, year) {

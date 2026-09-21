@@ -78,6 +78,24 @@
     return `<div class="card"><h3>${esc(title)}</h3>${(rows || []).slice(0, n).map((r) => `<div class="leader"><div class="who">${esc(r.name)}<span>${esc(r.position)} · ${esc(abbr(r.teamId))}</span></div><div class="n">${fmt(r[key], d)}${suffix}</div></div>`).join('') || '<div class="muted">No games yet.</div>'}</div>`;
   }
 
+  // ---------- franchise files sitting on this PC
+  async function localCard(open) {
+    let found = { files: [], searched: [] };
+    try { found = await api('/franchise/detect'); } catch { /* listed as none */ }
+    const list = found.files.length
+      ? `<ul class="list">${found.files.map((f) => `<li><span><b>${esc(f.league)}</b> <span class="muted">· Madden ${f.year || '?'} · saved ${esc(new Date(f.modified).toLocaleString())}</span><br><span class="small-note mono">${esc(f.path)}</span></span><button class="small blue" data-open-recent="${esc(f.path)}">Open</button></li>`).join('')}</ul>`
+      : `<p class="small-note">No franchise files found on this PC. Looked in: ${found.searched.length ? found.searched.map((d) => `<span class="mono">${esc(d)}</span>`).join(', ') : 'nowhere, no Madden folder exists here'}.</p>`;
+    return `<div class="card">
+      <h3>Franchise file on this PC (unlocks the injury tool)</h3>
+      <p>Only a PC franchise file can be written to, so this is the only way to use the injury tool, and it is the only way to get real snap counts and pancakes instead of reconstructed ones.</p>
+      <p>${open ? `<span class="pill win">Open</span> <span class="mono">${esc(state.status.filePath)}</span>` : '<span class="pill">No file open</span>'}</p>
+      ${list}
+      <div class="toolbar"><button class="primary" id="c-open">Browse for a file</button>${open ? '<button id="c-close">Close file</button>' : ''}</div>
+      ${!window.m26 ? '<div class="toolbar"><input type="text" id="c-path" placeholder="Paste the full path to the CAREER file" style="min-width:360px"><button id="c-open-path">Open path</button></div>' : ''}
+      <p class="small-note">Be out of the franchise in Madden when you write injuries, then load it again in game.</p>
+    </div>`;
+  }
+
   // ---------- EA account sign-in
   const eaUI = { pending: null, task: null, busy: false, showDiag: false };
 
@@ -258,20 +276,12 @@
     const open = state.status.franchiseOpen;
     return `
       <h1>Connect your franchise</h1>
-      <p class="lead">Three ways in. Sign in with your EA account and the tool lists your franchises and downloads the one you pick. A PC franchise file gives you everything, including the injury tool and real snap counts. The Madden Companion App export works too.</p>
+      <p class="lead">Sign in with EA and your online franchises are listed here. Click one and the stats load. The other two ways in are below it.</p>
       ${await eaCard()}
       <div class="grid cols-2">
+        ${await localCard(open)}
         <div class="card">
-          <h3>2 · PC franchise file (full access)</h3>
-          <p>Madden 26 on PC keeps each franchise as a file in <span class="mono">Documents\\Madden NFL 26\\settings</span> (files named <span class="mono">CAREER-…</span>). Open it here and the tool reads rosters, the schedule, box scores, snap counts and injuries straight from the save, and can write injuries back into it. A backup is made before every write.</p>
-          <p>${open ? `<span class="pill win">Open</span> <span class="mono">${esc(state.status.filePath)}</span>` : '<span class="pill">No file open</span>'}</p>
-          <div class="toolbar"><button class="primary" id="c-open">Open franchise file</button>${open ? '<button id="c-close">Close file</button>' : ''}</div>
-          ${!window.m26 ? '<div class="toolbar"><input type="text" id="c-path" placeholder="Paste the full path to the CAREER file" style="min-width:360px"><button id="c-open-path">Open path</button></div>' : ''}
-          ${(state.status.settings.recentFiles || []).length ? `<h3>Recent</h3><ul class="list">${state.status.settings.recentFiles.map((f) => `<li><span class="mono">${esc(f)}</span><button class="small" data-open-recent="${esc(f)}">Open</button></li>`).join('')}</ul>` : ''}
-          <p class="small-note">Close Madden or be out of the franchise when you write injuries, then re-load the franchise in game. Madden's cloud sync will upload the changed file the next time you save.</p>
-        </div>
-        <div class="card">
-          <h3>3 · Madden Companion App export</h3>
+          <h3>Madden Companion App export</h3>
           <p>Every Madden 26 franchise (console or PC) lives on EA's servers, and EA's official way out of the cloud is the <b>Madden Companion App</b> on your phone. Its <b>Export</b> feature sends the whole league to any address you type in. This program is listening right now at:</p>
           ${lan.map((a) => `<div class="url-box">http://${esc(a)}:${port}</div>`).join('')}
           <ol class="steps">
