@@ -551,27 +551,64 @@
     if (!g) return;
     if (!state.catalog) state.catalog = await api('/injuries/catalog');
     const root = $('#modal-root');
-    let teamId = presetTeam || g.homeTeamId;
-    let roster = (await api(`/leagues/${state.leagueKey}/teams/${teamId}/roster`)).players;
+    // Only the two teams playing this game can have somebody hurt in it, so a
+    // team carried over from another screen is ignored rather than shown.
+    const teams = [
+      { id: g.homeTeamId, name: g.homeName, abbr: g.home },
+      { id: g.awayTeamId, name: g.awayName, abbr: g.away },
+    ];
+    let teamId = teams.some((t) => t.id === presetTeam) ? presetTeam : g.homeTeamId;
+    const rosters = {};
+    const loadRoster = async (id) => {
+      if (!rosters[id]) rosters[id] = (await api(`/leagues/${state.leagueKey}/teams/${id}/roster`)).players;
+      return rosters[id];
+    };
+    await loadRoster(teamId);
+    let selectedId = null;
     let plan = null;
+    let search = '';
     const canApply = state.league.source === 'franchise';
+
+    const selectedPlayer = () => (rosters[teamId] || []).find((p) => p.playerId === selectedId) || null;
+    const selectedLine = () => {
+      const p = selectedPlayer();
+      if (!p) return '<span class="muted">Pick a player from the list above.</span>';
+      return `<b>${esc(p.fullName)}</b> <span class="muted">${esc(p.position)} · #${p.jerseyNum} · ${p.overall} overall${p.injury && p.injury.status === 'Injured' ? ' · already hurt' : ''}</span>`;
+    };
+    const rosterHtml = () => {
+      const players = rosters[teamId] || [];
+      if (!players.length) return '<div class="muted" style="padding:12px">No players on this team.</div>';
+      let out = '';
+      let lastGroup = null;
+      for (const p of players) {
+        if (p.groupLabel !== lastGroup) {
+          lastGroup = p.groupLabel;
+          out += `<div class="rgroup" data-group="${esc(lastGroup)}">${esc(lastGroup)}</div>`;
+        }
+        const hurt = p.injury && p.injury.status === 'Injured';
+        out += `<div class="rrow${selectedId === p.playerId ? ' sel' : ''}" data-player="${esc(p.playerId)}" data-group="${esc(p.groupLabel)}" data-search="${esc(`${p.fullName} ${p.position} ${p.jerseyNum}`.toLowerCase())}"><span class="rnum">#${p.jerseyNum}</span><span class="rname">${esc(p.fullName)}</span><span class="rpos">${esc(p.position)}</span><span class="rovr">${p.overall}</span><span class="rinj">${hurt ? '<span class="injured">hurt</span>' : ''}</span></div>`;
+      }
+      return out;
+    };
+
     const draw = () => {
       const parts = state.catalog.bodyParts;
       root.innerHTML = `<div class="modal-back"><div class="modal">
         <h2>Injure a player · ${esc(g.label)}: ${esc(g.away)} @ ${esc(g.home)}</h2>
+        <div class="teamtabs">${teams.map((t) => `<button class="teamtab${teamId === t.id ? ' active' : ''}" data-team="${esc(t.id)}">${esc(t.name)}</button>`).join('')}</div>
+        <input type="text" id="im-search" class="rsearch" placeholder="Filter by name, position or number" value="${esc(search)}">
+        <div id="im-roster" class="roster">${rosterHtml()}</div>
+        <div id="im-selected" class="selline">${selectedLine()}</div>
         <div class="form-grid">
-          <div class="field"><span>Team</span><select id="im-team"><option value="${esc(g.homeTeamId)}" ${teamId === g.homeTeamId ? 'selected' : ''}>${esc(g.homeName)}</option><option value="${esc(g.awayTeamId)}" ${teamId === g.awayTeamId ? 'selected' : ''}>${esc(g.awayName)}</option></select></div>
-          <div class="field"><span>Player</span><select id="im-player">${roster.map((p) => `<option value="${esc(p.playerId)}">${esc(p.position)} ${esc(p.fullName)} #${p.jerseyNum} (${p.overall})${p.injury && p.injury.status === 'Injured' ? ' — already injured' : ''}</option>`).join('')}</select></div>
           <div class="field"><span>Body part</span><select id="im-part">${parts.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join('')}</select></div>
           <div class="field"><span>Injury</span><select id="im-type"></select></div>
           <div class="field"><span>Weeks out (blank = the game's normal range)</span><input type="number" id="im-weeks" min="0" max="63" placeholder="auto"></div>
           <div class="field"><span>Side</span><select id="im-side"><option value="">Random</option><option value="Left">Left</option><option value="Right">Right</option></select></div>
           <div class="field full"><label style="display:flex;align-items:center;gap:8px;color:var(--text)"><input type="checkbox" id="im-ir" style="min-width:0"> Place on injured reserve when 4+ weeks</label></div>
         </div>
-        <div id="im-plan">${plan ? planHtml(plan) : '<p class="small-note">Click <b>Preview</b> to roll the play it happens on and the exact weeks.</p>'}</div>
+        <div id="im-plan">${plan ? planHtml(plan) : '<p class="small-note">Pick a player and the injury is rolled straight away.</p>'}</div>
         <div class="modal-actions">
           <button id="im-cancel">Cancel</button>
-          <button id="im-preview">Preview</button>
           <button id="im-reroll" ${plan ? '' : 'disabled'}>Re-roll play</button>
           <button class="blue" id="im-schedule" ${plan ? '' : 'disabled'} title="Save it here and write it into the file later">Save for later</button>
           <button class="primary" id="im-apply" ${plan && canApply ? '' : 'disabled'} title="${canApply ? 'Write into the franchise file now (a backup is made first)' : 'Needs an open PC franchise file'}">Write into franchise file</button>
@@ -580,15 +617,67 @@
       </div></div>`;
       const partSel = $('#im-part'); const typeSel = $('#im-type');
       const fillTypes = () => { typeSel.innerHTML = state.catalog.byPart[partSel.value].map((t) => `<option value="${esc(t.key)}">${esc(t.name)} · ${t.seasonEnding ? 'season' : t.weeks.min + '-' + t.weeks.max + ' wk'}</option>`).join(''); };
-      fillTypes();
       partSel.value = state._lastPart || 'Knee'; fillTypes(); if (state._lastType) typeSel.value = state._lastType;
-      partSel.onchange = () => { state._lastPart = partSel.value; fillTypes(); };
-      typeSel.onchange = () => { state._lastType = typeSel.value; };
-      $('#im-team').onchange = async (e) => { teamId = e.target.value; roster = (await api(`/leagues/${state.leagueKey}/teams/${teamId}/roster`)).players; plan = null; draw(); };
       $('#im-cancel').onclick = () => { root.innerHTML = ''; };
-      const req = (salt) => ({ playerId: $('#im-player').value, gameId, injuryKey: $('#im-type').value, weeks: $('#im-weeks').value === '' ? undefined : Number($('#im-weeks').value), side: $('#im-side').value || undefined, placeOnIR: $('#im-ir').checked, salt: salt || '' });
-      $('#im-preview').onclick = async () => { try { plan = (await api(`/leagues/${state.leagueKey}/injuries/plan`, { method: 'POST', body: req('') })).plan; plan._salt = ''; draw(); } catch (e) { banner(esc(e.message), 'error'); } };
-      $('#im-reroll').onclick = async () => { const salt = String(Math.floor(Math.random() * 1e9)); try { plan = (await api(`/leagues/${state.leagueKey}/injuries/plan`, { method: 'POST', body: req(salt) })).plan; plan._salt = salt; draw(); } catch (e) { banner(esc(e.message), 'error'); } };
+      const req = (salt) => ({ playerId: selectedId, gameId, injuryKey: typeSel.value, weeks: $('#im-weeks').value === '' ? undefined : Number($('#im-weeks').value), side: $('#im-side').value || undefined, placeOnIR: $('#im-ir').checked, salt: salt || '' });
+
+      const setButtons = () => {
+        const ready = Boolean(selectedId && plan);
+        $('#im-reroll').disabled = !ready;
+        $('#im-schedule').disabled = !ready;
+        $('#im-apply').disabled = !(ready && canApply);
+      };
+      // Picking a player rolls the injury immediately, so there is nothing
+      // extra to press before writing it in.
+      const roll = async (salt = '') => {
+        if (!selectedId) { $('#im-plan').innerHTML = '<p class="small-note">Pick a player and the injury is rolled straight away.</p>'; plan = null; setButtons(); return; }
+        try {
+          plan = (await api(`/leagues/${state.leagueKey}/injuries/plan`, { method: 'POST', body: req(salt) })).plan;
+          plan._salt = salt;
+          $('#im-plan').innerHTML = planHtml(plan);
+        } catch (e) {
+          plan = null;
+          $('#im-plan').innerHTML = `<p class="small-note injured">${esc(e.message)}</p>`;
+        }
+        setButtons();
+      };
+
+      const rosterEl = $('#im-roster');
+      const applyFilter = () => {
+        const q = search.trim().toLowerCase();
+        for (const row of $$('[data-player]', rosterEl)) row.style.display = !q || row.dataset.search.includes(q) ? '' : 'none';
+        for (const head of $$('.rgroup', rosterEl)) {
+          const any = $$(`[data-player][data-group="${head.dataset.group}"]`, rosterEl).some((r) => r.style.display !== 'none');
+          head.style.display = any ? '' : 'none';
+        }
+      };
+      for (const row of $$('[data-player]', rosterEl)) {
+        row.onclick = () => {
+          selectedId = row.dataset.player;
+          for (const other of $$('[data-player]', rosterEl)) other.classList.toggle('sel', other === row);
+          $('#im-selected').innerHTML = selectedLine();
+          roll('');
+        };
+      }
+      $('#im-search').oninput = (e) => { search = e.target.value; applyFilter(); };
+      if (search) applyFilter();
+      for (const btn of $$('[data-team]', root)) {
+        btn.onclick = async () => {
+          if (btn.dataset.team === teamId) return;
+          teamId = btn.dataset.team;
+          selectedId = null;
+          plan = null;
+          search = '';
+          await loadRoster(teamId);
+          draw();
+        };
+      }
+      partSel.onchange = () => { state._lastPart = partSel.value; fillTypes(); roll(plan ? plan._salt : ''); };
+      typeSel.onchange = () => { state._lastType = typeSel.value; roll(plan ? plan._salt : ''); };
+      $('#im-weeks').onchange = () => roll(plan ? plan._salt : '');
+      $('#im-side').onchange = () => roll(plan ? plan._salt : '');
+      $('#im-reroll').onclick = () => roll(String(Math.floor(Math.random() * 1e9)));
+      setButtons();
       $('#im-schedule').onclick = async () => { try { await api(`/leagues/${state.leagueKey}/injuries/schedule`, { method: 'POST', body: req(plan._salt) }); root.innerHTML = ''; banner('Injury saved. Find it under Injury Report and write it into the file when you are ready.', 'ok'); } catch (e) { banner(esc(e.message), 'error'); } };
       $('#im-apply').onclick = async () => {
         if (!confirm(`Write this injury into the franchise file now?\n\n${plan.player.name}: ${plan.injury.name}, ${plan.injury.label}.\n\nA backup copy of the file is made first. Make sure Madden is not in this franchise while writing.`)) return;

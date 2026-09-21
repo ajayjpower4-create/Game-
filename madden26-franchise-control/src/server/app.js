@@ -16,6 +16,7 @@ import { planInjury } from '../core/franchise/injuries.js';
 import { addEvent, removeEvent, EVENT_TYPES } from '../core/tracker/tracker.js';
 import { BUNDLED_SCHEMA_DIR } from '../core/franchise/reader.js';
 import { findFranchiseFiles } from '../core/franchise/locate.js';
+import { positionRank, group as positionGroup, GROUP_LABEL, GROUP_ORDER } from '../core/positions.js';
 import { hashString } from '../core/rng.js';
 import { EAAccountService } from '../core/ea/account.js';
 import { DEFAULT_YEAR } from '../core/ea/constants.js';
@@ -140,8 +141,11 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
   api.get('/leagues/:leagueKey/teams/:teamId/roster', (req, res) => {
     const league = getLeague(req.params.leagueKey);
     if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
-    const players = Object.values(league.players).filter((p) => p.teamId === req.params.teamId).map(publicPlayer).sort((a, b) => a.position.localeCompare(b.position) || b.overall - a.overall);
-    res.json({ ok: true, players });
+    const players = Object.values(league.players)
+      .filter((p) => p.teamId === req.params.teamId)
+      .map(publicPlayer)
+      .sort((a, b) => positionRank(a.position) - positionRank(b.position) || b.overall - a.overall || a.fullName.localeCompare(b.fullName));
+    res.json({ ok: true, teamId: req.params.teamId, team: league.teams[req.params.teamId] || null, players });
   });
 
   api.get('/leagues/:leagueKey/schedule', (req, res) => {
@@ -351,8 +355,10 @@ function gameSort(a, b) {
 
 export function publicPlayer(p) {
   if (!p) return null;
-  return { playerId: p.playerId, teamId: p.teamId, fullName: p.fullName, firstName: p.firstName, lastName: p.lastName, position: p.position, jerseyNum: p.jerseyNum, age: p.age, overall: p.overall, devTrait: p.devTrait, injury: p.injury, career: p.career || null, ratings: p.ratings };
+  return { playerId: p.playerId, teamId: p.teamId, fullName: p.fullName, firstName: p.firstName, lastName: p.lastName, position: p.position, group: positionGroup(p.position), groupLabel: GROUP_LABEL[positionGroup(p.position)] || 'Other', jerseyNum: p.jerseyNum, age: p.age, overall: p.overall, devTrait: p.devTrait, injury: p.injury, career: p.career || null, ratings: p.ratings };
 }
+
+export { GROUP_ORDER };
 
 export function publicGame(g, league) {
   if (!g) return null;

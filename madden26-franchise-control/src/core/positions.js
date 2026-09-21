@@ -31,6 +31,18 @@ export function group(position) {
   return 'ST';
 }
 
+// Depth-chart order, the way a roster is read in football rather than
+// alphabetically.
+export const ROSTER_ORDER = ['QB', 'HB', 'FB', 'WR', 'TE', 'LT', 'LG', 'C', 'RG', 'RT', 'LE', 'RE', 'DT', 'LOLB', 'MLB', 'ROLB', 'CB', 'FS', 'SS', 'K', 'P', 'LS'];
+
+export function positionRank(position) {
+  const i = ROSTER_ORDER.indexOf(position);
+  return i === -1 ? ROSTER_ORDER.length : i;
+}
+
+export const GROUP_LABEL = { QB: 'Quarterbacks', RB: 'Running backs', WR: 'Wide receivers', TE: 'Tight ends', OL: 'Offensive line', DL: 'Defensive line', LB: 'Linebackers', DB: 'Defensive backs', ST: 'Special teams' };
+export const GROUP_ORDER = ['QB', 'RB', 'WR', 'TE', 'OL', 'DL', 'LB', 'DB', 'ST'];
+
 export function isBlocker(position) {
   return BLOCKERS.includes(position);
 }

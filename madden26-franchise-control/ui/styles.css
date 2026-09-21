@@ -90,10 +90,28 @@ ol.steps li { margin-bottom: 6px; }
 .modal h2 { margin-top: 0; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
 .form-grid .field select, .form-grid .field input { width: 100%; }
+.form-grid .field input[type=checkbox] { width: auto; min-width: 0; flex: none; margin: 0; }
 .form-grid .full { grid-column: 1 / -1; }
 .plan { background: var(--bg3); border-radius: 8px; padding: 12px 14px; margin-top: 12px; }
 .plan .headline { font-size: 16px; font-weight: 700; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+/* Roster picker in the injury tool */
+.teamtabs { display: flex; gap: 8px; margin-bottom: 10px; }
+.teamtabs .teamtab { flex: 1; padding: 10px; font-weight: 600; background: var(--bg3); border: 1px solid var(--line); }
+.teamtabs .teamtab.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+.rsearch { width: 100%; margin-bottom: 8px; }
+.roster { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.rgroup { position: sticky; top: 0; background: var(--bg2); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; padding: 6px 10px; border-bottom: 1px solid var(--line); z-index: 1; }
+.rrow { display: grid; grid-template-columns: 48px 1fr 52px 42px 54px; gap: 8px; align-items: center; padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.rrow:hover { background: var(--bg3); }
+.rrow.sel { background: var(--accent2); color: #fff; }
+.rrow.sel .rnum, .rrow.sel .rpos, .rrow.sel .rovr { color: #e8eeff; }
+.rrow .rnum, .rrow .rpos, .rrow .rovr { color: var(--muted); font-variant-numeric: tabular-nums; }
+.rrow .rname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rrow .rovr { text-align: right; }
+.rrow .rinj { text-align: right; font-size: 11px; }
+.selline { padding: 10px 0 4px; }
+
 .list { list-style: none; padding: 0; margin: 0; }
 .list li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .leader { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
