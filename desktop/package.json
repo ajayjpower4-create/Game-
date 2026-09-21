@@ -19,7 +19,9 @@
     "files": [
       "main.js",
       "preload.js",
-      "ui/**/*"
+      "madden-file.js",
+      "ui/**/*",
+      "node_modules/**/*"
     ],
     "directories": {
       "output": "release"
