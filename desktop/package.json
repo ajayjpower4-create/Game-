@@ -2,7 +2,7 @@
   "name": "gridiron-control-center",
   "productName": "Gridiron Control Center",
   "version": "1.0.0",
-  "description": "Madden 26 franchise mod — injury control and advanced franchise stats",
+  "description": "Madden 26 franchise mod \u2014 injury control and advanced franchise stats",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -20,6 +20,7 @@
       "main.js",
       "preload.js",
       "madden-file.js",
+      "tracker.js",
       "ui/**/*",
       "node_modules/**/*"
     ],
