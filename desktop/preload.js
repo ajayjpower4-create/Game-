@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('gcc', {
   pickSaveFolder: () => ipcRenderer.invoke('saves:pickFolder'),
   searchSaves: (extraRoots) => ipcRenderer.invoke('saves:search', extraRoots),
   searchEverywhere: () => ipcRenderer.invoke('saves:searchEverywhere'),
+  injuryList: () => ipcRenderer.invoke('franchise:injuries'),
+  injurePlayer: (payload) => ipcRenderer.invoke('franchise:injure', payload),
+  healPlayer: (playerRow) => ipcRenderer.invoke('franchise:heal', playerRow),
+  reloadFranchise: () => ipcRenderer.invoke('franchise:reload'),
   saveFile: (name, text) => ipcRenderer.invoke('file:save', { name, text }),
   onMenu: (handler) => {
     for (const channel of ['menu:open', 'menu:save', 'menu:injury-script']) {

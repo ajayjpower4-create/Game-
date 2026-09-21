@@ -46,6 +46,7 @@ const state = {
   saves: null,            // what the save scan found, newest first
   scanning: false,
   searchNote: null,       // what the last search covered
+  maddenInjuries: null,   // the real InjuryType list, when a save is open
   extraDirs: [],          // folders the user pointed at by hand
 };
 
@@ -117,8 +118,44 @@ const gradeCls = (good, mid) => (val) => (val >= good ? 'good' : val >= mid ? 'm
 
 // Rows for a category: either the season totals for the selected team or the
 // single-game lines from whatever game is selected.
+// Rows straight off a real franchise file. Only the numbers Madden actually
+// stores — the derived columns the simulated league has (pressures, almost
+// sacks, missed tackles) are not in the save and are left out rather than
+// made up.
+function realFeed(category) {
+  const roster = state.fr.rosters[state.team] || [];
+  const withStats = roster.filter((p) => p.stats);
+  const rows = [];
+  for (const p of withStats) {
+    const st = p.stats;
+    const base = { player: p, games: st.games || 0, started: st.started || 0, grade: st.grade || 0 };
+    if (category === 'snaps' && st.snaps) rows.push({ ...base, count: st.snaps, off: 0, def: 0 });
+    if (category === 'blocking' && (st.pancakes || st.sacksAllowed)) {
+      rows.push({ ...base, pancakes: st.pancakes, sacksAllowed: st.sacksAllowed, snaps: st.snaps });
+    }
+    if (category === 'receiving' && (st.catches || st.drops)) {
+      const targets = st.catches + st.drops;      // a floor: Madden keeps catches and drops, not targets
+      rows.push({
+        ...base, catches: st.catches, drops: st.drops, targets,
+        yards: st.recYards, yac: st.yac, tds: st.recTds,
+        dropRate: targets ? Math.round((st.drops / targets) * 1000) / 10 : 0,
+        catchRate: targets ? Math.round((st.catches / targets) * 100) : 0,
+      });
+    }
+    if (category === 'defense' && (st.tackles || st.sacks || st.assists)) {
+      rows.push({
+        ...base, tackles: st.tackles, assists: st.assists, tfl: st.tfl, sacks: st.sacks,
+        pbu: st.pbu, ints: st.ints, bigHits: st.bigHits, catchesAllowed: st.catchesAllowed,
+        combined: st.tackles + st.assists,
+      });
+    }
+  }
+  return rows;
+}
+
 function feed(category) {
   const fr = state.fr;
+  if (fr.real) return realFeed(category);
   if (state.scope === 'game' && state.gameId) {
     const game = fr.schedule.find((g) => g.id === state.gameId);
     if (!game || game.bye) return [];
@@ -167,6 +204,14 @@ const teamGames = (teamId) => state.fr.schedule.filter((g) => !g.bye && (g.home 
 
 function scopeBar(note) {
   const fr = state.fr;
+  if (fr.real) {
+    return el('div', { class: 'card' },
+      el('div', { class: 'row' },
+        el('label', { class: 'field grow' }, 'Team',
+          el('select', { onchange: (e) => { state.team = e.target.value; save(); render(); } },
+            fr.teams.map((t) => el('option', { value: t.id, selected: t.id === state.team || null }, `${t.city} ${t.name}`)))),
+        el('p', { class: 'note' }, `Season totals from ${fr.source}.`)));
+  }
   const games = teamGames(state.team).filter((g) => g.played);
   const sel = el('select', {
     onchange: (e) => {
@@ -196,8 +241,60 @@ function scopeBar(note) {
   );
 }
 
+// The dashboard for a real save: who is hurt, and who leads the categories
+// Madden actually records.
+function viewRealDashboard() {
+  const fr = state.fr;
+  const t = fr.teams.find((x) => x.id === state.team) || fr.teams[0];
+  const roster = fr.rosters[state.team] || [];
+  const injured = roster.filter((p) => p.injury);
+  const best = (cat, fn) => feed(cat).slice().sort((a, b) => fn(b) - fn(a))[0];
+  const pancake = best('blocking', (r) => r.pancakes);
+  const worstPass = best('blocking', (r) => r.sacksAllowed);
+  const drops = best('receiving', (r) => r.drops);
+  const snaps = best('snaps', (r) => r.count);
+  const tackles = best('defense', (r) => r.combined);
+  const stat = (k, v, sub) => el('div', { class: 'stat' }, el('div', { class: 'k' }, k), el('div', { class: 'v' }, v), el('div', { class: 's' }, sub || ''));
+
+  return [
+    el('div', { class: 'card' },
+      el('div', { class: 'spread' },
+        el('div', {},
+          el('h2', {}, t ? `${t.city} ${t.name}` : 'Your team'),
+          el('p', { class: 'hint' },
+            `${fr.source} · Madden ${fr.gameYear || '26'} · ${fr.year || ''} season, week ${fr.week} · ${roster.length} players`)),
+        el('div', { class: 'row' },
+          el('select', { onchange: (e) => { state.team = e.target.value; save(); render(); } },
+            fr.teams.map((x) => el('option', { value: x.id, selected: x.id === state.team || null }, `${x.city} ${x.name}`))),
+          el('button', { class: 'btn', onclick: () => openMaddenInjuryModal(state.team) }, 'Injure a player')))),
+    el('div', { class: 'grid' },
+      stat('Injured', injured.length, injured.length ? injured.slice(0, 4).map((p) => p.last).join(', ') : 'nobody hurt'),
+      stat('Pancake leader', pancake ? pancake.player.name : '—', pancake ? `${pancake.pancakes} pancakes` : 'no blocking stats yet'),
+      stat('Most sacks allowed', worstPass && worstPass.sacksAllowed ? worstPass.player.name : '—', worstPass && worstPass.sacksAllowed ? `${worstPass.sacksAllowed} allowed` : ''),
+      stat('Most drops', drops && drops.drops ? drops.player.name : '—', drops && drops.drops ? `${drops.drops} drops on ${drops.targets}` : 'nobody has dropped one'),
+      stat('Most snaps', snaps ? snaps.player.name : '—', snaps ? `${snaps.count} snaps` : ''),
+      stat('Most tackles', tackles ? tackles.player.name : '—', tackles ? `${tackles.combined} combined` : '')),
+    injured.length ? el('div', { class: 'card' },
+      el('h3', {}, 'Injury report'),
+      injured.map((p) => el('div', { class: 'game' },
+        el('div', {},
+          el('div', { class: 'match' }, `${p.name} (${p.pos})`),
+          el('div', { class: 'meta' }, `${p.injury.typeName} · ${p.injury.severity} · ${p.injury.gamesOut} weeks out${p.injury.ir ? ' · on IR' : ''}`)),
+        el('button', {
+          class: 'btn small ghost',
+          onclick: async () => {
+            const res = await window.gcc.healPlayer(p.row);
+            if (res.error) { state.flash = res.error; render(); return; }
+            const fresh = await window.gcc.reloadFranchise();
+            if (!fresh.error) { connectMadden(fresh); state.flash = `${p.name} healed and saved.`; render(); }
+          },
+        }, 'Heal him'))) ) : null,
+  ];
+}
+
 function viewDashboard() {
   const fr = state.fr;
+  if (fr.real) return viewRealDashboard();
   const tot = seasonTotals(fr, state.team, null);
   const played = teamGames(state.team).filter((g) => g.played).length;
   const t = fr.teams.find((x) => x.id === state.team);
@@ -244,6 +341,7 @@ function viewDashboard() {
 
 function viewSchedule() {
   const fr = state.fr;
+  if (fr.real) return viewRealSchedule();
   const weeks = [...new Set(fr.schedule.map((g) => g.week))];
   const week = state.week;
   const games = fr.schedule.filter((g) => g.week === week && !g.bye);
@@ -280,7 +378,95 @@ function viewSchedule() {
   ];
 }
 
+const REAL_COLS = {
+  blocking: [
+    { key: 'games', label: 'G', get: (r) => r.games },
+    { key: 'started', label: 'GS', get: (r) => r.started },
+    { key: 'snaps', label: 'Snaps', get: (r) => r.snaps || 0 },
+    { key: 'pancakes', label: 'Pancakes', get: (r) => r.pancakes, cls: (r) => (r.pancakes >= 40 ? 'good' : '') },
+    { key: 'sacksAllowed', label: 'Sacks allowed', get: (r) => r.sacksAllowed, cls: (r) => (r.sacksAllowed >= 6 ? 'bad' : r.sacksAllowed >= 3 ? 'mid' : 'good') },
+    { key: 'ratio', label: 'Pancakes / sack', get: (r) => (r.sacksAllowed ? Math.round(r.pancakes / r.sacksAllowed * 10) / 10 : r.pancakes) },
+    { key: 'grade', label: 'Game rating', get: (r) => r.grade },
+  ],
+  receiving: [
+    { key: 'games', label: 'G', get: (r) => r.games },
+    { key: 'targets', label: 'Catches + drops', get: (r) => r.targets, title: 'Madden stores catches and drops, not targets' },
+    { key: 'catches', label: 'Catches', get: (r) => r.catches },
+    { key: 'drops', label: 'Drops', get: (r) => r.drops, cls: (r) => (r.drops >= 5 ? 'bad' : r.drops >= 3 ? 'mid' : '') },
+    { key: 'dropRate', label: 'Drop %', get: (r) => r.dropRate, fmt: (r) => `${r.dropRate}%`, cls: (r) => (r.dropRate >= 12 ? 'bad' : r.dropRate >= 7 ? 'mid' : 'good') },
+    { key: 'yards', label: 'Yards', get: (r) => r.yards },
+    { key: 'yac', label: 'YAC', get: (r) => r.yac },
+    { key: 'tds', label: 'TD', get: (r) => r.tds },
+  ],
+  defense: [
+    { key: 'games', label: 'G', get: (r) => r.games },
+    { key: 'combined', label: 'Tackles', get: (r) => r.combined },
+    { key: 'tackles', label: 'Solo', get: (r) => r.tackles },
+    { key: 'assists', label: 'Assists', get: (r) => r.assists },
+    { key: 'tfl', label: 'TFL', get: (r) => r.tfl },
+    { key: 'sacks', label: 'Sacks', get: (r) => r.sacks },
+    { key: 'bigHits', label: 'Big hits', get: (r) => r.bigHits },
+    { key: 'catchesAllowed', label: 'Catches allowed', get: (r) => r.catchesAllowed, cls: (r) => (r.catchesAllowed >= 40 ? 'bad' : '') },
+    { key: 'pbu', label: 'PBU', get: (r) => r.pbu },
+    { key: 'ints', label: 'INT', get: (r) => r.ints },
+  ],
+  snaps: [
+    { key: 'games', label: 'G', get: (r) => r.games },
+    { key: 'started', label: 'Started', get: (r) => r.started },
+    { key: 'count', label: 'Snaps', get: (r) => r.count },
+    { key: 'avg', label: 'Per game', get: (r) => (r.games ? Math.round(r.count / r.games) : 0) },
+  ],
+};
+
+// What the save does not keep, said once, where the missing column would be.
+const MISSING_NOTE = {
+  blocking: 'Madden stores pancakes and sacks allowed per blocker — not pressures, almost-sacks or time held. Those are not in the save, so they are not shown.',
+  receiving: 'Madden stores catches and drops, not targets. Catches + drops is the floor on how often the ball came his way.',
+  defense: 'Madden stores tackles, sacks and catches allowed — not missed tackles or missed sacks. Those are not in the save.',
+  snaps: 'Snaps are Madden\'s own DOWNSPLAYED count.',
+};
+
+function realTable(category, cols, empty) {
+  const rows = feed(category);
+  return [
+    el('div', { class: 'card' },
+      el('h3', {}, 'From your franchise file'),
+      el('p', { class: 'hint' }, MISSING_NOTE[category]),
+      table(`real-${category}`, rows, [playerCol, ...cols], { defaultSort: cols[2] ? cols[2].key : cols[0].key, empty })),
+  ];
+}
+
+// A real franchise's schedule, grouped by week, straight out of SeasonGame.
+function viewRealSchedule() {
+  const fr = state.fr;
+  const weeks = [...new Set(fr.schedule.map((g) => g.week))].sort((a, b) => a - b);
+  const week = weeks.includes(state.week) ? state.week : (weeks[0] || 1);
+  const games = fr.schedule.filter((g) => g.week === week);
+  const teamName = (id) => {
+    const t = fr.teams.find((x) => x.id === id);
+    return t ? `${t.city} ${t.name}` : id;
+  };
+
+  return [
+    el('div', { class: 'card' },
+      el('div', { class: 'spread' },
+        el('div', {},
+          el('h2', {}, `Week ${week}`),
+          el('p', { class: 'hint' }, `${fr.source} · ${fr.year || ''} season · injuries are written straight into this file.`)),
+        el('button', { class: 'btn', onclick: () => openMaddenInjuryModal(state.team) }, 'Injure a player')),
+      el('div', { class: 'row' }, weeks.map((w) =>
+        el('button', { class: `btn small ${w === week ? '' : 'ghost'}`, onclick: () => { state.week = w; render(); } }, `W${w}`)))),
+    el('div', { class: 'card' }, games.length ? games.map((g) => el('div', { class: `game ${g.played ? 'played' : ''}` },
+      el('div', {},
+        el('div', { class: 'match' }, `${teamName(g.away)} at ${teamName(g.home)}`),
+        el('div', { class: 'meta' }, g.played ? `Final ${g.awayScore}–${g.homeScore}` : g.status || 'Not played')),
+      el('button', { class: 'btn small', onclick: () => openMaddenInjuryModal(g.home) }, 'Injure a player')))
+      : el('div', { class: 'empty' }, 'No games listed for this week.')),
+  ];
+}
+
 function viewBlocking() {
+  if (state.fr.real) return [scopeBar(null), ...realTable('blocking', REAL_COLS.blocking, 'No blocking stats in this save yet — play or sim a week.')];
   const rows = feed('blocking');
   const cols = [
     playerCol,
@@ -313,6 +499,7 @@ function viewBlocking() {
 }
 
 function viewSnaps() {
+  if (state.fr.real) return [scopeBar(null), ...realTable('snaps', REAL_COLS.snaps, 'Nothing recorded in this save yet.')];
   const rows = feed('snaps');
   const cols = [
     playerCol,
@@ -332,6 +519,7 @@ function viewSnaps() {
 }
 
 function viewReceiving() {
+  if (state.fr.real) return [scopeBar(null), ...realTable('receiving', REAL_COLS.receiving, 'Nothing recorded in this save yet.')];
   const rows = feed('receiving');
   const cols = [
     playerCol,
@@ -353,6 +541,7 @@ function viewReceiving() {
 }
 
 function viewDefense() {
+  if (state.fr.real) return [scopeBar(null), ...realTable('defense', REAL_COLS.defense, 'Nothing recorded in this save yet.')];
   const rows = feed('defense');
   const cols = [
     playerCol,
@@ -381,6 +570,15 @@ function viewDefense() {
 }
 
 function viewPenalties() {
+  if (state.fr.real) {
+    return [
+      el('div', { class: 'card' },
+        el('h2', {}, 'Penalties'),
+        el('p', { class: 'hint' },
+          'Madden keeps penalties as a team total — PENALTIES and PENALTYYARDS on the team stat table — and does not record who committed them. '
+          + 'There is no per-player penalty data in the save to show, so this tab does not invent any.')),
+    ];
+  }
   const rows = penaltyRows();
   const cols = [
     playerCol,
@@ -422,6 +620,20 @@ function viewPenalties() {
 
 function viewInjuries() {
   const fr = state.fr;
+  if (fr.real) {
+    const hurt = fr.teams.flatMap((t) => (fr.rosters[t.id] || []).filter((p) => p.injury));
+    return [
+      el('div', { class: 'card' },
+        el('h2', {}, 'Injury report'),
+        el('p', { class: 'hint' }, `Everyone hurt in ${fr.source}, league wide.`),
+        hurt.length ? hurt.sort((a, b) => b.injury.gamesOut - a.injury.gamesOut).map((p) => el('div', { class: 'game' },
+          el('div', {},
+            el('div', { class: 'match' }, `${p.name} (${p.pos}, ${p.team})`),
+            el('div', { class: 'meta' }, `${p.injury.typeName} · ${p.injury.severity} · ${p.injury.gamesOut} weeks out${p.injury.ir ? ' · IR' : ''}`)),
+          el('span', { class: 'note' }, `${p.ovr} OVR`)))
+          : el('div', { class: 'empty' }, 'Nobody in the league is hurt.')),
+    ];
+  }
   const scripted = fr.injuries.filter((i) => i.status === 'scripted');
   const fired = fr.injuries.filter((i) => i.status === 'fired');
   const sevClass = (s) => `pill sev-${s.split(' ')[0]}`;
@@ -528,13 +740,8 @@ async function searchEverywhere() {
 async function openSave(save) {
   const res = await window.gcc.readSave(save.path);
   if (!res || res.error) { state.flash = res ? res.error : 'Could not read that file.'; render(); return; }
-  if (res.binary) {
-    state.flash = `${res.name} is Madden's own save (${fileSize(res.size)}) — the packed binary, not an export. `
-      + 'The app found it, but this build does not unpack that format yet, so the rosters inside it cannot be read. '
-      + 'Send this file to Claude and the reader can be written against it.';
-    render();
-    return;
-  }
+  if (res.madden) { connectMadden(res); return; }
+  if (res.binary) { state.flash = `${res.name} is a Madden file this app does not read.`; render(); return; }
   connect(res.text, res.name);
 }
 
@@ -637,7 +844,80 @@ function statDump() {
 
 /* ---------------------------------------------------------- injury modal */
 
+/**
+ * The injury tool against a real franchise file: pick the player and the
+ * injury, and it is written into the save — InjuryType, InjurySeverity,
+ * InjuryStatus and the weeks out — after the file has been copied to a backup.
+ */
+function openMaddenInjuryModal(teamId) {
+  const fr = state.fr;
+  const list = state.maddenInjuries || [];
+  const sel = { teamId: teamId || state.team, playerId: null, injuryId: list[0] ? list[0].id : null, weeks: null, ir: false, busy: false, result: null };
+  const body = $('#modalBody');
+
+  function draw() {
+    const roster = (fr.rosters[sel.teamId] || []).filter((p) => !p.injury);
+    if (!roster.find((p) => p.id === sel.playerId)) sel.playerId = roster[0] ? roster[0].id : null;
+    const player = roster.find((p) => p.id === sel.playerId);
+    const injury = list.find((i) => i.id === sel.injuryId) || list[0];
+    const weeks = sel.weeks === null ? (injury ? injury.weeks : 0) : sel.weeks;
+
+    body.replaceChildren(...[
+      el('h2', {}, 'Injure a player'),
+      el('p', { class: 'hint' }, `This writes into ${fr.source}. The file is copied to a backup first.`),
+      el('div', { class: 'row' },
+        el('label', { class: 'field grow' }, 'Team',
+          el('select', { onchange: (e) => { sel.teamId = e.target.value; sel.playerId = null; sel.result = null; draw(); } },
+            fr.teams.map((t) => el('option', { value: t.id, selected: t.id === sel.teamId || null }, `${t.city} ${t.name}`)))),
+        el('label', { class: 'field grow' }, 'Player',
+          el('select', { onchange: (e) => { sel.playerId = e.target.value; sel.result = null; draw(); } },
+            roster.slice().sort((a, b) => a.pos.localeCompare(b.pos) || b.ovr - a.ovr).map((p) =>
+              el('option', { value: p.id, selected: p.id === sel.playerId || null }, `${p.pos} · ${p.name} (${p.ovr} OVR)`))))),
+      el('div', { class: 'row', style: 'margin-top:10px' },
+        el('label', { class: 'field grow' }, 'Injury',
+          el('select', { onchange: (e) => { sel.injuryId = e.target.value; sel.weeks = null; sel.result = null; draw(); } },
+            list.map((i) => el('option', { value: i.id, selected: i.id === sel.injuryId || null }, `${i.label} — ${i.weeks} week${i.weeks === 1 ? '' : 's'}`)))),
+        el('label', { class: 'field' }, 'Weeks out',
+          el('select', { onchange: (e) => { sel.weeks = Number(e.target.value); sel.result = null; draw(); } },
+            [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 17].map((w) =>
+              el('option', { value: w, selected: w === weeks || null }, w === 0 ? 'Same game' : `${w}`))))),
+      el('p', { class: 'note', style: 'margin-top:10px' },
+        injury ? `Writes InjuryType ${injury.id}, severity ${injury.severity}, ${weeks} weeks out.` : ''),
+      el('label', { class: 'row', style: 'margin-top:8px; gap:8px' },
+        el('input', { type: 'checkbox', checked: sel.ir || null, onchange: (e) => { sel.ir = e.target.checked; } }),
+        el('span', { class: 'note' }, 'Put him on injured reserve too')),
+      sel.result ? el('div', { class: 'preview' }, sel.result) : null,
+      el('div', { class: 'row', style: 'margin-top:14px' },
+        el('button', {
+          class: 'btn', disabled: sel.busy || !player || null,
+          onclick: async () => {
+            sel.busy = true; sel.result = 'Writing to the file…'; draw();
+            const res = await window.gcc.injurePlayer({
+              playerRow: player.row, injuryId: sel.injuryId, weeks,
+              week: fr.week, year: fr.year, ir: sel.ir,
+            });
+            sel.busy = false;
+            if (res.error) { sel.result = res.error; draw(); return; }
+            sel.result = `${res.player} — ${res.injury}, out ${res.weeksOut} weeks. Written and saved.`
+              + (res.skipped.length ? ` (${res.skipped.join(', ')} not in this file.)` : '');
+            draw();
+            // Re-read the save so the rosters and stat tabs show him as out.
+            const fresh = await window.gcc.reloadFranchise();
+            if (!fresh.error) { const keep = sel.result; connectMadden(fresh); state.flash = keep; render(); }
+          },
+        }, sel.busy ? 'Writing…' : 'Injure him'),
+        el('button', { class: 'btn ghost', onclick: closeModal }, 'Close')),
+      el('p', { class: 'note', style: 'margin-top:12px' },
+        'Close Madden before writing, and load the file in the game afterwards.'),
+    ].filter(Boolean));
+  }
+
+  draw();
+  $('#modal').classList.remove('hidden');
+}
+
 function openInjuryModal(game) {
+  if (state.fr.real) { openMaddenInjuryModal(game && game.home); return; }
   const fr = state.fr;
   const sel = { teamId: game.home, playerId: null, typeId: 'acl', quarter: 0, nonce: 0, preview: null };
 
@@ -738,6 +1018,42 @@ function download(name, data) {
 
 const downloadInjuryScript = () => download('injury_script.json', exportInjuryScript(state.fr));
 
+/**
+ * A real Madden franchise file just came back from the parser. Everything the
+ * app shows from here is what is actually in that save — real teams, real
+ * rosters, the real schedule, and the stats Madden itself keeps.
+ */
+function connectMadden(payload) {
+  const { data, report, meta, name, filePath } = payload;
+  const fr = {
+    real: true,
+    source: name,
+    filePath,
+    seedText: name,
+    gameYear: meta && meta.gameYear,
+    year: data.year,
+    week: data.week || 1,
+    teams: data.teams,
+    rosters: data.rosters,
+    schedule: data.schedule.map((g) => ({ ...g, kickoff: `Week ${g.week}` })),
+    injuries: [],
+    log: [],
+  };
+  state.fr = fr;
+  state.week = fr.week;
+  state.scope = 'season';
+  state.gameId = null;
+  if (!fr.rosters[state.team]) state.team = fr.teams[0] ? fr.teams[0].id : state.team;
+  state.flash = report.notes.join(' ');
+  state.view = 'dashboard';
+  // The real injury list comes from the file's own InjuryType enum.
+  if (window.gcc && window.gcc.injuryList) {
+    window.gcc.injuryList().then((list) => { state.maddenInjuries = list; }).catch(() => {});
+  }
+  save();
+  render();
+}
+
 // Desktop gets the native dialog; the browser gets the file input.
 async function chooseFile() {
   if (window.gcc && window.gcc.desktop) {
@@ -782,10 +1098,21 @@ const VIEWS = {
 
 function render() {
   const fr = state.fr;
-  $('#status').innerHTML = `Week <b>${fr.week}</b> · ${fr.injuries.filter((i) => i.status === 'scripted').length} scripted · ${playedGames().length} games played`;
+  $('#status').innerHTML = fr.real
+    ? `Madden ${fr.gameYear || '26'} · <b>${fr.source}</b> · week ${fr.week}`
+    : `Week <b>${fr.week}</b> · ${fr.injuries.filter((i) => i.status === 'scripted').length} scripted · ${playedGames().length} games played`;
 
+  // A real save doesn't carry missed tackles or targets, so the tabs don't
+  // claim to: they're named for what's actually in the file.
+  const realLabels = {
+    schedule: 'Schedule & Injuries',
+    receiving: 'Catches & Drops',
+    defense: 'Defense',
+    blocking: 'Blocking',
+  };
   $('#tabs').replaceChildren(...TABS.map(([id, label]) =>
-    el('button', { class: state.view === id ? 'on' : '', onclick: () => { state.view = id; render(); } }, label)));
+    el('button', { class: state.view === id ? 'on' : '', onclick: () => { state.view = id; render(); } },
+      (fr.real && realLabels[id]) || label)));
 
   const out = VIEWS[state.view]();
   $('#app').replaceChildren(...[out].flat().filter(Boolean));

@@ -146,17 +146,26 @@ function searchRoots() {
 const SKIP_DIRS = /^(windows|\$recycle\.bin|system volume information|node_modules|program files|programdata|temp|tmp|cache2|inetcache|webcache|\.git)$/i;
 
 // What kind of file this is, and whether this build can actually read it.
-function classify(name, fullPath = '') {
+// Madden names its franchise saves CAREER-<something>: CAREER-SEP12-04h14m57p-AUTOSAVE,
+// CAREER-EE-AUTOSAVE, CAREER-EE. Autosaves and manual saves both land here.
+const CAREER_FILE = /^CAREER([-_.]|$)/i;
+
+function classify(name, fullPath = '', size = Infinity) {
   const lower = name.toLowerCase();
-  if (/^careersave/i.test(name)) return { kind: 'Franchise save', readable: false, binary: true };
-  if (/^rostersave/i.test(name)) return { kind: 'Roster save', readable: false, binary: true };
-  if (lower.endsWith('.json')) return { kind: 'Export (JSON)', readable: true, binary: false };
-  if (lower.endsWith('.csv')) return { kind: 'Export (CSV)', readable: true, binary: false };
-  // Game Pass and the cloud caches rename saves to GUIDs, so in those folders
-  // judge by where the file is rather than what it's called.
-  const p = fullPath.toLowerCase();
-  if (/[\\/]wgs[\\/]/.test(p) || p.includes('cloudsynccache') || p.includes('cloudsync')) {
-    return { kind: 'Possible cloud save', readable: false, binary: true, guess: true };
+  if (CAREER_FILE.test(name)) {
+    return {
+      kind: /autosave/i.test(name) ? 'Franchise autosave' : 'Franchise save',
+      readable: true, madden: true, binary: true,
+    };
+  }
+  if (/^rostersave/i.test(name) || /^roster([-_.]|$)/i.test(name)) {
+    return { kind: 'Roster file', readable: false, binary: true };
+  }
+  // An export worth listing is a real one. The Game Pass folders are full of
+  // half-kilobyte .json bookkeeping that is not anybody's franchise.
+  if (lower.endsWith('.json') || lower.endsWith('.csv')) {
+    if (size < 8 * 1024) return null;
+    return { kind: lower.endsWith('.json') ? 'Export (JSON)' : 'Export (CSV)', readable: true, binary: false };
   }
   return null;
 }
@@ -173,12 +182,12 @@ async function scanDir({ dir, label }, { exportsOnly = false, limit = 40 } = {})
   const out = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    const info = classify(entry.name, path.join(dir, entry.name));
-    if (!info) continue;
-    if (exportsOnly && info.binary) continue;
     const full = path.join(dir, entry.name);
     let stat;
     try { stat = await fs.stat(full); } catch { continue; }
+    const info = classify(entry.name, full, stat.size);
+    if (!info) continue;
+    if (exportsOnly && info.binary) continue;
     out.push({ ...info, name: entry.name, path: full, dir, label, size: stat.size, modified: stat.mtimeMs });
   }
   return out.sort((a, b) => b.modified - a.modified).slice(0, limit);
@@ -236,12 +245,10 @@ async function deepSearch({ roots, budgetMs = 25000, maxDirs = 20000, minSize = 
           continue;
         }
         if (!entry.isFile()) continue;
-        const info = classify(entry.name, full);
-        if (!info) continue;
         let stat;
         try { stat = await fs.stat(full); } catch { continue; }
-        // A franchise is megabytes. Anything tiny in a cloud cache is
-        // bookkeeping, not a save.
+        const info = classify(entry.name, full, stat.size);
+        if (!info) continue;
         if (info.guess && stat.size < minSize) continue;
         allowedDirs.add(dir);
         found.push({ ...info, name: entry.name, path: full, dir, label: root.label, size: stat.size, modified: stat.mtimeMs });
@@ -284,19 +291,79 @@ ipcMain.handle('saves:searchEverywhere', async () => {
 
 ipcMain.handle('saves:read', async (_e, filePath) => {
   if (!allowedDirs.has(path.dirname(filePath))) return { error: 'That file is outside the folders this app scanned.' };
-  const info = classify(path.basename(filePath));
-  if (!info) return { error: 'Not a save or an export.' };
   const stat = await fs.stat(filePath);
-  if (info.binary) {
-    // Read the head so the app can say what it is, not so it can pretend to
-    // understand it — the binary save format is not parsed in this build.
-    const handle = await fs.open(filePath, 'r');
-    const buf = Buffer.alloc(16);
-    await handle.read(buf, 0, 16, 0);
-    await handle.close();
-    return { binary: true, name: path.basename(filePath), size: stat.size, head: buf.toString('hex') };
-  }
+  const info = classify(path.basename(filePath), filePath, stat.size);
+  if (!info) return { error: 'Not a save or an export.' };
+  if (info.madden) return openMaddenFile(filePath);
+  if (info.binary) return { error: `${path.basename(filePath)} is a Madden file this app does not read.` };
   return { binary: false, name: path.basename(filePath), size: stat.size, text: await fs.readFile(filePath, 'utf8') };
+});
+
+/* ------------------------------------------------------- real franchise file */
+
+// The franchise file currently open, kept so injuries can be written back to
+// the same handle instead of reparsing 8 MB on every click.
+let openFranchise = null;
+
+async function openMaddenFile(filePath) {
+  const { openFranchiseFile } = require('./madden-file.js');
+  try {
+    const result = await openFranchiseFile(filePath);
+    openFranchise = { file: result.file, path: filePath, data: result.data };
+    return {
+      madden: true,
+      name: path.basename(filePath),
+      filePath,
+      meta: result.meta,
+      data: result.data,
+      report: result.report,
+    };
+  } catch (err) {
+    return { error: `Could not read that franchise file: ${err.message}` };
+  }
+}
+
+// Every write is preceded by a copy of the save, named with the time, so a bad
+// injury is never the end of somebody's franchise.
+async function backupFranchise(filePath) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const backup = `${filePath}.gcc-backup-${stamp}`;
+  await fs.copyFile(filePath, backup);
+  return backup;
+}
+
+ipcMain.handle('franchise:injuries', async () => {
+  const { INJURIES } = require('./madden-file.js');
+  return INJURIES;
+});
+
+ipcMain.handle('franchise:injure', async (_e, payload) => {
+  if (!openFranchise) return { error: 'No franchise file is open.' };
+  const { writeInjury } = require('./madden-file.js');
+  try {
+    const backup = await backupFranchise(openFranchise.path);
+    const result = await writeInjury(openFranchise.file, payload);
+    return { ok: true, backup, ...result };
+  } catch (err) {
+    return { error: `Could not write that injury: ${err.message}` };
+  }
+});
+
+ipcMain.handle('franchise:heal', async (_e, playerRow) => {
+  if (!openFranchise) return { error: 'No franchise file is open.' };
+  const { clearInjury } = require('./madden-file.js');
+  try {
+    const backup = await backupFranchise(openFranchise.path);
+    await clearInjury(openFranchise.file, playerRow);
+    return { ok: true, backup };
+  } catch (err) {
+    return { error: `Could not clear that injury: ${err.message}` };
+  }
+});
+
+ipcMain.handle('franchise:reload', async () => {
+  if (!openFranchise) return { error: 'No franchise file is open.' };
+  return openMaddenFile(openFranchise.path);
 });
 
 ipcMain.handle('saves:pickFolder', async () => {

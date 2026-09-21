@@ -2,7 +2,7 @@
   "name": "gridiron-control-center",
   "productName": "Gridiron Control Center",
   "version": "1.0.0",
-  "description": "Madden 26 franchise mod \u2014 injury control and advanced franchise stats",
+  "description": "Madden 26 franchise mod — injury control and advanced franchise stats",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -50,5 +50,8 @@
     "portable": {
       "artifactName": "Gridiron-Control-Center-${version}-portable.${ext}"
     }
+  },
+  "dependencies": {
+    "madden-franchise": "^4.3.6"
   }
 }

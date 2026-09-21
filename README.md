@@ -243,10 +243,36 @@ where it sits and how big it is rather than by its name. That search is bounded
 by a clock, and **Search every drive** is the last resort when it still comes
 up short. **Add a folder** points it somewhere specific and is remembered.
 
-One limit, stated plainly: Madden's own `CAREERSAVE` files are a packed binary
-format this build does not parse. They still show up in the list, tagged
-**Madden save**, and clicking one says what it is — but the rosters inside it
-can't be pulled out yet. What loads today is an *export*: JSON or CSV.
+Madden names its franchise saves `CAREER-…` — `CAREER-SEP12-04h14m57p-AUTOSAVE`,
+`CAREER-EE`, and so on — and those load for real: the app reads the save with
+[`madden-franchise`](https://github.com/bep713/madden-franchise), the parser the
+community franchise tools are built on, which covers Madden 19 through 27.
+
+## What a real save actually holds
+
+Every number the app shows off a `CAREER-…` file is a field in that file. What
+Madden does not record, the app leaves out instead of inventing:
+
+| Category | In the save |
+| --- | --- |
+| **Injuries** | `InjuryType` (123 real types, from `LegCramp` to `KneeACLCompleteTear`), `InjurySeverity`, `InjuryStatus`, `TotalInjuryDuration`, `IsInjuredReserve`, `LatestInjuryWeek` — all writable |
+| **Schedule** | `SeasonGame`: week, home and away team, scores, status |
+| **Blocking** | `OLINEPANCAKES`, `OLINESACKSALLOWED`, `GAMERATING`. No pressures, no almost-sacks, no time-held — Madden doesn't track them |
+| **Snap counts** | `DOWNSPLAYED`, per player per season |
+| **Catches and drops** | `RECEIVECATCHES`, `RECEIVEDROPS`, `RECEIVEYARDS`, `RECEIVEYARDSAFTER`. Targets aren't stored, so catches + drops is the floor |
+| **Defense** | `DEFTACKLES`, `ASSDEFTACKLES`, `DEFTACKLESFORLOSS`, `DLINESACKS`, `CTHALLOWED`, `BIGHITS`, `DSECINTS`. Missed tackles and missed sacks are not in the file |
+| **Penalties** | Team totals only (`TeamStats.PENALTIES`, `PENALTYYARDS`). Madden never records which player drew the flag |
+
+## Injuring a player for real
+
+Pick the team, the player and the injury, set the weeks out, and the app writes
+`InjuryType`, `InjurySeverity`, `InjuryStatus`, `TotalInjuryDuration`, the
+`Min`/`Max` duration and `LatestInjuryWeek` onto that player's record, then
+saves the file. Before every write the save is copied to
+`<name>.gcc-backup-<timestamp>` next to the original, so a mistake is never the
+end of a franchise. Heal him and the same fields are cleared.
+
+Close Madden before writing, and load the file in the game afterwards.
 
 ## Connecting a franchise file
 
