@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madden 26 Franchise Control</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-title">Madden 26</div>
+      <div class="brand-sub">Franchise Control</div>
+    </div>
+    <nav id="nav">
+      <div class="nav-group">League</div>
+      <button data-section="connect">Connect</button>
+      <button data-section="schedule">Schedule &amp; Injury Tool</button>
+      <div class="nav-group">Advanced Stats</div>
+      <button data-section="blocking">Blocking</button>
+      <button data-section="passrush">Pass Rush &amp; Missed Sacks</button>
+      <button data-section="snaps">Snap Counts</button>
+      <button data-section="receiving">Targets &amp; Drops</button>
+      <button data-section="tackling">Missed Tackles</button>
+      <button data-section="penalties">Penalties</button>
+      <div class="nav-group">Tools</div>
+      <button data-section="tracker">Game Tracker</button>
+      <button data-section="injuries">Injury Report</button>
+      <button data-section="settings">Settings</button>
+    </nav>
+    <div class="sidebar-foot" id="sidebar-foot"></div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <label class="field">
+          <span>League</span>
+          <select id="league-select"></select>
+        </label>
+        <label class="field" id="stage-field">
+          <span>Season part</span>
+          <select id="stage-select">
+            <option value="pre">Preseason</option>
+            <option value="reg" selected>Regular season</option>
+            <option value="post">Playoffs</option>
+            <option value="all">Everything</option>
+          </select>
+        </label>
+        <label class="field" id="team-field">
+          <span>Team</span>
+          <select id="team-select"><option value="">All teams</option></select>
+        </label>
+      </div>
+      <div class="topbar-right">
+        <button id="btn-open-file" class="primary">Open franchise file</button>
+        <button id="btn-refresh" title="Re-read the file / exports">Refresh</button>
+      </div>
+    </header>
+    <div id="banner" class="banner hidden"></div>
+    <section id="content" class="content"></section>
+  </main>
+</div>
+<div id="modal-root"></div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 # Political Election Simulator
 
+> Looking for the **Madden 26 Franchise Control** mod (injury tool + advanced blocking, snap counts, targets/drops, missed tackles, penalties)? It is a separate Windows desktop app in [`madden26-franchise-control/`](madden26-franchise-control/README.md).
+
 Pick any two people — famous or invented — run them through a three-month
 campaign, then either rig the map yourself or let Claude Opus call the race.
 

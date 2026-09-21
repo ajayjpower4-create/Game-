@@ -1,0 +1,26 @@
+{
+  "name": "madden26-franchise-control",
+  "productName": "Madden 26 Franchise Control",
+  "version": "1.0.0",
+  "description": "Madden NFL 26 franchise mod: injury tool, advanced blocking, snap counts, targets and drops, missed sacks and tackles, penalties. Connects to the EA cloud through the Madden Companion App and to PC franchise files.",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "license": "MIT",
+  "author": "Madden 26 Franchise Control contributors",
+  "scripts": {
+    "start": "electron .",
+    "serve": "node src/server/standalone.js",
+    "test": "node --test",
+    "dist:win": "electron-builder --win --x64",
+    "dist:win:portable": "electron-builder --win portable --x64",
+    "dist:dir": "electron-builder --dir"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "madden-franchise": "^4.3.6"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^26.0.12"
+  }
+}

@@ -1,0 +1,30 @@
+appId: com.franchisecontrol.madden26
+productName: Madden 26 Franchise Control
+copyright: MIT
+directories:
+  output: dist
+  buildResources: build
+files:
+  - electron/**
+  - src/**
+  - ui/**
+  - schemas/**
+  - package.json
+  - "!**/*.map"
+asarUnpack:
+  - node_modules/madden-franchise/**
+  - schemas/**
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  artifactName: "Madden26FranchiseControl-${version}-${arch}-${os}.${ext}"
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Madden 26 Franchise Control
+portable:
+  artifactName: "Madden26FranchiseControl-${version}-portable.exe"
