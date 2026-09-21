@@ -25,7 +25,11 @@
   async function api(path, opts = {}) {
     const res = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
     const body = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
-    if (!res.ok || body.ok === false) throw new Error(body.error || `HTTP ${res.status}`);
+    if (!res.ok || body.ok === false) {
+      const err = new Error(body.error || `HTTP ${res.status}`);
+      if (body.help) err.help = body.help;
+      throw err;
+    }
     return body;
   }
 
@@ -84,7 +88,7 @@
     const yearSel = `<select id="ea-year" class="small">${(ea.years || [26]).map((y) => `<option value="${y}" ${y === year ? 'selected' : ''}>Madden ${y}</option>`).join('')}</select>`;
     if (!ea.signedIn) {
       const pick = eaUI.pending
-        ? `<div class="plan"><b>Which profile plays Madden?</b>${eaUI.pending.profiles.map((p) => `<label style="display:block;margin:6px 0"><input type="radio" name="ea-profile" value="${esc(p.personaId)}" data-console="${esc(p.console)}" ${eaUI.pending.profiles.length === 1 ? 'checked' : ''}> ${esc(p.displayName)} <span class="muted">· ${esc(p.consoleLabel)} (${esc(p.namespaceLabel)})</span></label>`).join('')}<div class="modal-actions"><button id="ea-cancel">Cancel</button><button class="primary" id="ea-choose" ${eaUI.busy ? 'disabled' : ''}>Continue</button></div></div>`
+        ? `<div class="plan"><b>Which profile plays Madden ${eaUI.pending.year}?</b>${(eaUI.pending.ownedYears || []).length > 1 ? `<div class="small-note">This account has Madden ${eaUI.pending.ownedYears.join(' and ')}. Cancel and change the year above to use a different one.</div>` : ''}${eaUI.pending.profiles.map((p) => `<label style="display:block;margin:6px 0"><input type="radio" name="ea-profile" value="${esc(p.personaId)}" data-console="${esc(p.console)}" ${eaUI.pending.profiles.length === 1 ? 'checked' : ''}> ${esc(p.displayName)} <span class="muted">· ${esc(p.consoleLabel)} (${esc(p.namespaceLabel)})</span></label>`).join('')}<div class="modal-actions"><button id="ea-cancel">Cancel</button><button class="primary" id="ea-choose" ${eaUI.busy ? 'disabled' : ''}>Continue</button></div></div>`
         : '';
       return `<div class="card">
         <h3>1 · Sign in with EA (easiest)</h3>
@@ -154,8 +158,10 @@
     render();
     try {
       const r = await api('/ea/code', { method: 'POST', body: { code: input, year } });
-      eaUI.pending = { handle: r.handle, profiles: r.profiles, year: r.year };
+      eaUI.pending = { handle: r.handle, profiles: r.profiles, year: r.year, ownedYears: r.ownedYears || [] };
+      eaUI.year = r.year;
       eaUI.busy = false;
+      if (r.requestedYear && r.year !== r.requestedYear) banner(`This EA account does not have Madden ${r.requestedYear}. Using Madden ${r.year}, which it does have.`, '');
       if (r.profiles.length === 1) { await eaChooseProfile(r.profiles[0].personaId, r.profiles[0].console); return; }
       render();
     } catch (e) {
@@ -178,7 +184,7 @@
       render();
     } catch (e) {
       eaUI.busy = false;
-      banner(`Could not finish the EA sign-in: ${esc(e.message)}`, 'error');
+      banner(`<b>Could not finish the EA sign-in.</b><br>${esc(e.message)}${e.help ? `<br><br>${esc(e.help)}` : ''}`, 'error');
       render();
     }
   }

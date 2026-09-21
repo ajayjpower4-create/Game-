@@ -96,10 +96,13 @@ export class EAAccountService {
     this.note(`login code received for Madden ${year}`);
     const found = await discoverAccount(code, Number(year));
     const handle = randomUUID();
-    this.pending.set(handle, { ...found, year: Number(year), at: Date.now() });
+    // discoverAccount falls back to a year the account actually owns.
+    this.pending.set(handle, { ...found, at: Date.now() });
     for (const [k, v] of this.pending) if (Date.now() - v.at > 15 * 60 * 1000) this.pending.delete(k);
-    this.note(`account has ${found.profiles.length} Madden ${year} profile(s): ${found.profiles.map((p) => `${p.displayName}/${p.console}`).join(', ')}`);
-    return { handle, profiles: found.profiles, year: Number(year) };
+    this.note(`account owns Madden ${found.ownedYears.join(', ')}`);
+    if (found.year !== Number(year)) this.note(`Madden ${year} is not on this account; using Madden ${found.year}`);
+    this.note(`${found.profiles.length} Madden ${found.year} profile(s): ${found.profiles.map((p) => `${p.displayName}/${p.console}`).join(', ')}`);
+    return { handle, profiles: found.profiles, year: found.year, ownedYears: found.ownedYears, requestedYear: Number(year) };
   }
 
   // Step 2: pick the console profile, log in to the game server, list franchises.

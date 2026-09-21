@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { messageAuth, AUTH_TYPE } from '../src/core/ea/signing.js';
 import { codeFromRedirect } from '../src/core/ea/auth.js';
-import { loginUrl, blazeServiceId, blazeProductName, entitlementGroup, consoleForEntitlement, yearConfig, EXPORT_KINDS, COMMANDS } from '../src/core/ea/constants.js';
+import { loginUrl, blazeServiceId, blazeServiceCandidates, blazeProductName, entitlementGroup, consoleForEntitlement, yearConfig, EXPORT_KINDS, COMMANDS } from '../src/core/ea/constants.js';
 import { weeksFor, importLeague, leagueKeyFor } from '../src/core/ea/importer.js';
 import { Store } from '../src/core/store.js';
 import { buildLeagueFromCompanion } from '../src/core/companion/league.js';
@@ -50,6 +50,18 @@ test('Madden 26 constants match the companion app naming', () => {
   assert.throws(() => yearConfig(24));
   assert.equal(COMMANDS.getMyLeagues.commandId, 801);
   assert.equal(EXPORT_KINDS.roster, 'CareerMode_GetTeamRostersExport');
+});
+
+test('game server naming falls back the way EA has renamed these clusters', () => {
+  // EA answered a 503 naming madden-2026-common, so that form is tried too.
+  assert.deepEqual(blazeServiceCandidates(26, 'pc'), ['madden-2026-pc', 'madden-2026-pc-gen5', 'madden-2026-common']);
+  assert.deepEqual(blazeServiceCandidates(26, 'ps4'), ['madden-2026-ps4', 'madden-2026-ps4-gen4', 'madden-2026-common']);
+  assert.equal(blazeServiceCandidates(27, 'xbsx')[0], 'madden-2027-xbsx');
+  // The first candidate is always the plain name used on its own elsewhere.
+  for (const c of ['pc', 'ps5', 'xbsx', 'ps4', 'xone']) {
+    assert.equal(blazeServiceCandidates(26, c)[0], blazeServiceId(26, c));
+    assert.equal(new Set(blazeServiceCandidates(26, c)).size, blazeServiceCandidates(26, c).length, 'no duplicates');
+  }
 });
 
 test('weeksFor covers the whole season or just the current week', () => {

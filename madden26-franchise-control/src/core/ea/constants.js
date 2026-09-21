@@ -63,6 +63,17 @@ export function blazeServiceId(year, consoleKey) {
   return `madden-${yearConfig(year).fullYear}-${consoleKey}`;
 }
 
+// EA has renamed these clusters between Madden years: plain for recent titles,
+// a generation suffix before that, and a shared "common" cluster some
+// platforms are routed to. Tried in order when the first one is unreachable.
+const GENERATION = { pc: 'gen5', ps5: 'gen5', xbsx: 'gen5', stadia: 'gen5', ps4: 'gen4', xone: 'gen4' };
+
+export function blazeServiceCandidates(year, consoleKey) {
+  const base = `madden-${yearConfig(year).fullYear}`;
+  const gen = GENERATION[consoleKey];
+  return [`${base}-${consoleKey}`, gen ? `${base}-${consoleKey}-${gen}` : null, `${base}-common`].filter(Boolean);
+}
+
 export function blazeProductName(year, consoleKey) {
   return `madden-${yearConfig(year).fullYear}-${consoleKey}-mca`;
 }

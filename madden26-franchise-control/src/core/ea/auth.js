@@ -7,7 +7,7 @@
 //   4. a second, persona-scoped code becomes the JWS token Blaze accepts
 
 import { request, parseJson } from './http.js';
-import { ACCOUNTS_HOST, GATEWAY_HOST, REDIRECT_URL, AUTH_SOURCE, MACHINE_KEY, APP_USER_AGENT, WEBVIEW_USER_AGENT, CONSOLES, yearConfig, consoleForEntitlement, NAMESPACE_LABEL } from './constants.js';
+import { ACCOUNTS_HOST, GATEWAY_HOST, REDIRECT_URL, AUTH_SOURCE, MACHINE_KEY, APP_USER_AGENT, WEBVIEW_USER_AGENT, CONSOLES, YEARS, yearConfig, consoleForEntitlement, NAMESPACE_LABEL } from './constants.js';
 
 export class EAError extends Error {
   constructor(message, help) {
@@ -69,9 +69,21 @@ export async function discoverAccount(code, year) {
   const token = await exchangeCode(code, year);
   const info = await tokenInfo(token.access_token);
   const ents = await entitlements(info.pid_id, token.access_token);
-  const owned = ents.filter((e) => e.entitlementTag === 'ONLINE_ACCESS' && consoleForEntitlement(year, e.groupName));
+  const online = ents.filter((e) => e.entitlementTag === 'ONLINE_ACCESS');
+  // Which Madden years this account can actually use, so the year is a fact
+  // rather than a guess. Newest first.
+  const ownedYears = Object.keys(YEARS)
+    .map(Number)
+    .filter((y) => online.some((e) => consoleForEntitlement(y, e.groupName)))
+    .sort((a, b) => b - a);
+  let owned = online.filter((e) => consoleForEntitlement(year, e.groupName));
   if (!owned.length) {
-    throw new EAError(`This EA account does not own Madden ${yearConfig(year).year} online access on any console (games found: ${[...new Set(ents.map((e) => e.groupName))].join(', ') || 'none'}).`, 'Sign in with the EA account that is linked to the PlayStation, Xbox or PC profile you play Madden on: https://myaccount.ea.com/cp-ui/connectaccounts/index');
+    if (!ownedYears.length) {
+      throw new EAError(`This EA account does not own Madden ${yearConfig(year).year} online access on any console (games found: ${[...new Set(ents.map((e) => e.groupName))].join(', ') || 'none'}).`, 'Sign in with the EA account that is linked to the PlayStation, Xbox or PC profile you play Madden on: https://myaccount.ea.com/cp-ui/connectaccounts/index');
+    }
+    // They own a different Madden than the one picked; use theirs.
+    year = ownedYears[0];
+    owned = online.filter((e) => consoleForEntitlement(year, e.groupName));
   }
   const profiles = [];
   for (const e of owned) {
@@ -79,14 +91,14 @@ export async function discoverAccount(code, year) {
     const list = await personas(e.pidUri, token.access_token);
     for (const p of list) {
       if (p.namespaceName !== console_.namespace) continue;
-      profiles.push({ personaId: p.personaId, displayName: p.displayName || p.name, namespace: p.namespaceName, namespaceLabel: NAMESPACE_LABEL[p.namespaceName] || p.namespaceName, console: console_.key, consoleLabel: console_.label, entitlement: e.groupName });
+      profiles.push({ personaId: p.personaId, displayName: p.displayName || p.name, namespace: p.namespaceName, namespaceLabel: NAMESPACE_LABEL[p.namespaceName] || p.namespaceName, console: console_.key, consoleLabel: console_.label, entitlement: e.groupName, year });
     }
   }
   if (!profiles.length) throw new EAError('Madden is on this EA account, but no matching console gamertag was found.', 'Check the linked accounts at https://myaccount.ea.com/cp-ui/connectaccounts/index');
   // De-duplicate persona+console pairs
   const seen = new Set();
   const unique = profiles.filter((p) => { const k = `${p.personaId}|${p.console}`; if (seen.has(k)) return false; seen.add(k); return true; });
-  return { accountToken: token, pid: info.pid_id, profiles: unique };
+  return { accountToken: token, pid: info.pid_id, profiles: unique, ownedYears, year };
 }
 
 // Persona-scoped JWS token for Blaze.
