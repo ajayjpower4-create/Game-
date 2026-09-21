@@ -6,6 +6,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('gcc', {
   desktop: true,
   openFranchiseFile: () => ipcRenderer.invoke('file:open'),
+  listSaves: (extraDirs) => ipcRenderer.invoke('saves:scan', extraDirs),
+  readSave: (filePath) => ipcRenderer.invoke('saves:read', filePath),
+  pickSaveFolder: () => ipcRenderer.invoke('saves:pickFolder'),
   saveFile: (name, text) => ipcRenderer.invoke('file:save', { name, text }),
   onMenu: (handler) => {
     for (const channel of ['menu:open', 'menu:save', 'menu:injury-script']) {

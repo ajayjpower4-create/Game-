@@ -43,6 +43,9 @@ const state = {
   week: 1,
   sort: {},               // per-view sort column + direction
   flash: null,
+  saves: null,            // what the save scan found, newest first
+  scanning: false,
+  extraDirs: [],          // folders the user pointed at by hand
 };
 
 /* ------------------------------------------------------------------ saving */
@@ -444,6 +447,99 @@ function viewInjuries() {
   ];
 }
 
+const EXTRA_DIRS_KEY = 'gcc.saveFolders.v1';
+
+const readExtraDirs = () => {
+  try { return JSON.parse(localStorage.getItem(EXTRA_DIRS_KEY) || '[]'); } catch { return []; }
+};
+const writeExtraDirs = (dirs) => {
+  try { localStorage.setItem(EXTRA_DIRS_KEY, JSON.stringify(dirs)); } catch { /* nothing to do */ }
+};
+
+const KB = 1024;
+function fileSize(bytes) {
+  if (bytes >= KB * KB) return `${Math.round(bytes / (KB * KB) * 10) / 10} MB`;
+  if (bytes >= KB) return `${Math.round(bytes / KB)} KB`;
+  return `${bytes} bytes`;
+}
+
+// "8 minutes ago", "yesterday", "Mar 4" — whichever reads fastest.
+function whenSaved(ms) {
+  const diff = Date.now() - ms;
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+async function scanSaves() {
+  if (!window.gcc || !window.gcc.listSaves) return;
+  state.scanning = true; render();
+  try { state.saves = await window.gcc.listSaves(state.extraDirs); }
+  catch { state.saves = []; }
+  state.scanning = false;
+  render();
+}
+
+async function openSave(save) {
+  const res = await window.gcc.readSave(save.path);
+  if (!res || res.error) { state.flash = res ? res.error : 'Could not read that file.'; render(); return; }
+  if (res.binary) {
+    state.flash = `${res.name} is Madden's own save file (${fileSize(res.size)}), not an export. `
+      + 'This build can read exports — JSON or CSV — not the packed save, so the rosters in it cannot be pulled out yet.';
+    render();
+    return;
+  }
+  connect(res.text, res.name);
+}
+
+// The save browser: every save this machine has, newest at the top.
+function saveBrowser() {
+  if (!window.gcc || !window.gcc.listSaves) {
+    return el('div', { class: 'card' },
+      el('h3', {}, 'Your saves'),
+      el('p', { class: 'hint' }, 'The desktop app lists every save on your PC here and loads one with a click. In a browser tab it can only take a file you hand it, below.'));
+  }
+
+  // Kick the first scan off after this render lands, not in the middle of it.
+  if (state.saves === null && !state.scanning) setTimeout(scanSaves, 0);
+
+  const rows = (state.saves || []).map((save, i) => el('div', { class: 'game' },
+    el('div', {},
+      el('div', { class: 'match' }, save.name,
+        i === 0 ? el('span', { class: 'pill on', style: 'margin-left:8px' }, 'Most recent') : null,
+        save.readable ? null : el('span', { class: 'pill sev-Minor', style: 'margin-left:8px' }, 'Madden save')),
+      el('div', { class: 'meta' }, `${save.kind} · saved ${whenSaved(save.modified)} · ${fileSize(save.size)}`),
+      el('div', { class: 'note' }, save.label)),
+    el('button', { class: `btn small ${save.readable ? '' : 'ghost'}`, onclick: () => openSave(save) },
+      save.readable ? 'Load this one' : 'What is this?')));
+
+  return el('div', { class: 'card' },
+    el('div', { class: 'spread' },
+      el('div', {},
+        el('h3', {}, 'Your saves'),
+        el('p', { class: 'hint' }, 'Everything found on this PC, newest first. Click the top one.')),
+      el('div', { class: 'row' },
+        el('button', { class: 'btn ghost small', onclick: scanSaves }, state.scanning ? 'Looking…' : 'Rescan'),
+        el('button', {
+          class: 'btn ghost small',
+          onclick: async () => {
+            const dir = await window.gcc.pickSaveFolder();
+            if (!dir) return;
+            if (!state.extraDirs.includes(dir)) { state.extraDirs.push(dir); writeExtraDirs(state.extraDirs); }
+            scanSaves();
+          },
+        }, 'Add a folder'))),
+    state.scanning && !state.saves ? el('div', { class: 'empty' }, 'Looking through your Madden folders…')
+      : rows.length ? rows
+        : el('div', { class: 'empty' }, 'Nothing found. If your saves live somewhere else, use Add a folder.'));
+}
+
 function viewFile() {
   const fr = state.fr;
   const box = el('div', { class: 'filebox' },
@@ -461,6 +557,7 @@ function viewFile() {
   });
 
   return [
+    saveBrowser(),
     el('div', { class: 'card' }, el('h2', {}, 'Franchise file'),
       el('p', { class: 'hint' }, `Connected: ${fr.source} · ${Object.values(fr.rosters).reduce((a, r) => a + r.length, 0)} players · ${fr.teams.length} teams · week ${fr.week}`),
       box,
@@ -652,7 +749,11 @@ function render() {
 
 /* -------------------------------------------------------------------- boot */
 
-state.fr = load() || generateFranchise('demo-franchise');
+const restored = load();
+state.extraDirs = readExtraDirs();
+state.fr = restored || generateFranchise('demo-franchise');
+// First launch on the desktop: open on the save list, not the demo league.
+if (!restored && window.gcc && window.gcc.desktop) state.view = 'file';
 state.week = state.fr.week;
 if (!state.fr.rosters[state.team]) state.team = TEAMS[0].id;
 

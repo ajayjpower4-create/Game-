@@ -227,6 +227,21 @@ writes `injury_script.json` — just the scripts, nothing else.
 Every table sorts by any column. Every tab has a team picker and a scope
 picker: season to date, or one specific game.
 
+## Finding your saves
+
+The desktop app opens on a **save list**, the way other Madden tools do: it
+looks through the places Madden keeps saves on a PC —
+`Documents\\Madden NFL 26\\settings` and the 25 and 24 folders, the same paths
+again under OneDrive when Documents is redirected there, plus Downloads and
+Desktop for exports — and lists everything it finds newest first, with the top
+one tagged **Most recent**. One click loads it. **Add a folder** points it
+somewhere else and it remembers.
+
+One limit, stated plainly: Madden's own `CAREERSAVE` files are a packed binary
+format this build does not parse. They still show up in the list, tagged
+**Madden save**, and clicking one says what it is — but the rosters inside it
+can't be pulled out yet. What loads today is an *export*: JSON or CSV.
+
 ## Connecting a franchise file
 
 The **Franchise File** tab (or the button in the top bar) takes a drop or a
@@ -283,7 +298,7 @@ scripted injury changes the stats that follow it.
 | `public/madden/injury.js` | Injury types, picking the play it happens on, scripting, firing, healing |
 | `public/madden/franchise-file.js` | Importing franchise exports and CSVs, and the native save format |
 | `public/madden/app.js` | The tabs, the tables, the injury tool |
-| `desktop/main.js` | Electron window, Franchise menu, the Open/Save bridge |
+| `desktop/main.js` | Electron window, Franchise menu, the save scanner and the Open/Save bridge |
 | `desktop/build.sh` | Builds the Windows installer and portable exe |
 
 This is a companion tool for a franchise you're already playing. It isn't
