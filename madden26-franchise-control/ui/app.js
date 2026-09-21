@@ -74,11 +74,143 @@
     return `<div class="card"><h3>${esc(title)}</h3>${(rows || []).slice(0, n).map((r) => `<div class="leader"><div class="who">${esc(r.name)}<span>${esc(r.position)} · ${esc(abbr(r.teamId))}</span></div><div class="n">${fmt(r[key], d)}${suffix}</div></div>`).join('') || '<div class="muted">No games yet.</div>'}</div>`;
   }
 
+  // ---------- EA account sign-in
+  const eaUI = { pending: null, task: null, busy: false, showDiag: false };
+
+  async function eaCard() {
+    let ea;
+    try { ea = await api('/ea/status'); } catch (e) { return `<div class="card"><h3>1 · Sign in with EA</h3><div class="muted">${esc(e.message)}</div></div>`; }
+    const year = eaUI.year || ea.year || 26;
+    const yearSel = `<select id="ea-year" class="small">${(ea.years || [26]).map((y) => `<option value="${y}" ${y === year ? 'selected' : ''}>Madden ${y}</option>`).join('')}</select>`;
+    if (!ea.signedIn) {
+      const pick = eaUI.pending
+        ? `<div class="plan"><b>Which profile plays Madden?</b>${eaUI.pending.profiles.map((p) => `<label style="display:block;margin:6px 0"><input type="radio" name="ea-profile" value="${esc(p.personaId)}" data-console="${esc(p.console)}" ${eaUI.pending.profiles.length === 1 ? 'checked' : ''}> ${esc(p.displayName)} <span class="muted">· ${esc(p.consoleLabel)} (${esc(p.namespaceLabel)})</span></label>`).join('')}<div class="modal-actions"><button id="ea-cancel">Cancel</button><button class="primary" id="ea-choose" ${eaUI.busy ? 'disabled' : ''}>Continue</button></div></div>`
+        : '';
+      return `<div class="card">
+        <h3>1 · Sign in with EA (easiest)</h3>
+        <p>Sign in with the EA account your Madden is on. The tool lists every franchise on the account and downloads the one you pick straight from EA, the same way the Madden Companion App does. Your password is typed on EA's page only.</p>
+        <div class="toolbar">${yearSel}${window.m26 ? `<button class="primary" id="ea-signin" ${eaUI.busy ? 'disabled' : ''}>${eaUI.busy ? 'Working…' : 'Sign in with EA'}</button>` : `<a id="ea-open-link" href="#" class="pill">Open the EA sign-in page</a>`}</div>
+        ${window.m26 ? '' : `<p class="small-note">Sign in on that page. EA then sends the browser to an address starting with <span class="mono">http://127.0.0.1/success</span> that will not load. Copy that whole address from the browser bar and paste it here:</p><div class="toolbar"><input type="text" id="ea-paste" placeholder="http://127.0.0.1/success?code=…" style="min-width:420px"><button class="primary" id="ea-paste-go" ${eaUI.busy ? 'disabled' : ''}>Continue</button></div>`}
+        ${pick}
+        ${eaDiag(ea)}
+      </div>`;
+    }
+    const imported = new Map((ea.importedLeagues || []).map((l) => [String(l.leagueId), l]));
+    const running = (ea.imports || []).find((t) => t.status === 'running' || t.status === 'queued');
+    if (running) eaUI.task = running.id;
+    const leagues = (ea.leagues || []).map((l) => {
+      const imp = imported.get(String(l.leagueId));
+      const task = (ea.imports || []).find((t) => t.leagueId === l.leagueId);
+      const busy = task && (task.status === 'running' || task.status === 'queued');
+      const pct = task && task.progress && task.progress.total ? Math.round((task.progress.done / task.progress.total) * 100) : 0;
+      return `<li>
+        <span><b>${esc(l.leagueName)}</b> <span class="muted">· ${esc(l.seasonText || '')} · ${l.numMembers || 1} member(s) · you: ${esc(l.userTeamName || '—')}</span>
+          ${imp ? `<br><span class="small-note">Downloaded ${esc(new Date(imp.lastImportAt).toLocaleString())} (${esc(imp.lastImportScope)})</span>` : ''}
+          ${busy ? `<br><span class="small-note">${esc(task.progress.step)} · ${pct}%</span>` : ''}
+          ${task && task.status === 'error' ? `<br><span class="injured">${esc(task.error)}</span>` : ''}
+          ${task && task.status === 'done' && task.result && task.result.errors.length ? `<br><span class="small-note">${task.result.errors.length} part(s) failed: ${esc(task.result.errors.slice(0, 2).join('; '))}</span>` : ''}
+        </span>
+        <span style="white-space:nowrap">
+          ${imp ? `<button class="small" data-ea-open="${esc(imp.leagueKey)}">Open</button> ` : ''}
+          <button class="small blue" data-ea-import="${esc(l.leagueId)}" data-scope="all" ${busy ? 'disabled' : ''}>${imp ? 'Download everything again' : 'Download everything'}</button>
+          <button class="small" data-ea-import="${esc(l.leagueId)}" data-scope="surrounding" ${busy ? 'disabled' : ''}>Update current week</button>
+        </span>
+      </li>`;
+    }).join('');
+    return `<div class="card">
+      <h3>1 · Sign in with EA</h3>
+      <p><span class="pill win">Signed in</span> <b>${esc(ea.profile.displayName)}</b> <span class="muted">· ${esc(ea.profile.consoleLabel)} · Madden ${ea.year}${ea.encrypted ? ' · sign-in sealed with the Windows keychain' : ''}</span></p>
+      <div class="toolbar"><button id="ea-refresh" class="small">Refresh franchise list</button><button id="ea-signout" class="small danger">Sign out</button></div>
+      <h3>Franchises on this account (${(ea.leagues || []).length})</h3>
+      ${leagues ? `<ul class="list">${leagues}</ul>` : '<div class="muted">No franchises found on this EA account. Refresh after you create or join one.</div>'}
+      <p class="small-note">"Download everything" pulls every week of the season and every roster (a few minutes). After each week you play, "Update current week" pulls just the weeks around the current one.</p>
+      ${eaDiag(ea)}
+    </div>`;
+  }
+
+  function eaDiag() {
+    return `<p class="small-note"><a href="#" id="ea-diag-toggle">${eaUI.showDiag ? 'Hide' : 'Show'} EA connection log</a></p>${eaUI.showDiag ? `<pre class="mono" id="ea-diag" style="white-space:pre-wrap;max-height:200px;overflow:auto">loading…</pre>` : ''}`;
+  }
+
+  async function eaStartSignIn() {
+    eaUI.busy = true;
+    render();
+    try {
+      const year = Number($('#ea-year') ? $('#ea-year').value : 26) || 26;
+      eaUI.year = year;
+      const { url } = await api(`/ea/login-url?year=${year}`);
+      const result = await window.m26.eaLogin(url);
+      if (!result || result.canceled || !result.url) { eaUI.busy = false; render(); return; }
+      await eaSubmitCode(result.url, year);
+    } catch (e) {
+      eaUI.busy = false;
+      banner(`EA sign-in failed: ${esc(e.message)}`, 'error');
+      render();
+    }
+  }
+
+  async function eaSubmitCode(input, year) {
+    eaUI.busy = true;
+    render();
+    try {
+      const r = await api('/ea/code', { method: 'POST', body: { code: input, year } });
+      eaUI.pending = { handle: r.handle, profiles: r.profiles, year: r.year };
+      eaUI.busy = false;
+      if (r.profiles.length === 1) { await eaChooseProfile(r.profiles[0].personaId, r.profiles[0].console); return; }
+      render();
+    } catch (e) {
+      eaUI.busy = false;
+      banner(`EA sign-in failed: ${esc(e.message)}`, 'error');
+      render();
+    }
+  }
+
+  async function eaChooseProfile(personaId, consoleKey) {
+    if (!eaUI.pending) return;
+    eaUI.busy = true;
+    render();
+    try {
+      const r = await api('/ea/profile', { method: 'POST', body: { handle: eaUI.pending.handle, personaId, console: consoleKey } });
+      eaUI.pending = null;
+      eaUI.busy = false;
+      banner(`Signed in as ${esc(r.profile.displayName)} (${esc(r.profile.consoleLabel)}). ${r.leagues.length} franchise(s) found.`, 'ok');
+      await loadStatus();
+      render();
+    } catch (e) {
+      eaUI.busy = false;
+      banner(`Could not finish the EA sign-in: ${esc(e.message)}`, 'error');
+      render();
+    }
+  }
+
+  async function eaImport(leagueId, scope) {
+    try {
+      const r = await api(`/ea/leagues/${leagueId}/import`, { method: 'POST', body: { scope } });
+      eaUI.task = r.task.id;
+      banner(`Downloading ${esc(r.task.leagueName)} from EA…`, '');
+      render();
+    } catch (e) { banner(`Could not start the download: ${esc(e.message)}`, 'error'); }
+  }
+
+  // While a download runs, keep the Connect page fresh.
+  setInterval(async () => {
+    if (!eaUI.task || state.section !== 'connect') return;
+    try {
+      const { task } = await api(`/ea/imports/${eaUI.task}`);
+      if (task.status === 'done' || task.status === 'error') {
+        eaUI.task = null;
+        if (task.status === 'done') { banner(`${esc(task.leagueName)} downloaded from EA: ${task.result.weeks} week(s), ${task.result.teams} rosters${task.result.errors.length ? `, ${task.result.errors.length} part(s) failed` : ''}.`, 'ok'); await loadStatus(); if (!state.leagueKey || state.leagueKey !== task.leagueKey) { state.leagueKey = task.leagueKey; $('#league-select').value = task.leagueKey; await loadLeague(); return; } }
+        else banner(`Download failed: ${esc(task.error)}`, 'error');
+      }
+      render();
+    } catch { /* keep polling */ }
+  }, 2000);
+
   // ---------- data loading
   async function loadStatus() {
     state.status = await api('/status');
     const sel = $('#league-select');
-    sel.innerHTML = state.status.leagues.map((l) => `<option value="${esc(l.leagueKey)}">${esc(l.name)} (${l.source === 'franchise' ? 'franchise file' : 'EA cloud export'})</option>`).join('') || '<option value="">No league yet</option>';
+    sel.innerHTML = state.status.leagues.map((l) => `<option value="${esc(l.leagueKey)}">${esc(l.name)} (${l.source === 'franchise' ? 'franchise file' : l.via === 'ea' ? 'EA account' : 'Companion App export'})</option>`).join('') || '<option value="">No league yet</option>';
     if (!state.leagueKey || !state.status.leagues.some((l) => l.leagueKey === state.leagueKey)) state.leagueKey = state.status.leagues[0] ? state.status.leagues[0].leagueKey : null;
     sel.value = state.leagueKey || '';
     $('#sidebar-foot').innerHTML = `Data folder:<br><span class="mono">${esc(state.status.dataDir)}</span>`;
@@ -120,10 +252,11 @@
     const open = state.status.franchiseOpen;
     return `
       <h1>Connect your franchise</h1>
-      <p class="lead">Two ways in. A PC franchise file gives you everything, including the injury tool and real snap counts. The EA cloud (console or PC) comes in through the Madden Companion App export and gives you every stat category.</p>
+      <p class="lead">Three ways in. Sign in with your EA account and the tool lists your franchises and downloads the one you pick. A PC franchise file gives you everything, including the injury tool and real snap counts. The Madden Companion App export works too.</p>
+      ${await eaCard()}
       <div class="grid cols-2">
         <div class="card">
-          <h3>1 · PC franchise file (full access)</h3>
+          <h3>2 · PC franchise file (full access)</h3>
           <p>Madden 26 on PC keeps each franchise as a file in <span class="mono">Documents\\Madden NFL 26\\settings</span> (files named <span class="mono">CAREER-…</span>). Open it here and the tool reads rosters, the schedule, box scores, snap counts and injuries straight from the save, and can write injuries back into it. A backup is made before every write.</p>
           <p>${open ? `<span class="pill win">Open</span> <span class="mono">${esc(state.status.filePath)}</span>` : '<span class="pill">No file open</span>'}</p>
           <div class="toolbar"><button class="primary" id="c-open">Open franchise file</button>${open ? '<button id="c-close">Close file</button>' : ''}</div>
@@ -132,7 +265,7 @@
           <p class="small-note">Close Madden or be out of the franchise when you write injuries, then re-load the franchise in game. Madden's cloud sync will upload the changed file the next time you save.</p>
         </div>
         <div class="card">
-          <h3>2 · EA cloud via the Madden Companion App</h3>
+          <h3>3 · Madden Companion App export</h3>
           <p>Every Madden 26 franchise (console or PC) lives on EA's servers, and EA's official way out of the cloud is the <b>Madden Companion App</b> on your phone. Its <b>Export</b> feature sends the whole league to any address you type in. This program is listening right now at:</p>
           ${lan.map((a) => `<div class="url-box">http://${esc(a)}:${port}</div>`).join('')}
           <ol class="steps">
@@ -492,6 +625,18 @@
     on('#c-close', 'onclick', async () => { await api('/franchise/close', { method: 'POST' }); await loadStatus(); await loadLeague(); });
     on('#c-open-path', 'onclick', () => openPath($('#c-path').value));
     on('[data-open-recent]', 'onclick', (e) => openPath(e.currentTarget.dataset.openRecent));
+    on('#ea-signin', 'onclick', eaStartSignIn);
+    on('#ea-open-link', 'onclick', async (e) => { e.preventDefault(); const year = Number($('#ea-year') ? $('#ea-year').value : 26) || 26; eaUI.year = year; const { url } = await api(`/ea/login-url?year=${year}`); window.open(url, '_blank'); });
+    on('#ea-paste-go', 'onclick', () => eaSubmitCode($('#ea-paste').value, Number($('#ea-year') ? $('#ea-year').value : 26) || 26));
+    on('#ea-year', 'onchange', (e) => { eaUI.year = Number(e.target.value); });
+    on('#ea-cancel', 'onclick', () => { eaUI.pending = null; render(); });
+    on('#ea-choose', 'onclick', () => { const r = $('input[name="ea-profile"]:checked'); if (!r) { banner('Pick a profile first.', ''); return; } eaChooseProfile(r.value, r.dataset.console); });
+    on('#ea-refresh', 'onclick', async () => { try { await api('/ea/leagues/refresh', { method: 'POST' }); render(); } catch (err) { banner(esc(err.message), 'error'); } });
+    on('#ea-signout', 'onclick', async () => { if (!confirm('Sign out of EA on this PC? Downloaded leagues stay.')) return; await api('/ea/signout', { method: 'POST' }); await loadStatus(); render(); });
+    on('[data-ea-import]', 'onclick', (e) => eaImport(e.currentTarget.dataset.eaImport, e.currentTarget.dataset.scope));
+    on('[data-ea-open]', 'onclick', async (e) => { state.leagueKey = e.currentTarget.dataset.eaOpen; $('#league-select').value = state.leagueKey; state.section = 'schedule'; await loadLeague(); });
+    on('#ea-diag-toggle', 'onclick', async (e) => { e.preventDefault(); eaUI.showDiag = !eaUI.showDiag; render(); });
+    if (eaUI.showDiag && $('#ea-diag')) api('/ea/diagnostics').then((r) => { const el = $('#ea-diag'); if (el) el.textContent = r.lines.join('\n') || 'nothing yet'; }).catch(() => {});
     on('[data-stats]', 'onclick', (e) => { e.stopPropagation(); state.gameId = e.currentTarget.dataset.stats; state.section = 'game'; render(); });
     on('[data-injure]', 'onclick', (e) => { e.stopPropagation(); openInjuryModal(e.currentTarget.dataset.injure, state.gameTeam); });
     on('[data-track]', 'onclick', (e) => { state.gameId = e.currentTarget.dataset.track; state.section = 'tracker'; render(); });

@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld('m26', {
   pickDirectory: () => ipcRenderer.invoke('pick-directory'),
   serverInfo: () => ipcRenderer.invoke('server-info'),
   openPath: (p) => ipcRenderer.invoke('open-path', p),
+  eaLogin: (url) => ipcRenderer.invoke('ea-login', url),
   onMenuOpenFile: (cb) => ipcRenderer.on('menu:open-file', cb),
 });

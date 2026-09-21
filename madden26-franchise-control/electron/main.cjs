@@ -1,6 +1,6 @@
-// Electron entry point: starts the local server, opens the window, and gives
-// the page a native "pick a franchise file" dialog.
-const { app, BrowserWindow, dialog, ipcMain, shell, Menu } = require('electron');
+// Electron entry point: starts the local server, opens the window, gives the
+// page native file dialogs, and hosts the EA sign-in window.
+const { app, BrowserWindow, dialog, ipcMain, shell, Menu, safeStorage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -24,11 +24,18 @@ async function startBackend() {
   const { Store } = await import('../src/core/store.js');
   const store = new Store(process.env.M26FC_DATA_DIR);
   const port = Number(store.getSettings().port) || 3826;
+  // The EA sign-in is sealed with the operating system keychain before it is saved.
+  const secretBox = {
+    available: safeStorage.isEncryptionAvailable(),
+    encrypt: (str) => safeStorage.encryptString(str).toString('base64'),
+    decrypt: (b64) => safeStorage.decryptString(Buffer.from(b64, 'base64')),
+  };
+  const options = { host: '0.0.0.0', dataDir: process.env.M26FC_DATA_DIR, secretBox, log: (...a) => console.log(...a) };
   try {
-    serverInfo = await startServer({ port, host: '0.0.0.0', dataDir: process.env.M26FC_DATA_DIR, log: (...a) => console.log(...a) });
+    serverInfo = await startServer({ port, ...options });
   } catch (e) {
     // Port busy: fall back to any free port so the app still opens.
-    serverInfo = await startServer({ port: 0, host: '0.0.0.0', dataDir: process.env.M26FC_DATA_DIR, log: (...a) => console.log(...a) });
+    serverInfo = await startServer({ port: 0, ...options });
   }
   return serverInfo;
 }
@@ -67,6 +74,39 @@ ipcMain.handle('pick-directory', async () => {
   if (result.canceled || !result.filePaths.length) return null;
   return result.filePaths[0];
 });
+
+// Opens EA's own sign-in page in its own window. When EA finishes, it sends the
+// browser to a local address that nothing listens on; this window catches that
+// address and hands it to the page. The password is typed on EA's page only.
+const EA_DONE_PREFIX = 'http://127.0.0.1/success';
+ipcMain.handle('ea-login', (event, url) => new Promise((resolve) => {
+  const win = new BrowserWindow({
+    width: 560,
+    height: 760,
+    parent: mainWindow,
+    title: 'Sign in with EA',
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, partition: 'persist:ea-login' },
+  });
+  let settled = false;
+  const finish = (result) => {
+    if (settled) return;
+    settled = true;
+    resolve(result);
+    if (!win.isDestroyed()) win.close();
+  };
+  const isDone = (u) => typeof u === 'string' && u.startsWith(EA_DONE_PREFIX);
+  win.webContents.session.webRequest.onBeforeRequest({ urls: ['http://127.0.0.1/*'] }, (details, callback) => {
+    if (isDone(details.url)) { callback({ cancel: true }); finish({ url: details.url }); return; }
+    callback({});
+  });
+  win.webContents.on('will-redirect', (e, u) => { if (isDone(u)) { e.preventDefault(); finish({ url: u }); } });
+  win.webContents.on('will-navigate', (e, u) => { if (isDone(u)) { e.preventDefault(); finish({ url: u }); } });
+  win.webContents.on('did-fail-load', (e, code, desc, u) => { if (isDone(u)) finish({ url: u }); });
+  win.on('closed', () => finish({ canceled: true }));
+  win.loadURL(url);
+}));
+
 ipcMain.handle('server-info', () => ({ port: serverInfo.port, urls: serverInfo.urls, lan: serverInfo.lan, dataDir: process.env.M26FC_DATA_DIR, version: app.getVersion() }));
 ipcMain.handle('open-path', (e, p) => shell.openPath(p));
 

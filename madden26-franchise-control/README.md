@@ -8,10 +8,11 @@ The file is also in this repo at [`download/Madden26FranchiseControl-portable.ex
 
 1. Download it and double-click it. It is not code-signed, so Windows SmartScreen will show a warning the first time: click **More info → Run anyway**.
 2. Windows Firewall will ask to allow the app on private networks. Say **yes**, or the Madden Companion App on your phone cannot send your league to it.
-3. The app opens. Go to **Connect** and either open your PC franchise file or export your league from the Madden Companion App to the address it shows.
+3. The app opens. Go to **Connect**, click **Sign in with EA**, sign in, pick your franchise and click **Download**. (Or open your PC franchise file, or export from the Madden Companion App.)
 
 A Windows desktop mod for **Madden NFL 26 franchise mode**. Connect your franchise and get the stats Madden never shows you, plus an injury tool that lets you decide who gets hurt in which game.
 
+- **Sign in with EA** – sign in once with your EA account; the tool lists the franchises on it and downloads whichever one you pick, no phone needed.
 - **Injury tool** – pick any game on the schedule, pick a player, pick the injury (ACL tear, high ankle sprain, broken collarbone… every injury the game has) or let it roll one. The tool picks the random play it happens on and writes the injury into your franchise file.
 - **Advanced blocking** – pressures, hurries, QB hits and sacks allowed by every blocker, almost-sacks, pancakes, how long each blocker holds his man off the QB, pass-block efficiency, a blocking grade, the best blocker and the most beaten blocker, and who beat whom.
 - **Pass rush & missed sacks** – pressures, hits, hurries, sacks and the sacks each defender let get away.
@@ -24,19 +25,24 @@ Everything is organised by category, by game, by team and by season part (presea
 
 ## How it connects to your franchise
 
-Madden 26 franchises live on EA's servers. There are two ways the tool gets at them:
+Madden 26 franchises live on EA's servers. There are three ways the tool gets at them:
 
-| | PC franchise file | Madden Companion App export (EA cloud) |
-|---|---|---|
-| Works for | PC | PC, PlayStation, Xbox |
-| Injury tool (writes to the save) | Yes | No – consoles cannot be written to from outside the game |
-| Snap counts | Real, recorded by Madden | Reconstructed |
-| Pancakes / sacks allowed per lineman | Real, recorded by Madden | Reconstructed |
-| Everything else | Yes | Yes |
+| | Sign in with EA (easiest) | PC franchise file | Madden Companion App export |
+|---|---|---|---|
+| Works for | PlayStation, Xbox, PC | PC | PlayStation, Xbox, PC |
+| What you do | Sign in once, pick the franchise, click Download | Open the CAREER file | Export from the phone app to the tool |
+| Injury tool (writes to the save) | No | Yes | No |
+| Snap counts | Reconstructed | Real, recorded by Madden | Reconstructed |
+| Pancakes / sacks allowed per lineman | Reconstructed | Real, recorded by Madden | Reconstructed |
+| Everything else | Yes | Yes | Yes |
+
+**Sign in with EA:** on the Connect page click **Sign in with EA**. EA's own login page opens in a window; sign in with the EA account your Madden is on. The tool then does exactly what the Madden Companion App does when it exports: it lists every franchise on that account and downloads the one you pick (teams, standings, every week's schedule and stats, every roster) straight from EA. After each week you play, click **Update current week**. Your password is typed on EA's page only. The sign-in the tool keeps is sealed with the Windows keychain on your PC and is only ever sent to EA. If the account has Madden on more than one console, you pick which profile to use. Sign out any time.
+
+> Worth knowing: EA publishes no official API for this, so the tool signs in as the Madden Companion App and reads only your own leagues, the same approach the open-source [Snallabot](https://github.com/snallabot/snallabot-service) Discord bot has used for years. It is unofficial, it is not endorsed by EA, and EA could change how it works at any time. It only ever reads; it never writes anything back to EA's servers. If you would rather not use an unofficial client, the Companion App export below does the same job with EA's own export button.
 
 **PC:** Madden keeps a local copy of each franchise in `Documents\Madden NFL 26\settings` (the file is named `CAREER-<your league name>`). Open it in the tool. EA's cloud sync uploads it again the next time you save in game.
 
-**EA cloud:** EA's official way out of the cloud is the **Madden Companion App** on your phone. Its **Export** feature sends the whole league (rosters, schedule, every box score, standings) to any address you type in. This program listens for that export. Same Wi-Fi, type the address the tool shows you on the Connect page, export "All", done. This is exactly how the community stat sites and Discord bots for Madden get their data.
+**Companion App export:** the **Madden Companion App** on your phone has an **Export** feature that sends the whole league to any address you type in. This program listens for that export too. Same Wi-Fi, type the address the tool shows you on the Connect page, export "All", done.
 
 ## Install
 
@@ -89,6 +95,7 @@ electron/        desktop shell (window, file dialogs)
 src/server/      local API + Companion App export receiver
 src/core/franchise/   franchise-file reader, injury catalog, injury writer
 src/core/companion/   Companion App export normaliser
+src/core/ea/          EA account sign-in, game-server client and league download
 src/core/stats/       blocking, snaps, receiving, tackling, penalties, aggregation
 src/core/tracker/     Game Tracker events and overrides
 ui/              the app's pages

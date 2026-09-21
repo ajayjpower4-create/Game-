@@ -16,6 +16,8 @@ import { planInjury } from '../core/franchise/injuries.js';
 import { addEvent, removeEvent, EVENT_TYPES } from '../core/tracker/tracker.js';
 import { BUNDLED_SCHEMA_DIR } from '../core/franchise/reader.js';
 import { hashString } from '../core/rng.js';
+import { EAAccountService } from '../core/ea/account.js';
+import { DEFAULT_YEAR } from '../core/ea/constants.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const UI_DIR = path.resolve(HERE, '../../ui');
@@ -45,7 +47,7 @@ function rawBodyParser(req, res, next) {
   req.on('error', next);
 }
 
-export function createApp({ store, franchise, engine, dataDir, log = () => {} } = {}) {
+export function createApp({ store, franchise, engine, dataDir, secretBox = null, log = () => {} } = {}) {
   store ||= new Store(dataDir);
   franchise ||= new FranchiseService({ schemaDirectory: store.getSettings().schemaDirectory || BUNDLED_SCHEMA_DIR });
   engine ||= new StatsEngine();
@@ -57,6 +59,8 @@ export function createApp({ store, franchise, engine, dataDir, log = () => {} } 
 
   const companionLeagues = new Map(); // leagueKey -> built league (cached)
   const leagueKeyFor = (platform, leagueId) => `companion-${platform}-${leagueId}`;
+  const ea = new EAAccountService({ store, secretBox, log, onImported: (leagueKey) => { companionLeagues.delete(leagueKey); engine.clear(); } });
+  app.locals.ea = ea;
 
   function getLeague(leagueKey) {
     if (franchise.isOpen && franchise.league.leagueId === leagueKey) return franchise.league;
@@ -76,9 +80,9 @@ export function createApp({ store, franchise, engine, dataDir, log = () => {} } 
 
   // ---- status / leagues
   api.get('/status', (req, res) => {
-    const leagues = store.listLeagues().filter((l) => l.source !== 'franchise').map((l) => ({ leagueKey: l.leagueKey, name: l.name || `${l.platform || ''} league ${l.companionLeagueId || ''}`.trim(), source: 'companion', lastExportAt: l.lastExportAt || null, platform: l.platform || null }));
+    const leagues = store.listLeagues().filter((l) => l.source !== 'franchise').map((l) => ({ leagueKey: l.leagueKey, name: l.name || `${l.platform || ''} league ${l.companionLeagueId || ''}`.trim(), source: 'companion', via: l.via || 'companion-app', lastExportAt: l.lastImportAt || l.lastExportAt || null, platform: l.platform || null }));
     if (franchise.isOpen) leagues.unshift({ leagueKey: franchise.league.leagueId, name: franchise.league.name, source: 'franchise', filePath: franchise.filePath, openedAt: franchise.openedAt, schema: franchise.league.schema, gameYear: franchise.league.gameYear });
-    res.json({ ok: true, leagues, franchiseOpen: franchise.isOpen, filePath: franchise.filePath, dataDir: store.dataDir, settings: store.getSettings(), version: process.env.M26FC_VERSION || 'dev' });
+    res.json({ ok: true, leagues, franchiseOpen: franchise.isOpen, filePath: franchise.filePath, dataDir: store.dataDir, settings: store.getSettings(), version: process.env.M26FC_VERSION || 'dev', ea: { signedIn: ea.signedIn, profile: ea.signedIn ? ea.state.profile : null } });
   });
 
   api.post('/franchise/open', async (req, res) => {
@@ -272,6 +276,32 @@ export function createApp({ store, franchise, engine, dataDir, log = () => {} } 
     if (settings.schemaDirectory) franchise.schemaDirectory = settings.schemaDirectory;
     res.json({ ok: true, settings });
   });
+
+  // ---- EA account sign-in: the companion app's own login and export flow, run from here.
+  const eaError = (res, e) => { log('ea error', e && e.message); res.status(400).json({ ok: false, error: e.message, help: e.help || null }); };
+  api.get('/ea/status', (req, res) => res.json({ ok: true, ...ea.status() }));
+  api.get('/ea/login-url', (req, res) => {
+    try { res.json({ ok: true, url: ea.loginUrl(Number(req.query.year) || DEFAULT_YEAR) }); } catch (e) { eaError(res, e); }
+  });
+  api.post('/ea/code', async (req, res) => {
+    try { res.json({ ok: true, ...(await ea.beginWithCode(req.body.code || req.body.url, Number(req.body.year) || DEFAULT_YEAR)) }); } catch (e) { eaError(res, e); }
+  });
+  api.post('/ea/profile', async (req, res) => {
+    try { res.json({ ok: true, ...(await ea.selectProfile(req.body.handle, req.body.personaId, req.body.console || null)) }); } catch (e) { eaError(res, e); }
+  });
+  api.post('/ea/leagues/refresh', async (req, res) => {
+    try { res.json({ ok: true, leagues: await ea.refreshLeagues() }); } catch (e) { eaError(res, e); }
+  });
+  api.post('/ea/leagues/:leagueId/import', (req, res) => {
+    try { res.json({ ok: true, task: ea.startImport(req.params.leagueId, req.body.scope || 'all') }); } catch (e) { eaError(res, e); }
+  });
+  api.get('/ea/imports/:taskId', (req, res) => {
+    const task = ea.getTask(req.params.taskId);
+    if (!task) return res.status(404).json({ ok: false, error: 'task not found' });
+    res.json({ ok: true, task });
+  });
+  api.post('/ea/signout', (req, res) => { ea.signOut(); res.json({ ok: true }); });
+  api.get('/ea/diagnostics', (req, res) => res.json({ ok: true, lines: ea.diagnostics() }));
 
   app.use('/api', api);
 

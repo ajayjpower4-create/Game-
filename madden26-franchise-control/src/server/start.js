@@ -7,8 +7,10 @@ export function lanAddresses() {
   return out;
 }
 
-export function startServer({ port = 3826, host = '0.0.0.0', dataDir, log = () => {} } = {}) {
-  const app = createApp({ dataDir, log });
+// secretBox: optional { available, encrypt, decrypt } used to seal the EA
+// sign-in on disk (the desktop app passes the OS keychain).
+export function startServer({ port = 3826, host = '0.0.0.0', dataDir, secretBox = null, log = () => {} } = {}) {
+  const app = createApp({ dataDir, secretBox, log });
   return new Promise((resolve, reject) => {
     const server = app.listen(port, host, () => {
       const actual = server.address().port;

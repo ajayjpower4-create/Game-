@@ -6,6 +6,9 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif; }
 button, select, input { font: inherit; }
+a { color: var(--accent2); }
+a.pill { text-decoration: none; background: var(--accent2); color: #fff; padding: 8px 12px; border-radius: 6px; font-weight: 600; }
+a.pill:hover { filter: brightness(1.12); }
 #app { display: flex; height: 100vh; }
 .sidebar { width: 236px; flex: none; background: var(--bg2); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
 .brand { padding: 18px 18px 10px; border-bottom: 1px solid var(--line); }
