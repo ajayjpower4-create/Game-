@@ -1,6 +1,6 @@
 # Political Election Simulator
 
-> Looking for the **Madden 26 Franchise Control** mod (injury tool + advanced blocking, snap counts, targets/drops, missed tackles, penalties)? It is a separate Windows desktop app in [`madden26-franchise-control/`](madden26-franchise-control/README.md).
+> Looking for the **Madden 26 Franchise Control** mod (injury tool + advanced blocking, snap counts, targets/drops, missed tackles, penalties)? It is a separate Windows desktop app in [`madden26-franchise-control/`](madden26-franchise-control/README.md), and the exe is right there: [download Madden26FranchiseControl-portable.exe](https://github.com/ajayjpower4-create/Game-/raw/claude/laughing-curie-g3tt2q/madden26-franchise-control/download/Madden26FranchiseControl-portable.exe).
 
 Pick any two people — famous or invented — run them through a three-month
 campaign, then either rig the map yourself or let Claude Opus call the race.

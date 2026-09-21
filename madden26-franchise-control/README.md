@@ -1,5 +1,15 @@
 # Madden 26 Franchise Control
 
+## ⬇️ Download the exe
+
+**[Download Madden26FranchiseControl-portable.exe](https://github.com/ajayjpower4-create/Game-/raw/claude/laughing-curie-g3tt2q/madden26-franchise-control/download/Madden26FranchiseControl-portable.exe)** (Windows 10/11, 64-bit, about 80 MB, no install needed)
+
+The file is also in this repo at [`download/Madden26FranchiseControl-portable.exe`](download/Madden26FranchiseControl-portable.exe) (open it and press "Download raw file").
+
+1. Download it and double-click it. It is not code-signed, so Windows SmartScreen will show a warning the first time: click **More info → Run anyway**.
+2. Windows Firewall will ask to allow the app on private networks. Say **yes**, or the Madden Companion App on your phone cannot send your league to it.
+3. The app opens. Go to **Connect** and either open your PC franchise file or export your league from the Madden Companion App to the address it shows.
+
 A Windows desktop mod for **Madden NFL 26 franchise mode**. Connect your franchise and get the stats Madden never shows you, plus an injury tool that lets you decide who gets hurt in which game.
 
 - **Injury tool** – pick any game on the schedule, pick a player, pick the injury (ACL tear, high ankle sprain, broken collarbone… every injury the game has) or let it roll one. The tool picks the random play it happens on and writes the injury into your franchise file.
@@ -30,9 +40,7 @@ Madden 26 franchises live on EA's servers. There are two ways the tool gets at t
 
 ## Install
 
-1. Download `Madden26FranchiseControl-<version>-x64-win.exe` (installer) or the `-portable.exe` from the Releases page of this repository.
-2. Run it. Windows SmartScreen may ask once because the build is not code-signed; choose *More info → Run anyway*. Windows Firewall will ask to allow the app on private networks – say yes, or phone exports cannot reach it.
-3. The app opens. Go to **Connect** and either open your franchise file or export from the Companion App.
+Use the download link at the top of this page. Run the exe, allow it through SmartScreen (*More info → Run anyway*) and Windows Firewall (private networks), and the app opens on the **Connect** page. The GitHub Actions workflow in this repository (`Build Windows exe`) rebuilds the portable exe and an installer from source whenever you want a fresh copy.
 
 Nothing is sent anywhere. All data stays in the app's data folder on your PC (shown at the bottom of the sidebar), and every franchise-file write makes a timestamped backup next to the file in `franchise-control-backups`.
 
