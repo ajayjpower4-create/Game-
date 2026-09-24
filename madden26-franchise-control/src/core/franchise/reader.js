@@ -37,7 +37,7 @@ export const PLAYER_RATING_FIELDS = [
   'TackleRating', 'HitPowerRating', 'PursuitRating', 'PlayRecognitionRating', 'PowerMovesRating',
   'FinesseMovesRating', 'BlockSheddingRating', 'ManCoverageRating', 'ZoneCoverageRating', 'PressRating',
   'ThrowPowerRating', 'ThrowAccuracyRating', 'ThrowUnderPressureRating', 'InjuryRating', 'ToughnessRating',
-  'StaminaRating',
+  'StaminaRating', 'BreakSackRating', 'KickAccuracyRating', 'KickPowerRating',
 ];
 
 // Companion-app style rating keys so the stats engine sees one shape.
@@ -52,15 +52,29 @@ const RATING_KEY_MAP = {
   PursuitRating: 'pursuit', PlayRecognitionRating: 'playRec', PowerMovesRating: 'powerMoves', FinesseMovesRating: 'finesseMoves',
   BlockSheddingRating: 'blockShed', ManCoverageRating: 'manCover', ZoneCoverageRating: 'zoneCover', PressRating: 'press',
   ThrowPowerRating: 'throwPower', ThrowAccuracyRating: 'throwAcc', ThrowUnderPressureRating: 'throwUnderPressure',
-  InjuryRating: 'injury', ToughnessRating: 'toughness', StaminaRating: 'stamina',
+  InjuryRating: 'injury', ToughnessRating: 'toughness', StaminaRating: 'stamina', BreakSackRating: 'breakSack',
+  KickAccuracyRating: 'kickAcc', KickPowerRating: 'kickPower',
 };
 
 const PLAYER_INFO_FIELDS = [
   'FirstName', 'LastName', 'Position', 'TeamIndex', 'ContractStatus', 'JerseyNum', 'Age', 'YearsPro', 'TraitDevelopment',
   'InjuryStatus', 'InjuryType', 'InjurySeverity', 'InjurySide', 'MinInjuryDuration', 'MaxInjuryDuration', 'TotalInjuryDuration',
   'IsInjuredReserve', 'LatestInjuryWeek', 'LatestInjuryStage', 'LatestInjuryYear', 'WasPreviouslyInjured',
-  'CurrentYearSeasonEndingInjuryWeek', 'GameStats', 'SeasonStats', 'CareerStats', 'PLYR_PORTRAIT',
+  'CurrentYearSeasonEndingInjuryWeek', 'GameStats', 'SeasonStats', 'CareerStats', 'PLYR_PORTRAIT', 'PresentationId',
 ];
+
+// Key plays the game logs for every game it plays or sims. Codes decoded from
+// the saves themselves: each pair shares a quarter and clock.
+export const KEY_PLAY = {
+  4: 'intThrown', // QB threw an interception (secondary: the defender)
+  7: 'tdPass', // QB threw a touchdown (secondary: the receiver)
+  21: 'tdCatch', // receiver caught a touchdown (secondary: the QB)
+  30: 'tdRun', // ball carrier ran it in
+  56: 'fumbleRecovery', // defender came up with the ball
+  59: 'sack', // defender sacked the QB (secondary: the QB)
+  64: 'intMade', // defender intercepted (secondary: the QB)
+  84: 'fieldGoal', // kicker made a field goal; yards is the distance
+};
 
 export const PLAYER_READ_FIELDS = [...PLAYER_INFO_FIELDS, ...PLAYER_RATING_FIELDS];
 
@@ -304,6 +318,16 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
   }
   const playerIdForRef = (ref) => (ref && ref.tableId === playerT.header.tableId ? playerRowToId.get(ref.rowNumber) || null : null);
 
+  // The key-play log names players by PresentationId. Map every player row,
+  // including ones since cut or retired, so an old play still has a name.
+  const byPresentation = new Map();
+  if (availableFields.has('PresentationId')) {
+    for (const r of playerT.records) {
+      if (r.isEmpty || !r.PresentationId) continue;
+      byPresentation.set(r.PresentationId, { playerId: playerRowToId.get(r.index) || null, name: `${r.FirstName} ${r.LastName}`, position: r.Position });
+    }
+  }
+
   // Career extras (pressures, targets, stops) when the file has them
   for (const p of Object.values(players)) {
     const hit = await cache.record(p._refs.careerStats).catch(() => null);
@@ -344,7 +368,10 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
       gameStatus: r.GameStatus,
       isSimmed: Boolean(r.IsSimmed),
       published: Boolean(r.HasBeenPublished),
+      quarterLengthSec: (numberOr(r.QuarterLengthMins, 15) || 15) * 60,
       _refs: {
+        scoring: refOf(r, 'ScoringSummaries'),
+        playTracker: refOf(r, 'PlayTracker'),
         injuryCache: refOf(r, 'InjuryCache'),
         homeStats: refOf(r, 'HomePlayerStatCache'),
         awayStats: refOf(r, 'AwayPlayerStatCache'),
@@ -357,11 +384,19 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
   }
   const gameIdForRef = (ref) => (ref && ref.tableId === gameT.header.tableId ? gameRowToId.get(ref.rowNumber) || null : null);
 
-  // Per-game team stats, player stats and injuries
+  // Per-game team stats, player stats, injuries and key plays
   const teamGameStats = {};
   const playerGameStats = {};
   const gameInjuries = {};
+  const gamePlays = {};
   const seen = new Set();
+  // The key-play log names teams by TeamIndex + 1.
+  const teamForLogId = (id) => (Number.isFinite(id) && id > 0 && teams[`t${id - 1}`] ? `t${id - 1}` : null);
+  const personFor = (presId) => {
+    if (!presId) return null;
+    const hit = byPresentation.get(presId);
+    return hit ? { playerId: hit.playerId, name: hit.name, position: hit.position } : null;
+  };
 
   const addPlayerLine = (gameId, playerId, category, line, teamId) => {
     const k = `${gameId}|${playerId}|${category}`;
@@ -400,6 +435,50 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
         addPlayerLine(g.gameId, playerId, category, statLine(category, statHit.record), sideKey === 'homeStats' ? g.homeTeamId : g.awayTeamId);
       }
     }
+    // Key plays and the scoring timeline
+    const plays = [];
+    try {
+      const tracker = await cache.record(g._refs.playTracker);
+      const refs = tracker ? await cache.arrayRefs(refOf(tracker.record, 'TrackedPlayList')) : [];
+      for (const ref of refs) {
+        const hit = await cache.record(ref).catch(() => null);
+        if (!hit) continue;
+        const x = hit.record;
+        const type = KEY_PLAY[x.SimPlayerStat] || null;
+        if (!type) continue;
+        // The ids describe possession after the play, so a turnover flips them.
+        const offTeam = teamForLogId(x.OffensiveTeamId);
+        const defTeam = teamForLogId(x.DefensiveTeamId);
+        const primaryTeam = ['sack', 'intThrown'].includes(type) ? defTeam : offTeam;
+        plays.push({
+          quarter: numberOr(x.Quarter),
+          clockSec: Math.max(0, Math.round(numberOr(x.Timestamp))),
+          type,
+          code: x.SimPlayerStat,
+          teamId: primaryTeam,
+          primary: personFor(x.PrimaryPlayerId),
+          secondary: personFor(x.SecondaryPlayerId),
+          count: numberOr(x.StatValue, 1),
+          yards: Math.round(numberOr(x.ScoreYards)),
+        });
+      }
+    } catch (e) {
+      warnings.push(`key plays ${g.gameId}: ${e.message}`);
+    }
+    const scoring = [];
+    try {
+      const refs = await cache.arrayRefs(g._refs.scoring);
+      for (const ref of refs) {
+        const hit = await cache.record(ref).catch(() => null);
+        if (!hit) continue;
+        const x = hit.record;
+        scoring.push({ quarter: numberOr(x.Quarter), clockSec: Math.max(0, numberOr(x.TimeStampInSec)), homeAfter: numberOr(x.HomeCurrentScore), awayAfter: numberOr(x.AwayCurrentScore) });
+      }
+    } catch (e) {
+      warnings.push(`scoring ${g.gameId}: ${e.message}`);
+    }
+    if (plays.length || scoring.length) gamePlays[g.gameId] = { quarterLengthSec: g.quarterLengthSec, plays, scoring };
+
     // Injuries the game itself produced
     let injRefs = [];
     try { injRefs = await cache.arrayRefs(g._refs.injuryCache); } catch { injRefs = []; }
@@ -448,7 +527,8 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
     teamGameStats,
     playerGameStats,
     gameInjuries,
+    gamePlays,
     warnings,
-    capabilities: { snapsRecorded: true, pancakesRecorded: true, injuryTool: true },
+    capabilities: { snapsRecorded: true, pancakesRecorded: true, injuryTool: true, playByPlay: true },
   };
 }

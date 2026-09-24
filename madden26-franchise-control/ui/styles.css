@@ -121,3 +121,61 @@ ol.steps li { margin-bottom: 6px; }
 .kbd { font-family: ui-monospace, monospace; background: var(--bg3); padding: 1px 5px; border-radius: 4px; }
 .injured { color: var(--bad); font-weight: 600; }
 .small-note { font-size: 12px; color: var(--muted); }
+
+/* Tables */
+.table-tools { display: flex; justify-content: flex-end; margin: 4px 0; }
+a.plink { color: var(--text); text-decoration: none; }
+a.plink:hover { color: var(--accent2); text-decoration: underline; }
+tr.clickable, .clickable { cursor: pointer; }
+tr.teamrow td { background: var(--bg3); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: 4px 0 12px; }
+.seg button { border: 0; border-radius: 0; background: transparent; padding: 7px 14px; color: var(--muted); }
+.seg button.active { background: var(--accent2); color: #fff; }
+
+/* Highlights */
+.weekchips { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 4px; }
+.weekchips button { padding: 5px 10px; font-size: 12px; border-radius: 14px; }
+.weekchips button.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+.hl { display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; padding: 9px 10px; border-left: 3px solid var(--good); background: var(--bg2); border-radius: 6px; margin-bottom: 6px; }
+.card .hl { background: var(--bg3); }
+.hl.lowlight { border-left-color: var(--bad); }
+.hl.clickable:hover { outline: 1px solid var(--accent2); }
+.hl-when { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; padding-top: 2px; }
+.hl-type { font-weight: 700; font-size: 13px; }
+.hl-team { color: var(--muted); font-weight: 600; font-size: 11px; margin-left: 4px; }
+.hl-tag { display: inline-block; background: #4a3410; color: #ffd27a; border-radius: 10px; font-size: 10px; font-weight: 700; padding: 1px 7px; margin-left: 5px; text-transform: uppercase; letter-spacing: .4px; }
+.hl.lowlight .hl-tag { background: #4a1410; color: #ffb3ae; }
+.hl-text { margin-top: 2px; }
+.hl-src { font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: .5px; white-space: nowrap; }
+.hl-head { margin-bottom: 8px; }
+.hl-headline { font-size: 17px; font-weight: 700; }
+.hl-headline.small { font-size: 13px; font-weight: 600; margin: 6px 0 4px; }
+.pog { margin-top: 8px; }
+.hlgame .won { color: var(--good); }
+.lowtxt { color: #ffb3ae; }
+
+/* Matchup preview */
+.risk { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.risk-low { background: #12402a; color: #7ff0b0; }
+.risk-medium { background: #3a3a14; color: #f0e27f; }
+.risk-high { background: #4a3410; color: #ffd27a; }
+.risk-critical { background: #4a1410; color: #ffb3ae; }
+ul.tips { margin: 0; padding-left: 18px; }
+ul.tips li { margin-bottom: 7px; }
+
+/* Weekly blocking grid */
+table.weekly td { text-align: center; }
+table.weekly td.left { text-align: left; }
+table.weekly th { text-align: center; }
+.gcell b { font-size: 14px; }
+.g-elite { background: #0f4a2c !important; }
+.g-good { background: #173a28 !important; }
+.g-avg { background: #2a2f3a !important; }
+.g-poor { background: #4a3410 !important; }
+.g-bad { background: #4a1410 !important; }
+.gchip { display: inline-block; padding: 1px 7px; border-radius: 4px; margin: 0 2px 0 8px; color: var(--text); }
+.trend { font-weight: 700; font-size: 12px; }
+.trend.up { color: var(--good); }
+.trend.down { color: var(--bad); }
+.trend.steady { color: var(--muted); }
+.modal.wide { width: min(1100px, 96vw); }

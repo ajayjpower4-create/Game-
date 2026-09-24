@@ -84,7 +84,8 @@ const RATINGS = {
   leadBlockRating: 'leadBlock', tackleRating: 'tackle', hitPowerRating: 'hitPower', pursuitRating: 'pursuit', playRecRating: 'playRec',
   powerMovesRating: 'powerMoves', finesseMovesRating: 'finesseMoves', blockShedRating: 'blockShed', manCoverRating: 'manCover', zoneCoverRating: 'zoneCover',
   pressRating: 'press', throwPowerRating: 'throwPower', throwAccRating: 'throwAcc', throwUnderPressureRating: 'throwUnderPressure',
-  injuryRating: 'injury', toughRating: 'toughness', staminaRating: 'stamina',
+  injuryRating: 'injury', toughRating: 'toughness', staminaRating: 'stamina', breakSackRating: 'breakSack',
+  kickAccRating: 'kickAcc', kickPowerRating: 'kickPower',
 };
 
 export function normalizeRosterPlayer(p) {

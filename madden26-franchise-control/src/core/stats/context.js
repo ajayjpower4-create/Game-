@@ -103,6 +103,30 @@ export function teamContext(league, gameId, teamId, opponentId) {
   }
   if (!offPlays) offPlays = 60;
 
+  // Run blocking, measured: yards gained before the first defender got a hand
+  // on the runner. Madden records both halves of every carry.
+  let carries = 0;
+  let ybc = 0;
+  let brokenTackles = 0;
+  for (const x of people) {
+    const o = offense(x);
+    if (!o.RUSHATTEMPTS) continue;
+    carries += o.RUSHATTEMPTS;
+    brokenTackles += o.RUSHBROKENTACKLES || 0;
+    if (typeof o.RUSHYARDSAFTER1STHIT === 'number') ybc += (o.RUSHYARDS || 0) - o.RUSHYARDSAFTER1STHIT;
+    else ybc += (o.RUSHYARDS || 0) * 0.45; // exports without the split: typical share
+  }
+
+  // The passer who took most of the dropbacks; his release and escapability
+  // shape every pressure number.
+  let qb = null;
+  let qbAtt = -1;
+  for (const x of people) {
+    const att = offense(x).PASSATTEMPTS || 0;
+    if (att > qbAtt && (x.player.position === 'QB' || att > 0)) { qb = x.player; qbAtt = att; }
+  }
+  if (!qb) qb = (people.find((x) => x.player.position === 'QB') || {}).player || null;
+
   return {
     teamId,
     opponentId,
@@ -122,6 +146,8 @@ export function teamContext(league, gameId, teamId, opponentId) {
     yac: sums.yac,
     penalties: line.PENALTIES || 0,
     penaltyYards: line.PENALTYYARDS || 0,
+    run: { carries, yardsBeforeContact: Math.max(0, ybc), brokenTackles },
+    qb,
   };
 }
 

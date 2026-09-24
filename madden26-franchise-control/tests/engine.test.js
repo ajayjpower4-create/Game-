@@ -23,7 +23,8 @@ test('blocking respects recorded totals', () => {
   assert.equal(t.blocking.summary.sacksAllowed, 2);
   assert.ok(t.blocking.summary.pressuresAllowed >= 2);
   assert.equal(t.blocking.blockers.reduce((s, b) => s + b.sacksAllowed, 0), 2);
-  assert.equal(t.blocking.blockers.reduce((s, b) => s + b.pressuresAllowed, 0), t.blocking.summary.pressuresAllowed);
+  // Pressures from a rusher nobody blocked are on no blocker.
+  assert.equal(t.blocking.blockers.reduce((s, b) => s + b.pressuresAllowed, 0) + t.blocking.summary.unblockedPressures, t.blocking.summary.pressuresAllowed);
   const rushers = t.blocking.passRush; // Buffalo rushers vs KC
   assert.equal(rushers.reduce((s, r) => s + r.pressures, 0), t.blocking.summary.pressuresAllowed);
   assert.equal(rushers.find((r) => r.name === 'Von Edge').sacks, 2, 'recorded sacks are kept');

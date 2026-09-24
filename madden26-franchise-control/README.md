@@ -14,14 +14,17 @@ A Windows desktop mod for **Madden NFL 26 franchise mode**. Connect your franchi
 
 - **Sign in with EA** – sign in once with your EA account; the tool lists the franchises on it and downloads whichever one you pick, no phone needed.
 - **Injury tool** – pick any game on the schedule, pick a player, pick the injury (ACL tear, high ankle sprain, broken collarbone… every injury the game has) or let it roll one. The tool picks the random play it happens on and writes the injury into your franchise file.
-- **Advanced blocking** – pressures, hurries, QB hits and sacks allowed by every blocker, almost-sacks, pancakes, how long each blocker holds his man off the QB, pass-block efficiency, a blocking grade, the best blocker and the most beaten blocker, and who beat whom.
+- **Highlights** – the biggest plays and the worst moments of every game, written out: "Daniel Jones finds Josh Downs for a 28-yard touchdown to win it", pick-sixes, sacks, comebacks, blown leads, drops, missed field goals, blown blocks. Click a game for its highlights, lowlights, key plays in order, scoring and player of the game, or see the plays of the week across the league.
+- **Advanced blocking** – pressures, hurries, QB hits and sacks allowed by every blocker, almost-sacks, pancakes, run-block wins, how long each blocker holds his man off the QB, pass-block efficiency, pass, run and overall grades, the best blocker and the most beaten blocker, and who beat whom. See any single week, or the **week by week** grid that follows every blocker through the season with a trend arrow.
+- **Matchup preview** – before you play a game, see every one-on-one up front: who each of your blockers lines up against, how often that rusher wins, the pressures and sacks he should give up, a risk rating, the best run lane, and game-plan tips for both sides of the ball (who to chip, when to go quick game, which blocker to attack with your best rusher).
 - **Pass rush & missed sacks** – pressures, hits, hurries, sacks and the sacks each defender let get away.
 - **Snap counts** – offense, defense and special teams for every player, every game.
-- **Targets & drops** – targets, catches, drops, catch rate, drop rate, yards per target.
-- **Missed tackles** – missed tackles and miss rate for every defender.
+- **Targets & drops** – targets, catches, drops, catch rate, drop rate, air yards, yards after catch, yards per target, and balls thrown away under pressure.
+- **Missed tackles** – missed tackles and miss rate for every defender, split into misses on runs and misses after the catch.
 - **Penalties** – flags and yards charged to each player, with the type of penalty.
+- **Player game logs** – click any player's name for his game-by-game line across every category.
 
-Everything is organised by category, by game, by team and by season part (preseason / regular season / playoffs), with leaderboards.
+Everything is organised by category, by game, by team, by week and by season part (preseason / regular season / playoffs), with leaderboards. Every table exports to CSV.
 
 ## How it connects to your franchise
 
@@ -55,7 +58,7 @@ Nothing is sent anywhere. All data stays in the app's data folder on your PC (sh
 ## Using the injury tool
 
 1. **Schedule & Injury Tool** → pick the game → **Injure a player**.
-2. Choose the team, the player, the body part and the injury. Leave the weeks blank to get the game's normal range for that injury, or type the weeks yourself. Choose a side or let it be random. Tick IR if you want him on injured reserve.
+2. Choose the team, then the player from that team's full roster (or press **Let the game pick** to hurt someone the way the game would: starters on the field a lot with low injury ratings are the likeliest), then the body part and the injury. Leave the weeks blank to get the game's normal range for that injury, or type the weeks yourself. Choose a side or let it be random. Tick IR if you want him on injured reserve.
 3. **Preview** rolls the play it happens on (quarter, clock, down and distance, play type) and the exact weeks. **Re-roll play** if you want a different moment.
 4. **Write into franchise file** puts it into the save right away (backup first). **Save for later** keeps it in the Injury Report so you can write it in after that game is played.
 
@@ -72,6 +75,20 @@ Madden does not record pressures, hurries, QB hits, targets, missed tackles, or 
 - **R** recorded by Madden
 - **~** reconstructed by the tool
 - **T** logged by you in the Game Tracker
+
+### How the blocking model works
+
+Every pass-rush rep is a one-on-one. Rushers line up where they do in the real game (a right end on the left tackle, a left end on the right tackle, tackles on the guards and center, blitzers picked up by backs and tight ends), and each rep is won with a probability set by the rusher's power moves against the blocker's pass-block power, and his finesse moves against the blocker's finesse, leaning on whichever edge is better. Each player also has a steady form of his own and a game-day swing, the quarterback's ability to slip sacks and throw under pressure changes how long the pocket has to hold, and defenses playing with a big lead rush harder.
+
+The model then calibrates itself to your league. It solves for the setting that makes the average rep produce NFL-typical pressure (about 38 pressures per 100 dropbacks), takes the rate at which pressure became a sack from your league's own sack numbers, and measures run blocking against your league's own yards before contact. Madden's recorded sacks are always kept as they are, and so are its recorded sacks allowed per lineman, pancakes and snap counts. Pressures from a rusher nobody blocked are credited to the blitzer and charged to no blocker. Grades run 0-99 with 60 as average and are pulled toward average on small samples.
+
+The matchup preview runs the same model forward, using only what was known before kickoff: the ratings, each player's form, and how he did in this league's earlier games compared with what the model expected of him.
+
+### Highlights
+
+A PC franchise file keeps a play-by-play of every game (the scoring plays, sacks, interceptions and fumble recoveries with the quarter and clock) and a scoreboard after every score. The tool rebuilds the running score from it, including extra points and two-point tries, so it knows which touchdown tied it, which took the lead and which won it. Box-score moments (300-yard passers, 100-yard rushers, drops, missed field goals, shutouts), the tool's own reconstructed stats (blown blocks, missed tackles, penalties) and the injury report add the rest. A league from the Companion App or the EA sign-in has box scores but no play-by-play, so it gets box-score moments without clock times.
+
+### Game Tracker
 
 The **Game Tracker** is how you make the reconstructed categories real. While you play (or from a replay), log the pressures, sacks and the blocker who got beat, pancakes, targets and drops, missed tackles, penalties with their yards, and real snap counts. Whatever you log for a team in a game replaces the reconstruction for that category.
 
@@ -98,7 +115,7 @@ src/server/      local API + Companion App export receiver
 src/core/franchise/   franchise-file reader, injury catalog, injury writer
 src/core/companion/   Companion App export normaliser
 src/core/ea/          EA account sign-in, game-server client and league download
-src/core/stats/       blocking, snaps, receiving, tackling, penalties, aggregation
+src/core/stats/       blocking, matchup preview, highlights, snaps, receiving, tackling, penalties, aggregation
 src/core/tracker/     Game Tracker events and overrides
 ui/              the app's pages
 schemas/         extra Madden 26 franchise schemas

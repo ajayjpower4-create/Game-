@@ -3,11 +3,14 @@
 // Madden records only the team's penalty count and yards. The tool charges
 // each flag to a player using how often each position draws flags, the
 // player's awareness, and how many snaps he played, and picks a penalty type
-// whose yardage adds up to the recorded team total. Tracked penalties replace
-// this completely.
+// whose yardage adds up to the recorded team total. The other systems steer
+// it: a blocker who kept getting beaten is the one who grabs (holding), a
+// corner giving up catches draws the interference and holding calls, and a
+// rusher hitting the quarterback risks roughing the passer. Tracked
+// penalties replace this completely.
 
 import { makeRng, apportion } from '../rng.js';
-import { rating, snapCount } from './context.js';
+import { rating, snapCount, defense } from './context.js';
 import { side as sideOf } from '../positions.js';
 
 const POSITION_RATE = { LT: 3.4, RT: 3.4, LG: 2.4, RG: 2.4, C: 1.6, TE: 1.6, WR: 1.4, HB: 0.6, FB: 0.5, QB: 0.45, LE: 2.2, RE: 2.2, DT: 1.7, LOLB: 1.4, ROLB: 1.4, MLB: 1.0, CB: 2.6, SS: 1.3, FS: 1.1, K: 0.05, P: 0.1, LS: 0.15 };
@@ -36,7 +39,7 @@ function typeGroup(pos) {
   return 'ST';
 }
 
-export function penaltiesForTeam({ league, gameId, ctx, oppCtx, overrides = {} }) {
+export function penaltiesForTeam({ league, gameId, ctx, oppCtx, overrides = {}, blocking = null, passRush = null }) {
   const rng = makeRng('penalties', league.leagueId, gameId, ctx.teamId);
   const tracked = overrides.penalties || null;
 
@@ -46,6 +49,26 @@ export function penaltiesForTeam({ league, gameId, ctx, oppCtx, overrides = {} }
     const { snaps } = snapCount(ctx, x, plays);
     return { x, playerId: x.player.playerId, name: x.player.fullName, position: x.player.position, snapPct: plays ? Math.min(1, snaps / plays) : 0 };
   });
+  // What the other systems saw each player do.
+  const beaten = new Map((blocking ? blocking.blockers : []).map((b) => [b.playerId, b.pressuresAllowed + 0.5 * (b.runRepsLost || 0) / 4]));
+  const hits = new Map((passRush || []).map((r) => [r.playerId, r.hits + r.sacks]));
+  const lean = (p) => {
+    const g = typeGroup(p.position);
+    if (g === 'OL' || g === 'TE' || g === 'RB') return 1 + Math.min(1.2, 0.18 * (beaten.get(p.playerId) || 0));
+    if (g === 'DB') return 1 + Math.min(1, 0.12 * (defense(p.x).CTHALLOWED || 0));
+    if (g === 'DL' || g === 'LB') return 1 + Math.min(0.6, 0.12 * (hits.get(p.playerId) || 0));
+    return 1;
+  };
+  // Tilt the flag type toward what that player was doing wrong.
+  const typeTable = (p) => {
+    const g = typeGroup(p.position);
+    const table = TYPES[g];
+    const bump = (name, by) => table.map(([t, y, w]) => [t, y, t === name ? w * by : w]);
+    if (g === 'OL' || g === 'TE' || g === 'RB') return bump('Offensive Holding', 1 + 0.25 * (beaten.get(p.playerId) || 0));
+    if (g === 'DB') return bump('Defensive Pass Interference', 1 + 0.15 * (defense(p.x).CTHALLOWED || 0));
+    if (g === 'DL' || g === 'LB') return bump('Roughing the Passer', 1 + 0.3 * (hits.get(p.playerId) || 0));
+    return table;
+  };
 
   let flags = []; // {playerId, type, yards}
   let source;
@@ -54,11 +77,11 @@ export function penaltiesForTeam({ league, gameId, ctx, oppCtx, overrides = {} }
     source = 'tracked';
   } else {
     const count = ctx.penalties || 0;
-    const weights = people.map((p) => (POSITION_RATE[p.position] || 0.5) * (1 + Math.max(0, 72 - rating(p.x.player, 'awareness')) / 60) * (p.snapPct > 0 ? 0.15 + p.snapPct : 0.02));
+    const weights = people.map((p) => (POSITION_RATE[p.position] || 0.5) * (1 + Math.max(0, 72 - rating(p.x.player, 'awareness')) / 60) * (p.snapPct > 0 ? 0.15 + p.snapPct : 0.02) * lean(p));
     const dist = apportion(count, weights, rng);
     dist.forEach((n, i) => {
       for (let k = 0; k < n; k++) {
-        const table = TYPES[typeGroup(people[i].position)];
+        const table = typeTable(people[i]);
         const [type, yards] = rng.weighted(table.map(([t, y, w]) => ({ item: [t, y], weight: w })));
         flags.push({ playerId: people[i].playerId, type, yards, spot: yards === 0 });
       }

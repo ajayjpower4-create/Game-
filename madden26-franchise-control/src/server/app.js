@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { Store } from '../core/store.js';
 import { FranchiseService } from '../core/franchise/service.js';
 import { StatsEngine } from '../core/stats/engine.js';
-import { seasonTotals } from '../core/stats/aggregate.js';
+import { seasonTotals, blockingByWeek, playerLog } from '../core/stats/aggregate.js';
+import { weekHighlights } from '../core/stats/highlights.js';
+import { predictGame } from '../core/stats/predict.js';
 import { buildLeagueFromCompanion } from '../core/companion/league.js';
 import { classifyPath, extractList } from '../core/companion/normalize.js';
 import { INJURY_TYPES, BODY_PARTS, injuryTypesByPart } from '../core/franchise/injury-catalog.js';
@@ -171,8 +173,67 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     const tracker = store.getTracker(req.params.leagueKey);
     const stage = req.query.stage || 'reg';
     const teamId = req.query.teamId || null;
-    const totals = seasonTotals(league, engine, tracker, { stage, teamId });
+    const week = req.query.week ? Number(req.query.week) : null;
+    const totals = seasonTotals(league, engine, tracker, { stage, teamId, week });
     res.json({ ok: true, totals });
+  });
+
+  // ---- highlights
+  api.get('/leagues/:leagueKey/games/:gameId/highlights', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    const game = league.games[req.params.gameId];
+    if (!game) return res.status(404).json({ ok: false, error: 'game not found' });
+    if (game.status !== 'played') return res.json({ ok: true, played: false, game: publicGame(game, league) });
+    const h = engine.highlights(league, game.gameId, store.getTracker(req.params.leagueKey));
+    res.json({ ok: true, played: true, game: publicGame(game, league), highlights: h });
+  });
+
+  api.get('/leagues/:leagueKey/highlights/week', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    const tracker = store.getTracker(req.params.leagueKey);
+    const played = Object.values(league.games).filter((g) => g.status === 'played').sort(gameSort);
+    const inStage = req.query.stage ? played.filter((g) => g.stage === req.query.stage) : played;
+    const last = inStage[inStage.length - 1] || played[played.length - 1];
+    const stage = inStage.length ? req.query.stage || last.stage : last ? last.stage : 'reg';
+    const week = req.query.week != null && req.query.week !== '' ? Number(req.query.week) : last ? last.week : 1;
+    const out = weekHighlights(league, engine, tracker, { stage, week, limit: Number(req.query.limit) || 12 });
+    out.games = out.games.map((x) => ({ ...x, game: publicGame(league.games[x.gameId], league) }));
+    res.json({ ok: true, ...out });
+  });
+
+  // ---- matchup preview (the blocking model, projected forward)
+  api.get('/leagues/:leagueKey/games/:gameId/preview', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    if (!league.games[req.params.gameId]) return res.status(404).json({ ok: false, error: 'game not found' });
+    try {
+      const tracker = store.getTracker(req.params.leagueKey);
+      const preview = engine.memo(`preview|${engine.leagueKey(league, tracker)}|${req.params.gameId}`, () => predictGame(league, engine, tracker, req.params.gameId));
+      res.json({ ok: true, game: publicGame(league.games[req.params.gameId], league), preview });
+    } catch (e) {
+      log('preview failed', e);
+      res.status(400).json({ ok: false, error: e.message });
+    }
+  });
+
+  // ---- weekly blocking and player game logs
+  api.get('/leagues/:leagueKey/blocking/weekly', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    const teamId = req.query.teamId;
+    if (!teamId || !league.teams[teamId]) return res.status(400).json({ ok: false, error: 'pick a team' });
+    res.json({ ok: true, ...blockingByWeek(league, engine, store.getTracker(req.params.leagueKey), { stage: req.query.stage || 'reg', teamId }) });
+  });
+
+  api.get('/leagues/:leagueKey/players/:playerId/log', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    const player = league.players[req.params.playerId];
+    if (!player) return res.status(404).json({ ok: false, error: 'player not found' });
+    const games = playerLog(league, engine, store.getTracker(req.params.leagueKey), player.playerId);
+    res.json({ ok: true, player: publicPlayer(player), team: league.teams[player.teamId] || null, games });
   });
 
   // ---- tracker
