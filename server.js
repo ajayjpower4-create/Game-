@@ -9,6 +9,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 app.use(express.json());
 app.use(express.static(join(__dirname, 'public')));
+app.use('/kingstar', express.static(join(__dirname, 'kingstar-school')));
 
 const currency = (n) => `$${Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -110,4 +111,5 @@ Rules:
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Budget Planner running at http://localhost:${PORT}`);
+  console.log(`KingstarSchool running at http://localhost:${PORT}/kingstar/`);
 });
