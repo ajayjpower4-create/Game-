@@ -904,6 +904,7 @@
     triRight: '<path d="M9 6l7 6-7 6z" fill="currentColor"/>',
     posted: '<path d="M4 20l1-4.5L16 4.5l3.5 3.5-11 11z"/><path d="M13.5 7l3.5 3.5"/>',
     grade: '<path d="M4 12.5l4.5 4.5L20 5.5"/><path d="M4 20h16"/>',
+    copy: '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="1.8"/><path d="M15.5 8.5V5.2a1.2 1.2 0 0 0-1.2-1.2H5.2A1.2 1.2 0 0 0 4 5.2v9.1a1.2 1.2 0 0 0 1.2 1.2h3.3"/>',
   };
   const ic = (name, cls = '') =>
     `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
@@ -1844,7 +1845,9 @@
 
   // ---------- Views: gradebook (teacher) ----------
 
-  function viewGradebook(ctx, course) {
+  // Everything the gradebook shows, with its filters applied. The table on
+  // screen and the copied table are both built from this.
+  function gradebookData(ctx, course) {
     const g = S.ui.gb;
     const roster = rosterOf(ctx.teacher, course);
     const q = g.q.trim().toLowerCase();
@@ -1853,6 +1856,39 @@
       .filter((a) => (g.mp === 'all' || String(a.mp) === g.mp) && (g.cat === 'all' || a.cat === g.cat))
       .sort(byDue);
     const mpSel = g.mp !== 'all' && g.mp !== '0' ? Number(g.mp) : null;
+    const rows = students.map((s) => {
+      const r = calcStudent(course, s.id);
+      return {
+        s,
+        overall: mpSel ? r.periods.find((p) => p.mp === mpSel).pct : r.pct,
+        missing: assignmentsOf(course).filter((a) => isPastDue(a) && !entryOf(course.id, a.id, s.id)).length,
+        cells: items.map((a) => entryOf(course.id, a.id, s.id)),
+      };
+    });
+    const avgs = items.map((a, i) => {
+      const got = rows.map((r) => r.cells[i]).filter((e) => e && e.t !== 'x');
+      if (!got.length) return null;
+      return (got.reduce((sum, e) => sum + (e.t === 'g' ? e.s : 0), 0) / got.length / (Number(a.points) || 1)) * 100;
+    });
+    const overalls = rows.map((r) => r.overall).filter((p) => p != null);
+    const classAvg = overalls.length ? overalls.reduce((a, b) => a + b, 0) / overalls.length : null;
+    return { roster, items, mpSel, rows, avgs, classAvg };
+  }
+
+  // How one grade reads once it is copied out of KingstarSchool.
+  function copyCell(e, a) {
+    const pts = fmtNum(a.points);
+    if (!e) return isPastDue(a) ? 'Not done' : '—';
+    if (e.t === 'a') return `ABS (0/${pts})`;
+    if (e.t === 'x') return 'EX';
+    return `${fmtNum(e.s)}/${pts}`;
+  }
+
+  function viewGradebook(ctx, course) {
+    const g = S.ui.gb;
+    const d = gradebookData(ctx, course);
+    const { items, mpSel } = d;
+    const canCopy = d.roster.length > 0 && assignmentsOf(course).length > 0;
     const tools = `<div class="gb-tools">
       <label class="field inline" for="gb-mp"><span>Marking period</span><select id="gb-mp" class="ctl slim" data-ui="gb.mp" data-live>
         ${opt('all', 'All', g.mp)}${MPS.map((m) => opt(String(m), `MP ${m}`, g.mp)).join('')}${opt('0', 'No grading period', g.mp)}
@@ -1861,19 +1897,15 @@
         ${opt('all', 'All', g.cat)}${CATS.map((c) => opt(c.key, c.label, g.cat)).join('')}
       </select></label>
       <label class="search" for="gb-q">${ic('search')}<input id="gb-q" type="search" placeholder="Find a student" autocomplete="off" data-ui="gb.q" data-live value="${esc(g.q)}"></label>
+      ${canCopy ? `<button type="button" class="btn push" data-act="copy-grades" title="Copies this whole table so you can paste it into a Google Doc">${ic('copy')} Copy grades</button>` : ''}
     </div>
-    <p class="gb-legend">Type a score and press Enter. Type <b>ABS</b> for absent (0 points) or <b>EX</b> for exempt, or use the <span class="nowrap">${ic('dots')}</span> button in a cell. A red cell was due and has no grade yet. A blue dot means the student typed the grade in.</p>`;
+    <p class="gb-legend">Type a score and press Enter. Type <b>ABS</b> for absent (0 points) or <b>EX</b> for exempt, or use the <span class="nowrap">${ic('dots')}</span> button in a cell. A red cell was due and has no grade yet. A blue dot means the student typed the grade in. <b>Copy grades</b> copies the whole table for a Google Doc.</p>`;
     let table;
-    if (!roster.length) {
+    if (!d.roster.length) {
       table = '<div class="empty slim"><h2>No students yet</h2><p>Add names to this course\'s class list under Class Lists.</p></div>';
     } else if (!assignmentsOf(course).length) {
       table = `<div class="empty slim"><h2>No assignments yet</h2><p>Add one from <button type="button" class="linkbtn" data-act="nav" data-to="course" data-course="${course.id}">Materials</button> with Add Materials.</p></div>`;
     } else {
-      const results = new Map(students.map((s) => [s.id, calcStudent(course, s.id)]));
-      const overallOf = (s) => {
-        const r = results.get(s.id);
-        return mpSel ? r.periods.find((p) => p.mp === mpSel).pct : r.pct;
-      };
       const head = `<tr>
         <th scope="col" class="stick gb-name">Student</th>
         <th scope="col" class="gb-sum">${mpSel ? `MP ${mpSel}` : 'Overall'}</th>
@@ -1888,12 +1920,11 @@
           )
           .join('')}
       </tr>`;
-      const rows = students
-        .map((s) => {
-          const missing = assignmentsOf(course).filter((a) => isPastDue(a) && !entryOf(course.id, a.id, s.id)).length;
-          const cells = items
-            .map((a) => {
-              const e = entryOf(course.id, a.id, s.id);
+      const rows = d.rows
+        .map(({ s, overall, missing, cells }) => {
+          const tds = items
+            .map((a, i) => {
+              const e = cells[i];
               const miss = !e && isPastDue(a);
               const cls = [
                 'gb-cell',
@@ -1905,30 +1936,115 @@
               return `<td class="${cls}"><input class="gb-input" id="gb-${a.id}-${s.id}" data-grade data-course="${course.id}" data-aid="${a.id}" data-sid="${s.id}" inputmode="decimal" autocomplete="off" value="${esc(displayValue(e))}" placeholder="${miss ? 'Not done' : '—'}" aria-label="${esc(s.name)}, ${esc(a.title)}"><button type="button" class="gb-more" data-act="pop" data-pop="cell" data-id="${a.id}.${s.id}" aria-label="More for ${esc(s.name)}, ${esc(a.title)}">${ic('dots')}</button></td>`;
             })
             .join('');
-          return `<tr><th scope="row" class="stick gb-name">${esc(s.name)}</th><td class="gb-sum">${pctChip(overallOf(s))}</td><td class="gb-sum${missing ? ' has-miss' : ''}">${missing || '—'}</td>${cells}</tr>`;
+          return `<tr><th scope="row" class="stick gb-name">${esc(s.name)}</th><td class="gb-sum">${pctChip(overall)}</td><td class="gb-sum${missing ? ' has-miss' : ''}">${missing || '—'}</td>${tds}</tr>`;
         })
         .join('');
-      const avgs = items
-        .map((a) => {
-          const got = students.map((s) => entryOf(course.id, a.id, s.id)).filter((e) => e && e.t !== 'x');
-          if (!got.length) return '<td>—</td>';
-          const pct = (got.reduce((sum, e) => sum + (e.t === 'g' ? e.s : 0), 0) / got.length / (Number(a.points) || 1)) * 100;
-          return `<td>${fmtPct(pct)}</td>`;
-        })
-        .join('');
-      const overalls = students.map(overallOf).filter((p) => p != null);
-      const classAvg = overalls.length ? overalls.reduce((a, b) => a + b, 0) / overalls.length : null;
+      const avgs = d.avgs.map((p) => `<td>${p == null ? '—' : fmtPct(p)}</td>`).join('');
       table = `<div class="gb-scroll" id="gb-scroll" data-keep-scroll>
         <table class="gb">
           <thead>${head}</thead>
           <tbody>${rows || `<tr><td class="gb-none" colspan="${items.length + 3}">No students match that search.</td></tr>`}</tbody>
-          <tfoot><tr><th scope="row" class="stick gb-name">Class average</th><td class="gb-sum">${pctChip(classAvg)}</td><td class="gb-sum"></td>${avgs}</tr></tfoot>
+          <tfoot><tr><th scope="row" class="stick gb-name">Class average</th><td class="gb-sum">${pctChip(d.classAvg)}</td><td class="gb-sum"></td>${avgs}</tr></tfoot>
         </table>
       </div>
       ${items.length ? '' : '<p class="muted pad">No assignments match these filters.</p>'}`;
     }
     const inner = `${courseHead(ctx, course)}<h2 class="section-title">Gradebook</h2>${tools}${table}`;
     return courseShell(ctx, course, 'gradebook', inner, false);
+  }
+
+  // ---------- Copying grades ----------
+
+  const pctText = (p) => (p == null ? '—' : `${letterFor(p)} (${fmtPct(p)})`);
+
+  // Builds the gradebook as a table Google Docs pastes as a real table
+  // (HTML), plus tab-separated text for anything that only takes plain text.
+  function gradebookCopy(ctx, course) {
+    const d = gradebookData(ctx, course);
+    const g = S.ui.gb;
+    const filters = [];
+    if (g.mp !== 'all') filters.push(g.mp === '0' ? 'No grading period' : `MP ${g.mp}`);
+    if (g.cat !== 'all') filters.push(`${CAT_LABEL[g.cat]} grades`);
+    if (g.q.trim()) filters.push(`students matching "${g.q.trim()}"`);
+    const title = `${courseTitle(course)} · Gradebook`;
+    const info = [ctx.teacher.school, ctx.teacher.name, `Copied ${fmtDay(new Date())}`].filter(Boolean).join(' · ');
+    const shown = filters.length ? `Showing only: ${filters.join(', ')}` : '';
+    const key = 'ABS = absent (counts as 0). EX = exempt (does not count). Not done = past due with no grade.';
+    const head = ['Student', d.mpSel ? `MP ${d.mpSel}` : 'Overall', 'Not done', ...d.items.map((a) => a.title)];
+    const sub = ['', '', '', ...d.items.map((a) => `${CAT_LABEL[a.cat] || 'Minor'} · ${a.mp ? `MP ${a.mp}` : 'No MP'} · ${fmtNum(a.points)} pts · Due ${fmtShort(a.due)}`)];
+    const body = d.rows.map((r) => [r.s.name, pctText(r.overall), String(r.missing), ...r.cells.map((e, i) => copyCell(e, d.items[i]))]);
+    const foot = ['Class average', pctText(d.classAvg), '', ...d.avgs.map((p) => (p == null ? '—' : fmtPct(p)))];
+
+    const font = 'font-family:Arial,sans-serif;';
+    const box = 'border:1px solid #9aa3b2;padding:4px 6px;vertical-align:top;';
+    const th = (inner, extra = '') => `<th style="${box}text-align:left;${extra}">${inner}</th>`;
+    const td = (text, extra = '') => `<td style="${box}text-align:center;${extra}">${esc(text)}</td>`;
+    const table = `<table style="border-collapse:collapse;${font}font-size:10pt;color:#111;">
+<thead><tr>${head.map((h, i) => th(`${esc(h)}${sub[i] ? `<br><span style="font-weight:normal;color:#555;font-size:8pt;">${esc(sub[i])}</span>` : ''}`, 'background:#e6edf7;')).join('')}</tr></thead>
+<tbody>${body.map((row) => `<tr>${row.map((v, i) => (i ? td(v) : th(esc(v), 'font-weight:normal;'))).join('')}</tr>`).join('\n')}</tbody>
+<tfoot><tr>${foot.map((v, i) => (i ? td(v, 'background:#f2f4f8;font-weight:bold;') : th(esc(v), 'background:#f2f4f8;'))).join('')}</tr></tfoot>
+</table>`;
+    const html = `<h2 style="${font}">${esc(title)}</h2><p style="${font}color:#555;">${esc(info)}${shown ? `<br>${esc(shown)}` : ''}</p>${table}<p style="${font}font-size:9pt;color:#555;">${esc(key)}</p>`;
+    const clean = (v) => String(v).replace(/[\t\r\n]+/g, ' ');
+    const lines = [title, info];
+    if (shown) lines.push(shown);
+    lines.push('', ...[head, sub, ...body, foot].map((r) => r.map(clean).join('\t')), '', key);
+    return { html, table, text: lines.join('\n'), students: body.length, assignments: d.items.length };
+  }
+
+  // Copies with both an HTML table and plain text. The copy-event route runs
+  // inside the click, which works in the most browsers and embedded pages.
+  function copyWithEvent(html, text) {
+    let wrote = false;
+    const onCopy = (e) => {
+      if (!e.clipboardData) return;
+      e.clipboardData.setData('text/html', html);
+      e.clipboardData.setData('text/plain', text);
+      e.preventDefault();
+      wrote = true;
+    };
+    const active = document.activeElement;
+    const holder = document.createElement('span');
+    holder.textContent = 'KingstarSchool grades';
+    holder.className = 'sr-only';
+    document.body.appendChild(holder);
+    const sel = window.getSelection();
+    document.addEventListener('copy', onCopy);
+    try {
+      if (sel) {
+        const range = document.createRange();
+        range.selectNodeContents(holder);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      document.execCommand('copy');
+    } catch (_) {
+      wrote = false;
+    } finally {
+      document.removeEventListener('copy', onCopy);
+      if (sel) sel.removeAllRanges();
+      holder.remove();
+      if (active && active.focus) active.focus({ preventScroll: true });
+    }
+    return wrote;
+  }
+
+  async function copyRich(html, text) {
+    if (copyWithEvent(html, text)) return true;
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+          }),
+        ]);
+        return true;
+      }
+    } catch (_) {
+      /* the browser refused; the caller shows the table to copy by hand */
+    }
+    return false;
   }
 
   // ---------- Views: grades (student) ----------
@@ -2267,6 +2383,16 @@
         ${modalFoot(m.id ? 'Save list' : 'Add list')}
       </form>`;
     },
+    copy(m) {
+      return `<form data-form="info" novalidate>
+        ${modalHead('Copy grades', `<span class="modal-ic tint">${ic('copy')}</span>`)}
+        <div class="modal-body">
+          <p>This browser would not let KingstarSchool copy by itself. Tap <b>Select table</b>, then copy it: press Ctrl+C (Command+C on a Mac), or tap Copy on a phone or tablet. Then paste it into your Google Doc.</p>
+          <div class="copy-preview" id="copy-preview">${m.html}</div>
+        </div>
+        <footer class="modal-foot"><button type="button" class="btn" data-act="select-copy">Select table</button><button type="submit" class="btn primary">Done</button></footer>
+      </form>`;
+    },
     confirm(m) {
       return `<form data-form="confirm" novalidate>
         ${modalHead(m.title)}
@@ -2562,6 +2688,28 @@
       } else {
         setEntry(cid, aid, sid, { t: mark }, 't');
       }
+    },
+    'copy-grades'() {
+      const ctx = me();
+      const course = Store.get('courses', S.route.courseId);
+      if (!ctx || !course) return;
+      const out = gradebookCopy(ctx, course);
+      copyRich(out.html, out.text).then((ok) => {
+        if (ok) {
+          toast(`Copied ${plural(out.students, 'student')} and ${plural(out.assignments, 'assignment')}. Paste it into your Google Doc.`);
+        } else {
+          openModal({ type: 'copy', html: out.table });
+        }
+      });
+    },
+    'select-copy'() {
+      const box = document.getElementById('copy-preview');
+      const sel = window.getSelection();
+      if (!box || !sel) return;
+      const range = document.createRange();
+      range.selectNodeContents(box);
+      sel.removeAllRanges();
+      sel.addRange(range);
     },
     'toggle-open'(el) {
       const key = el.dataset.key;
@@ -2980,6 +3128,26 @@
       e.preventDefault();
       if (t.id === 'w-custom') ACTIONS['wiz-add-custom']();
     }
+  });
+
+  // Selecting the gradebook and copying it by hand would lose every score,
+  // because browsers leave typing boxes out of copied tables. Copy the same
+  // full table the Copy grades button makes instead.
+  document.addEventListener('copy', (e) => {
+    if (S.route.name !== 'gradebook' || !e.clipboardData) return;
+    const a = document.activeElement;
+    if ((a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement) && a.selectionStart !== a.selectionEnd) return;
+    const sel = window.getSelection();
+    const table = $('.gb');
+    if (!table || !sel || sel.isCollapsed || !sel.rangeCount || !sel.getRangeAt(0).intersectsNode(table)) return;
+    const ctx = me();
+    const course = Store.get('courses', S.route.courseId);
+    if (!ctx || ctx.role !== 'teacher' || !course) return;
+    const out = gradebookCopy(ctx, course);
+    e.clipboardData.setData('text/html', out.html);
+    e.clipboardData.setData('text/plain', out.text);
+    e.preventDefault();
+    toast('Copied the whole gradebook. Paste it into your Google Doc.');
   });
 
   window.addEventListener('resize', closePop);

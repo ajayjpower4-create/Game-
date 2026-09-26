@@ -649,6 +649,10 @@ form[data-form="wizard"] { display: flex; flex-direction: column; gap: 16px; }
   content: ''; position: absolute; left: 6px; top: 6px; width: 6px; height: 6px;
   border-radius: 50%; background: var(--link); pointer-events: none;
 }
+.copy-preview {
+  overflow: auto; max-height: 50vh; padding: 10px;
+  border: 1px solid var(--line); border-radius: 4px; background: #FFFFFF; color: #111111;
+}
 .gb tfoot th, .gb tfoot td { background: var(--surface-2); color: var(--ink-2); font-size: 13px; padding: 8px 10px; text-align: center; border-bottom: 0; }
 .gb tfoot .gb-name { text-align: left; }
 .gb-none { padding: 16px; text-align: center; color: var(--ink-3); }
