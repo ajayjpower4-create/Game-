@@ -174,7 +174,7 @@
     { key: 'practice', label: 'Practice' },
   ];
   const CAT_LABEL = { minor: 'Minor', major: 'Major', practice: 'Practice' };
-  const DEFAULT_WEIGHTS = { minor: 70, major: 30, practice: 0 };
+  const DEFAULT_WEIGHTS = { minor: 60, major: 50, practice: 0 };
   const MPS = [1, 2, 3, 4];
   const MP_WEIGHT = 25;
   // The school's scale. A score right on a line gets the higher grade.
@@ -234,15 +234,12 @@
         const pct = possible > 0 ? (earned / possible) * 100 : null;
         return { ...c, weight: Number(weights[c.key]) || 0, rows, earned, possible, pct };
       });
+      // A grade type set to 0% (Practice, by default) never changes the grade.
       let pct = null;
       const counted = cats.filter((c) => c.pct != null && c.weight > 0);
       if (counted.length) {
         const total = counted.reduce((s, c) => s + c.weight, 0);
         pct = counted.reduce((s, c) => s + c.pct * c.weight, 0) / total;
-      } else {
-        const graded = cats.filter((c) => c.pct != null);
-        const possible = graded.reduce((s, c) => s + c.possible, 0);
-        if (possible > 0) pct = (graded.reduce((s, c) => s + c.earned, 0) / possible) * 100;
       }
       return { mp, cats, pct, weight: mp ? MP_WEIGHT : 0, rows: cats.flatMap((c) => c.rows) };
     });
