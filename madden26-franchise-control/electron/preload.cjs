@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('m26', {
   openPath: (p) => ipcRenderer.invoke('open-path', p),
   eaLogin: (url) => ipcRenderer.invoke('ea-login', url),
   onMenuOpenFile: (cb) => ipcRenderer.on('menu:open-file', cb),
+  copyText: (text) => ipcRenderer.invoke('copy-text', String(text)),
 });

@@ -61,7 +61,51 @@ const PLAYER_INFO_FIELDS = [
   'InjuryStatus', 'InjuryType', 'InjurySeverity', 'InjurySide', 'MinInjuryDuration', 'MaxInjuryDuration', 'TotalInjuryDuration',
   'IsInjuredReserve', 'LatestInjuryWeek', 'LatestInjuryStage', 'LatestInjuryYear', 'WasPreviouslyInjured',
   'CurrentYearSeasonEndingInjuryWeek', 'GameStats', 'SeasonStats', 'CareerStats', 'PLYR_PORTRAIT', 'PresentationId',
+  // Contract: salary and prorated signing bonus for every year of the deal
+  'ContractLength', 'ContractYear', 'PLYR_CAPSALARY', 'ContractExtraYearOption', 'IsDemandRelease',
+  ...[0, 1, 2, 3, 4, 5, 6, 7].flatMap((i) => [`ContractSalary${i}`, `ContractBonus${i}`]),
+  'PLYR_DRAFTROUND', 'PLYR_DRAFTPICK', 'YearDrafted', 'PLYR_CONSECYEARSWITHTEAM',
 ];
+
+// Madden keeps every dollar amount in units of $10,000 (the league minimum
+// of $840,000 is stored as 84, Josh Allen's $36.33M cap hit as 3633).
+export const MONEY_UNIT = 10000;
+
+export function contractFromRow(r) {
+  const status = r.ContractStatus;
+  const length = numberOr(r.ContractLength);
+  const yearIndex = numberOr(r.ContractYear);
+  if (status === 'FreeAgent' || status === 'Retired' || !length) return { status, length: 0, yearIndex: 0, yearsLeft: 0, capHit: 0, salary: 0, bonusProration: 0, years: [], total: 0, totalBonus: 0, remaining: 0, remainingBonus: 0, averagePerYear: 0, extraYearOption: false, demandRelease: Boolean(r.IsDemandRelease) };
+  const years = [];
+  for (let i = 0; i < Math.min(8, length); i++) {
+    const salary = numberOr(r[`ContractSalary${i}`]) * MONEY_UNIT;
+    const bonus = numberOr(r[`ContractBonus${i}`]) * MONEY_UNIT;
+    years.push({ index: i, salary, bonus, capHit: salary + bonus });
+  }
+  const sum = (list, k) => list.reduce((a, y) => a + y[k], 0);
+  const left = years.filter((y) => y.index >= yearIndex);
+  const current = years[yearIndex] || { salary: 0, bonus: 0 };
+  // The cap hit Madden itself carries for this season; it matches salary +
+  // bonus for the year except for deals signed mid-year.
+  const capHit = r.PLYR_CAPSALARY != null ? numberOr(r.PLYR_CAPSALARY) * MONEY_UNIT : current.salary + current.bonus;
+  return {
+    status,
+    length,
+    yearIndex,
+    yearsLeft: Math.max(0, length - yearIndex),
+    capHit,
+    salary: current.salary,
+    bonusProration: current.bonus,
+    years,
+    total: sum(years, 'capHit'),
+    totalBonus: sum(years, 'bonus'),
+    remaining: sum(left, 'capHit'),
+    remainingBonus: sum(left, 'bonus'),
+    averagePerYear: length ? Math.round(sum(years, 'capHit') / length) : 0,
+    extraYearOption: Boolean(r.ContractExtraYearOption),
+    demandRelease: Boolean(r.IsDemandRelease),
+  };
+}
 
 // Key plays the game logs for every game it plays or sims. Codes decoded from
 // the saves themselves: each pair shares a quarter and clock.
@@ -245,7 +289,8 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
 
   // Teams
   const teamT = tableByUniqueIdOrName(franchise, TABLE_IDS.Team, 'Team');
-  await readFields(teamT, ['DisplayName', 'ShortName', 'LongName', 'NickName', 'TeamIndex', 'TEAM_TYPE', 'TEAM_LOGO', 'TEAM_RATINGOVR', 'TEAM_RATINGOL', 'TEAM_RATINGDL', 'TEAM_RATINGDEF', 'TEAM_RATINGOFF', 'IsUserManaged']);
+  await readFields(teamT, ['DisplayName', 'ShortName', 'LongName', 'NickName', 'TeamIndex', 'TEAM_TYPE', 'TEAM_LOGO', 'TEAM_RATINGOVR', 'TEAM_RATINGOL', 'TEAM_RATINGDL', 'TEAM_RATINGDEF', 'TEAM_RATINGOFF', 'IsUserManaged',
+    'SalCapCapRoom', 'SalCapNextYearCapRoom', 'ThisYearCapPenalties', 'NextYearCapPenalties', 'RolloverCap']);
   const teams = {};
   const teamRowToId = new Map();
   for (const r of teamT.records) {
@@ -263,6 +308,13 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
       olRating: numberOr(r.TEAM_RATINGOL),
       dlRating: numberOr(r.TEAM_RATINGDL),
       userControlled: Boolean(r.IsUserManaged),
+      cap: 'SalCapCapRoom' in r.fields ? {
+        room: numberOr(r.SalCapCapRoom) * MONEY_UNIT,
+        nextYearRoom: numberOr(r.SalCapNextYearCapRoom) * MONEY_UNIT,
+        deadThisYear: numberOr(r.ThisYearCapPenalties) * MONEY_UNIT,
+        deadNextYear: numberOr(r.NextYearCapPenalties) * MONEY_UNIT,
+        rollover: numberOr(r.RolloverCap) * MONEY_UNIT,
+      } : null,
     };
     teamRowToId.set(r.index, teamId);
   }
@@ -294,7 +346,7 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
       age: numberOr(r.Age),
       yearsPro: numberOr(r.YearsPro),
       overall: numberOr(r.OverallRating),
-      devTrait: r.TraitDevelopment,
+      devTrait: devTraitName(r.TraitDevelopment),
       contractStatus: r.ContractStatus,
       ratings,
       injury: {
@@ -311,6 +363,9 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
         year: numberOr(r.LatestInjuryYear),
         wasPreviouslyInjured: Boolean(r.WasPreviouslyInjured),
       },
+      contract: availableFields.has('ContractLength') ? contractFromRow(r) : null,
+      draft: availableFields.has('PLYR_DRAFTROUND') ? { round: numberOr(r.PLYR_DRAFTROUND), pick: numberOr(r.PLYR_DRAFTPICK), year: numberOr(r.YearDrafted) } : null,
+      yearsWithTeam: numberOr(r.PLYR_CONSECYEARSWITHTEAM),
       career: null,
       _refs: { gameStats: refOf(r, 'GameStats'), seasonStats: refOf(r, 'SeasonStats'), careerStats: refOf(r, 'CareerStats') },
     };
@@ -320,6 +375,10 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
 
   // The key-play log names players by PresentationId. Map every player row,
   // including ones since cut or retired, so an old play still has a name.
+  const rowPerson = (row) => {
+    const r = playerT.records[row];
+    return r && !r.isEmpty ? { playerId: playerRowToId.get(row) || null, name: `${r.FirstName} ${r.LastName}`, position: r.Position } : null;
+  };
   const byPresentation = new Map();
   if (availableFields.has('PresentationId')) {
     for (const r of playerT.records) {
@@ -516,6 +575,16 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
   for (const p of Object.values(players)) delete p._refs;
   for (const g of Object.values(games)) delete g._refs;
 
+  const salaryCap = deriveLeagueCap(teams, players);
+  if (salaryCap) {
+    for (const t of Object.values(teams)) {
+      if (!t.cap) continue;
+      t.cap.teamCap = salaryCap.cap + t.cap.rollover;
+      t.cap.spent = t.cap.teamCap - t.cap.room;
+    }
+  }
+  const news = await readNews(franchise, { teamIdForRef, rowPerson, playerTableId: playerT.header.tableId, warnings });
+
   return {
     leagueId: leagueId || 'franchise-file',
     name: sourceName || 'Franchise file',
@@ -528,7 +597,117 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
     playerGameStats,
     gameInjuries,
     gamePlays,
+    salaryCap,
+    news,
     warnings,
-    capabilities: { snapsRecorded: true, pancakesRecorded: true, injuryTool: true, playByPlay: true },
+    capabilities: { snapsRecorded: true, pancakesRecorded: true, injuryTool: true, playByPlay: true, contracts: true, news: true },
   };
+}
+
+// The league salary cap is not stored as a plain number, but every team's cap
+// room is: room = league cap + that team's rollover - the cap hits that count
+// - dead money. Solve it from the teams and keep it only when all 32 agree.
+// Which contracts count depends on the time of year (the top 51 in the
+// offseason, everyone on the roster in season), so every rule is tried and
+// the one the game is using is the one where the teams agree.
+export function deriveLeagueCap(teams, players) {
+  const list = Object.values(teams).filter((t) => t.cap);
+  if (list.length < 8) return null;
+  const hits = new Map(list.map((t) => [t.teamId, { core: [], ps: [] }]));
+  for (const p of Object.values(players)) {
+    if (!p.teamId || !p.contract || !hits.has(p.teamId)) continue;
+    if (!['Signed', 'Extended', 'Restructured', 'Expiring', 'PracticeSquad'].includes(p.contract.status)) continue;
+    hits.get(p.teamId)[p.contract.status === 'PracticeSquad' ? 'ps' : 'core'].push(p.contract.capHit);
+  }
+  const rules = [
+    ['top 51 contracts (offseason rule)', (h) => h.core.slice().sort((a, b) => b - a).slice(0, 51)],
+    ['every contract on the active roster', (h) => h.core],
+    ['every contract, practice squad included', (h) => [...h.core, ...h.ps]],
+  ];
+  let best = null;
+  for (const [rule, pick] of rules) {
+    const implied = list.map((t) => pick(hits.get(t.teamId)).reduce((a, b) => a + b, 0) + t.cap.room + t.cap.deadThisYear - t.cap.rollover).sort((a, b) => a - b);
+    const median = implied[Math.floor(implied.length / 2)];
+    const agree = implied.filter((v) => Math.abs(v - median) <= 0.002 * median).length / implied.length;
+    if (!best || agree > best.agree) best = { rule, cap: median, agree };
+  }
+  // Fewer than 80% of teams agreeing means the save is mid-transaction or
+  // counts something else; better to show no league cap than a wrong one.
+  if (!best || best.agree < 0.8 || best.cap <= 0) return null;
+  return { cap: best.cap, rule: best.rule, teamsAgreeing: Math.round(best.agree * list.length) };
+}
+
+// Madden's own league news: the story cards and social posts the game writes
+// each week, and every player transaction (signings, releases, trades).
+async function readNews(franchise, { teamIdForRef, rowPerson, playerTableId, warnings }) {
+  const out = { stories: [], posts: [], transactions: [] };
+  const table = async (name) => {
+    const list = franchise.getAllTablesByName(name) || [];
+    const t = list.reduce((b, c) => (!b || c.header.recordCapacity > b.header.recordCapacity ? c : b), null);
+    if (!t) return null;
+    if (!t.recordsRead) await t.readRecords();
+    return t;
+  };
+  const text = (v) => (typeof v === 'string' ? v.trim() : '');
+  try {
+    const t = await table('Story');
+    for (const r of t ? t.records : []) {
+      if (r.isEmpty || !text(r.Header)) continue;
+      out.stories.push({ stage: r.CurrentStage, week: numberOr(r.CurrentWeek), year: numberOr(r.SeasonYear), headline: text(r.Header), text: text(r.Tag), teamId: teamIdForRef(refOf(r, 'Team')), breaking: Boolean(r.IsBreaking), priority: numberOr(r.Priority) });
+    }
+  } catch (e) { warnings.push(`news stories: ${e.message}`); }
+  try {
+    const t = await table('Tweet');
+    for (const r of t ? t.records : []) {
+      if (r.isEmpty || !r.Published || !text(r.Tweet)) continue;
+      out.posts.push({ stage: r.CurrentStage, week: numberOr(r.CurrentWeek), year: numberOr(r.SeasonYear), author: text(r.AuthorName), text: text(r.Tweet), teamId: teamIdForRef(refOf(r, 'Team')), breaking: Boolean(r.IsBreaking), time: text(r.TimeStamp) || null });
+    }
+  } catch (e) { warnings.push(`news posts: ${e.message}`); }
+  try {
+    const t = await table('PlayerTransactionHistoryEntry');
+    for (const r of t ? t.records : []) {
+      if (r.isEmpty) continue;
+      const pref = refOf(r, 'Player');
+      const person = pref && pref.tableId === playerTableId ? rowPerson(pref.rowNumber) : null;
+      if (!person) continue;
+      const from = teamIdForRef(refOf(r, 'OldTeam'));
+      const to = teamIdForRef(refOf(r, 'NewTeam'));
+      out.transactions.push({
+        id: numberOr(r.TransactionId),
+        stage: r.SeasonStage,
+        week: numberOr(r.SeasonWeek),
+        year: numberOr(r.SeasonYear),
+        ...person,
+        fromTeamId: from,
+        toTeamId: to,
+        oldStatus: r.OldContractStatus,
+        newStatus: r.ContractStatus,
+        kind: transactionKind(r.OldContractStatus, r.ContractStatus, from, to),
+        contract: { length: numberOr(r.ContractLength), perYear: numberOr(r.ContractSalary) * MONEY_UNIT, total: numberOr(r.ContractTotalSalary) * MONEY_UNIT, bonus: numberOr(r.ContractBonus) * MONEY_UNIT },
+        capSavings: numberOr(r.CapSavingsThisYear) * MONEY_UNIT,
+      });
+    }
+    out.transactions.sort((a, b) => a.id - b.id);
+  } catch (e) { warnings.push(`transactions: ${e.message}`); }
+  return out;
+}
+
+export function transactionKind(oldStatus, newStatus, from, to) {
+  if (from && to && from !== to) return 'trade';
+  if (newStatus === 'Retired') return 'retired';
+  if (newStatus === 'FreeAgent') return 'released';
+  if (newStatus === 'PracticeSquad') return oldStatus === 'PracticeSquad' ? 'practice squad' : 'signed to practice squad';
+  if (oldStatus === 'PracticeSquad' && newStatus === 'Signed') return 'promoted';
+  if (newStatus === 'Extended') return 'extended';
+  if (newStatus === 'Restructured') return 'restructured';
+  if (oldStatus === 'Drafted' || oldStatus === 'Draft') return 'signed rookie deal';
+  if (['Expiring', 'Signed'].includes(oldStatus) && newStatus === 'Signed') return 're-signed';
+  return 'signed';
+}
+
+// Madden 26's schema labels the four development traits with College
+// Football's names; in Madden they are Normal, Star, Superstar and X-Factor.
+const DEV_TRAITS = { Normal: 'Normal', College_Impact: 'Star', College_Star: 'Superstar', College_Elite: 'X-Factor', Star: 'Star', Superstar: 'Superstar', XFactor: 'X-Factor', 'X-Factor': 'X-Factor', 0: 'Normal', 1: 'Star', 2: 'Superstar', 3: 'X-Factor' };
+export function devTraitName(v) {
+  return DEV_TRAITS[v] || (v == null ? null : String(v));
 }

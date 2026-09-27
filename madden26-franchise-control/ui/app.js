@@ -14,6 +14,9 @@
     teamId: '',
     week: '',
     blockView: 'season',
+    recapKey: null,
+    contractsView: 'league',
+    contractsTeam: null,
     weeklyTeam: null,
     gameId: null,
     gameTab: 'blocking',
@@ -49,6 +52,109 @@
   const tag = (src) => (src ? `<span class="tag ${esc(src)}" title="${src === 'recorded' ? 'Recorded by Madden' : src === 'tracked' ? 'Logged in the Game Tracker' : src === 'mixed' ? 'Mix of recorded and reconstructed games' : 'Reconstructed by the tool from recorded stats and ratings'}">${src === 'recorded' ? 'R' : src === 'tracked' ? 'T' : src === 'mixed' ? 'M' : '~'}</span>` : '');
   const legend = () => `<div class="legend"><span class="tag recorded">R</span> recorded by Madden &nbsp; <span class="tag tracked">T</span> logged in the Game Tracker &nbsp; <span class="tag reconstructed">~</span> reconstructed by this tool from what Madden recorded plus player ratings &nbsp; <span class="tag mixed">M</span> mixed across games</div>`;
   const fmt = (v, d = 0) => (v == null || Number.isNaN(v) ? '—' : typeof v === 'number' ? v.toFixed(d) : esc(v));
+  const money = (v) => {
+    if (v == null || !Number.isFinite(v)) return '—';
+    const a = Math.abs(v);
+    const sign = v < 0 ? '-' : '';
+    if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(2)}M`;
+    if (a >= 1e3) return `${sign}$${Math.round(a / 1e3)}K`;
+    return `${sign}$${a}`;
+  };
+
+  // ---------- plain-text copy
+  // Everything copied out of the app is plain text: no colours, no table
+  // formatting, no R / ~ / T source letters. Tables become lined-up columns.
+  const cellText = (c) => {
+    const x = c.cloneNode(true);
+    x.querySelectorAll('.tag, button, .no-copy, input, select').forEach((n) => n.remove());
+    return x.textContent.replace(/[▼▲]/g, '').replace(/\s+/g, ' ').trim();
+  };
+  function tableToText(t) {
+    const rows = [...t.querySelectorAll('tr')].filter((r) => r.style.display !== 'none').map((r) => [...r.cells].map(cellText));
+    if (!rows.length) return '';
+    const n = Math.max(...rows.map((r) => r.length));
+    const widths = Array.from({ length: n }, (_, i) => Math.max(0, ...rows.map((r) => (r[i] || '').length)));
+    const isNum = (v) => !v || v === '—' || /^[-+]?\$?[\d.,]+[%sMK]?$|^[-+]?[\d.,]+ ?(?:of \d+)?$/.test(v);
+    const numeric = Array.from({ length: n }, (_, i) => i > 0 && rows.slice(1).every((r) => isNum(r[i])));
+    return rows.map((r) => r.map((v, i) => (numeric[i] ? (v || '').padStart(widths[i]) : (v || '').padEnd(widths[i]))).join('  ').replace(/\s+$/, '')).join('\n');
+  }
+  function nodeToText(root) {
+    const clone = root.cloneNode(true);
+    clone.querySelectorAll('.tag, button, .no-copy, input, select, .table-tools, script, style').forEach((n) => n.remove());
+    // Tables that were cloned from a selection may have lost their <table>.
+    const loose = [...clone.children].filter((c) => /^(TR|TBODY|THEAD)$/.test(c.tagName));
+    if (loose.length) { const t = document.createElement('table'); loose.forEach((c) => t.appendChild(c)); clone.appendChild(t); }
+    // Cards laid out side by side on screen read as one line each in text.
+    const line = (el, txt) => { const d = document.createElement('div'); d.textContent = txt.replace(/\s+/g, ' ').trim(); el.replaceWith(d); };
+    const txt = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
+    clone.querySelectorAll('.stat').forEach((el) => line(el, `${txt(el.querySelector('.v'))} ${txt(el.querySelector('.l')).toLowerCase()}`));
+    clone.querySelectorAll('.hl').forEach((el) => {
+      const type = el.querySelector('.hl-type');
+      const base = type ? [...type.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' ').trim() : '';
+      const team = txt(el.querySelector('.hl-team'));
+      const tags = [...el.querySelectorAll('.hl-tag')].map(txt).filter(Boolean);
+      const game = txt(el.querySelector('.hl-main .small-note'));
+      line(el, `${txt(el.querySelector('.hl-when'))} | ${base}${team ? ` (${team})` : ''}${tags.length ? ` [${tags.join(', ')}]` : ''}: ${txt(el.querySelector('.hl-text'))}${game ? ` (${game})` : ''}`);
+    });
+    clone.querySelectorAll('.teams').forEach((el) => line(el, [...el.children].map(txt).join(' ')));
+    clone.querySelectorAll('.game .meta').forEach((el) => line(el, [...el.children].map(txt).join(' · ')));
+    clone.querySelectorAll('.leader').forEach((el) => {
+      const who = el.querySelector('.who');
+      if (who) who.querySelectorAll('.small-note, span').forEach((n) => { n.textContent = ` ${n.classList.contains('small-note') ? `(${n.textContent.trim()})` : n.textContent.trim()}`; });
+      line(el, `${txt(who)}: ${txt(el.querySelector('.n'))}`);
+    });
+    clone.querySelectorAll('.posbar').forEach((el) => line(el, `${txt(el.querySelector('.p'))} ${txt(el.querySelector('.m'))}`));
+    clone.querySelectorAll('.game').forEach((el) => { const d = document.createElement('div'); d.innerHTML = el.innerHTML; d.appendChild(document.createElement('br')); el.replaceWith(d); });
+    for (const t of [...clone.querySelectorAll('table')]) {
+      const live = document.createElement('table');
+      live.innerHTML = t.innerHTML;
+      const pre = document.createElement('pre');
+      pre.textContent = tableToText(live);
+      t.replaceWith(pre);
+    }
+    const holder = document.createElement('div');
+    holder.className = 'copy-holder';
+    holder.style.cssText = 'position:fixed;left:-100000px;top:0;width:1200px;white-space:normal';
+    holder.appendChild(clone);
+    document.body.appendChild(holder);
+    const text = holder.innerText;
+    holder.remove();
+    return text.replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  async function copyText(text) {
+    try { if (window.m26 && window.m26.copyText) { await window.m26.copyText(text); return true; } } catch { /* fall through */ }
+    try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+  function copied(btn, ok) {
+    if (!btn) return;
+    const was = btn.dataset.label || btn.textContent;
+    btn.dataset.label = was;
+    btn.textContent = ok ? 'Copied ✓' : 'Copy failed';
+    btn.classList.toggle('ok', ok);
+    setTimeout(() => { btn.textContent = was; btn.classList.remove('ok'); }, 1600);
+  }
+  // Ctrl+C or right-click Copy on anything selected in the app: plain text only.
+  document.addEventListener('copy', (e) => {
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    const div = document.createElement('div');
+    for (let i = 0; i < sel.rangeCount; i++) div.appendChild(sel.getRangeAt(i).cloneContents());
+    const text = nodeToText(div);
+    if (!text) return;
+    e.clipboardData.setData('text/plain', text);
+    e.preventDefault();
+  });
 
   function sortRows(rows, key, dir) {
     return rows.slice().sort((a, b) => {
@@ -64,7 +170,7 @@
     const sorted = sortRows(rows, sort.key, sort.dir);
     const head = cols.map((c) => `<th class="${c.left ? 'left' : ''} ${sort.key === c.key ? 'sorted' : ''}" data-sort="${c.key}" data-table="${id}">${esc(c.label)}${sort.key === c.key ? (sort.dir === 1 ? ' ▼' : ' ▲') : ''}</th>`).join('');
     const body = sorted.map((r) => `<tr>${cols.map((c) => `<td class="${c.left ? 'left' : 'num'}">${c.render ? c.render(r) : fmt(r[c.key], c.d || 0)}${c.src && r.source ? tag(r.source[c.src]) : c.src && r.sources ? tag(r.sources[c.src]) : ''}</td>`).join('')}</tr>`).join('');
-    return `<div class="table-tools"><button class="small" data-csv="${id}" title="Save this table as a CSV file for Excel or Google Sheets">Export CSV</button></div><div class="${maxHeight ? 'table-wrap' : ''}"><table class="data" id="${id}"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="left muted">Nothing to show yet.</td></tr>`}</tbody></table></div>`;
+    return `<div class="table-tools"><button class="small" data-copy-table="${id}" title="Copy this table as plain text, ready to paste anywhere">Copy</button><button class="small" data-csv="${id}" title="Save this table as a CSV file for Excel or Google Sheets">Export CSV</button></div><div class="${maxHeight ? 'table-wrap' : ''}"><table class="data" id="${id}"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="left muted">Nothing to show yet.</td></tr>`}</tbody></table></div>`;
   }
   document.addEventListener('click', (e) => {
     const th = e.target.closest('th[data-sort]');
@@ -255,6 +361,14 @@
       const first = state.schedule.find((g) => g.status === 'played');
       if (first) state.stage = first.stage;
     }
+    // Anything picked in another league means nothing in this one.
+    const ids = new Set(state.league.teams.map((t) => t.teamId));
+    if (!ids.has(state.teamId)) state.teamId = '';
+    if (!ids.has(state.weeklyTeam)) state.weeklyTeam = null;
+    if (!ids.has(state.contractsTeam)) state.contractsTeam = null;
+    if (!ids.has(state.gameTeam)) state.gameTeam = null;
+    if (state.gameId && !state.schedule.some((g) => g.gameId === state.gameId)) { state.gameId = null; if (state.section === 'game') state.section = 'schedule'; }
+    state.recapKey = null;
     const ts = $('#team-select');
     ts.innerHTML = '<option value="">All teams</option>' + state.league.teams.map((t) => `<option value="${esc(t.teamId)}">${esc(t.abbr)} — ${esc(t.displayName)}</option>`).join('');
     ts.value = state.teamId;
@@ -393,7 +507,7 @@
     }
     const teamPick = state.gameTab === 'highlights' ? '' : `<div class="field"><span>Team</span><select id="game-team"><option value="${esc(g.homeTeamId)}" ${state.gameTeam === g.homeTeamId ? 'selected' : ''}>${esc(g.homeName)}</option><option value="${esc(g.awayTeamId)}" ${state.gameTeam === g.awayTeamId ? 'selected' : ''}>${esc(g.awayName)}</option></select></div>`;
     return `
-      <button id="back-sched">← ${state.backTo === 'highlights' ? 'Highlights' : 'Schedule'}</button>
+      <button id="back-sched">← ${({ highlights: 'Highlights', recap: 'Weekly Recap', contracts: 'Contracts' })[state.backTo] || 'Schedule'}</button>
       <h1>${esc(g.label)}: ${played ? `${esc(g.away)} ${g.awayScore} @ ${esc(g.home)} ${g.homeScore}` : `${esc(g.away)} @ ${esc(g.home)} <span class="pill">Not played yet</span>`}</h1>
       <div class="toolbar">${teamPick}<button data-injure="${esc(g.gameId)}">Injure a player in this game</button>${played ? `<button data-track="${esc(g.gameId)}">Log events in the Game Tracker</button>` : ''}</div>
       <div class="tabs">${tabs.map(([k, l]) => `<button class="${state.gameTab === k ? 'active' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
@@ -536,7 +650,8 @@
   async function blockingWeekly() {
     if (!state.league) return '<div class="empty">Connect a franchise first.</div>';
     const teams = state.league.teams;
-    const teamId = state.teamId || state.weeklyTeam || (teams[0] || {}).teamId;
+    const valid = (id) => teams.some((t) => t.teamId === id);
+    const teamId = [state.teamId, state.weeklyTeam].find(valid) || (teams[0] || {}).teamId;
     state.weeklyTeam = teamId;
     const r = await api(`/leagues/${state.leagueKey}/blocking/weekly?stage=${state.stage}&teamId=${encodeURIComponent(teamId)}`);
     const pick = state.teamId ? '' : `<div class="field"><span>Team</span><select id="bw-team">${teams.map((t) => `<option value="${esc(t.teamId)}" ${t.teamId === teamId ? 'selected' : ''}>${esc(t.abbr)} — ${esc(t.displayName)}</option>`).join('')}</select></div>`;
@@ -549,7 +664,7 @@
       ${blockToggle()}
       <div class="toolbar">${pick}</div>
       <div class="legend"><span class="gchip g-elite">80+</span> elite <span class="gchip g-good">68-79</span> good <span class="gchip g-avg">52-67</span> average <span class="gchip g-poor">40-51</span> poor <span class="gchip g-bad">under 40</span> bad</div>
-      ${weeks.length ? `<div class="table-wrap"><table class="data weekly">${head}${teamRow}${rows}</table></div>` : '<div class="empty">This team has no games in this part of the season yet.</div>'}`;
+      ${weeks.length ? `<div class="table-tools"><button class="small" data-copy-table="bw-grid">Copy</button></div><div class="table-wrap"><table class="data weekly" id="bw-grid">${head}${teamRow}${rows}</table></div>` : '<div class="empty">This team has no games in this part of the season yet.</div>'}`;
   }
 
   sections.passrush = () => seasonSection('Pass Rush & Missed Sacks', 'Pressures created by every defender, sacks (recorded by Madden), QB hits, hurries, and the sacks they had and let get away.', (s) => `
@@ -620,9 +735,10 @@
       </div>`;
     };
     return `
-      <h1>Highlights</h1>
+      <div class="head-row"><h1>Highlights</h1><button class="blue" data-copy-block="hl-week-body">Copy as text</button></div>
       <p class="lead">The biggest plays and the worst moments of every game, in words: long touchdowns, game-winners, sacks, picks, comebacks, blown leads, drops, missed tackles and blown blocks. Click a game for all of its highlights and lowlights in order.</p>
       <div class="weekchips">${chips.map((c) => `<button class="${c.week === r.week ? 'active' : ''}" data-hl-week="${c.week}">${esc(c.label)}</button>`).join('')}</div>
+      <div id="hl-week-body">
       <h2>${esc(r.label || '')}${state.teamId ? ` · ${esc(teamName(state.teamId).displayName)}` : ''}</h2>
       <div class="grid cols-2">
         <div class="card"><h3>Plays of the week</h3>${hlList(r.highlights.filter(keep), 'Nothing yet.', { showGame: true })}</div>
@@ -630,6 +746,7 @@
       </div>
       <h2>Games</h2>
       <div class="games">${games.map(card).join('') || '<div class="muted">No games this week.</div>'}</div>
+      </div>
       ${pbpNote}`;
   };
 
@@ -638,7 +755,8 @@
     const h = r.highlights;
     const pog = h.playerOfTheGame;
     const scoreRows = h.scoring.map((e) => `<tr><td class="left">${esc(e.clock)}</td><td class="left">${esc(abbr(e.teamId))}</td><td class="left">${esc({ TD: 'Touchdown', FG: 'Field goal', SAF: 'Safety' }[e.kind] || e.kind || '')}${e.conversion ? ` <span class="muted">(${esc(e.conversion)})</span>` : ''}${e.gameWinner ? ' <span class="hl-tag">game-winner</span>' : e.tookLead ? ' <span class="hl-tag">lead</span>' : ''}</td><td>${esc(g.away)} ${e.score.away} - ${esc(g.home)} ${e.score.home}</td></tr>`).join('');
-    return `
+    return `<div id="gh-body">
+      <div class="table-tools"><button class="small" data-copy-block="gh-body">Copy highlights as text</button></div>
       <div class="card hl-head">
         <div class="hl-headline">${esc(h.headline)}</div>
         ${pog ? `<div class="pog"><span class="pill win">Player of the game</span> <b>${esc(pog.name)}</b> <span class="muted">${esc(pog.position)} · ${esc(abbr(pog.teamId))}</span>${pog.line ? ` <span class="muted">· ${esc(pog.line)}</span>` : ''}</div>` : ''}
@@ -650,7 +768,7 @@
       ${h.timeline.length ? `<h2>Key plays in order</h2>${h.timeline.map((m) => hlItem(m)).join('')}` : ''}
       ${scoreRows ? `<h2>Scoring</h2><table class="data"><thead><tr><th class="left">When</th><th class="left">Team</th><th class="left">Score</th><th>Score after</th></tr></thead><tbody>${scoreRows}</tbody></table>` : ''}
       ${h.hasPlayByPlay ? '' : '<p class="small-note">This league came from a Companion App export, which has box scores but no play-by-play, so there are no clock times or scoring-play details.</p>'}
-      ${pbpNote}`;
+      ${pbpNote}</div>`;
   }
 
   // ---------- matchup preview
@@ -684,7 +802,7 @@
     ], { defaultSort: 'predictedPressures' });
     const lanes = (x) => x.runLanes.map((l, i) => `<div class="leader"><div class="who">${i === 0 ? '★ ' : ''}${esc(l.side === 'middle' ? 'Inside' : l.side === 'left' ? 'Left side' : 'Right side')}<span>${esc(l.blockers.join(', '))} vs ${esc(l.defenders.join(', ') || 'nobody')}</span></div><div class="n">${fmt(l.winPct, 1)}%</div></div>`).join('');
     const tips = (list) => (list.length ? `<ul class="tips">${list.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : '<div class="muted">Nothing stands out.</div>');
-    return `
+    return `<div id="pv-body"><div class="table-tools"><button class="small" data-copy-block="pv-body">Copy preview as text</button></div>
       <p class="lead">What the blocking model expects up front before kickoff: every one-on-one between the ${esc(teamName(T).displayName)} and the ${esc(teamName(O).displayName)}, from ratings, each player's form, and how he has done in this league's earlier games. League average: a rusher wins ${p.leagueRepWinPct}% of his reps. ${p.played ? 'This game has been played, so the real results sit next to the projection.' : ''}</p>
       <p class="small-note">Built from the ${esc(off.basis.lineup)}${off.basis.fromGames ? `; dropbacks from ${esc(abbr(T))}'s ${off.basis.fromGames} earlier game(s)` : '; no earlier games, so a league-typical 36 dropbacks'}. Switch team at the top to see it from the other side.</p>
       <h2>When ${esc(abbr(T))} has the ball</h2>
@@ -706,7 +824,7 @@
       <h3 style="margin-top:16px">${esc(abbr(T))} pass rushers</h3>
       ${rushRows(def, 'pv-rush')}
       <h3>${esc(abbr(O))} pass protection</h3>
-      ${protRows(def, 'pv-oppprot')}`;
+      ${protRows(def, 'pv-oppprot')}</div>`;
   }
 
   // ---------- player game log
@@ -734,11 +852,22 @@
       <h2>${esc(p.fullName)} <span class="muted">${esc(p.position)} · #${esc(p.jerseyNum)} · ${esc(r.team ? r.team.displayName : 'Free agent')} · ${p.overall} OVR</span></h2>
       ${games.length ? `<div class="table-wrap"><table class="data"><thead><tr>${cols.map((c) => `<th class="${c.left ? 'left' : ''}">${esc(c.h)}</th>`).join('')}</tr></thead><tbody>${games.map((x) => `<tr class="clickable" data-log-game="${esc(x.gameId)}">${cols.map((c) => `<td class="${c.left ? 'left' : 'num'}">${c.v(x)}</td>`).join('')}</tr>`).join('')}<tr class="teamrow">${cols.map((c, i) => `<td class="${c.left ? 'left' : 'num'}">${i === 0 ? `<b>Total (${games.length} g)</b>` : c.left ? '' : `<b>${total(c)}</b>`}</td>`).join('')}</tr></tbody></table></div>` : '<div class="empty">He has not played in a game yet.</div>'}
       <p class="small-note">Grade in the total row is his average. Click a game to open it.</p>
-      <div class="modal-actions"><button id="pl-close">Close</button></div>
+      ${contractHtml(r.contract)}
+      <div class="modal-actions"><button class="blue" data-copy-log="1">Copy as text</button><button id="pl-close">Close</button></div>
     </div></div>`;
     $('#pl-close').onclick = () => { root.innerHTML = ''; };
+    const cp = $('[data-copy-log]', root);
+    if (cp) cp.onclick = async () => { const m = $('.modal', root); copied(cp, await copyText(nodeToText(m))); };
     $('#pl-back').onclick = (e) => { if (e.target.id === 'pl-back') root.innerHTML = ''; };
     $$('[data-log-game]', root).forEach((el) => (el.onclick = () => { root.innerHTML = ''; state.gameId = el.dataset.logGame; state.gameTab = 'highlights'; state.backTo = state.section === 'game' ? state.backTo : state.section; state.section = 'game'; render(); }));
+  }
+
+  function contractHtml(c) {
+    if (!c) return '';
+    if (c.status === 'FreeAgent' || !c.length) return `<h3>Contract</h3><p class="muted">${c.status === 'FreeAgent' ? 'Free agent, no contract.' : 'No contract on file.'}</p>`;
+    const head = `<div class="stat-row card"><div class="stat"><div class="v">${money(c.capHit)}</div><div class="l">cap hit this season${c.capPct != null ? ` (${c.capPct}% of cap)` : ''}</div></div>${c.total != null ? `<div class="stat"><div class="v">${money(c.total)}</div><div class="l">total value, ${c.length} yr</div></div>` : `<div class="stat"><div class="v">${c.length} yr</div><div class="l">length</div></div>`}<div class="stat"><div class="v">${esc(c.contractYear || '—')}</div><div class="l">contract year${c.yearsLeft ? `, ${c.yearsLeft} left` : ''}</div></div>${c.remaining != null ? `<div class="stat"><div class="v">${money(c.remaining)}</div><div class="l">still owed</div></div>` : ''}${c.remainingBonus != null ? `<div class="stat"><div class="v">${money(c.remainingBonus)}</div><div class="l">dead money if cut</div></div>` : ''}${c.releaseSavings != null ? `<div class="stat"><div class="v">${money(c.releaseSavings)}</div><div class="l">cap saved if cut</div></div>` : ''}${c.releasePenalty != null ? `<div class="stat"><div class="v">${money(c.releasePenalty)}</div><div class="l">dead money if cut</div></div>` : ''}</div>`;
+    const years = c.years && c.years.length ? `<table class="data compact"><thead><tr><th class="left">Season</th><th>Salary</th><th>Bonus</th><th>Cap hit</th><th class="left"></th></tr></thead><tbody>${c.years.map((y) => `<tr class="${y.current ? 'current' : y.done ? 'done' : ''}"><td class="left">${y.season || `Year ${y.index + 1}`}</td><td>${money(y.salary)}</td><td>${money(y.bonus)}</td><td><b>${money(y.capHit)}</b></td><td class="left">${y.current ? 'this season' : y.done ? 'paid' : ''}</td></tr>`).join('')}</tbody></table>` : '';
+    return `<h3>Contract</h3>${head}${years}${c.draftRound ? `<p class="small-note">${c.draftRound <= 7 ? `Drafted ${c.draftYear || ''} round ${c.draftRound}, pick ${c.draftPick} of the round.` : 'Undrafted.'}</p>` : ''}`;
   }
 
   function exportCsv(id) {
@@ -755,6 +884,177 @@
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
+
+  // ---------- weekly recap
+  const who = (x) => `${x.playerId ? `<a href="#" class="plink" data-player="${esc(x.playerId)}">` : ''}<b>${esc(x.name)}</b>${x.playerId ? '</a>' : ''} <span class="muted">${esc(x.position || '')}${x.teamId ? ' · ' + esc(abbr(x.teamId)) : ''}</span>`;
+  const SEVERITY = { GameEnding: 'Out for the game', CoupleGames: 'Out a few games', SeasonEnding: 'Season-ending', CareerEnding: 'Career-ending', Minor: 'Minor' };
+  const severityText = (v) => (!v || /^Invalid|^Max_/.test(v) ? '' : SEVERITY[v] || String(v).replace(/([a-z])([A-Z])/g, '$1 $2'));
+  const SOURCE_LABEL = { 'in-game': 'Hurt in the game', 'injury report': "Madden's injury report", 'injury tool': 'Added with the injury tool' };
+
+  sections.recap = async () => {
+    if (!state.league) return '<div class="empty">Connect a franchise first.</div>';
+    const [st, wk] = (state.recapKey || '').split(':');
+    const r = await api(`/leagues/${state.leagueKey}/recap${state.recapKey ? `?stage=${encodeURIComponent(st)}&week=${encodeURIComponent(wk)}` : ''}`);
+    if (!r.recap) return '<h1>Weekly Recap</h1><div class="empty">No games have been played yet.</div>';
+    const x = r.recap;
+    state.recapKey = `${x.stage}:${x.week}`;
+    const chips = r.weeks.map((w) => `<button class="${w.stage === x.stage && w.week === x.week ? 'active' : ''}" data-recap="${esc(w.stage)}:${w.week}">${esc(w.label)}</button>`).join('');
+    const scoreCard = (g) => {
+      if (g.status !== 'played') return `<div class="game unplayed"><div class="teams"><span>${esc(g.away)}</span><span class="muted">@</span><span>${esc(g.home)}</span></div><div class="meta"><span>${esc(g.awayName)} at ${esc(g.homeName)}</span><span>Not played yet</span></div></div>`;
+      const awayWon = g.winner === g.awayTeamId;
+      const homeWon = g.winner === g.homeTeamId;
+      return `<div class="game hlgame" data-hl-game="${esc(g.gameId)}">
+        <div class="teams"><span class="${awayWon ? 'won' : ''}">${esc(g.away)} ${g.awayScore}${g.awayRecord ? ` <span class="rec">(${esc(g.awayRecord)})</span>` : ''}</span><span class="muted">@</span><span class="${homeWon ? 'won' : ''}">${esc(g.home)} ${g.homeScore}${g.homeRecord ? ` <span class="rec">(${esc(g.homeRecord)})</span>` : ''}</span></div>
+        <div class="meta"><span>${g.winner ? `${esc(teamName(g.winner).displayName)} win` : 'Tie'}${g.overtime ? ' in OT' : ''}</span><span>${g.simmed ? 'Simmed' : 'Final'}${g.overtime ? '/OT' : ''}</span></div>
+        ${g.topPlay ? `<div class="small-note">★ ${esc(g.topPlay)}</div>` : ''}
+        ${g.playerOfTheGame ? `<div class="small-note"><b>Player of the game:</b> ${esc(g.playerOfTheGame.name)} (${esc(g.playerOfTheGame.position)}, ${esc(abbr(g.playerOfTheGame.teamId))})${g.playerOfTheGame.line ? ` · ${esc(g.playerOfTheGame.line)}` : ''}</div>` : ''}
+      </div>`;
+    };
+    const leaderCard = (title, list, unit) => `<div class="card"><h3>${esc(title)}</h3>${list.length ? list.map((l, i) => `<div class="leader"><div class="who">${i + 1}. ${who(l)}<div class="small-note">${esc(l.line)}</div></div><div class="n">${l.value}${unit ? ` <span class="muted small">${unit}</span>` : ''}</div></div>`).join('') : '<div class="muted">Nobody.</div>'}</div>`;
+    const potw = (title, p) => `<div class="card potw"><h3>${esc(title)}</h3>${p ? `<div class="big">${who(p)}</div><div>${esc(p.line)}</div>` : '<div class="muted">Nobody stood out.</div>'}</div>`;
+    const injRows = x.injuries.map((i) => {
+      const g = i.gameId ? state.schedule.find((q) => q.gameId === i.gameId) : null;
+      const weeks = i.weeksMax ? (i.weeksMin === i.weeksMax ? `${i.weeksMax} wk` : `${i.weeksMin}-${i.weeksMax} wk`) : 'day-to-day';
+      const now = i.stillOut ? `Out${i.weeksLeft ? `, ${i.weeksLeft} wk left` : ''}${i.onIR ? ' · IR' : ''}` : 'Not on the injury report now';
+      return `<tr><td class="left">${who(i)}</td><td class="left">${esc(i.injury)}</td><td class="left">${esc(severityText(i.severity))}</td><td>${esc(weeks)}</td><td class="left">${esc(now)}</td><td class="left">${esc(SOURCE_LABEL[i.source] || i.source)}${g ? ` · ${esc(g.away)} @ ${esc(g.home)}` : ''}</td></tr>`;
+    }).join('');
+    const txRows = x.transactions.map((t) => `<tr><td class="left">${who({ ...t, teamId: null })}</td><td class="left">${esc(t.kind)}</td><td class="left">${esc(t.fromAbbr || (t.oldStatus === 'FreeAgent' ? 'Free agency' : '—'))} → ${esc(t.toAbbr || (t.newStatus === 'FreeAgent' ? 'Free agency' : t.newStatus === 'Retired' ? 'Retired' : '—'))}</td><td>${t.contract && t.contract.length ? `${t.contract.length} yr, ${money(t.contract.total)}${t.contract.bonus ? `, ${money(t.contract.bonus)} bonus` : ''}` : '—'}</td></tr>`).join('');
+    const adv = (title, list, suffix = '') => `<div class="card"><h3>${esc(title)}</h3>${list.length ? list.map((l) => `<div class="leader"><div class="who">${who(l)}</div><div class="n">${fmt(l.value, 0)}${suffix}</div></div>`).join('') : '<div class="muted">Nobody.</div>'}</div>`;
+    const standings = x.standings ? x.standings.divisions.map((d) => `<div class="card"><h3>${esc(d.division)}</h3><table class="data compact"><thead><tr><th class="left">Team</th><th>W-L</th><th>PF</th><th>PA</th><th>Streak</th></tr></thead><tbody>${d.teams.map((t) => `<tr><td class="left">${esc(t.abbr)}</td><td>${esc(t.text)}</td><td>${t.pf}</td><td>${t.pa}</td><td>${t.streak ? esc(t.streak.text) : '—'}</td></tr>`).join('')}</tbody></table></div>`).join('') : '';
+    const s = x.summary;
+    return `
+      <div class="head-row"><h1>Weekly Recap</h1><button class="blue" data-copy-block="recap-body" title="Copy the whole recap as plain text">Copy recap as text</button></div>
+      <p class="lead">Everything that happened across the league in one week: every score, the records and standings after it, the injuries, Madden's own league news and transactions, the stat leaders and the biggest plays. Scores, stats, injuries and news are exactly what Madden saved.</p>
+      <div class="weekchips">${chips}</div>
+      <div id="recap-body">
+        <h2>${esc(x.label)} recap</h2>
+        <div class="stat-row card"><div class="stat"><div class="v">${s.gamesPlayed}${s.gamesScheduled > s.gamesPlayed ? ` / ${s.gamesScheduled}` : ''}</div><div class="l">games played</div></div><div class="stat"><div class="v">${s.totalPoints}</div><div class="l">points scored</div></div><div class="stat"><div class="v">${s.averagePoints}</div><div class="l">points per game</div></div><div class="stat"><div class="v">${s.homeWins}-${s.awayWins}</div><div class="l">home vs road wins</div></div><div class="stat"><div class="v">${s.injuries}</div><div class="l">injuries</div></div>${x.hasNews ? `<div class="stat"><div class="v">${s.transactions}</div><div class="l">transactions</div></div>` : ''}</div>
+
+        <h2>Scores</h2>
+        <div class="games">${x.scores.map(scoreCard).join('')}</div>
+
+        ${x.storylines.length ? `<h2>Storylines</h2><ul class="tips story">${x.storylines.map((t) => `<li><b>${esc(t.kind)}:</b> ${esc(t.text)}</li>`).join('')}</ul>` : ''}
+
+        <h2>Players of the week</h2>
+        <div class="grid cols-3">${potw('Offense', x.playersOfWeek.offense)}${potw('Defense', x.playersOfWeek.defense)}${potw('Rookie', x.playersOfWeek.rookie)}</div>
+        <p class="small-note">Picked by this tool from the recorded box scores (yards, touchdowns, turnovers, tackles, sacks, takeaways), with a small bump for playing on a winning team.</p>
+
+        <h2>Stat leaders</h2>
+        <div class="grid cols-4">${leaderCard('Passing yards', x.leaders.passing, 'yds')}${leaderCard('Rushing yards', x.leaders.rushing, 'yds')}${leaderCard('Receiving yards', x.leaders.receiving, 'yds')}${leaderCard('Touchdowns', x.leaders.touchdowns, 'TD')}</div>
+        <div class="grid cols-3" style="margin-top:14px">${leaderCard('Sacks', x.leaders.sacks, 'sk')}${leaderCard('Tackles', x.leaders.tackles, 'tkl')}${leaderCard('Interceptions', x.leaders.interceptions, 'INT')}</div>
+
+        <h2>Highlights and lowlights</h2>
+        <div class="grid cols-2">
+          <div class="card"><h3>Plays of the week</h3>${hlList(x.highlights, 'Nothing yet.', { showGame: true })}</div>
+          <div class="card"><h3>Lowlights of the week</h3>${hlList(x.lowlights, 'Nothing yet.', { showGame: true })}</div>
+        </div>
+
+        <h2>Injuries (${x.injuries.length})</h2>
+        ${x.injuryNote ? `<p class="small-note">${esc(x.injuryNote)}</p>` : ''}
+        ${x.injuries.length ? `<div class="table-tools"><button class="small" data-copy-table="rc-inj">Copy</button></div><div class="table-wrap"><table class="data" id="rc-inj"><thead><tr><th class="left">Player</th><th class="left">Injury</th><th class="left">Severity</th><th>Expected out</th><th class="left">Now</th><th class="left">Where it came from</th></tr></thead><tbody>${injRows}</tbody></table></div>` : `<div class="muted">${x.source === 'franchise' ? 'No injuries this week.' : 'A Companion App export does not say which week an injury happened.'}</div>`}
+        ${x.currentReport ? `<h3>Current injury report (${x.currentReport.length})</h3><p class="small-note">From the latest export. The export lists who is hurt now, not the week it happened.</p>${table('rc-cur', x.currentReport.map((p) => ({ ...p })), [{ key: 'name', label: 'Player', left: true, render: playerCell }, { key: 'injury', label: 'Injury', left: true }, { key: 'weeksLeft', label: 'Weeks left' }, { key: 'onIR', label: 'IR', left: true, render: (p) => (p.onIR ? 'IR' : '') }], { defaultSort: 'weeksLeft' })}` : ''}
+
+        ${x.hasNews ? `
+        <h2>League news</h2>
+        ${x.stories.length ? `<div class="grid cols-2">${x.stories.map((n) => `<div class="card news"><div class="news-head">${n.breaking ? '<span class="pill loss">Breaking</span> ' : ''}${esc(n.headline)}</div><div>${esc(n.text)}</div>${n.teamId ? `<div class="small-note">${esc(teamName(n.teamId).displayName)}</div>` : ''}</div>`).join('')}</div>` : '<div class="muted">Madden wrote no news stories this week.</div>'}
+        ${x.posts.length ? `<h3>Around the league</h3><ul class="list">${x.posts.map((pp) => `<li><span><b>${esc(pp.author || 'Post')}</b>: ${esc(pp.text)}${pp.teamId ? ` <span class="muted">· ${esc(abbr(pp.teamId))}</span>` : ''}</span></li>`).join('')}</ul>` : ''}
+        <h3>Transactions (${x.transactions.length})</h3>
+        ${x.transactions.length ? `<div class="table-tools"><button class="small" data-copy-table="rc-tx">Copy</button></div><div class="table-wrap"><table class="data" id="rc-tx"><thead><tr><th class="left">Player</th><th class="left">Move</th><th class="left">From → To</th><th>Contract</th></tr></thead><tbody>${txRows}</tbody></table></div>` : '<div class="muted">No signings, releases or trades this week.</div>'}` : '<p class="small-note">League news, social posts and transactions come from the PC franchise file; a Companion App export does not include them.</p>'}
+
+        <h2>Under the hood</h2>
+        <p class="small-note">From this tool's advanced stats. Drops are recorded by Madden; the rest are reconstructed from what Madden recorded and the players' ratings.</p>
+        <div class="grid cols-3">${adv('Best blockers (grade)', x.advanced.bestBlockers)}${adv('Most pressures allowed', x.advanced.mostPressuresAllowed)}${adv('Most pressures', x.advanced.topPassRushers)}</div>
+        <div class="grid cols-3" style="margin-top:14px">${adv('Most drops', x.advanced.mostDrops)}${adv('Most missed tackles', x.advanced.mostMissedTackles)}${adv('Most penalties', x.advanced.mostPenalties)}</div>
+
+        ${standings ? `<h2>Standings after ${esc(x.label)}</h2><div class="grid cols-4">${standings}</div>` : ''}
+
+        ${x.upcoming.length ? `<h2>Coming up: ${esc(x.upcoming[0].label)}</h2><ul class="list">${x.upcoming.map((u) => `<li><span><b>${esc(u.away)}</b>${u.awayRecord ? ` <span class="muted">(${esc(u.awayRecord)})</span>` : ''} @ <b>${esc(u.home)}</b>${u.homeRecord ? ` <span class="muted">(${esc(u.homeRecord)})</span>` : ''}</span><a href="#" class="small no-copy" data-preview-game="${esc(u.gameId)}">Matchup preview</a></li>`).join('')}</ul>` : ''}
+      </div>`;
+  };
+
+  // ---------- contracts and the salary cap
+  const capTip = 'Every dollar figure is what Madden stores for the contract.';
+  sections.contracts = async () => {
+    if (!state.league) return '<div class="empty">Connect a franchise first.</div>';
+    const teams = state.league.teams;
+    const teamId = [state.teamId, state.contractsTeam].find((id) => teams.some((t) => t.teamId === id)) || (teams[0] || {}).teamId;
+    if (state.teamId) state.contractsTeam = state.teamId;
+    const view = state.teamId && state.contractsView === 'league' ? 'team' : state.contractsView;
+    const focus = view === 'team' ? teamId : state.teamId && ['top', 'expiring'].includes(view) ? state.teamId : null;
+    const r = await api(`/leagues/${state.leagueKey}/contracts${focus ? `?teamId=${encodeURIComponent(focus)}` : ''}`);
+    const file = r.detail === 'year-by-year';
+    const tabs = [['league', 'League cap'], ['team', 'Team contracts'], ['top', 'Biggest contracts'], ['expiring', 'Expiring deals'], ['fa', 'Free agents']];
+    const nav = `<div class="seg">${tabs.map(([k, l]) => `<button class="${view === k ? 'active' : ''}" data-cview="${k}">${l}</button>`).join('')}</div>`;
+    const capLine = r.salaryCap ? `<p class="small-note">League salary cap: <b>${money(r.salaryCap.cap)}</b>${r.season ? ` for ${r.season}` : ''}. ${file ? `Worked out from every team's cap room (${r.salaryCap.teamsAgreeing} of ${r.teams.length} teams agree; the game is counting ${esc(r.salaryCap.rule)}).` : 'From the exported team caps.'} ${capTip}</p>` : `<p class="small-note">${capTip}</p>`;
+    const contractCell = (c) => `${playerCell({ ...c, teamId: view === 'team' ? null : c.teamId })}${c.injured ? ' <span class="injured small">hurt</span>' : ''}`;
+    const baseCols = [
+      { key: 'name', label: 'Player', left: true, render: contractCell },
+      { key: 'age', label: 'Age' },
+      { key: 'overall', label: 'OVR' },
+      { key: 'devTrait', label: 'Dev', left: true },
+      { key: 'capHit', label: 'Cap hit', render: (c) => money(c.capHit) },
+    ];
+    const fileCols = [
+      { key: 'capPct', label: '% of cap', d: 1 },
+      { key: 'salary', label: 'Salary', render: (c) => money(c.salary) },
+      { key: 'bonusProration', label: 'Bonus (this yr)', render: (c) => money(c.bonusProration) },
+      { key: 'yearsLeft', label: 'Year', render: (c) => esc(c.contractYear || '—') },
+      { key: 'total', label: 'Total value', render: (c) => money(c.total) },
+      { key: 'averagePerYear', label: 'Per year', render: (c) => money(c.averagePerYear) },
+      { key: 'signingBonus', label: 'Signing bonus', render: (c) => money(c.signingBonus) },
+      { key: 'remaining', label: 'Still owed', render: (c) => money(c.remaining) },
+      { key: 'remainingBonus', label: 'Dead $ if cut', render: (c) => money(c.remainingBonus) },
+      { key: 'expiresAfter', label: 'Through', render: (c) => (c.expiresAfter ? String(c.expiresAfter) : '—') },
+    ];
+    const summaryCols = [
+      { key: 'capPct', label: '% of cap', d: 1 },
+      { key: 'salary', label: 'Salary', render: (c) => money(c.salary) },
+      { key: 'signingBonus', label: 'Bonus', render: (c) => money(c.signingBonus) },
+      { key: 'length', label: 'Years' },
+      { key: 'yearsLeft', label: 'Left' },
+      { key: 'releaseSavings', label: 'Cut: saves', render: (c) => money(c.releaseSavings) },
+      { key: 'releasePenalty', label: 'Cut: dead $', render: (c) => money(c.releasePenalty) },
+    ];
+    const cols = [...baseCols, ...(file ? fileCols : summaryCols)];
+    const draftCol = { key: 'draftYear', label: 'Drafted', left: true, render: (c) => (c.draftRound && c.draftRound <= 7 ? `${c.draftYear || ''} Rd ${c.draftRound}, #${c.draftPick}` : c.draftRound ? 'Undrafted' : '—') };
+    let body = '';
+    if (view === 'league') {
+      const rows = r.teams.map((t) => ({ ...t, teamCap: t.cap ? t.cap.teamCap : null, spent: t.cap ? t.cap.spent : null, room: t.cap ? t.cap.room : null, dead: t.cap ? t.cap.deadThisYear : null, deadNext: t.cap ? t.cap.deadNextYear : null, nextRoom: t.cap ? t.cap.nextYearRoom : null, rollover: t.cap ? t.cap.rollover : null, top: t.topContract ? t.topContract.capHit : null }));
+      body = `${capLine}${table('ct-league', rows, [
+        { key: 'abbr', label: 'Team', left: true, render: (t) => `<a href="#" data-ct-team="${esc(t.teamId)}"><b>${esc(t.abbr)}</b></a> <span class="muted">${esc(t.name)}</span>` },
+        { key: 'room', label: 'Cap room', render: (t) => `<span class="${t.room != null && t.room < 0 ? 'injured' : ''}">${money(t.room)}</span>` },
+        { key: 'spent', label: 'Cap used', render: (t) => money(t.spent) },
+        { key: 'teamCap', label: 'Team cap', render: (t) => money(t.teamCap) },
+        ...(file ? [
+          { key: 'dead', label: 'Dead money', render: (t) => money(t.dead) },
+          { key: 'rollover', label: 'Rollover', render: (t) => money(t.rollover) },
+          { key: 'nextRoom', label: 'Next yr room', render: (t) => money(t.nextRoom) },
+        ] : []),
+        { key: 'top', label: 'Biggest cap hit', left: true, render: (t) => (t.topContract ? `${esc(t.topContract.name)} <span class="muted">${esc(t.topContract.position)}</span> ${money(t.topContract.capHit)}` : '—') },
+        { key: 'expiring', label: 'Expiring' },
+        { key: 'players', label: 'Players' },
+      ], { defaultSort: 'room' })}`;
+    } else if (view === 'team') {
+      const t = r.team;
+      const pick = state.teamId ? '' : `<div class="toolbar"><div class="field"><span>Team</span><select id="ct-team">${teams.map((x) => `<option value="${esc(x.teamId)}" ${x.teamId === teamId ? 'selected' : ''}>${esc(x.abbr)} — ${esc(x.displayName)}</option>`).join('')}</select></div></div>`;
+      const c = t && t.cap;
+      const tiles = c ? `<div class="stat-row card"><div class="stat"><div class="v ${c.room < 0 ? 'injured' : ''}">${money(c.room)}</div><div class="l">cap room</div></div><div class="stat"><div class="v">${money(c.spent)}</div><div class="l">cap used</div></div><div class="stat"><div class="v">${money(c.teamCap)}</div><div class="l">team cap</div></div>${file ? `<div class="stat"><div class="v">${money(c.deadThisYear)}</div><div class="l">dead money this year</div></div><div class="stat"><div class="v">${money(c.deadNextYear)}</div><div class="l">dead money next year</div></div><div class="stat"><div class="v">${money(c.rollover)}</div><div class="l">rolled over</div></div><div class="stat"><div class="v">${money(c.nextYearRoom)}</div><div class="l">room next year</div></div>` : ''}<div class="stat"><div class="v">${t.expiring}</div><div class="l">deals ending</div></div></div>` : '<div class="muted">No cap numbers for this team.</div>';
+      const commit = t && t.commitments ? `<h3>Money already committed</h3><table class="data compact" id="ct-commit"><thead><tr><th class="left">Season</th>${t.commitments.map((_, i) => `<th>${r.season ? r.season + i : `Year ${i + 1}`}</th>`).join('')}</tr></thead><tbody><tr><td class="left">Cap hits under contract</td>${t.commitments.map((v) => `<td>${money(v)}</td>`).join('')}</tr></tbody></table><p class="small-note">Salary plus prorated bonus of every contract on the roster for each coming season, from the year-by-year deals. Dead money and future signings are not included.</p>` : '';
+      const byPos = t && t.byPosition.length ? `<h3>Cap by position</h3><div class="posbars">${t.byPosition.map((b) => `<div class="posbar"><span class="p">${esc(b.position)}</span><span class="bar"><i style="width:${Math.max(1, Math.round((b.capHit / Math.max(...t.byPosition.map((q) => q.capHit), 1)) * 100))}%"></i></span><span class="m">${money(b.capHit)}</span></div>`).join('')}</div>` : '';
+      body = `${pick}<h2>${esc(teamName(teamId).displayName)}</h2>${capLine}${tiles}${table('ct-team-players', r.players, [...cols, { key: 'position', label: 'Pos', left: true }, draftCol], { defaultSort: 'capHit' })}${commit}${byPos}`;
+    } else if (view === 'top') {
+      const topCols = [...baseCols, ...(file ? fileCols.filter((c) => ['capPct', 'yearsLeft', 'total', 'averagePerYear', 'expiresAfter'].includes(c.key)) : summaryCols.slice(0, 3))];
+      body = `${capLine}<h2>Biggest cap hits this season${focus ? ` · ${esc(teamName(focus).displayName)}` : ''}</h2>${table('ct-top-cap', r.leaders.capHit, topCols, { defaultSort: 'capHit' })}${file ? `<h2>Biggest total value</h2>${table('ct-top-total', r.leaders.total, topCols, { defaultSort: 'total' })}<h2>Most per year</h2>${table('ct-top-aav', r.leaders.averagePerYear, topCols, { defaultSort: 'averagePerYear' })}<h2>Most dead money if cut</h2>${table('ct-top-dead', r.leaders.remainingBonus, [...baseCols, fileCols.find((c) => c.key === 'remainingBonus'), fileCols.find((c) => c.key === 'yearsLeft')], { defaultSort: 'remainingBonus' })}` : ''}`;
+    } else if (view === 'expiring') {
+      body = `<p class="lead">The best players${focus ? ` on the ${esc(teamName(focus).displayName)}` : ''} in the last year of their deals${r.season ? `, due to hit free agency after the ${r.season} season` : ''} unless they are re-signed.</p>${table('ct-exp', r.leaders.expiring, [...baseCols, { key: 'position', label: 'Pos', left: true }, ...(file ? fileCols.filter((c) => ['salary', 'yearsLeft', 'total'].includes(c.key)) : [])], { defaultSort: 'overall' })}`;
+    } else {
+      body = `<p class="lead">The best free agents available right now (${r.counts.freeAgents} in all), by overall.</p>${table('ct-fa', r.freeAgents, [{ key: 'name', label: 'Player', left: true, render: (c) => `${playerCell({ ...c, teamId: null })}${c.injured ? ' <span class="injured small">hurt</span>' : ''}` }, { key: 'age', label: 'Age' }, { key: 'overall', label: 'OVR' }, { key: 'devTrait', label: 'Dev', left: true }, { key: 'yearsPro', label: 'Years pro' }, draftCol], { defaultSort: 'overall' })}`;
+    }
+    return `<h1>Contracts &amp; Salary Cap</h1>
+      <p class="lead">Every contract in the league: cap hits, salaries, bonuses, years left, total value, money still owed and the dead money a release would leave, plus each team's cap room, dead money, rollover and what is already committed to future seasons. Click a player for his year-by-year deal.</p>
+      ${nav}${body}
+      ${file ? '' : '<p class="small-note">A Companion App export carries one salary, one bonus, the cap hit and the release numbers for each contract. The year-by-year breakdown, total value and dead money come from the PC franchise file.</p>'}`;
+  };
 
   // ---------- tracker
   sections.tracker = async () => {
@@ -989,11 +1289,11 @@
 
   // ---------- render / events
   async function render() {
-    $$('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.section === state.section || (state.section === 'game' && b.dataset.section === (state.backTo === 'highlights' ? 'highlights' : 'schedule'))));
-    const showFilters = !['connect', 'settings', 'game'].includes(state.section);
-    $('#stage-field').classList.toggle('hidden', !showFilters);
+    $$('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.section === state.section || (state.section === 'game' && b.dataset.section === (['highlights', 'recap'].includes(state.backTo) ? state.backTo : 'schedule'))));
+    const showFilters = !['connect', 'settings', 'game', 'recap'].includes(state.section);
+    $('#stage-field').classList.toggle('hidden', !showFilters || state.section === 'contracts');
     $('#team-field').classList.toggle('hidden', !showFilters || ['tracker', 'injuries'].includes(state.section));
-    const weekOn = showFilters && !['tracker', 'injuries'].includes(state.section) && !(state.section === 'blocking' && state.blockView === 'weekly');
+    const weekOn = showFilters && !['tracker', 'injuries', 'contracts'].includes(state.section) && !(state.section === 'blocking' && state.blockView === 'weekly');
     $('#week-field').classList.toggle('hidden', !weekOn);
     if (weekOn) fillWeeks();
     const content = $('#content');
@@ -1027,16 +1327,23 @@
     if (eaUI.showDiag && $('#ea-diag')) api('/ea/diagnostics').then((r) => { const el = $('#ea-diag'); if (el) el.textContent = r.lines.join('\n') || 'nothing yet'; }).catch(() => {});
     on('[data-stats]', 'onclick', (e) => { e.stopPropagation(); state.gameId = e.currentTarget.dataset.stats; state.section = 'game'; render(); });
     on('[data-open-game]', 'onclick', (e) => { e.stopPropagation(); state.gameId = e.currentTarget.dataset.openGame; state.gameTab = e.currentTarget.dataset.openTab; state.backTo = 'schedule'; state.section = 'game'; render(); });
-    on('[data-hl-game]', 'onclick', (e) => { state.gameId = e.currentTarget.dataset.hlGame; state.gameTab = 'highlights'; state.backTo = 'highlights'; state.section = 'game'; render(); });
+    on('[data-hl-game]', 'onclick', (e) => { state.gameId = e.currentTarget.dataset.hlGame; state.gameTab = 'highlights'; state.backTo = state.section === 'recap' ? 'recap' : 'highlights'; state.section = 'game'; render(); });
     on('[data-hl-week]', 'onclick', (e) => { state.week = e.currentTarget.dataset.hlWeek; render(); });
     on('[data-bview]', 'onclick', (e) => { state.blockView = e.currentTarget.dataset.bview; render(); });
     on('#bw-team', 'onchange', (e) => { state.weeklyTeam = e.target.value; render(); });
     on('[data-player]', 'onclick', (e) => { e.preventDefault(); e.stopPropagation(); openPlayerLog(e.currentTarget.dataset.player); });
     on('[data-csv]', 'onclick', (e) => exportCsv(e.currentTarget.dataset.csv));
+    on('[data-copy-table]', 'onclick', async (e) => { const btn = e.currentTarget; const t = document.getElementById(btn.dataset.copyTable); copied(btn, t ? await copyText(tableToText(t)) : false); });
+    on('[data-copy-block]', 'onclick', async (e) => { const btn = e.currentTarget; const el = document.getElementById(btn.dataset.copyBlock); copied(btn, el ? await copyText(nodeToText(el)) : false); });
+    on('[data-recap]', 'onclick', (e) => { state.recapKey = e.currentTarget.dataset.recap; render(); });
+    on('[data-cview]', 'onclick', (e) => { state.contractsView = e.currentTarget.dataset.cview; render(); });
+    on('#ct-team', 'onchange', (e) => { state.contractsTeam = e.target.value; render(); });
+    on('[data-ct-team]', 'onclick', (e) => { e.preventDefault(); state.contractsTeam = e.currentTarget.dataset.ctTeam; state.contractsView = 'team'; render(); });
+    on('[data-preview-game]', 'onclick', (e) => { e.preventDefault(); state.gameId = e.currentTarget.dataset.previewGame; state.gameTab = 'preview'; state.backTo = state.section; state.section = 'game'; render(); });
     on('[data-injure]', 'onclick', (e) => { e.stopPropagation(); openInjuryModal(e.currentTarget.dataset.injure, state.gameTeam); });
     on('[data-track]', 'onclick', (e) => { state.gameId = e.currentTarget.dataset.track; state.section = 'tracker'; render(); });
     on('.game[data-game]', 'onclick', (e) => { const g = state.schedule.find((x) => x.gameId === e.currentTarget.dataset.game); if (g) { state.gameId = g.gameId; state.gameTab = g.status === 'played' ? 'highlights' : 'preview'; state.backTo = 'schedule'; state.section = 'game'; render(); } });
-    on('#back-sched', 'onclick', () => { state.section = state.backTo === 'highlights' ? 'highlights' : 'schedule'; render(); });
+    on('#back-sched', 'onclick', () => { state.section = ['highlights', 'recap', 'contracts'].includes(state.backTo) ? state.backTo : 'schedule'; render(); });
     on('[data-tab]', 'onclick', (e) => { state.gameTab = e.currentTarget.dataset.tab; render(); });
     on('#game-team', 'onchange', (e) => { state.gameTeam = e.target.value; render(); });
     on('#tr-game', 'onchange', (e) => { state.gameId = e.target.value; state.gameTeam = null; render(); });
@@ -1089,6 +1396,7 @@
   }
 
   $('#btn-open-file').onclick = openFile;
+  $('#btn-copy-page').onclick = async (e) => { const btn = e.currentTarget; copied(btn, await copyText(nodeToText($('#content')))); };
   $('#btn-refresh').onclick = async () => { banner('Refreshing…'); try { if (state.status.franchiseOpen && state.league && state.league.source === 'franchise') await api('/franchise/refresh', { method: 'POST' }); await loadStatus(); await loadLeague(); banner(''); } catch (e) { banner(esc(e.message), 'error'); } };
   $('#league-select').onchange = async (e) => { state.leagueKey = e.target.value; state.gameId = null; await loadLeague(); };
   $('#stage-select').onchange = (e) => { state.stage = e.target.value; state.week = ''; fillWeeks(); render(); };

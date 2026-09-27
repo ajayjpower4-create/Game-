@@ -7,6 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { FranchiseService } from '../src/core/franchise/service.js';
 import { StatsEngine } from '../src/core/stats/engine.js';
+import { weeklyRecap } from '../src/core/stats/recap.js';
+import { contractsReport } from '../src/core/contracts.js';
 
 const candidates = [process.env.M26_TEST_FILE, '/home/user/bep713/madden-franchise/tests/data/CAREER-TESTSAVE-26'].filter(Boolean);
 const source = candidates.find((p) => fs.existsSync(p));
@@ -39,4 +41,27 @@ test('reads a real Madden 26 save and writes an injury', { skip: source ? false 
   const healed = await svc.heal(player.playerId);
   assert.equal(healed.written.InjuryStatus, 'Uninjured');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('reads contracts, the salary cap and league news from a real save', { skip: source ? false : 'no Madden 26 test save available' }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'm26fc-'));
+  const work = path.join(dir, 'CAREER-TEST');
+  fs.copyFileSync(source, work);
+  const league = await new FranchiseService({ backupDir: path.join(dir, 'backups') }).open(work);
+  // The 2025 NFL cap, solved from the teams' cap room
+  assert.equal(league.salaryCap.cap, 279200000);
+  const allen = Object.values(league.players).find((p) => p.fullName === 'Josh Allen' && p.position === 'QB');
+  assert.equal(allen.contract.capHit, 36330000);
+  assert.equal(allen.contract.length, 6);
+  assert.equal(allen.contract.years[0].capHit, allen.contract.capHit, 'salary + prorated bonus is the cap hit');
+  assert.equal(allen.devTrait, 'X-Factor');
+  const report = contractsReport(league, { teamId: allen.teamId });
+  assert.equal(report.team.cap.teamCap - report.team.cap.room, report.team.cap.spent);
+  assert.equal(report.players[0].name, 'Josh Allen', 'his is the biggest cap hit on the Bills');
+  assert.ok(league.news.stories.length > 0);
+  const first = Object.values(league.games).find((g) => g.status === 'played');
+  const recap = weeklyRecap(league, new StatsEngine(), { events: [] }, { stage: first.stage, week: first.week });
+  assert.ok(recap.scores.filter((s) => s.status === 'played').every((s) => Number.isFinite(s.homeScore) && s.homeRecord));
+  assert.ok(recap.stories.length > 0, "Madden's stories for the week are in the recap");
+  assert.ok(recap.injuries.some((i) => i.source === 'in-game'));
 });

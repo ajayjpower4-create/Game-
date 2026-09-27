@@ -11,6 +11,8 @@ import { StatsEngine } from '../core/stats/engine.js';
 import { seasonTotals, blockingByWeek, playerLog } from '../core/stats/aggregate.js';
 import { weekHighlights } from '../core/stats/highlights.js';
 import { predictGame } from '../core/stats/predict.js';
+import { weeklyRecap, recapWeeks } from '../core/stats/recap.js';
+import { contractsReport, playerContract } from '../core/contracts.js';
 import { buildLeagueFromCompanion } from '../core/companion/league.js';
 import { classifyPath, extractList } from '../core/companion/normalize.js';
 import { INJURY_TYPES, BODY_PARTS, injuryTypesByPart } from '../core/franchise/injury-catalog.js';
@@ -218,6 +220,34 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     }
   });
 
+  // ---- weekly recap
+  api.get('/leagues/:leagueKey/recap', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    const weeks = recapWeeks(league);
+    if (!weeks.length) return res.json({ ok: true, weeks, recap: null });
+    let pick = weeks.find((w) => w.stage === req.query.stage && String(w.week) === String(req.query.week));
+    if (!pick && req.query.stage) pick = weeks.filter((w) => w.stage === req.query.stage).pop();
+    pick ||= weeks[weeks.length - 1];
+    try {
+      const tracker = store.getTracker(req.params.leagueKey);
+      const injuryLog = store.getInjuryLog(req.params.leagueKey).entries;
+      const recap = engine.memo(`recap|${engine.leagueKey(league, tracker)}|${injuryLog.length}|${pick.stage}|${pick.week}`, () => weeklyRecap(league, engine, tracker, { stage: pick.stage, week: pick.week, injuryLog }));
+      res.json({ ok: true, weeks, recap });
+    } catch (e) {
+      log('recap failed', e);
+      res.status(400).json({ ok: false, error: e.message });
+    }
+  });
+
+  // ---- contracts and the salary cap
+  api.get('/leagues/:leagueKey/contracts', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    const teamId = req.query.teamId && league.teams[req.query.teamId] ? req.query.teamId : null;
+    res.json({ ok: true, ...contractsReport(league, { teamId }) });
+  });
+
   // ---- weekly blocking and player game logs
   api.get('/leagues/:leagueKey/blocking/weekly', (req, res) => {
     const league = getLeague(req.params.leagueKey);
@@ -233,7 +263,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     const player = league.players[req.params.playerId];
     if (!player) return res.status(404).json({ ok: false, error: 'player not found' });
     const games = playerLog(league, engine, store.getTracker(req.params.leagueKey), player.playerId);
-    res.json({ ok: true, player: publicPlayer(player), team: league.teams[player.teamId] || null, games });
+    res.json({ ok: true, player: publicPlayer(player), team: league.teams[player.teamId] || null, games, contract: playerContract(league, player.playerId) });
   });
 
   // ---- tracker

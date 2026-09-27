@@ -179,3 +179,29 @@ table.weekly th { text-align: center; }
 .trend.down { color: var(--bad); }
 .trend.steady { color: var(--muted); }
 .modal.wide { width: min(1100px, 96vw); }
+
+/* Copy buttons */
+.table-tools { gap: 6px; }
+button.ok { border-color: var(--good) !important; color: var(--good) !important; }
+.head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.small { font-size: 12px; }
+
+/* Weekly recap */
+.rec { color: var(--muted); font-weight: 500; font-size: 12px; }
+ul.story li { margin-bottom: 6px; }
+.potw .big { font-size: 16px; margin-bottom: 4px; }
+.news .news-head { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+table.data.compact th, table.data.compact td { padding: 4px 6px; }
+table.data.compact th { position: static; }
+.card table.data.compact { margin-top: 2px; }
+
+/* Contracts */
+tr.current td { background: #173a28; }
+tr.done td { color: var(--muted); }
+.posbars { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 18px; margin-bottom: 12px; }
+.posbar { display: grid; grid-template-columns: 44px 1fr 70px; gap: 8px; align-items: center; font-size: 12px; }
+.posbar .p { color: var(--muted); font-weight: 600; }
+.posbar .bar { background: var(--bg3); border-radius: 4px; height: 10px; overflow: hidden; }
+.posbar .bar i { display: block; height: 100%; background: var(--accent2); }
+.posbar .m { text-align: right; font-variant-numeric: tabular-nums; }
+.copy-holder, .copy-holder * { text-transform: none !important; }

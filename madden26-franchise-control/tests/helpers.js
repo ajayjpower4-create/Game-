@@ -3,8 +3,8 @@ import { buildLeagueFromCompanion } from '../src/core/companion/league.js';
 
 export function syntheticRaw() {
   const kc = [
-    { rosterId: 1, firstName: 'Pat', lastName: 'Passer', position: 'QB', teamId: 101, jerseyNum: 15, playerBestOvr: 99, awareRating: 99 },
-    { rosterId: 2, firstName: 'Left', lastName: 'Tackle', position: 'LT', teamId: 101, jerseyNum: 77, playerBestOvr: 80, passBlockRating: 82, runBlockRating: 78, impactBlockRating: 80 },
+    { rosterId: 1, firstName: 'Pat', lastName: 'Passer', position: 'QB', teamId: 101, jerseyNum: 15, playerBestOvr: 99, awareRating: 99, devTrait: 3, capHit: 45000000, contractSalary: 40000000, contractBonus: 60000000, contractLength: 5, contractYearsLeft: 3, capReleaseNetSavings: 12000000, capReleasePenalty: 33000000 },
+    { rosterId: 2, firstName: 'Left', lastName: 'Tackle', position: 'LT', teamId: 101, jerseyNum: 77, playerBestOvr: 80, passBlockRating: 82, runBlockRating: 78, impactBlockRating: 80, capHit: 9000000, contractSalary: 8000000, contractBonus: 5000000, contractLength: 3, contractYearsLeft: 1 },
     { rosterId: 3, firstName: 'Right', lastName: 'Guard', position: 'RG', teamId: 101, jerseyNum: 65, playerBestOvr: 75, passBlockRating: 70 },
     { rosterId: 4, firstName: 'Fast', lastName: 'Receiver', position: 'WR', teamId: 101, jerseyNum: 10, playerBestOvr: 92, deepRouteRunRating: 90 },
     { rosterId: 5, firstName: 'Slot', lastName: 'Guy', position: 'WR', teamId: 101, jerseyNum: 11, playerBestOvr: 80 },
@@ -27,7 +27,7 @@ export function syntheticRaw() {
       { teamId: 101, abbrName: 'KC', cityName: 'Kansas City', displayName: 'Chiefs', nickName: 'Chiefs', divName: 'AFC West', logoId: 1, ovrRating: 90, userName: 'me' },
       { teamId: 102, abbrName: 'BUF', cityName: 'Buffalo', displayName: 'Bills', nickName: 'Bills', divName: 'AFC East', logoId: 2, ovrRating: 88 },
     ],
-    standings: [{ teamId: 101, totalWins: 1, totalLosses: 0, seed: 1, rank: 1 }, { teamId: 102, totalWins: 0, totalLosses: 1, seed: 5, rank: 5 }],
+    standings: [{ teamId: 101, totalWins: 1, totalLosses: 0, seed: 1, rank: 1, capRoom: 279200000, capSpent: 250000000, capAvailable: 29200000 }, { teamId: 102, totalWins: 0, totalLosses: 1, seed: 5, rank: 5, capRoom: 279200000, capSpent: 270000000, capAvailable: 9200000 }],
     rosters: { 101: kc, 102: buf },
     schedules: { 'reg-1': [{ scheduleId: 9001, homeTeamId: 101, awayTeamId: 102, homeScore: 27, awayScore: 24, status: 3, weekIndex: 0, stageIndex: 1, seasonIndex: 0 }, { scheduleId: 9002, homeTeamId: 102, awayTeamId: 101, homeScore: 0, awayScore: 0, status: 1, weekIndex: 1, stageIndex: 1, seasonIndex: 0 }] },
     passing: { 'reg-1': [{ scheduleId: 9001, rosterId: 1, teamId: 101, fullName: 'Pat Passer', passAtt: 34, passComp: 24, passYds: 310, passTDs: 3, passInts: 1, passSacks: 2 }, { scheduleId: 9001, rosterId: 21, teamId: 102, fullName: 'Josh Thrower', passAtt: 40, passComp: 26, passYds: 290, passTDs: 2, passInts: 0, passSacks: 3 }] },

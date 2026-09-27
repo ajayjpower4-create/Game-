@@ -14,6 +14,9 @@ A Windows desktop mod for **Madden NFL 26 franchise mode**. Connect your franchi
 
 - **Sign in with EA** – sign in once with your EA account; the tool lists the franchises on it and downloads whichever one you pick, no phone needed.
 - **Injury tool** – pick any game on the schedule, pick a player, pick the injury (ACL tear, high ankle sprain, broken collarbone… every injury the game has) or let it roll one. The tool picks the random play it happens on and writes the injury into your franchise file.
+- **Weekly recap** – one page for the whole league each week: every score with both teams' records, storylines (blowouts, nail-biters, upsets, comebacks, streaks, unbeaten and winless teams), players of the week, stat leaders, the plays and lowlights of the week, every injury, Madden's own league news stories, social posts and transactions (signings, releases, trades), advanced-stat notes, the standings by division, and next week's games.
+- **Contracts & salary cap** – every contract in the league: cap hit, salary, prorated bonus, contract year, total value, per-year average, money still owed and the dead money a release would leave, each player's year-by-year deal, and each team's cap room, cap used, dead money, rollover, room next year, money already committed to future seasons and cap spent by position. Plus the biggest contracts, the best players on expiring deals, and the free-agent pool.
+- **Copy as plain text** – every table has a **Copy** button, pages like the recap and highlights have **Copy as text**, and **Copy page** in the top bar copies whatever you are looking at. What lands on the clipboard is plain text with the columns lined up, no colours or formatting, ready to paste into Discord, a text message or a note. Selecting text and pressing Ctrl+C (or right-click → Copy) gives plain text too.
 - **Highlights** – the biggest plays and the worst moments of every game, written out: "Daniel Jones finds Josh Downs for a 28-yard touchdown to win it", pick-sixes, sacks, comebacks, blown leads, drops, missed field goals, blown blocks. Click a game for its highlights, lowlights, key plays in order, scoring and player of the game, or see the plays of the week across the league.
 - **Advanced blocking** – pressures, hurries, QB hits and sacks allowed by every blocker, almost-sacks, pancakes, run-block wins, how long each blocker holds his man off the QB, pass-block efficiency, pass, run and overall grades, the best blocker and the most beaten blocker, and who beat whom. See any single week, or the **week by week** grid that follows every blocker through the season with a trend arrow.
 - **Matchup preview** – before you play a game, see every one-on-one up front: who each of your blockers lines up against, how often that rusher wins, the pressures and sacks he should give up, a risk rating, the best run lane, and game-plan tips for both sides of the ball (who to chip, when to go quick game, which blocker to attack with your best rusher).
@@ -84,6 +87,14 @@ The model then calibrates itself to your league. It solves for the setting that 
 
 The matchup preview runs the same model forward, using only what was known before kickoff: the ratings, each player's form, and how he did in this league's earlier games compared with what the model expected of him.
 
+### Weekly recap
+
+Scores, records, standings, stat leaders, injuries, news stories, social posts and transactions all come straight from what Madden saved: the scoreboard, the recorded box scores, each game's own injury list, Madden's injury report (with the week each injury happened), and the league news and transaction log in the franchise file. Records and standings are counted from the game results; divisions are the NFL's. The recap only says a game went to overtime when the play-by-play shows a fifth quarter, and only calls a result an upset when the loser's Madden team rating was at least 4 points higher. Players of the week are picked by the tool from the recorded box scores, and the advanced-stat notes come from the tool's reconstructed stats; both say so on the page. A Companion App export has no news feed or dated injuries, so its recap shows the current injury report instead.
+
+### Contracts and the salary cap
+
+Madden stores every contract year by year: the salary and the prorated signing bonus for each season, and the cap hit it carries this season. The tool reads those as they are (Madden keeps money in units of $10,000). Each team's cap room, dead money this year and next, rollover and next year's room are also stored. The league salary cap itself is not stored as a plain number, so the tool solves it from the teams' cap room and shows it only when the teams agree (it comes out at $279.2M for 2025, the real NFL figure). "Dead money if cut" is the signing bonus still to be counted, which is what a release accelerates onto the cap. A Companion App export carries one salary, one bonus, the cap hit and the release numbers per contract, so those leagues show that instead of the year-by-year breakdown.
+
 ### Highlights
 
 A PC franchise file keeps a play-by-play of every game (the scoring plays, sacks, interceptions and fumble recoveries with the quarter and clock) and a scoreboard after every score. The tool rebuilds the running score from it, including extra points and two-point tries, so it knows which touchdown tied it, which took the lead and which won it. Box-score moments (300-yard passers, 100-yard rushers, drops, missed field goals, shutouts), the tool's own reconstructed stats (blown blocks, missed tackles, penalties) and the injury report add the rest. A league from the Companion App or the EA sign-in has box scores but no play-by-play, so it gets box-score moments without clock times.
@@ -115,7 +126,8 @@ src/server/      local API + Companion App export receiver
 src/core/franchise/   franchise-file reader, injury catalog, injury writer
 src/core/companion/   Companion App export normaliser
 src/core/ea/          EA account sign-in, game-server client and league download
-src/core/stats/       blocking, matchup preview, highlights, snaps, receiving, tackling, penalties, aggregation
+src/core/stats/       blocking, matchup preview, highlights, weekly recap, snaps, receiving, tackling, penalties, aggregation
+src/core/contracts.js contracts and salary cap
 src/core/tracker/     Game Tracker events and overrides
 ui/              the app's pages
 schemas/         extra Madden 26 franchise schemas

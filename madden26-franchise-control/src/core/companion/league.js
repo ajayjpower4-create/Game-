@@ -15,6 +15,7 @@ export function buildLeagueFromCompanion(raw, { leagueKey, name } = {}) {
     const id = `c${s.teamId}`;
     if (!teams[id]) continue;
     teams[id].record = { wins: s.totalWins || 0, losses: s.totalLosses || 0, ties: s.totalTies || 0, seed: s.seed, rank: s.rank };
+    if (s.capSpent != null || s.capAvailable != null) teams[id]._capRaw = { total: s.capRoom, spent: s.capSpent, room: s.capAvailable };
     if (s.divisionName) teams[id].division = s.divisionName;
     if (s.conferenceName) teams[id].conference = s.conferenceName;
   }
@@ -26,6 +27,8 @@ export function buildLeagueFromCompanion(raw, { leagueKey, name } = {}) {
       players[player.playerId] = player;
     }
   }
+
+  applyCompanionMoney(teams, players);
 
   const games = {};
   for (const list of Object.values(raw.schedules || {})) {
@@ -121,7 +124,73 @@ export function buildLeagueFromCompanion(raw, { leagueKey, name } = {}) {
     playerGameStats,
     gameInjuries: {},
     warnings: [],
-    capabilities: { snapsRecorded: false, pancakesRecorded: false, injuryTool: false },
+    salaryCap: companionSalaryCap(teams),
+    news: null,
+    capabilities: { snapsRecorded: false, pancakesRecorded: false, injuryTool: false, contracts: Object.values(players).some((p) => p.contract), news: false },
     exportInfo: raw.meta || null,
   };
+}
+
+// The export's money fields have come in whole dollars, but guard against a
+// feed in thousands or in Madden's own $10,000 units: a top cap hit is tens
+// of millions of dollars, a team cap hundreds of millions.
+export function moneyScale(values, { team = false } = {}) {
+  const max = Math.max(0, ...values.filter((v) => Number.isFinite(v)).map(Math.abs));
+  if (!max) return 1;
+  if (team) return max >= 1e7 ? 1 : max >= 1e5 ? 1000 : 10000;
+  return max >= 1e6 ? 1 : max >= 15000 ? 1000 : 10000;
+}
+
+function applyCompanionMoney(teams, players) {
+  const raws = Object.values(players).map((p) => p._contractRaw).filter(Boolean);
+  const k = moneyScale(raws.flatMap((c) => [c.capHit, c.salary]));
+  for (const p of Object.values(players)) {
+    const c = p._contractRaw;
+    delete p._contractRaw;
+    if (!c || p.contractStatus === 'FreeAgent') { p.contract = c ? { status: p.contractStatus, length: 0, yearsLeft: 0, capHit: 0, salary: 0, years: [] } : null; continue; }
+    p.contract = {
+      status: p.contractStatus,
+      length: c.length,
+      yearsLeft: c.yearsLeft,
+      yearIndex: Math.max(0, c.length - c.yearsLeft),
+      capHit: c.capHit * k,
+      salary: c.salary * k,
+      signingBonus: c.bonus * k,
+      releaseSavings: c.releaseSavings == null ? null : c.releaseSavings * k,
+      releasePenalty: c.releasePenalty == null ? null : c.releasePenalty * k,
+      years: [],
+      total: null,
+      remaining: null,
+      remainingBonus: null,
+    };
+  }
+  const caps = Object.values(teams).map((t) => t._capRaw).filter(Boolean);
+  const tk = moneyScale(caps.flatMap((c) => [c.total, c.spent, c.room]), { team: true });
+  for (const t of Object.values(teams)) {
+    const c = t._capRaw;
+    delete t._capRaw;
+    if (!c) continue;
+    // capRoom is the team's whole cap when spent + available add up to it.
+    const total = n0(c.total) * tk;
+    const spent = n0(c.spent) * tk;
+    const room = c.room != null ? n0(c.room) * tk : total - spent;
+    const isTotal = total > 0 && Math.abs(total - (spent + room)) <= 0.01 * total;
+    t.cap = { teamCap: isTotal ? total : spent + room, spent, room, deadThisYear: null, deadNextYear: null, nextYearRoom: null, rollover: null };
+  }
+}
+
+function companionSalaryCap(teams) {
+  const caps = Object.values(teams).map((t) => t.cap && t.cap.teamCap).filter((v) => v > 0).sort((a, b) => a - b);
+  if (caps.length < 8) return null;
+  // Every team's cap is the league cap plus its own rollover, so teams with
+  // nothing rolled over share the league's number. Take it only when several do.
+  const count = new Map();
+  for (const v of caps) count.set(v, (count.get(v) || 0) + 1);
+  const [cap, agree] = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
+  return agree >= 3 ? { cap, rule: 'from the exported team caps', teamsAgreeing: agree } : null;
+}
+
+function n0(v) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
 }

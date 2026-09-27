@@ -1,6 +1,6 @@
 // Electron entry point: starts the local server, opens the window, gives the
 // page native file dialogs, and hosts the EA sign-in window.
-const { app, BrowserWindow, dialog, ipcMain, shell, Menu, safeStorage } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Menu, safeStorage, clipboard } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -56,8 +56,17 @@ function createWindow() {
   });
   mainWindow.loadURL(`http://127.0.0.1:${serverInfo.port}/`);
   mainWindow.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  // Right-click: copy what is selected (the page turns it into plain text), paste into boxes.
+  mainWindow.webContents.on('context-menu', (e, params) => {
+    const items = [];
+    if (params.isEditable) items.push({ role: 'cut', enabled: params.editFlags.canCut }, { role: 'copy', enabled: params.editFlags.canCopy }, { role: 'paste', enabled: params.editFlags.canPaste });
+    else items.push({ role: 'copy', enabled: Boolean(params.selectionText) });
+    items.push({ type: 'separator' }, { role: 'selectAll' });
+    Menu.buildFromTemplate(items).popup({ window: mainWindow });
+  });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: 'File', submenu: [{ label: 'Open Franchise File…', accelerator: 'CmdOrCtrl+O', click: () => mainWindow.webContents.send('menu:open-file') }, { type: 'separator' }, { role: 'quit' }] },
+    { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { label: 'Help', submenu: [{ label: 'Show data folder', click: () => shell.openPath(process.env.M26FC_DATA_DIR) }] },
   ]));
@@ -113,6 +122,8 @@ ipcMain.handle('ea-login', (event, url) => new Promise((resolve) => {
 
 ipcMain.handle('server-info', () => ({ port: serverInfo.port, urls: serverInfo.urls, lan: serverInfo.lan, dataDir: process.env.M26FC_DATA_DIR, version: app.getVersion() }));
 ipcMain.handle('open-path', (e, p) => shell.openPath(p));
+// Plain text only, so pasted stats never carry colours or table formatting.
+ipcMain.handle('copy-text', (e, text) => { clipboard.writeText(String(text)); return true; });
 
 app.whenReady().then(async () => {
   await startBackend();

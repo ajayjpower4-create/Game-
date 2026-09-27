@@ -1,3 +1,4 @@
+import { devTraitName } from '../franchise/reader.js';
 // Turns the JSON the Madden Companion App POSTs (its "Export" feature pulls
 // your franchise from the EA cloud and sends it to a URL you give it) into the
 // same league model the franchise-file reader produces.
@@ -104,7 +105,7 @@ export function normalizeRosterPlayer(p) {
     age: n(p.age),
     yearsPro: n(p.yearsPro),
     overall: n(p.playerBestOvr),
-    devTrait: p.devTrait,
+    devTrait: devTraitName(p.devTrait),
     contractStatus: p.isFreeAgent ? 'FreeAgent' : p.isOnPracticeSquad ? 'PracticeSquad' : 'Signed',
     ratings,
     injury: {
@@ -115,6 +116,17 @@ export function normalizeRosterPlayer(p) {
     },
     portraitId: p.portraitId,
     career: null,
+    // Contract as exported; the league builder puts the money into dollars.
+    _contractRaw: 'capHit' in p || 'contractSalary' in p ? {
+      length: n(p.contractLength),
+      yearsLeft: n(p.contractYearsLeft),
+      salary: n(p.contractSalary),
+      bonus: n(p.contractBonus),
+      capHit: n(p.capHit),
+      releaseSavings: p.capReleaseNetSavings != null ? n(p.capReleaseNetSavings) : null,
+      releasePenalty: p.capReleasePenalty != null ? n(p.capReleasePenalty) : null,
+    } : null,
+    draft: p.draftRound ? { round: n(p.draftRound), pick: n(p.draftPick), calendarYear: n(p.rookieYear) || null } : null,
   };
 }
 
