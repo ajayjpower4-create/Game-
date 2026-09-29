@@ -205,3 +205,60 @@ tr.done td { color: var(--muted); }
 .posbar .bar i { display: block; height: 100%; background: var(--accent2); }
 .posbar .m { text-align: right; font-variant-numeric: tabular-nums; }
 .copy-holder, .copy-holder * { text-transform: none !important; }
+.ol { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.ol-minor { background: #12402a; color: #7ff0b0; }
+.ol-doubtful { background: #3a3a14; color: #f0e27f; }
+.ol-out { background: #4a3410; color: #ffd27a; }
+.ol-season { background: #4a1410; color: #ffb3ae; }
+.ol-unknown { background: var(--bg3); color: var(--muted); }
+/* Box score */
+.box-team h4 { margin: 12px 0 4px; font-size: 13px; color: var(--muted); }
+table.linescore { max-width: 520px; margin: 8px 0; }
+table.linescore td, table.linescore th { text-align: center; }
+table.teamstats td.best { color: var(--good); font-weight: 700; }
+.gotw { margin-top: 14px; border-color: var(--accent2); }
+.gotw .big { font-size: 16px; margin: 4px 0; }
+
+/* ---------- UI settings ---------- */
+.checks { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+label.check { display: flex; align-items: center; gap: 8px; color: var(--text); cursor: pointer; }
+label.check input { width: auto; min-width: 0; margin: 0; }
+tr.mine td { background: color-mix(in srgb, var(--accent2) 16%, transparent) !important; }
+tr.mine td:first-child { box-shadow: inset 3px 0 0 var(--accent2); }
+.hide-tags .tag { display: none !important; }
+.no-sticky table.data th { position: static; }
+.reduce-motion * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+#nav button.active, button.blue, .tabs button.active, .seg button.active, .weekchips button.active { background-color: var(--accent2); border-color: var(--accent2); }
+.tabs button.active { background: transparent; border-bottom-color: var(--accent2); }
+
+/* Compact tables */
+[data-density="compact"] table.data th, [data-density="compact"] table.data td { padding: 3px 6px; font-size: 12px; }
+[data-density="compact"] .card { padding: 10px 12px; }
+[data-density="compact"] .leader { padding: 3px 0; }
+[data-density="compact"] .hl { padding: 6px 8px; margin-bottom: 4px; }
+
+/* Light theme */
+[data-theme="light"] { --bg: #f4f6fa; --bg2: #ffffff; --bg3: #eef1f6; --line: #d7dce6; --text: #172033; --muted: #5d6879; --good: #1b8f55; --warn: #b8770f; --bad: #c9322a; }
+[data-theme="light"] .tag.recorded, [data-theme="light"] .pill.win, [data-theme="light"] .risk-low, [data-theme="light"] .ol-minor { background: #d9f4e5; color: #11683d; }
+[data-theme="light"] .tag.reconstructed, [data-theme="light"] .risk-high, [data-theme="light"] .ol-out, [data-theme="light"] .hl-tag { background: #fbeccd; color: #7a4d06; }
+[data-theme="light"] .tag.tracked { background: #dbe8fb; color: #1d4f9a; }
+[data-theme="light"] .tag.mixed, [data-theme="light"] .ol-unknown { background: #e6e9ef; color: #444; }
+[data-theme="light"] .pill.loss, [data-theme="light"] .risk-critical, [data-theme="light"] .ol-season, [data-theme="light"] .hl.lowlight .hl-tag { background: #fbdcd9; color: #8e1d16; }
+[data-theme="light"] .risk-medium, [data-theme="light"] .ol-doubtful { background: #f5f0c8; color: #6b5d06; }
+[data-theme="light"] .banner { background: #fff5e0; color: #6b4a06; }
+[data-theme="light"] .banner.error { background: #fde8e6; color: #8e1d16; }
+[data-theme="light"] .banner.ok { background: #e3f6ec; color: #11683d; }
+[data-theme="light"] .g-elite { background: #bfe9d0 !important; }
+[data-theme="light"] .g-good { background: #dcf3e5 !important; }
+[data-theme="light"] .g-avg { background: #eef1f6 !important; }
+[data-theme="light"] .g-poor { background: #fbeccd !important; }
+[data-theme="light"] .g-bad { background: #fbdcd9 !important; }
+[data-theme="light"] tr.current td { background: #dcf3e5; }
+[data-theme="light"] .lowtxt { color: #a0271f; }
+[data-theme="light"] .injured { color: #c9322a; }
+[data-theme="light"] .brand-title { color: var(--accent); }
+
+/* High contrast */
+[data-theme="contrast"] { --bg: #000; --bg2: #0a0a0a; --bg3: #1a1a1a; --line: #777; --text: #fff; --muted: #e0e0e0; --good: #3dff8f; --bad: #ff5a4f; --warn: #ffd23f; }
+[data-theme="contrast"] table.data th, [data-theme="contrast"] table.data td { border-bottom-color: #555; }
+[data-theme="contrast"] button { border-color: #aaa; }

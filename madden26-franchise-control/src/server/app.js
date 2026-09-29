@@ -12,7 +12,9 @@ import { seasonTotals, blockingByWeek, playerLog } from '../core/stats/aggregate
 import { weekHighlights } from '../core/stats/highlights.js';
 import { predictGame } from '../core/stats/predict.js';
 import { weeklyRecap, recapWeeks } from '../core/stats/recap.js';
+import { boxScore, lineScore } from '../core/stats/boxscore.js';
 import { contractsReport, playerContract } from '../core/contracts.js';
+import { updateLedger, gameInjuryReport } from '../core/injuries/game-injuries.js';
 import { buildLeagueFromCompanion } from '../core/companion/league.js';
 import { classifyPath, extractList } from '../core/companion/normalize.js';
 import { INJURY_TYPES, BODY_PARTS, injuryTypesByPart } from '../core/franchise/injury-catalog.js';
@@ -68,6 +70,19 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
   const ea = new EAAccountService({ store, secretBox, log, onImported: (leagueKey) => { companionLeagues.delete(leagueKey); engine.clear(); } });
   app.locals.ea = ea;
 
+  // Write down every injury visible in this load of the league, so the ones
+  // that heal before the next save are not lost.
+  function trackInjuries(leagueKey, league) {
+    try {
+      const next = updateLedger(store.getInjuryLedger(leagueKey), league);
+      store.saveInjuryLedger(leagueKey, next);
+      league.injuryLedgerAt = next.updatedAt;
+    } catch (e) {
+      log('injury ledger failed', e && e.message);
+    }
+  }
+  const ledgerFor = (leagueKey) => store.getInjuryLedger(leagueKey);
+
   function getLeague(leagueKey) {
     if (franchise.isOpen && franchise.league.leagueId === leagueKey) return franchise.league;
     if (leagueKey === 'file' && franchise.isOpen) return franchise.league;
@@ -77,6 +92,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     const raw = store.getCompanionRaw(leagueKey);
     const league = buildLeagueFromCompanion(raw, { leagueKey, name: meta.name || `${meta.platform || ''} league ${meta.companionLeagueId || ''}`.trim() });
     league.loadedAt = meta.updatedAt || '';
+    trackInjuries(leagueKey, league);
     companionLeagues.set(leagueKey, league);
     return league;
   }
@@ -108,6 +124,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     if (!filePath) return res.status(400).json({ ok: false, error: 'filePath is required' });
     try {
       const league = await franchise.open(filePath);
+      trackInjuries(league.leagueId, league);
       engine.clear();
       const settings = store.getSettings();
       settings.recentFiles = [filePath, ...(settings.recentFiles || []).filter((f) => f !== filePath)].slice(0, 8);
@@ -123,6 +140,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
   api.post('/franchise/refresh', async (req, res) => {
     try {
       const league = await franchise.refresh();
+      trackInjuries(league.leagueId, league);
       engine.clear();
       res.json({ ok: true, leagueKey: league.leagueId, summary: summarizeLeague(league) });
     } catch (e) {
@@ -166,7 +184,8 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     if (!league.games[req.params.gameId]) return res.status(404).json({ ok: false, error: 'game not found' });
     const tracker = store.getTracker(req.params.leagueKey);
     const result = engine.game(league, req.params.gameId, tracker);
-    res.json({ ok: true, result: { ...result, game: publicGame(result.game, league), injuries: (league.gameInjuries[req.params.gameId] || []).map((i) => ({ ...i, player: publicPlayer(league.players[i.playerId]) })) } });
+    const injuryReport = gameInjuryReport(league, req.params.gameId, { ledger: ledgerFor(req.params.leagueKey), injuryLog: store.getInjuryLog(req.params.leagueKey).entries });
+    res.json({ ok: true, result: { ...result, game: publicGame(result.game, league), injuryReport } });
   });
 
   api.get('/leagues/:leagueKey/season', (req, res) => {
@@ -180,6 +199,17 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     res.json({ ok: true, totals });
   });
 
+  // ---- box score
+  api.get('/leagues/:leagueKey/games/:gameId/boxscore', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    const game = league.games[req.params.gameId];
+    if (!game) return res.status(404).json({ ok: false, error: 'game not found' });
+    if (game.status !== 'played') return res.json({ ok: true, played: false, game: publicGame(game, league) });
+    const box = engine.memo(`box|${engine.leagueKey(league, null)}|${game.gameId}`, () => boxScore(league, game.gameId));
+    res.json({ ok: true, played: true, game: publicGame(game, league), box });
+  });
+
   // ---- highlights
   api.get('/leagues/:leagueKey/games/:gameId/highlights', (req, res) => {
     const league = getLeague(req.params.leagueKey);
@@ -188,7 +218,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     if (!game) return res.status(404).json({ ok: false, error: 'game not found' });
     if (game.status !== 'played') return res.json({ ok: true, played: false, game: publicGame(game, league) });
     const h = engine.highlights(league, game.gameId, store.getTracker(req.params.leagueKey));
-    res.json({ ok: true, played: true, game: publicGame(game, league), highlights: h });
+    res.json({ ok: true, played: true, game: publicGame(game, league), highlights: { ...h, lineScore: lineScore(league, game.gameId) } });
   });
 
   api.get('/leagues/:leagueKey/highlights/week', (req, res) => {
@@ -232,7 +262,8 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     try {
       const tracker = store.getTracker(req.params.leagueKey);
       const injuryLog = store.getInjuryLog(req.params.leagueKey).entries;
-      const recap = engine.memo(`recap|${engine.leagueKey(league, tracker)}|${injuryLog.length}|${pick.stage}|${pick.week}`, () => weeklyRecap(league, engine, tracker, { stage: pick.stage, week: pick.week, injuryLog }));
+      const ledger = ledgerFor(req.params.leagueKey);
+      const recap = engine.memo(`recap|${engine.leagueKey(league, tracker)}|${injuryLog.length}|${ledger.updatedAt}|${pick.stage}|${pick.week}`, () => weeklyRecap(league, engine, tracker, { stage: pick.stage, week: pick.week, injuryLog, ledger }));
       res.json({ ok: true, weeks, recap });
     } catch (e) {
       log('recap failed', e);
@@ -318,6 +349,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     const { playerId, gameId, injuryKey, weeks, side, placeOnIR, salt, applyMode } = req.body || {};
     try {
       const result = await franchise.applyInjury({ playerId, gameId, injuryKey, weeks, side, placeOnIR, salt });
+      trackInjuries(franchise.league.leagueId, franchise.league);
       engine.clear();
       const logData = store.getInjuryLog(req.params.leagueKey);
       const entry = { id: `${Date.now().toString(36)}-${hashString(playerId + gameId).toString(36)}`, at: new Date().toISOString(), gameId, game: publicGame(league.games[gameId], league), plan: result.plan, written: result.written, backupPath: result.backupPath, applyMode: applyMode || 'now', status: 'applied' };
@@ -371,6 +403,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     if (!league || league.source !== 'franchise' || !franchise.isOpen) return res.status(400).json({ ok: false, error: 'Healing needs an open PC franchise file.' });
     try {
       const result = await franchise.heal(req.body.playerId);
+      trackInjuries(franchise.league.leagueId, franchise.league);
       engine.clear();
       res.json({ ok: true, ...result });
     } catch (e) {

@@ -1,4 +1,5 @@
 import { devTraitName } from '../franchise/reader.js';
+import { injuryTypeName, severityName } from '../injuries/game-injuries.js';
 // Turns the JSON the Madden Companion App POSTs (its "Export" feature pulls
 // your franchise from the EA cloud and sends it to a URL you give it) into the
 // same league model the franchise-file reader produces.
@@ -109,8 +110,11 @@ export function normalizeRosterPlayer(p) {
     contractStatus: p.isFreeAgent ? 'FreeAgent' : p.isOnPracticeSquad ? 'PracticeSquad' : 'Signed',
     ratings,
     injury: {
-      status: n(p.injuryLength) > 0 || p.isOnIR ? 'Injured' : 'Uninjured',
-      type: p.injuryType,
+      // A named injury with no weeks left is still an injury (out for part of
+      // a game); a bare number with no weeks cannot be told apart from "none".
+      status: n(p.injuryLength) > 0 || p.isOnIR || (typeof p.injuryType === 'string' && p.injuryType && !/^\d+$/.test(p.injuryType) && !/^(Invalid_?|None|Healthy)$/i.test(p.injuryType)) ? 'Injured' : 'Uninjured',
+      type: injuryTypeName(p.injuryType),
+      severity: severityName(p.injurySeverity),
       weeksTotal: n(p.injuryLength),
       onIR: Boolean(p.isOnIR),
     },

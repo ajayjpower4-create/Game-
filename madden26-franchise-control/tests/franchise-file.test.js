@@ -63,5 +63,6 @@ test('reads contracts, the salary cap and league news from a real save', { skip:
   const recap = weeklyRecap(league, new StatsEngine(), { events: [] }, { stage: first.stage, week: first.week });
   assert.ok(recap.scores.filter((s) => s.status === 'played').every((s) => Number.isFinite(s.homeScore) && s.homeRecord));
   assert.ok(recap.stories.length > 0, "Madden's stories for the week are in the recap");
-  assert.ok(recap.injuries.some((i) => i.source === 'in-game'));
+  assert.ok(recap.injuries.some((i) => i.source === 'game-list'), "Madden's own game injury lists are in the recap");
+  assert.ok(recap.injuries.length > 20, 'plus the injury report for the week');
 });

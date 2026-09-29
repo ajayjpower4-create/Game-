@@ -244,9 +244,12 @@ const OFF_KEYS = ['DOWNSPLAYED', 'GAMESSTARTED', 'PASSATTEMPTS', 'PASSCOMPLETED'
   'RUSHATTEMPTS', 'RUSHYARDS', 'RUSHTDS', 'RUSHBROKENTACKLES', 'RUSHFUMBLES', 'RUSHLONGEST', 'RUSHYARDSAFTER1STHIT', 'RUSH20YARDRUNS',
   'RECEIVECATCHES', 'RECEIVEDROPS', 'RECEIVEYARDS', 'RECEIVETDS', 'RECEIVELONGEST', 'RECEIVEYARDSAFTER'];
 const DEF_KEYS = ['DOWNSPLAYED', 'GAMESSTARTED', 'DEFTACKLES', 'ASSDEFTACKLES', 'DEFTACKLESFORLOSS', 'DLINESACKS', 'DLINEHALFSACK', 'BIGHITS', 'CTHALLOWED',
-  'DEFPASSDEFLECTIONS', 'DLINEBLOCKS', 'DLINEFORCEDFUMBLES', 'DLINEFUMBLERECOVERIES', 'DSECINTS', 'DSECINTRETURNYARDS', 'DSECINTTDS', 'DLINESAFETIES'];
+  'DEFPASSDEFLECTIONS', 'DLINEBLOCKS', 'DLINEFORCEDFUMBLES', 'DLINEFUMBLERECOVERIES', 'DSECINTS', 'DSECINTRETURNYARDS', 'DSECINTTDS', 'DSECINTLONGESTRETURN', 'DLINESAFETIES'];
 const OL_KEYS = ['DOWNSPLAYED', 'GAMESSTARTED', 'OLINEPANCAKES', 'OLINESACKSALLOWED', 'GAMERATING'];
-const KICK_KEYS = ['DOWNSPLAYED', 'KICKFGATTEMPTS', 'KICKFGMADE', 'KICKEPATTEMPTS', 'KICKEPMADE', 'PUNTATTEMPTS', 'PUNTYARDS', 'PUNTIN20', 'KICKNUMKICKOFFS'];
+const KICK_KEYS = ['DOWNSPLAYED', 'KICKFGATTEMPTS', 'KICKFGMADE', 'KICKFGLONGEST', 'KICKFGBLOCKED', 'KICKEPATTEMPTS', 'KICKEPMADE', 'PUNTATTEMPTS', 'PUNTYARDS', 'PUNTNETYARDS', 'PUNTLONGEST', 'PUNTIN20', 'PUNTTOUCHBACKS', 'KICKNUMKICKOFFS', 'KICKTOUCHBACKS'];
+// Kick and punt returns live in their own tables alongside the player's
+// offensive or defensive line.
+const RET_KEYS = ['KRETATTEMPTS', 'KRETYARDS', 'KRETTDS', 'KRETLONGEST', 'PRETATTEMPTS', 'PRETYARDS', 'PRETTDS', 'PRETLONGEST'];
 const TEAM_KEYS = ['PENALTIES', 'PENALTYYARDS', 'SACKS', 'SACKSALLOWED', 'PASSATTEMPTS', 'RUSHATTEMPTS', 'OFFYARDS', 'OFFPASSYARDS', 'OFFRUSHYARDS', 'TOTALYARDS',
   'FIRSTDOWNS', 'THIRDDOWNS', 'THIRDDOWNCONV', 'FOURTHDOWNS', 'FOURTHDOWNCONV', 'PASSDEFLECTIONS', 'TACKLESFORLOSS', 'POSSESSIONTIME', 'GIVEAWAYS', 'TAKEAWAYS',
   'PASSTDS', 'RUSHTDS', 'PASSINTS', 'FUMBLESLOST', 'FORCEDFUMBLES', 'FUMBLEREC', 'DEFPASSYARDS', 'DEFRUSHYARDS', 'PASSESTIPPED', 'OFFREDZONES', 'OFFREDZONETDS'];
@@ -492,6 +495,7 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
         if (!playerId || !statHit) continue;
         const category = categorize(statHit.table.name);
         addPlayerLine(g.gameId, playerId, category, statLine(category, statHit.record), sideKey === 'homeStats' ? g.homeTeamId : g.awayTeamId);
+        if (/KPReturn/.test(statHit.table.name)) addPlayerLine(g.gameId, playerId, 'returns', pickStat(statHit.record, RET_KEYS), sideKey === 'homeStats' ? g.homeTeamId : g.awayTeamId);
       }
     }
     // Key plays and the scoring timeline
@@ -569,6 +573,7 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
       if (!gameId) continue;
       const category = categorize(hit.table.name);
       addPlayerLine(gameId, p.playerId, category, statLine(category, hit.record));
+      if (/KPReturn/.test(hit.table.name)) addPlayerLine(gameId, p.playerId, 'returns', pickStat(hit.record, RET_KEYS));
     }
   }
 

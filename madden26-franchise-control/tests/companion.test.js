@@ -33,7 +33,7 @@ test('schedule normalisation and playoff week types', () => {
 test('buildLeagueFromCompanion assembles a full league model', () => {
   const league = syntheticLeague();
   assert.equal(Object.keys(league.teams).length, 2);
-  assert.equal(Object.keys(league.players).length, 16);
+  assert.equal(Object.keys(league.players).length, 17);
   assert.equal(Object.keys(league.games).length, 2);
   assert.equal(league.games.s9001.status, 'played');
   assert.equal(league.games.s9001.label, 'Week 1');

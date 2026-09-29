@@ -91,6 +91,17 @@ export class Store {
     return log;
   }
 
+  // Every injury the tool has seen, so small ones that heal before the next
+  // save are still remembered for the game they happened in.
+  getInjuryLedger(leagueKey) {
+    return readJson(path.join(this.leagueDir(leagueKey), 'injury-ledger.json'), { entries: {}, loads: 0, updatedAt: null });
+  }
+
+  saveInjuryLedger(leagueKey, ledger) {
+    writeJson(path.join(this.leagueDir(leagueKey), 'injury-ledger.json'), ledger);
+    return ledger;
+  }
+
   getSettings() {
     return readJson(path.join(this.dataDir, 'settings.json'), { recentFiles: [], schemaDirectory: null, port: 3826 });
   }

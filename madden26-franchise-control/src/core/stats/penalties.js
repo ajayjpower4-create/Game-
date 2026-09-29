@@ -86,27 +86,30 @@ export function penaltiesForTeam({ league, gameId, ctx, oppCtx, overrides = {}, 
         flags.push({ playerId: people[i].playerId, type, yards, spot: yards === 0 });
       }
     });
-    // Make the yards add up to the recorded team total.
+    // Make the yards add up to the recorded team total. Spot fouls (pass
+    // interference) take whatever is left; then any flag is nudged within
+    // its sensible range until the total matches exactly.
     const targetYards = ctx.penaltyYards || 0;
     if (flags.length) {
       const spots = flags.filter((f) => f.spot);
-      let fixed = flags.filter((f) => !f.spot).reduce((s, f) => s + f.yards, 0);
-      let remaining = targetYards - fixed;
+      const fixed = flags.filter((f) => !f.spot).reduce((s, f) => s + f.yards, 0);
       if (spots.length) {
-        const share = apportion(Math.max(spots.length * 3, remaining), spots.map(() => 1), rng);
+        const share = apportion(Math.max(spots.length, targetYards - fixed), spots.map(() => 1), rng);
         spots.forEach((f, i) => { f.yards = Math.max(1, Math.min(55, share[i])); });
-      } else {
-        // No spot fouls: nudge fixed-yard flags so the total matches.
-        let diff = remaining;
-        let guard = 0;
-        while (diff !== 0 && guard++ < 200) {
-          const f = rng.pick(flags);
-          const step = Math.sign(diff) * Math.min(Math.abs(diff), 5);
-          const next = f.yards + step;
-          if (next >= 1 && next <= 25) { f.yards = next; diff -= step; }
+      }
+      const max = (f) => (f.spot ? 55 : 25);
+      let diff = targetYards - flags.reduce((s, f) => s + f.yards, 0);
+      let guard = 0;
+      while (diff !== 0 && guard++ < 1000) {
+        const f = rng.pick(flags);
+        const step = Math.sign(diff) * Math.min(Math.abs(diff), 5);
+        const next = f.yards + step;
+        if (next >= 1 && next <= max(f)) { f.yards = next; diff -= step; }
+        else if (Math.abs(diff) < 5) {
+          const one = f.yards + Math.sign(diff);
+          if (one >= 1 && one <= max(f)) { f.yards = one; diff -= Math.sign(diff); }
         }
       }
-      fixed = flags.reduce((s, f) => s + f.yards, 0);
     }
     source = 'reconstructed';
   }

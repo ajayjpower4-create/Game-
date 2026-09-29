@@ -16,6 +16,7 @@
 // which team blew a lead.
 
 import { makeRng } from '../rng.js';
+import { exportPlays } from './export-plays.js';
 import { getInjuryType } from '../franchise/injury-catalog.js';
 
 const TD_POINTS = 6;
@@ -260,12 +261,30 @@ export function highlightsForGame(league, gameId, result) {
     }
 
     // Scores with no matching play: return and defensive touchdowns, safeties.
+    // When exactly one player on the team has a return or defensive touchdown
+    // in the box score, and the team has exactly one such score, it is his.
+    const unmatched = events.filter((ev) => !ev.play && ev.kind === 'TD' && !gp.plays.some((p) => p.type === 'intMade' && p.teamId === ev.teamId && p.quarter === ev.quarter && Math.abs(p.clockSec - ev.clockSec) <= 6));
+    const scorerFor = (teamId) => {
+      if (unmatched.filter((ev) => ev.teamId === teamId).length !== 1) return null;
+      const cands = [];
+      for (const e of Object.values(league.playerGameStats[gameId] || {})) {
+        if ((e.teamId || (league.players[e.playerId] || {}).teamId) !== teamId) continue;
+        const r = e.returns || {};
+        const d = e.defense || {};
+        if (r.KRETTDS) cands.push({ pid: e.playerId, how: `takes a kickoff back ${r.KRETATTEMPTS === 1 ? `${r.KRETLONGEST} yards ` : ''}for a touchdown`, n: r.KRETTDS });
+        if (r.PRETTDS) cands.push({ pid: e.playerId, how: `takes a punt back ${r.PRETATTEMPTS === 1 ? `${r.PRETLONGEST} yards ` : ''}for a touchdown`, n: r.PRETTDS });
+        if (d.DSECINTTDS) cands.push({ pid: e.playerId, how: 'returns an interception for a touchdown', n: d.DSECINTTDS });
+      }
+      return cands.length === 1 && cands[0].n === 1 ? cands[0] : null;
+    };
     for (const ev of events) {
       if (ev.play) continue;
       const pickSix = gp.plays.some((p) => p.type === 'intMade' && p.teamId === ev.teamId && p.quarter === ev.quarter && Math.abs(p.clockSec - ev.clockSec) <= 6);
       if (pickSix) continue;
       const lev = leverage(ev.quarter, ev.clockSec, ev);
-      if (ev.kind === 'TD') add({ kind: 'highlight', type: 'Return or defensive touchdown', teamId: ev.teamId, quarter: ev.quarter, clockSec: ev.clockSec, impact: 55 + lev.bonus, tags: lev.tags, source: 'play-by-play', text: `${teamOf(ev.teamId).abbr} scores a touchdown without its offense on the field${scoreLine(ev)}.` });
+      const scorer = ev.kind === 'TD' ? scorerFor(ev.teamId) : null;
+      if (ev.kind === 'TD' && scorer) add({ kind: 'highlight', type: /kickoff/.test(scorer.how) ? 'Kick return touchdown' : /punt/.test(scorer.how) ? 'Punt return touchdown' : 'Pick-six', teamId: ev.teamId, quarter: ev.quarter, clockSec: ev.clockSec, playerIds: [scorer.pid], impact: 58 + lev.bonus, tags: lev.tags, source: 'play-by-play', text: `${playerName(scorer.pid)} ${scorer.how}${scoreLine(ev)}.` });
+      else if (ev.kind === 'TD') add({ kind: 'highlight', type: 'Return or defensive touchdown', teamId: ev.teamId, quarter: ev.quarter, clockSec: ev.clockSec, impact: 55 + lev.bonus, tags: lev.tags, source: 'play-by-play', text: `${teamOf(ev.teamId).abbr} scores a touchdown without its offense on the field${scoreLine(ev)}.` });
       else if (ev.kind === 'SAF') add({ kind: 'highlight', type: 'Safety', teamId: ev.teamId, quarter: ev.quarter, clockSec: ev.clockSec, impact: 45 + lev.bonus, tags: lev.tags, source: 'play-by-play', text: `${teamOf(ev.teamId).abbr} traps the ball carrier in the end zone for a safety${scoreLine(ev)}.` });
     }
 
@@ -289,6 +308,24 @@ export function highlightsForGame(league, gameId, result) {
         if (lateLead) add({ kind: 'lowlight', type: 'Late collapse', teamId: loser, impact: 40, tags: ['blown lead'], source: 'play-by-play', text: `${teamOf(loser).displayName} led in the fourth quarter and lost.` });
       }
     }
+  }
+
+  // ---------------- real plays rebuilt from the box score (no play-by-play)
+  const fromBox = exportPlays(league, gameId);
+  const skipInt = new Set();
+  if (!hasPbp) {
+    const IMPACT = {
+      'Touchdown pass': (y) => 36 + y * 0.5, 'Long completion': (y) => 20 + Math.max(0, y - 20) * 0.5, 'Touchdown catch': (y) => 32 + y * 0.45,
+      'Touchdown run': (y) => 32 + y * 0.5, 'Long run': (y) => 20 + Math.max(0, y - 25) * 0.6, 'Pick-six': () => 56, 'Fumble return touchdown': () => 52,
+      'Defensive touchdown': () => 50, 'Interception return': (y) => 30 + (y - 30) * 0.3, Safety: () => 45, 'Kick return touchdown': () => 58, 'Punt return touchdown': () => 56, 'Long kickoff return': (y) => 22 + (y - 40) * 0.4, 'Long punt return': (y) => 22 + (y - 40) * 0.4, 'Field goal': (y) => 10 + Math.max(0, y - 40) * 2, 'Long field goal': (y) => 16 + Math.max(0, y - 45) * 2,
+    };
+    for (const pl of fromBox.plays) {
+      const impact = (IMPACT[pl.type] || (() => 20))(pl.yards || 0);
+      if (pl.type === 'Field goal' && (pl.yards || 0) < 40) continue; // a routine kick is not a highlight
+      add({ kind: 'highlight', type: pl.type, teamId: pl.teamId, playerIds: pl.playerIds, impact, tags: pl.touchdown ? ['touchdown'] : [], source: 'box score (real play)', text: pl.text });
+      if (['Pick-six', 'Interception return'].includes(pl.type)) skipInt.add(pl.playerIds[0]);
+    }
+    for (const k of fromBox.covered) coveredLongest.add(k);
   }
 
   // ---------------- box-score moments (every source)
@@ -332,14 +369,13 @@ export function highlightsForGame(league, gameId, result) {
       gameScore += (d.DLINESACKS || 0) * 3 + (d.DSECINTS || 0) * 4 + (d.DLINEFORCEDFUMBLES || 0) * 3 + (d.DEFTACKLES || 0) * 0.5 + (d.DEFPASSDEFLECTIONS || 0);
       const sacks = (d.DLINESACKS || 0) + (d.DLINEHALFSACK || 0) * 0.5;
       if (sacks >= 2) add({ kind: 'highlight', type: 'Multi-sack game', teamId, playerIds: [pid], impact: 28 + (sacks - 2) * 9, source: 'box score', text: `${name} records ${sacks} sacks.` });
-      if (!hasPbp && d.DSECINTS >= 1) add({ kind: 'highlight', type: 'Interception', teamId, playerIds: [pid], impact: 34 + (d.DSECINTS - 1) * 14 + (d.DSECINTTDS || 0) * 25, source: 'box score', text: `${name} ${d.DSECINTS >= 2 ? `picks off ${d.DSECINTS} passes` : 'comes up with an interception'}${d.DSECINTTDS ? ' and scores' : ''}.` });
+      if (!hasPbp && d.DSECINTS >= 1 && !skipInt.has(pid)) add({ kind: 'highlight', type: 'Interception', teamId, playerIds: [pid], impact: 34 + (d.DSECINTS - 1) * 14 + (d.DSECINTTDS || 0) * 25, source: 'box score', text: `${name} ${d.DSECINTS >= 2 ? `picks off ${d.DSECINTS} passes` : 'comes up with an interception'}${d.DSECINTTDS ? ' and scores' : ''}.` });
       if (d.DEFTACKLES >= 10) add({ kind: 'highlight', type: 'Tackling machine', teamId, playerIds: [pid], impact: 18 + (d.DEFTACKLES - 10) * 1.5, source: 'box score', text: `${name} is everywhere with ${d.DEFTACKLES} tackles.` });
       if (d.DLINEFORCEDFUMBLES >= 1) add({ kind: 'highlight', type: 'Forced fumble', teamId, playerIds: [pid], impact: 26 + (d.DLINEFORCEDFUMBLES - 1) * 10, source: 'box score', text: `${name} forces ${d.DLINEFORCEDFUMBLES === 1 ? 'a fumble' : `${d.DLINEFORCEDFUMBLES} fumbles`}.` });
     }
     if (k.KICKFGATTEMPTS) {
       const missed = k.KICKFGATTEMPTS - (k.KICKFGMADE || 0);
       if (missed >= 1) add({ kind: 'lowlight', type: 'Missed field goal', teamId, playerIds: [pid], impact: 22 + missed * 10 + (teamId === loser && margin <= 3 ? 25 : 0), tags: teamId === loser && margin <= 3 ? ['cost the game'] : [], source: 'box score', text: `${name} misses ${missed === 1 ? 'a field goal' : `${missed} field goals`}${teamId === loser && margin <= 3 ? ' in a game decided by a field goal or less' : ''}.` });
-      if (!hasPbp && (k.KICKFGLONGEST || 0) >= 50) add({ kind: 'highlight', type: 'Long field goal', teamId, playerIds: [pid], impact: 20 + (k.KICKFGLONGEST - 50) * 2, source: 'box score', text: `${name} hits from ${k.KICKFGLONGEST} yards.` });
       if (k.KICKEPATTEMPTS && k.KICKEPMADE < k.KICKEPATTEMPTS && !hasPbp) add({ kind: 'lowlight', type: 'Missed extra point', teamId, playerIds: [pid], impact: 20, source: 'box score', text: `${name} misses ${k.KICKEPATTEMPTS - k.KICKEPMADE === 1 ? 'an extra point' : 'extra points'}.` });
     }
     if (gameScore > 0) pogCandidates.push({ pid, teamId, gameScore, name, pos, o, d });
@@ -426,6 +462,7 @@ export function highlightsForGame(league, gameId, result) {
     highlights,
     lowlights,
     timeline,
+    breakdown: fromBox.scoring,
     scoring: events.map((ev) => ({ teamId: ev.teamId, kind: ev.kind, quarter: ev.quarter, clock: clockText(ev.quarter, ev.clockSec), conversion: ev.conversion, score: ev.scoreAfter, tookLead: ev.tookLead, gameWinner: Boolean(ev.gameWinner) })),
   };
 }

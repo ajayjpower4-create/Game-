@@ -14,7 +14,9 @@ A Windows desktop mod for **Madden NFL 26 franchise mode**. Connect your franchi
 
 - **Sign in with EA** – sign in once with your EA account; the tool lists the franchises on it and downloads whichever one you pick, no phone needed.
 - **Injury tool** – pick any game on the schedule, pick a player, pick the injury (ACL tear, high ankle sprain, broken collarbone… every injury the game has) or let it roll one. The tool picks the random play it happens on and writes the injury into your franchise file.
-- **Weekly recap** – one page for the whole league each week: every score with both teams' records, storylines (blowouts, nail-biters, upsets, comebacks, streaks, unbeaten and winless teams), players of the week, stat leaders, the plays and lowlights of the week, every injury, Madden's own league news stories, social posts and transactions (signings, releases, trades), advanced-stat notes, the standings by division, and next week's games.
+- **Weekly recap** – one page for the whole league each week: every score with both teams' records, the game of the week coming up, storylines (blowouts, nail-biters, upsets, comebacks, streaks, unbeaten and winless teams), players of the week, big performances, stat leaders, fantasy points, teams of the week, the plays and lowlights of the week, every injury, Madden's own league news stories, social posts and transactions (signings, releases, trades), power rankings with movement, the playoff picture, the standings by division, season leaders to date, advanced-stat notes and next week's games.
+- **Every injury in every game** – the Injuries tab lists everyone hurt in a game, including the small ones (out a couple of plays or quarters) that heal before the next week, how bad each one is, whether he will miss next week, whether he is still out, and where the tool found it. It also lists anyone else Madden dated to that week who has no stats in the game.
+- **Box score** – every player's passing, rushing, receiving, defense, kicking, punting and return line, the team stat comparison, the score by quarter, and how each team got its points, checked against the final score.
 - **Contracts & salary cap** – every contract in the league: cap hit, salary, prorated bonus, contract year, total value, per-year average, money still owed and the dead money a release would leave, each player's year-by-year deal, and each team's cap room, cap used, dead money, rollover, room next year, money already committed to future seasons and cap spent by position. Plus the biggest contracts, the best players on expiring deals, and the free-agent pool.
 - **Copy as plain text** – every table has a **Copy** button, pages like the recap and highlights have **Copy as text**, and **Copy page** in the top bar copies whatever you are looking at. What lands on the clipboard is plain text with the columns lined up, no colours or formatting, ready to paste into Discord, a text message or a note. Selecting text and pressing Ctrl+C (or right-click → Copy) gives plain text too.
 - **Highlights** – the biggest plays and the worst moments of every game, written out: "Daniel Jones finds Josh Downs for a 28-yard touchdown to win it", pick-sixes, sacks, comebacks, blown leads, drops, missed field goals, blown blocks. Click a game for its highlights, lowlights, key plays in order, scoring and player of the game, or see the plays of the week across the league.
@@ -87,6 +89,14 @@ The model then calibrates itself to your league. It solves for the setting that 
 
 The matchup preview runs the same model forward, using only what was known before kickoff: the ratings, each player's form, and how he did in this league's earlier games compared with what the model expected of him.
 
+### Injuries
+
+Madden keeps injuries in two places in a franchise file: each game's post-game injury list, which in practice holds only some of the game's injuries, and the league injury report, which dates every injury to a week but drops a player the moment he heals. A Companion App or EA export has neither, only who is hurt when you export. So the tool keeps an injury ledger in its data folder: every time a league loads it writes down every injury it can see, and remembers it after the player heals. A game's injury list is then everything from all of those, each line saying where it came from. For an export, an injury that first shows up in the export after a game is listed with that game (the first export of a league can only show who was already hurt, so export after every game). Injury types and severities sent as Madden's enum numbers are decoded with the game's own tables.
+
+### Highlights from an export
+
+A Companion App or EA export has no play-by-play, but it records each player's longest play, which is enough to rebuild several real plays exactly: a quarterback's longest completion is matched to the one teammate whose longest catch has the same yards (only when no other passer could have thrown it), a catch or run is called a touchdown only when the numbers force it (every catch he made scored, or his only carry did), a defensive touchdown with an interception and no fumble recovery is a pick-six, and a kicker's lone or longest field goal is exact. These show as REAL PLAY. Checked against the real play-by-play in a franchise file, every touchdown this method claims was right.
+
 ### Weekly recap
 
 Scores, records, standings, stat leaders, injuries, news stories, social posts and transactions all come straight from what Madden saved: the scoreboard, the recorded box scores, each game's own injury list, Madden's injury report (with the week each injury happened), and the league news and transaction log in the franchise file. Records and standings are counted from the game results; divisions are the NFL's. The recap only says a game went to overtime when the play-by-play shows a fifth quarter, and only calls a result an upset when the loser's Madden team rating was at least 4 points higher. Players of the week are picked by the tool from the recorded box scores, and the advanced-stat notes come from the tool's reconstructed stats; both say so on the page. A Companion App export has no news feed or dated injuries, so its recap shows the current injury report instead.
@@ -102,6 +112,10 @@ A PC franchise file keeps a play-by-play of every game (the scoring plays, sacks
 ### Game Tracker
 
 The **Game Tracker** is how you make the reconstructed categories real. While you play (or from a replay), log the pressures, sacks and the blocker who got beat, pancakes, targets and drops, missed tackles, penalties with their yards, and real snap counts. Whatever you log for a team in a game replaces the reconstruction for that category.
+
+## Settings
+
+Settings has a look-and-feel section: dark, light or high-contrast theme, accent color, text size, compact tables, showing or hiding the R / ~ / T source letters, and sticky table headers. You can pick the page the app opens on, the season part it shows first, and your team in each league (highlighted in every table, and optionally the default filter). Copy can put plain lined-up text, a Discord code block, or tab-separated columns for Excel and Google Sheets on the clipboard, and money can show as $36.33M or $36,330,000. Everything saves to the data folder and applies immediately.
 
 ## Running from source
 
@@ -126,8 +140,9 @@ src/server/      local API + Companion App export receiver
 src/core/franchise/   franchise-file reader, injury catalog, injury writer
 src/core/companion/   Companion App export normaliser
 src/core/ea/          EA account sign-in, game-server client and league download
-src/core/stats/       blocking, matchup preview, highlights, weekly recap, snaps, receiving, tackling, penalties, aggregation
+src/core/stats/       blocking, matchup preview, highlights, real plays from exports, box score, weekly recap, power rankings and playoff picture, snaps, receiving, tackling, penalties, aggregation
 src/core/contracts.js contracts and salary cap
+src/core/injuries/    per-game injury report and the injury ledger
 src/core/tracker/     Game Tracker events and overrides
 ui/              the app's pages
 schemas/         extra Madden 26 franchise schemas

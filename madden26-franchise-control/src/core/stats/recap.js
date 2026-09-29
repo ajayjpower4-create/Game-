@@ -9,6 +9,8 @@
 // rating was clearly higher.
 
 import { getInjuryType } from '../franchise/injury-catalog.js';
+import { powerRankings, playoffPicture, bigPerformances, fantasyLeaders, seasonLeaders, teamAwards, gameOfTheWeek, results } from './league-table.js';
+import { gameInjuryReport, injuryTypeName, injuryLabel, severityName, outlook, SEVERITY } from '../injuries/game-injuries.js';
 
 const STAGE_RANK = { pre: 0, reg: 1, post: 2 };
 
@@ -104,7 +106,7 @@ function statLine(o, d) {
   return bits.join(' · ');
 }
 
-export function weeklyRecap(league, engine, tracker, { stage, week, injuryLog = [] }) {
+export function weeklyRecap(league, engine, tracker, { stage, week, injuryLog = [], ledger = null }) {
   week = Number(week);
   const weekGames = Object.values(league.games).filter((g) => g.stage === stage && g.week === week).sort((a, b) => String(a.gameId).localeCompare(String(b.gameId)));
   const played = weekGames.filter((g) => g.status === 'played');
@@ -221,40 +223,33 @@ export function weeklyRecap(league, engine, tracker, { stage, week, injuryLog = 
     rookie: best((x) => Math.max(offScore(x), defScore(x)), (x) => x.rookie && !taken.has(x.playerId)),
   };
 
-  // ---------- injuries
+  // ---------- injuries: every game's full injury report, then anyone else
+  // on Madden's injury report dated to this week (hurt away from a game).
   const injuries = [];
   const seen = new Set();
-  const addInjury = (row) => {
-    const k = `${row.playerId}|${row.type}`;
-    if (seen.has(k)) return;
-    seen.add(k);
-    injuries.push(row);
-  };
-  const weekGameIds = new Set(weekGames.map((g) => g.gameId));
-  const gameOf = (gid) => league.games[gid];
   for (const g of played) {
-    for (const i of (league.gameInjuries && league.gameInjuries[g.gameId]) || []) {
-      const p = league.players[i.playerId];
-      if (!p) continue;
-      const now = p.injury && p.injury.status === 'Injured' && p.injury.type === i.type ? p.injury : null;
-      addInjury({ playerId: p.playerId, name: p.fullName, position: p.position, teamId: p.teamId || (i.gameTeam === 0 ? g.homeTeamId : g.awayTeamId), type: i.type, injury: prettyInjury(i.type), severity: i.severity, weeksMin: i.weeksMin, weeksMax: i.weeksMax, gameId: g.gameId, source: 'in-game', stillOut: Boolean(now), onIR: Boolean(now && now.onIR), weeksLeft: now ? now.weeksTotal : 0 });
+    const rep = gameInjuryReport(league, g.gameId, { ledger, injuryLog });
+    for (const r of rep ? rep.injuries : []) {
+      const k = `${r.playerId}|${r.type}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      injuries.push({ ...r, gameId: g.gameId });
     }
   }
-  // The rest of Madden's injury report that is dated to this week.
   for (const p of Object.values(league.players)) {
     const inj = p.injury;
     if (!inj || inj.status !== 'Injured' || inj.week == null || !inj.stage) continue;
     if (!matchesWeek(inj, stage, week) || (inj.year != null && inj.year !== seasonYear)) continue;
-    addInjury({ playerId: p.playerId, name: p.fullName, position: p.position, teamId: p.teamId, type: inj.type, injury: prettyInjury(inj.type), severity: inj.severity, weeksMin: inj.weeksMin, weeksMax: inj.weeksMax, gameId: null, source: 'injury report', stillOut: true, onIR: Boolean(inj.onIR), weeksLeft: inj.weeksTotal });
+    const k = `${p.playerId}|${injuryTypeName(inj.type)}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const row = { playerId: p.playerId, name: p.fullName, position: p.position, teamId: p.teamId, type: injuryTypeName(inj.type), injury: injuryLabel(inj.type), severity: severityName(inj.severity), weeksMin: inj.weeksMin, weeksMax: inj.weeksMax, weeksLeft: inj.weeksTotal, stillOut: true, onIR: Boolean(inj.onIR), source: 'report', gameId: null, played: null, note: p.teamId ? 'His team did not play this week' : 'Not on a team' };
+    row.severityLabel = row.severity && SEVERITY[row.severity] ? SEVERITY[row.severity].label : row.severity || '';
+    row.outlook = outlook(row);
+    injuries.push(row);
   }
-  // Injuries written with this tool into this week's games
-  for (const e of injuryLog || []) {
-    if (!weekGameIds.has(e.gameId) || e.status !== 'applied') continue;
-    const pid = e.plan && e.plan.player ? e.plan.player.playerId : null;
-    const p = league.players[pid];
-    addInjury({ playerId: pid, name: p ? p.fullName : e.plan.player.name, position: p ? p.position : e.plan.player.position, teamId: p ? p.teamId : null, type: e.plan.injury.key || e.plan.injury.name, injury: e.plan.injury.name, severity: e.plan.injury.severity, weeksMin: e.plan.injury.weeks, weeksMax: e.plan.injury.weeks, gameId: e.gameId, source: 'injury tool', stillOut: Boolean(p && p.injury && p.injury.status === 'Injured'), onIR: Boolean(p && p.injury && p.injury.onIR), weeksLeft: p && p.injury ? p.injury.weeksTotal : null });
-  }
-  injuries.sort((a, b) => (a.source === 'in-game' ? 0 : a.source === 'injury tool' ? 1 : 2) - (b.source === 'in-game' ? 0 : b.source === 'injury tool' ? 1 : 2) || (b.weeksMax || 0) - (a.weeksMax || 0) || String(a.teamId).localeCompare(String(b.teamId)));
+  const SRC = { 'game-list': 0, tool: 1, report: 2, ledger: 3, export: 4 };
+  injuries.sort((a, b) => (SRC[a.source] ?? 5) - (SRC[b.source] ?? 5) || (b.weeksMax || 0) - (a.weeksMax || 0) || String(a.teamId).localeCompare(String(b.teamId)));
   // Madden dates the injuries players carried into a new franchise to its
   // very first week, so that week's report includes them.
   const firstWeek = recapWeeks(league)[0];
@@ -322,6 +317,15 @@ export function weeklyRecap(league, engine, tracker, { stage, week, injuryLog = 
   const nextWeekGames = nextGames.length ? nextGames.filter((g) => g.stage === nextGames[0].stage && g.week === nextGames[0].week) : [];
   const upcoming = nextWeekGames.map((g) => ({ gameId: g.gameId, label: g.label, away: team(g.awayTeamId).abbr, home: team(g.homeTeamId).abbr, awayRecord: rec && rec[g.awayTeamId] && g.stage === stage ? rec[g.awayTeamId].text : null, homeRecord: rec && rec[g.homeTeamId] && g.stage === stage ? rec[g.homeTeamId].text : null }));
 
+  // ---------- league tables (new systems)
+  const tableStage = stage === 'post' ? 'reg' : stage;
+  const lastRegWeek = Math.max(-1, ...Object.values(league.games).filter((g) => g.status === 'played' && g.stage === 'reg' && (g.seasonYear ?? seasonYear) === seasonYear).map((g) => g.week));
+  const tableWeek = stage === 'post' ? lastRegWeek : week;
+  const power = tableWeek >= 0 ? powerRankings(league, tableStage, seasonYear, tableWeek) : [];
+  const playoffs = stage === 'reg' ? playoffPicture(league, seasonYear, week) : [];
+  const playedIds = played.map((g) => g.gameId);
+  const gotw = gameOfTheWeek(league, nextWeekGames, rec ? results(league, stage, seasonYear, week) : null, power);
+
   const totalPoints = decided.reduce((s, x) => s + x.homeScore + x.awayScore, 0);
   return {
     stage,
@@ -338,6 +342,7 @@ export function weeklyRecap(league, engine, tracker, { stage, week, injuryLog = 
       homeWins: decided.filter((s) => s.winner && s.winner === s.homeTeamId).length,
       awayWins: decided.filter((s) => s.winner && s.winner === s.awayTeamId).length,
       injuries: injuries.length,
+      minorInjuries: injuries.filter((i) => i.outlook && i.outlook.key === 'minor').length,
       transactions: transactions.length,
     },
     scores,
@@ -355,6 +360,14 @@ export function weeklyRecap(league, engine, tracker, { stage, week, injuryLog = 
     advanced,
     standings,
     upcoming,
+    gameOfTheWeek: gotw,
+    powerRankings: power,
+    powerRankingsNote: stage === 'post' ? 'Through the end of the regular season.' : null,
+    playoffPicture: playoffs,
+    bigPerformances: bigPerformances(league, playedIds).slice(0, 20),
+    fantasy: fantasyLeaders(league, playedIds, 10),
+    seasonLeaders: seasonLeaders(league, stage, seasonYear, week),
+    teamAwards: teamAwards(league, played),
   };
 }
 

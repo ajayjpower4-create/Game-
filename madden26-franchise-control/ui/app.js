@@ -27,6 +27,28 @@
     serverInfo: null,
   };
 
+  // ---------- UI settings (saved in the data folder, applied live)
+  const UI_DEFAULTS = { theme: 'dark', accent: 'blue', textSize: 'normal', density: 'comfortable', sourceTags: true, startPage: 'connect', defaultStage: 'auto', copyFormat: 'aligned', moneyFormat: 'short', myTeams: {}, myTeamFilter: false, stickyHeaders: true, reduceMotion: false };
+  const ACCENTS = { blue: '#2f7de3', red: '#e3392f', green: '#23a55a', purple: '#8e5bd8', orange: '#e0822a', teal: '#1ba3a3', gold: '#c9a227' };
+  const TEXT_ZOOM = { small: 0.9, normal: 1, large: 1.12, xlarge: 1.25 };
+  let ui = { ...UI_DEFAULTS };
+  function applyUi() {
+    const root = document.documentElement;
+    root.dataset.theme = ui.theme;
+    root.dataset.density = ui.density;
+    root.classList.toggle('hide-tags', !ui.sourceTags);
+    root.classList.toggle('no-sticky', !ui.stickyHeaders);
+    root.classList.toggle('reduce-motion', Boolean(ui.reduceMotion));
+    root.style.setProperty('--accent2', ACCENTS[ui.accent] || ACCENTS.blue);
+    document.body.style.zoom = String(TEXT_ZOOM[ui.textSize] || 1);
+  }
+  const myTeam = () => (state.leagueKey && ui.myTeams && ui.myTeams[state.leagueKey]) || null;
+  async function saveUi(patch) {
+    ui = { ...ui, ...patch };
+    applyUi();
+    try { await api('/settings', { method: 'POST', body: { ui } }); state.status.settings.ui = ui; } catch (e) { banner(esc(e.message), 'error'); }
+  }
+
   // ---------- api
   async function api(path, opts = {}) {
     const res = await fetch('/api' + path, { headers: { 'content-type': 'application/json' }, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
@@ -56,6 +78,7 @@
     if (v == null || !Number.isFinite(v)) return '—';
     const a = Math.abs(v);
     const sign = v < 0 ? '-' : '';
+    if (ui.moneyFormat === 'full') return `${sign}$${Math.round(a).toLocaleString('en-US')}`;
     if (a >= 1e6) return `${sign}$${(a / 1e6).toFixed(2)}M`;
     if (a >= 1e3) return `${sign}$${Math.round(a / 1e3)}K`;
     return `${sign}$${a}`;
@@ -76,6 +99,7 @@
     const widths = Array.from({ length: n }, (_, i) => Math.max(0, ...rows.map((r) => (r[i] || '').length)));
     const isNum = (v) => !v || v === '—' || /^[-+]?\$?[\d.,]+[%sMK]?$|^[-+]?[\d.,]+ ?(?:of \d+)?$/.test(v);
     const numeric = Array.from({ length: n }, (_, i) => i > 0 && rows.slice(1).every((r) => isNum(r[i])));
+    if (ui.copyFormat === 'tabs') return rows.map((r) => r.join('\t')).join('\n');
     return rows.map((r) => r.map((v, i) => (numeric[i] ? (v || '').padStart(widths[i]) : (v || '').padEnd(widths[i]))).join('  ').replace(/\s+$/, '')).join('\n');
   }
   function nodeToText(root) {
@@ -122,6 +146,8 @@
     return text.replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   }
   async function copyText(text) {
+    // Discord and most chat apps line columns up only inside a code block.
+    if (ui.copyFormat === 'discord' && text && !text.startsWith('```')) text = '```\n' + text.replace(/```/g, "'''") + '\n```';
     try { if (window.m26 && window.m26.copyText) { await window.m26.copyText(text); return true; } } catch { /* fall through */ }
     try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
     const ta = document.createElement('textarea');
@@ -169,7 +195,8 @@
     const sort = state.sort[id] || { key: defaultSort || cols[1].key, dir: 1 };
     const sorted = sortRows(rows, sort.key, sort.dir);
     const head = cols.map((c) => `<th class="${c.left ? 'left' : ''} ${sort.key === c.key ? 'sorted' : ''}" data-sort="${c.key}" data-table="${id}">${esc(c.label)}${sort.key === c.key ? (sort.dir === 1 ? ' ▼' : ' ▲') : ''}</th>`).join('');
-    const body = sorted.map((r) => `<tr>${cols.map((c) => `<td class="${c.left ? 'left' : 'num'}">${c.render ? c.render(r) : fmt(r[c.key], c.d || 0)}${c.src && r.source ? tag(r.source[c.src]) : c.src && r.sources ? tag(r.sources[c.src]) : ''}</td>`).join('')}</tr>`).join('');
+    const mine = myTeam();
+    const body = sorted.map((r) => `<tr class="${mine && (r.teamId === mine) ? 'mine' : ''}">${cols.map((c) => `<td class="${c.left ? 'left' : 'num'}">${c.render ? c.render(r) : fmt(r[c.key], c.d || 0)}${c.src && r.source ? tag(r.source[c.src]) : c.src && r.sources ? tag(r.sources[c.src]) : ''}</td>`).join('')}</tr>`).join('');
     return `<div class="table-tools"><button class="small" data-copy-table="${id}" title="Copy this table as plain text, ready to paste anywhere">Copy</button><button class="small" data-csv="${id}" title="Save this table as a CSV file for Excel or Google Sheets">Export CSV</button></div><div class="${maxHeight ? 'table-wrap' : ''}"><table class="data" id="${id}"><thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="${cols.length}" class="left muted">Nothing to show yet.</td></tr>`}</tbody></table></div>`;
   }
   document.addEventListener('click', (e) => {
@@ -342,6 +369,8 @@
   // ---------- data loading
   async function loadStatus() {
     state.status = await api('/status');
+    ui = { ...UI_DEFAULTS, ...((state.status.settings && state.status.settings.ui) || {}) };
+    applyUi();
     const sel = $('#league-select');
     sel.innerHTML = state.status.leagues.map((l) => `<option value="${esc(l.leagueKey)}">${esc(l.name)} (${l.source === 'franchise' ? 'franchise file' : l.via === 'ea' ? 'EA account' : 'Companion App export'})</option>`).join('') || '<option value="">No league yet</option>';
     if (!state.leagueKey || !state.status.leagues.some((l) => l.leagueKey === state.leagueKey)) state.leagueKey = state.status.leagues[0] ? state.status.leagues[0].leagueKey : null;
@@ -369,6 +398,8 @@
     if (!ids.has(state.gameTeam)) state.gameTeam = null;
     if (state.gameId && !state.schedule.some((g) => g.gameId === state.gameId)) { state.gameId = null; if (state.section === 'game') state.section = 'schedule'; }
     state.recapKey = null;
+    if (ui.myTeamFilter && myTeam() && ids.has(myTeam()) && !state.teamId) state.teamId = myTeam();
+    if (ui.defaultStage !== 'auto' && state.schedule.some((g) => g.stage === ui.defaultStage)) state.stage = ui.defaultStage;
     const ts = $('#team-select');
     ts.innerHTML = '<option value="">All teams</option>' + state.league.teams.map((t) => `<option value="${esc(t.teamId)}">${esc(t.abbr)} — ${esc(t.displayName)}</option>`).join('');
     ts.value = state.teamId;
@@ -463,19 +494,21 @@
     if (!g) return '<div class="empty">Pick a game from the schedule.</div>';
     const played = g.status === 'played';
     const tabs = played
-      ? [['highlights', 'Highlights'], ['preview', 'Matchup preview'], ['blocking', 'Blocking'], ['passrush', 'Pass Rush'], ['snaps', 'Snap Counts'], ['receiving', 'Targets & Drops'], ['tackling', 'Missed Tackles'], ['penalties', 'Penalties'], ['injuries', 'Injuries']]
+      ? [['highlights', 'Highlights'], ['box', 'Box score'], ['preview', 'Matchup preview'], ['blocking', 'Blocking'], ['passrush', 'Pass Rush'], ['snaps', 'Snap Counts'], ['receiving', 'Targets & Drops'], ['tackling', 'Missed Tackles'], ['penalties', 'Penalties'], ['injuries', 'Injuries']]
       : [['preview', 'Matchup preview']];
     if (!tabs.some(([k]) => k === state.gameTab)) state.gameTab = tabs[0][0];
     if (![g.homeTeamId, g.awayTeamId].includes(state.gameTeam)) state.gameTeam = g.homeTeamId;
     let body = '';
     let result = null;
     let t = null;
-    if (!['highlights', 'preview'].includes(state.gameTab)) {
+    if (!['highlights', 'preview', 'box'].includes(state.gameTab)) {
       result = (await api(`/leagues/${state.leagueKey}/games/${g.gameId}/stats`)).result;
       t = result.teams[state.gameTeam];
     }
     if (state.gameTab === 'highlights') {
       body = await gameHighlights(g);
+    } else if (state.gameTab === 'box') {
+      body = await gameBoxScore(g);
     } else if (state.gameTab === 'preview') {
       body = await gamePreview(g);
     } else if (state.gameTab === 'blocking') {
@@ -502,10 +535,19 @@
       const s = t.penalties.summary;
       body = `<div class="stat-row card"><div class="stat"><div class="v">${s.penalties}</div><div class="l">penalties</div></div><div class="stat"><div class="v">${s.yards}</div><div class="l">yards</div></div><div class="stat"><div class="v">${s.recordedPenalties} / ${s.recordedYards}</div><div class="l">recorded team total</div></div></div>${legend()}${table('g-pen', t.penalties.players.map((p) => ({ ...p, typeList: p.types.map((x) => `${x.type} (${x.yards})`).join(', ') })), PEN_COLS, { defaultSort: 'penalties' })}`;
     } else if (state.gameTab === 'injuries') {
-      const inj = result.injuries || [];
-      body = inj.length ? `<ul class="list">${inj.map((i) => `<li><span><b>${esc(i.player ? i.player.fullName : i.playerId)}</b> <span class="muted">${esc(i.player ? i.player.position : '')} · ${esc(i.gameTeam === 0 ? g.home : g.away)}</span> — ${esc(i.type)} (${esc(i.severity)}, ${i.weeksMin}-${i.weeksMax} weeks)</span><span class="tag recorded">game</span></li>`).join('')}</ul>` : '<div class="empty">Madden did not record any injuries in this game. Use "Injure a player" to add one.</div>';
+      const rep = result.injuryReport || { injuries: [], counts: { total: 0, minor: 0, out: 0, byTeam: {} }, sources: {} };
+      const c = rep.counts;
+      const hurt = rep.injuries.filter((i) => i.where !== 'week');
+      const week = rep.injuries.filter((i) => i.where === 'week');
+      body = `<div class="stat-row card"><div class="stat"><div class="v">${c.total}</div><div class="l">hurt in this game</div></div><div class="stat"><div class="v">${c.minor}</div><div class="l">minor (part of a game)</div></div><div class="stat"><div class="v">${c.out}</div><div class="l">miss next week or more</div></div><div class="stat"><div class="v">${c.byTeam[g.awayTeamId] || 0} / ${c.byTeam[g.homeTeamId] || 0}</div><div class="l">${esc(g.away)} / ${esc(g.home)}</div></div>${c.alsoThisWeek ? `<div class="stat"><div class="v">${c.alsoThisWeek}</div><div class="l">also hurt this week</div></div>` : ''}</div>
+        <h3>Hurt in this game (${hurt.length})</h3>
+        ${hurt.length ? injuryTable('g-inj', hurt) : '<div class="muted">Nobody on either team got hurt in this game, as far as the save and the tool have seen.</div>'}
+        ${week.length ? `<h3>Also on Madden's injury report this week (${week.length})</h3><p class="small-note">Dated to this game's week, but they have no stats in this game: hurt in practice, before kickoff, or they did not play.</p>${injuryTable('g-inj-week', week)}` : ''}
+        <p class="small-note">${rep.sources.exportOnly
+          ? 'A Companion App / EA export only lists who is hurt when you export. The tool remembers every injury it sees, and an injury that first shows up in the export right after this game is listed here. Export after every game so none are missed; the first export can only show who was already hurt.'
+          : "Listed from Madden's post-game injury list, Madden's injury report (every injury dated to this game's week, including the small ones that heal before next week), injuries the tool remembered from earlier loads after they healed, and anything added with the injury tool. \"In the game\" shows whether he has stats in this game."}</p>`;
     }
-    const teamPick = state.gameTab === 'highlights' ? '' : `<div class="field"><span>Team</span><select id="game-team"><option value="${esc(g.homeTeamId)}" ${state.gameTeam === g.homeTeamId ? 'selected' : ''}>${esc(g.homeName)}</option><option value="${esc(g.awayTeamId)}" ${state.gameTeam === g.awayTeamId ? 'selected' : ''}>${esc(g.awayName)}</option></select></div>`;
+    const teamPick = ['highlights', 'box'].includes(state.gameTab) ? '' : `<div class="field"><span>Team</span><select id="game-team"><option value="${esc(g.homeTeamId)}" ${state.gameTeam === g.homeTeamId ? 'selected' : ''}>${esc(g.homeName)}</option><option value="${esc(g.awayTeamId)}" ${state.gameTeam === g.awayTeamId ? 'selected' : ''}>${esc(g.awayName)}</option></select></div>`;
     return `
       <button id="back-sched">← ${({ highlights: 'Highlights', recap: 'Weekly Recap', contracts: 'Contracts' })[state.backTo] || 'Schedule'}</button>
       <h1>${esc(g.label)}: ${played ? `${esc(g.away)} ${g.awayScore} @ ${esc(g.home)} ${g.homeScore}` : `${esc(g.away)} @ ${esc(g.home)} <span class="pill">Not played yet</span>`}</h1>
@@ -692,10 +734,11 @@
     'play-by-play': 'From the play-by-play Madden saved for this game',
     'play-by-play + reconstructed': 'The play is from the play-by-play; who got beaten is the blocking model',
     'box score': 'From the box score Madden recorded',
+    'box score (real play)': 'A real play, rebuilt exactly from the longest-play stats in the box score. The export has no play-by-play, so there is no clock time.',
     reconstructed: "From this tool's reconstructed stats",
     'injury report': "From Madden's injury report",
   };
-  const srcShort = (src) => ({ 'play-by-play': 'PLAY', 'play-by-play + reconstructed': 'PLAY ~', 'box score': 'BOX', reconstructed: '~', 'injury report': 'INJ' }[src] || '');
+  const srcShort = (src) => ({ 'play-by-play': 'PLAY', 'play-by-play + reconstructed': 'PLAY ~', 'box score': 'BOX', 'box score (real play)': 'REAL PLAY', reconstructed: '~', 'injury report': 'INJ' }[src] || '');
 
   function hlItem(m, { showGame = false } = {}) {
     const g = showGame ? state.schedule.find((x) => x.gameId === m.gameId) : null;
@@ -710,7 +753,7 @@
     </div>`;
   }
   const hlList = (items, empty, opts) => (items.length ? items.map((m) => hlItem(m, opts)).join('') : `<div class="muted">${empty}</div>`);
-  const pbpNote = `<p class="small-note">PLAY = straight from the play-by-play in the franchise file (with the game clock). BOX = from the box score. ~ = from this tool's reconstructed stats. Companion App exports carry box scores only, so their games get box-score moments; open the PC franchise file for every touchdown, sack and pick with its time.</p>`;
+  const pbpNote = `<p class="small-note">PLAY = straight from the play-by-play in the franchise file (with the game clock). REAL PLAY = one real play rebuilt exactly from an export's box score. BOX = from the box score. ~ = from this tool's reconstructed stats. Companion App exports carry box scores only, so their games get box-score moments; open the PC franchise file for every touchdown, sack and pick with its time.</p>`;
 
   sections.highlights = async () => {
     if (!state.league) return '<div class="empty">Connect a franchise first.</div>';
@@ -750,6 +793,56 @@
       ${pbpNote}`;
   };
 
+  function lineScoreHtml(g, ls) {
+    if (!ls) return '';
+    const tot = (r) => r.reduce((a, b) => a + b, 0);
+    return `<table class="data compact linescore" id="ls-${esc(g.gameId)}"><thead><tr><th class="left">Team</th>${ls.labels.map((l) => `<th>${esc(l)}</th>`).join('')}<th>Final</th></tr></thead><tbody>
+      <tr><td class="left"><b>${esc(g.away)}</b></td>${ls.away.map((v) => `<td>${v}</td>`).join('')}<td><b>${tot(ls.away)}</b></td></tr>
+      <tr><td class="left"><b>${esc(g.home)}</b></td>${ls.home.map((v) => `<td>${v}</td>`).join('')}<td><b>${tot(ls.home)}</b></td></tr></tbody></table>`;
+  }
+  function breakdownHtml(g, bd) {
+    if (!bd) return '';
+    const cell = (b) => {
+      const parts = [];
+      if (b.passTD) parts.push(`${b.passTD} passing TD`);
+      if (b.rushTD) parts.push(`${b.rushTD} rushing TD`);
+      if (b.retTD) parts.push(`${b.retTD} return TD`);
+      if (b.defTD) parts.push(`${b.defTD} defensive TD`);
+      if (b.fgAtt) parts.push(`${b.fg}/${b.fgAtt} FG`);
+      if (b.xpAtt) parts.push(`${b.xp}/${b.xpAtt} XP`);
+      if (b.twoPt) parts.push(`${b.twoPt} two-point try`);
+      if (b.safeties) parts.push(`${b.safeties} safety`);
+      return parts.join(', ') || 'no points';
+    };
+    const row = (id, abbrv) => { const b = bd[id]; return `<tr><td class="left"><b>${esc(abbrv)}</b></td><td class="left">${esc(cell(b))}</td><td>${b.final}</td><td class="left">${b.complete ? '<span class="ol ol-minor">adds up</span>' : b.unexplained == null ? '<span class="muted">no kicking stats</span>' : `<span class="ol ol-out">${b.unexplained > 0 ? `${b.unexplained} pts not itemized` : 'check'}</span>`}</td></tr>`; };
+    return `<h3>How they scored</h3><table class="data compact" id="bd-${esc(g.gameId)}"><thead><tr><th class="left">Team</th><th class="left">Scoring</th><th>Points</th><th class="left">Check</th></tr></thead><tbody>${row(g.awayTeamId, g.away)}${row(g.homeTeamId, g.home)}</tbody></table>`;
+  }
+
+  async function gameBoxScore(g) {
+    const r = await api(`/leagues/${state.leagueKey}/games/${g.gameId}/boxscore`);
+    const b = r.box;
+    const P = (x) => playerCell({ ...x, teamId: null });
+    const sect = (title, id, rows, cols, sortKey) => (rows.length ? `<h4>${esc(title)}</h4>${table(id, rows, cols, { defaultSort: sortKey, maxHeight: false })}` : '');
+    const team = (tid, ab, name) => {
+      const t = b.teams[tid];
+      return `<div class="card box-team"><h3>${esc(name)}</h3>
+        ${sect('Passing', `bx-p-${tid}`, t.passing, [{ key: 'name', label: 'Player', left: true, render: P }, { key: 'att', label: 'C/ATT', render: (x) => `${x.comp}/${x.att}` }, { key: 'yards', label: 'YDS' }, { key: 'td', label: 'TD' }, { key: 'int', label: 'INT' }, { key: 'sacked', label: 'SK' }, { key: 'long', label: 'LNG' }, { key: 'ypa', label: 'Y/A', d: 1 }, { key: 'rating', label: 'RTG', d: 1 }], 'yards')}
+        ${sect('Rushing', `bx-r-${tid}`, t.rushing, [{ key: 'name', label: 'Player', left: true, render: P }, { key: 'car', label: 'CAR' }, { key: 'yards', label: 'YDS' }, { key: 'avg', label: 'AVG', d: 1 }, { key: 'td', label: 'TD' }, { key: 'long', label: 'LNG' }, { key: 'brokenTackles', label: 'BTK' }, { key: 'fumbles', label: 'FUM' }], 'yards')}
+        ${sect('Receiving', `bx-c-${tid}`, t.receiving, [{ key: 'name', label: 'Player', left: true, render: P }, { key: 'rec', label: 'REC' }, { key: 'yards', label: 'YDS' }, { key: 'avg', label: 'AVG', d: 1 }, { key: 'td', label: 'TD' }, { key: 'long', label: 'LNG' }, { key: 'yac', label: 'YAC' }, { key: 'drops', label: 'DROP' }], 'yards')}
+        ${sect('Defense', `bx-d-${tid}`, t.defense, [{ key: 'name', label: 'Player', left: true, render: P }, { key: 'tackles', label: 'TKL' }, { key: 'assists', label: 'AST' }, { key: 'tfl', label: 'TFL' }, { key: 'sacks', label: 'SK', d: 1 }, { key: 'int', label: 'INT' }, { key: 'pd', label: 'PD' }, { key: 'ff', label: 'FF' }, { key: 'fr', label: 'FR' }, { key: 'td', label: 'TD' }], 'tackles')}
+        ${sect('Kicking', `bx-k-${tid}`, t.kicking, [{ key: 'name', label: 'Player', left: true, render: P }, { key: 'fgAtt', label: 'FG', render: (x) => `${x.fgMade}/${x.fgAtt}` }, { key: 'long', label: 'LNG' }, { key: 'xpAtt', label: 'XP', render: (x) => `${x.xpMade}/${x.xpAtt}` }, { key: 'points', label: 'PTS' }], 'points')}
+        ${sect('Punting', `bx-u-${tid}`, t.punting, [{ key: 'name', label: 'Player', left: true, render: P }, { key: 'punts', label: 'NO' }, { key: 'yards', label: 'YDS' }, { key: 'avg', label: 'AVG', d: 1 }, { key: 'net', label: 'NET', d: 1 }, { key: 'long', label: 'LNG' }, { key: 'in20', label: 'IN20' }], 'punts')}
+        ${sect('Returns', `bx-t-${tid}`, t.returns, [{ key: 'name', label: 'Player', left: true, render: P }, { key: 'kr', label: 'KR', render: (x) => (x.kr ? `${x.kr}-${x.krYards}` : '—') }, { key: 'krLong', label: 'KR LNG' }, { key: 'krTd', label: 'KR TD' }, { key: 'pr', label: 'PR', render: (x) => (x.pr ? `${x.pr}-${x.prYards}` : '—') }, { key: 'prLong', label: 'PR LNG' }, { key: 'prTd', label: 'PR TD' }], 'kr')}
+      </div>`;
+    };
+    const ts = b.teamStats.length ? `<h3>Team stats</h3><table class="data compact teamstats" id="bx-team"><thead><tr><th class="left">Stat</th><th>${esc(g.away)}</th><th>${esc(g.home)}</th></tr></thead><tbody>${b.teamStats.map((r) => `<tr><td class="left">${esc(r.label)}</td><td class="${r.better === 'away' ? 'best' : ''}">${esc(r.awayText ?? '—')}</td><td class="${r.better === 'home' ? 'best' : ''}">${esc(r.homeText ?? '—')}</td></tr>`).join('')}</tbody></table>` : '';
+    return `<div id="bx-body"><div class="table-tools"><button class="small" data-copy-block="bx-body">Copy box score as text</button></div>
+      ${lineScoreHtml(g, b.lineScore)}
+      <div class="grid cols-2">${ts ? `<div>${ts}</div>` : ''}<div>${breakdownHtml(g, b.breakdown)}</div></div>
+      <p class="small-note">Every number here is what Madden recorded for this game.${b.lineScore ? ' The score by quarter comes from the scoring log in the save.' : ''}</p>
+      <div class="grid cols-2">${team(g.awayTeamId, g.away, g.awayName)}${team(g.homeTeamId, g.home, g.homeName)}</div></div>`;
+  }
+
   async function gameHighlights(g) {
     const r = await api(`/leagues/${state.leagueKey}/games/${g.gameId}/highlights`);
     const h = r.highlights;
@@ -759,6 +852,7 @@
       <div class="table-tools"><button class="small" data-copy-block="gh-body">Copy highlights as text</button></div>
       <div class="card hl-head">
         <div class="hl-headline">${esc(h.headline)}</div>
+        ${h.lineScore ? lineScoreHtml(g, h.lineScore) : ''}
         ${pog ? `<div class="pog"><span class="pill win">Player of the game</span> <b>${esc(pog.name)}</b> <span class="muted">${esc(pog.position)} · ${esc(abbr(pog.teamId))}</span>${pog.line ? ` <span class="muted">· ${esc(pog.line)}</span>` : ''}</div>` : ''}
       </div>
       <div class="grid cols-2">
@@ -767,7 +861,8 @@
       </div>
       ${h.timeline.length ? `<h2>Key plays in order</h2>${h.timeline.map((m) => hlItem(m)).join('')}` : ''}
       ${scoreRows ? `<h2>Scoring</h2><table class="data"><thead><tr><th class="left">When</th><th class="left">Team</th><th class="left">Score</th><th>Score after</th></tr></thead><tbody>${scoreRows}</tbody></table>` : ''}
-      ${h.hasPlayByPlay ? '' : '<p class="small-note">This league came from a Companion App export, which has box scores but no play-by-play, so there are no clock times or scoring-play details.</p>'}
+      ${breakdownHtml(g, h.breakdown)}
+      ${h.hasPlayByPlay ? '' : '<p class="small-note">This league has box scores but no play-by-play (Companion App and EA exports do not include it). Plays marked REAL PLAY are rebuilt exactly from the longest-play stats: a quarterback\'s longest completion matched to the one teammate whose longest catch has the same yards, touchdowns only where the numbers force it (every catch he made scored, or his only carry did), pick-sixes, returns and field goals. The order and clock times are not in the export.</p>'}
       ${pbpNote}</div>`;
   }
 
@@ -889,7 +984,23 @@
   const who = (x) => `${x.playerId ? `<a href="#" class="plink" data-player="${esc(x.playerId)}">` : ''}<b>${esc(x.name)}</b>${x.playerId ? '</a>' : ''} <span class="muted">${esc(x.position || '')}${x.teamId ? ' · ' + esc(abbr(x.teamId)) : ''}</span>`;
   const SEVERITY = { GameEnding: 'Out for the game', CoupleGames: 'Out a few games', SeasonEnding: 'Season-ending', CareerEnding: 'Career-ending', Minor: 'Minor' };
   const severityText = (v) => (!v || /^Invalid|^Max_/.test(v) ? '' : SEVERITY[v] || String(v).replace(/([a-z])([A-Z])/g, '$1 $2'));
-  const SOURCE_LABEL = { 'in-game': 'Hurt in the game', 'injury report': "Madden's injury report", 'injury tool': 'Added with the injury tool' };
+  const SOURCE_LABEL = { 'game-list': "Madden's game injury list", report: "Madden's injury report (this week)", ledger: 'Remembered by the tool', export: 'First seen in the export after this game', tool: 'Injury tool' };
+
+  // One table for injuries, used by the game view and the weekly recap.
+  function injuryTable(id, rows, { showGame = false } = {}) {
+    const body = rows.map((i) => {
+      const g = showGame && i.gameId ? state.schedule.find((q) => q.gameId === i.gameId) : null;
+      const weeks = i.weeksMax != null && (i.weeksMax > 0 || i.weeksMin > 0) ? (i.weeksMin === i.weeksMax || i.weeksMin == null ? `${i.weeksMax} wk` : `${i.weeksMin}-${i.weeksMax} wk`) : '0 wk';
+      const now = i.stillOut ? `Out${i.weeksLeft ? `, ${i.weeksLeft} wk left` : ''}${i.onIR ? ' · IR' : ''}` : 'Not on the injury report now';
+      const inGame = i.played ? (i.played.snaps != null ? `Yes, ${i.played.snaps} snaps` : 'Yes') : i.played === null && i.source !== 'report' ? '—' : 'No stats in it';
+      // Off the report already: say what Madden had him down for, not "out".
+      const cleared = !i.stillOut && i.outlook && ['out', 'doubtful', 'season'].includes(i.outlook.key);
+      const cls = cleared ? 'ol-unknown' : i.outlook ? `ol-${i.outlook.key}` : '';
+      const olText = cleared ? `Cleared (was: ${i.outlook.text.toLowerCase()})` : i.outlook ? i.outlook.text : '';
+      return `<tr><td class="left">${who(i)}</td><td class="left">${esc(i.injury)}</td><td class="left">${esc(i.severityLabel || severityText(i.severity))}</td><td class="left"><span class="ol ${cls}">${esc(olText)}</span></td><td>${esc(weeks)}</td><td class="left">${esc(now)}</td><td class="left">${esc(inGame)}</td><td class="left">${esc(SOURCE_LABEL[i.source] || i.source)}${i.note ? `<div class="small-note">${esc(i.note)}</div>` : ''}${g ? `<div class="small-note">${esc(g.away)} @ ${esc(g.home)}</div>` : ''}</td></tr>`;
+    }).join('');
+    return `<div class="table-tools"><button class="small" data-copy-table="${id}">Copy</button></div><div class="table-wrap"><table class="data" id="${id}"><thead><tr><th class="left">Player</th><th class="left">Injury</th><th class="left">How bad</th><th class="left">Outlook</th><th>Madden's range</th><th class="left">Now</th><th class="left">In the game</th><th class="left">Where it came from</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  }
 
   sections.recap = async () => {
     if (!state.league) return '<div class="empty">Connect a franchise first.</div>';
@@ -912,16 +1023,32 @@
     };
     const leaderCard = (title, list, unit) => `<div class="card"><h3>${esc(title)}</h3>${list.length ? list.map((l, i) => `<div class="leader"><div class="who">${i + 1}. ${who(l)}<div class="small-note">${esc(l.line)}</div></div><div class="n">${l.value}${unit ? ` <span class="muted small">${unit}</span>` : ''}</div></div>`).join('') : '<div class="muted">Nobody.</div>'}</div>`;
     const potw = (title, p) => `<div class="card potw"><h3>${esc(title)}</h3>${p ? `<div class="big">${who(p)}</div><div>${esc(p.line)}</div>` : '<div class="muted">Nobody stood out.</div>'}</div>`;
-    const injRows = x.injuries.map((i) => {
-      const g = i.gameId ? state.schedule.find((q) => q.gameId === i.gameId) : null;
-      const weeks = i.weeksMax ? (i.weeksMin === i.weeksMax ? `${i.weeksMax} wk` : `${i.weeksMin}-${i.weeksMax} wk`) : 'day-to-day';
-      const now = i.stillOut ? `Out${i.weeksLeft ? `, ${i.weeksLeft} wk left` : ''}${i.onIR ? ' · IR' : ''}` : 'Not on the injury report now';
-      return `<tr><td class="left">${who(i)}</td><td class="left">${esc(i.injury)}</td><td class="left">${esc(severityText(i.severity))}</td><td>${esc(weeks)}</td><td class="left">${esc(now)}</td><td class="left">${esc(SOURCE_LABEL[i.source] || i.source)}${g ? ` · ${esc(g.away)} @ ${esc(g.home)}` : ''}</td></tr>`;
-    }).join('');
     const txRows = x.transactions.map((t) => `<tr><td class="left">${who({ ...t, teamId: null })}</td><td class="left">${esc(t.kind)}</td><td class="left">${esc(t.fromAbbr || (t.oldStatus === 'FreeAgent' ? 'Free agency' : '—'))} → ${esc(t.toAbbr || (t.newStatus === 'FreeAgent' ? 'Free agency' : t.newStatus === 'Retired' ? 'Retired' : '—'))}</td><td>${t.contract && t.contract.length ? `${t.contract.length} yr, ${money(t.contract.total)}${t.contract.bonus ? `, ${money(t.contract.bonus)} bonus` : ''}` : '—'}</td></tr>`).join('');
     const adv = (title, list, suffix = '') => `<div class="card"><h3>${esc(title)}</h3>${list.length ? list.map((l) => `<div class="leader"><div class="who">${who(l)}</div><div class="n">${fmt(l.value, 0)}${suffix}</div></div>`).join('') : '<div class="muted">Nobody.</div>'}</div>`;
     const standings = x.standings ? x.standings.divisions.map((d) => `<div class="card"><h3>${esc(d.division)}</h3><table class="data compact"><thead><tr><th class="left">Team</th><th>W-L</th><th>PF</th><th>PA</th><th>Streak</th></tr></thead><tbody>${d.teams.map((t) => `<tr><td class="left">${esc(t.abbr)}</td><td>${esc(t.text)}</td><td>${t.pf}</td><td>${t.pa}</td><td>${t.streak ? esc(t.streak.text) : '—'}</td></tr>`).join('')}</tbody></table></div>`).join('') : '';
     const s = x.summary;
+    const move = (m) => (m > 0 ? `<span class="trend up">▲${m}</span>` : m < 0 ? `<span class="trend down">▼${-m}</span>` : '<span class="muted">—</span>');
+    state.sort['rc-power'] ||= { key: 'rank', dir: -1 };
+    const powerHtml = x.powerRankings.length ? `<h2>Power rankings</h2>${x.powerRankingsNote ? `<p class="small-note">${esc(x.powerRankingsNote)}</p>` : ''}${table('rc-power', x.powerRankings.map((p) => ({ ...p, name: p.name })), [
+      { key: 'rank', label: '#', render: (p) => `<b>${p.rank}</b>` },
+      { key: 'move', label: 'Move', render: (p) => move(p.move) },
+      { key: 'abbr', label: 'Team', left: true, render: (p) => `<b>${esc(p.abbr)}</b> <span class="muted">${esc(p.name)}</span>` },
+      { key: 'record', label: 'Record', left: true },
+      { key: 'diff', label: 'Pt diff', render: (p) => `${p.diff > 0 ? '+' : ''}${p.diff}` },
+      { key: 'overall', label: 'OVR' },
+      { key: 'lastResult', label: 'This week', left: true },
+      { key: 'power', label: 'Score', d: 1 },
+    ], { defaultSort: 'rank' })}<p class="small-note">The tool's formula: 40% record, 30% point differential per game, 15% the last three games, 15% Madden's team rating. Before a team has played, rating only.</p>` : '';
+    const playoffHtml = x.playoffPicture.length ? `<h2>Playoff picture after ${esc(x.label)}</h2><div class="grid cols-2">${x.playoffPicture.map((c) => `<div class="card"><h3>${esc(c.conference)}</h3><table class="data compact"><thead><tr><th>Seed</th><th class="left">Team</th><th>Record</th><th>Diff</th><th class="left"></th></tr></thead><tbody>${c.teams.map((t) => `<tr class="${t.seed ? '' : 'done'}"><td>${t.seed || '—'}</td><td class="left"><b>${esc(t.abbr)}</b> <span class="muted">${esc(t.division || '')}</span></td><td>${esc(t.record)}</td><td>${t.diff > 0 ? '+' : ''}${t.diff}</td><td class="left small">${esc(t.how)}</td></tr>`).join('')}</tbody></table></div>`).join('')}</div><p class="small-note">If the season ended today. Ties are broken by winning percentage, head-to-head when two teams are tied, then point differential; the NFL uses more tiebreakers than this.</p>` : '';
+    const bigHtml = x.bigPerformances.length ? `<h2>Big performances</h2><ul class="list">${x.bigPerformances.map((b) => `<li><span>${who(b)} · ${esc(b.text)}</span></li>`).join('')}</ul>` : '';
+    const fantasyHtml = x.fantasy.length ? `<div class="card"><h3>Fantasy points (PPR)</h3>${x.fantasy.map((f, i) => `<div class="leader"><div class="who">${i + 1}. ${who(f)}</div><div class="n">${f.points}</div></div>`).join('')}<p class="small-note">1 per catch, 1 per 10 rushing or receiving yards, 1 per 25 passing yards, 6 per touchdown (4 passing), -2 per interception or fumble.</p></div>` : '';
+    const sl = x.seasonLeaders;
+    const slCard = (title, list, unit) => `<div class="card"><h3>${esc(title)}</h3>${list.length ? list.map((l, i) => `<div class="leader"><div class="who">${i + 1}. ${who(l)}</div><div class="n">${l.value}${unit ? ` <span class="muted small">${unit}</span>` : ''}</div></div>`).join('') : '<div class="muted">Nobody yet.</div>'}</div>`;
+    const seasonHtml = sl && sl.games ? `<h2>Season leaders through ${esc(x.label)}</h2><div class="grid cols-4">${slCard('Passing yards', sl.passing, 'yds')}${slCard('Rushing yards', sl.rushing, 'yds')}${slCard('Receiving yards', sl.receiving, 'yds')}${slCard('Touchdowns', sl.touchdowns, 'TD')}</div><div class="grid cols-4" style="margin-top:14px">${slCard('Sacks', sl.sacks, 'sk')}${slCard('Interceptions', sl.interceptions, 'INT')}${slCard('Tackles', sl.tackles, 'tkl')}${slCard('Fantasy points', sl.fantasy, 'pts')}</div>` : '';
+    const ta = x.teamAwards || {};
+    const award = (label, r, key, unit) => (r ? `<div class="leader"><div class="who">${esc(label)}<span>${esc(r.name || r.abbr)}</span></div><div class="n">${r[key]}${unit ? ` <span class="muted small">${unit}</span>` : ''}</div></div>` : '');
+    const awardsHtml = `<div class="card"><h3>Teams of the week</h3>${award('Most points', ta.mostPoints, 'points', 'pts')}${award('Most yards', ta.mostYards, 'yards', 'yds')}${award('Fewest yards allowed', ta.fewestYardsAllowed, 'yardsAllowed', 'yds')}${award('Fewest points allowed', ta.fewestPointsAllowed, 'allowed', 'pts')}${award('Most takeaways', ta.mostTakeaways, 'takeaways', '')}${award('Most sacks', ta.mostSacks, 'sacks', '')}</div>`;
+    const gotw = x.gameOfTheWeek ? `<div class="card gotw"><h3>Game of the week: ${esc(x.gameOfTheWeek.label)}</h3><div class="big"><b>${esc(x.gameOfTheWeek.awayName)}</b> at <b>${esc(x.gameOfTheWeek.homeName)}</b></div><div class="small-note">${esc(x.gameOfTheWeek.why)}. Picked by the tool from records, ratings and power rankings.</div><div class="toolbar"><a href="#" class="small no-copy" data-preview-game="${esc(x.gameOfTheWeek.gameId)}">Matchup preview</a></div></div>` : '';
     return `
       <div class="head-row"><h1>Weekly Recap</h1><button class="blue" data-copy-block="recap-body" title="Copy the whole recap as plain text">Copy recap as text</button></div>
       <p class="lead">Everything that happened across the league in one week: every score, the records and standings after it, the injuries, Madden's own league news and transactions, the stat leaders and the biggest plays. Scores, stats, injuries and news are exactly what Madden saved.</p>
@@ -933,16 +1060,19 @@
         <h2>Scores</h2>
         <div class="games">${x.scores.map(scoreCard).join('')}</div>
 
+        ${gotw}
         ${x.storylines.length ? `<h2>Storylines</h2><ul class="tips story">${x.storylines.map((t) => `<li><b>${esc(t.kind)}:</b> ${esc(t.text)}</li>`).join('')}</ul>` : ''}
 
         <h2>Players of the week</h2>
         <div class="grid cols-3">${potw('Offense', x.playersOfWeek.offense)}${potw('Defense', x.playersOfWeek.defense)}${potw('Rookie', x.playersOfWeek.rookie)}</div>
         <p class="small-note">Picked by this tool from the recorded box scores (yards, touchdowns, turnovers, tackles, sacks, takeaways), with a small bump for playing on a winning team.</p>
 
+        ${bigHtml}
         <h2>Stat leaders</h2>
         <div class="grid cols-4">${leaderCard('Passing yards', x.leaders.passing, 'yds')}${leaderCard('Rushing yards', x.leaders.rushing, 'yds')}${leaderCard('Receiving yards', x.leaders.receiving, 'yds')}${leaderCard('Touchdowns', x.leaders.touchdowns, 'TD')}</div>
         <div class="grid cols-3" style="margin-top:14px">${leaderCard('Sacks', x.leaders.sacks, 'sk')}${leaderCard('Tackles', x.leaders.tackles, 'tkl')}${leaderCard('Interceptions', x.leaders.interceptions, 'INT')}</div>
 
+        <div class="grid cols-2" style="margin-top:14px">${fantasyHtml}${awardsHtml}</div>
         <h2>Highlights and lowlights</h2>
         <div class="grid cols-2">
           <div class="card"><h3>Plays of the week</h3>${hlList(x.highlights, 'Nothing yet.', { showGame: true })}</div>
@@ -951,7 +1081,8 @@
 
         <h2>Injuries (${x.injuries.length})</h2>
         ${x.injuryNote ? `<p class="small-note">${esc(x.injuryNote)}</p>` : ''}
-        ${x.injuries.length ? `<div class="table-tools"><button class="small" data-copy-table="rc-inj">Copy</button></div><div class="table-wrap"><table class="data" id="rc-inj"><thead><tr><th class="left">Player</th><th class="left">Injury</th><th class="left">Severity</th><th>Expected out</th><th class="left">Now</th><th class="left">Where it came from</th></tr></thead><tbody>${injRows}</tbody></table></div>` : `<div class="muted">${x.source === 'franchise' ? 'No injuries this week.' : 'A Companion App export does not say which week an injury happened.'}</div>`}
+        ${x.summary.minorInjuries ? `<p class="small-note">${x.summary.minorInjuries} of them are minor: out for part of a game at most.</p>` : ''}
+        ${x.injuries.length ? injuryTable('rc-inj', x.injuries, { showGame: true }) : `<div class="muted">${x.source === 'franchise' ? 'No injuries this week.' : 'No injuries seen after this week yet. The tool can only see what each export shows, so export after every game.'}</div>`}
         ${x.currentReport ? `<h3>Current injury report (${x.currentReport.length})</h3><p class="small-note">From the latest export. The export lists who is hurt now, not the week it happened.</p>${table('rc-cur', x.currentReport.map((p) => ({ ...p })), [{ key: 'name', label: 'Player', left: true, render: playerCell }, { key: 'injury', label: 'Injury', left: true }, { key: 'weeksLeft', label: 'Weeks left' }, { key: 'onIR', label: 'IR', left: true, render: (p) => (p.onIR ? 'IR' : '') }], { defaultSort: 'weeksLeft' })}` : ''}
 
         ${x.hasNews ? `
@@ -966,7 +1097,10 @@
         <div class="grid cols-3">${adv('Best blockers (grade)', x.advanced.bestBlockers)}${adv('Most pressures allowed', x.advanced.mostPressuresAllowed)}${adv('Most pressures', x.advanced.topPassRushers)}</div>
         <div class="grid cols-3" style="margin-top:14px">${adv('Most drops', x.advanced.mostDrops)}${adv('Most missed tackles', x.advanced.mostMissedTackles)}${adv('Most penalties', x.advanced.mostPenalties)}</div>
 
+        ${powerHtml}
+        ${playoffHtml}
         ${standings ? `<h2>Standings after ${esc(x.label)}</h2><div class="grid cols-4">${standings}</div>` : ''}
+        ${seasonHtml}
 
         ${x.upcoming.length ? `<h2>Coming up: ${esc(x.upcoming[0].label)}</h2><ul class="list">${x.upcoming.map((u) => `<li><span><b>${esc(u.away)}</b>${u.awayRecord ? ` <span class="muted">(${esc(u.awayRecord)})</span>` : ''} @ <b>${esc(u.home)}</b>${u.homeRecord ? ` <span class="muted">(${esc(u.homeRecord)})</span>` : ''}</span><a href="#" class="small no-copy" data-preview-game="${esc(u.gameId)}">Matchup preview</a></li>`).join('')}</ul>` : ''}
       </div>`;
@@ -1271,9 +1405,42 @@
   // ---------- settings
   sections.settings = async () => {
     const s = state.status.settings;
+    const opt = (id, value, list) => `<select id="${id}" data-ui="${id.replace('ui-', '')}">${list.map(([v, l]) => `<option value="${esc(v)}" ${String(value) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    const check = (id, value, label) => `<label class="check"><input type="checkbox" id="${id}" data-ui="${id.replace('ui-', '')}" ${value ? 'checked' : ''}> ${esc(label)}</label>`;
+    const teams = state.league ? state.league.teams : [];
     return `
       <h1>Settings</h1>
       <div class="card">
+        <h3>Look and feel</h3>
+        <div class="form-grid">
+          <div class="field"><span>Theme</span>${opt('ui-theme', ui.theme, [['dark', 'Dark'], ['light', 'Light'], ['contrast', 'High contrast']])}</div>
+          <div class="field"><span>Accent color</span>${opt('ui-accent', ui.accent, Object.keys(ACCENTS).map((k) => [k, k[0].toUpperCase() + k.slice(1)]))}</div>
+          <div class="field"><span>Text size</span>${opt('ui-textSize', ui.textSize, [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large'], ['xlarge', 'Extra large']])}</div>
+          <div class="field"><span>Tables</span>${opt('ui-density', ui.density, [['comfortable', 'Comfortable'], ['compact', 'Compact (more rows on screen)']])}</div>
+        </div>
+        <div class="checks">${check('ui-sourceTags', ui.sourceTags, 'Show where each number comes from (R recorded, ~ reconstructed, T tracked)')}${check('ui-stickyHeaders', ui.stickyHeaders, 'Keep table headers on screen while scrolling')}${check('ui-reduceMotion', ui.reduceMotion, 'Reduce motion')}</div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>How the app starts and filters</h3>
+        <div class="form-grid">
+          <div class="field"><span>Open on this page</span>${opt('ui-startPage', ui.startPage, [['connect', 'Connect'], ['schedule', 'Schedule & Injury Tool'], ['recap', 'Weekly Recap'], ['highlights', 'Highlights'], ['contracts', 'Contracts & Cap'], ['blocking', 'Blocking']])}</div>
+          <div class="field"><span>Season part to show first</span>${opt('ui-defaultStage', ui.defaultStage, [['auto', 'Whatever has games'], ['pre', 'Preseason'], ['reg', 'Regular season'], ['post', 'Playoffs']])}</div>
+          <div class="field"><span>My team${state.league ? ` in ${esc(state.league.name)}` : ''}</span>${state.league ? `<select id="ui-myTeam"><option value="">None</option>${teams.map((t) => `<option value="${esc(t.teamId)}" ${myTeam() === t.teamId ? 'selected' : ''}>${esc(t.abbr)} — ${esc(t.displayName)}</option>`).join('')}</select>` : '<span class="muted">Open a league first</span>'}</div>
+        </div>
+        <div class="checks">${check('ui-myTeamFilter', ui.myTeamFilter, 'Show only my team when a league opens')}</div>
+        <p class="small-note">Your team's rows are highlighted in every table.</p>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Copy and numbers</h3>
+        <div class="form-grid">
+          <div class="field"><span>What Copy puts on the clipboard</span>${opt('ui-copyFormat', ui.copyFormat, [['aligned', 'Plain text, columns lined up'], ['discord', 'Plain text in a code block (Discord)'], ['tabs', 'Tab-separated (pastes into Excel / Sheets)']])}</div>
+          <div class="field"><span>Money</span>${opt('ui-moneyFormat', ui.moneyFormat, [['short', '$36.33M'], ['full', '$36,330,000']])}</div>
+        </div>
+        <div class="modal-actions"><button id="ui-reset">Reset look and feel to defaults</button></div>
+        <p class="small-note" id="ui-saved">Changes apply and save right away.</p>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Connection</h3>
         <div class="form-grid">
           <div class="field"><span>Port the Companion App exports to (restart to apply)</span><input type="number" id="set-port" value="${esc(s.port || 3826)}"></div>
           <div class="field"><span>Extra schema folder (advanced: newer Madden patches)</span><input type="text" id="set-schema" value="${esc(s.schemaDirectory || '')}" placeholder="leave empty for the bundled schemas"></div>
@@ -1369,6 +1536,15 @@
       if (!entry || !confirm(`Write ${entry.plan.player.name}'s ${entry.plan.injury.name} into the franchise file now? A backup is made first.`)) return;
       try { await api(`/leagues/${state.leagueKey}/injuries/apply`, { method: 'POST', body: { ...entry.request, applyMode: 'later' } }); await api(`/leagues/${state.leagueKey}/injuries/log/${entry.id}`, { method: 'DELETE' }); banner('Written to the franchise file.', 'ok'); await loadLeague(); } catch (err) { banner(esc(err.message), 'error'); }
     });
+    on('[data-ui]', 'onchange', async (e) => {
+      const el = e.currentTarget;
+      const key = el.dataset.ui;
+      await saveUi({ [key]: el.type === 'checkbox' ? el.checked : el.value });
+      const note = $('#ui-saved'); if (note) note.textContent = 'Saved.';
+      if (['moneyFormat', 'sourceTags'].includes(key)) render();
+    });
+    on('#ui-myTeam', 'onchange', async (e) => { await saveUi({ myTeams: { ...(ui.myTeams || {}), [state.leagueKey]: e.target.value || null } }); const note = $('#ui-saved'); if (note) note.textContent = 'Saved.'; });
+    on('#ui-reset', 'onclick', async () => { await saveUi({ theme: UI_DEFAULTS.theme, accent: UI_DEFAULTS.accent, textSize: UI_DEFAULTS.textSize, density: UI_DEFAULTS.density, sourceTags: true, stickyHeaders: true, reduceMotion: false }); render(); });
     on('#set-save', 'onclick', async () => { try { await api('/settings', { method: 'POST', body: { port: Number($('#set-port').value) || 3826, schemaDirectory: $('#set-schema').value || null } }); banner('Saved.', 'ok'); await loadStatus(); } catch (e) { banner(esc(e.message), 'error'); } });
   }
   function updateTrackerFields() {
@@ -1409,6 +1585,10 @@
   setInterval(async () => { if (state.section !== 'connect') return; try { const before = JSON.stringify(state.status.leagues); await loadStatus(); if (JSON.stringify(state.status.leagues) !== before) { if (!state.leagueKey) state.leagueKey = state.status.leagues[0] && state.status.leagues[0].leagueKey; await loadLeague(); } } catch {} }, 8000);
 
   (async () => {
-    try { await loadStatus(); await loadLeague(); } catch (e) { banner(esc(e.message), 'error'); }
+    try {
+      await loadStatus();
+      if (ui.startPage && sections[ui.startPage] && state.status.leagues.length) state.section = ui.startPage;
+      await loadLeague();
+    } catch (e) { banner(esc(e.message), 'error'); }
   })();
 })();
