@@ -69,6 +69,7 @@
   let pointers = new Map(); // pointerId -> {x,y} (canvas coords) — for multitouch
   let gesture = null;       // active pinch-zoom / two-finger pan
   const mqMobile = window.matchMedia('(max-width: 760px)');
+  const isCoarse = window.matchMedia('(pointer: coarse)').matches; // touch-ish device
 
   // undo/redo — snapshots of floors+activeFloor JSON
   let undoStack = [];
@@ -193,6 +194,9 @@
     y: (sy - view.offY) / view.scale,
   });
   const snap = (v) => Math.round(v / CELL) * CELL;
+  // snap to grid, clamped to the lot so rooms can't be drawn outside it
+  const snapX = (v) => clamp(snap(v), 0, worldW());
+  const snapY = (v) => clamp(snap(v), 0, worldH());
 
   // rect helpers (rooms of type 'rect' store x,y,w,h in world px)
   function roomBounds(r) {
@@ -262,10 +266,10 @@
     ];
   }
 
-  function handleAt(sx, sy, r) {
+  function handleAt(sx, sy, r, tol = HANDLE) {
     for (const h of resizeHandles(r)) {
       const hs = { x: h.x * view.scale + view.offX, y: h.y * view.scale + view.offY };
-      if (Math.abs(sx - hs.x) <= HANDLE && Math.abs(sy - hs.y) <= HANDLE) return h;
+      if (Math.abs(sx - hs.x) <= tol && Math.abs(sy - hs.y) <= tol) return h;
     }
     return null;
   }
@@ -421,12 +425,14 @@
     ctx.strokeRect(ox + b.x * s, oy + b.y * s, b.w * s, b.h * s);
     ctx.setLineDash([]);
     if (r.type === 'rect') {
+      const hw = isCoarse ? 7 : 4; // half-size of handle square (bigger on touch)
+      ctx.lineWidth = 1.5;
       for (const h of resizeHandles(r)) {
         const x = ox + h.x * s, y = oy + h.y * s;
         ctx.fillStyle = '#fff';
         ctx.strokeStyle = '#5b8cff';
-        ctx.fillRect(x - 4, y - 4, 8, 8);
-        ctx.strokeRect(x - 4, y - 4, 8, 8);
+        ctx.fillRect(x - hw, y - hw, hw * 2, hw * 2);
+        ctx.strokeRect(x - hw, y - hw, hw * 2, hw * 2);
       }
     }
     ctx.restore();
@@ -505,10 +511,13 @@
       return;
     }
 
+    const touch = e.pointerType === 'touch' || e.pointerType === 'pen';
+    const thresh = touch ? 10 : 4; // ignore this much jitter before it counts as a drag
+
     if (tool === 'select') {
       const sel = selectedRoom();
       if (sel && sel.type === 'rect') {
-        const h = handleAt(p.x, p.y, sel);
+        const h = handleAt(p.x, p.y, sel, touch ? 24 : HANDLE);
         if (h) {
           pushUndo();
           drag = { type: 'resize', handle: h.id, room: sel, orig: { ...roomBounds(sel) } };
@@ -517,20 +526,20 @@
       }
       const hit = roomAt(w.x, w.y);
       if (hit) {
-        selectRoom(hit.id);
-        pushUndo();
+        if (hit.id !== selectedId) selectRoom(hit.id);
         const b = roomBounds(hit);
-        drag = { type: 'move', room: hit, dx: w.x - b.x, dy: w.y - b.y, moved: false };
+        drag = { type: 'move', room: hit, dx: w.x - b.x, dy: w.y - b.y,
+                 moved: false, startX: p.x, startY: p.y, thresh };
       } else {
         selectRoom(null);
-        drag = { type: 'pan', startX: p.x, startY: p.y, offX: view.offX, offY: view.offY };
+        drag = { type: 'pan', startX: p.x, startY: p.y, offX: view.offX, offY: view.offY, thresh, panning: false };
       }
     } else if (tool === 'rect') {
-      const sx = snap(w.x), sy = snap(w.y);
+      const sx = snapX(w.x), sy = snapY(w.y);
       pushUndo();
       drag = { type: 'draw-rect', x0: sx, y0: sy, x1: sx, y1: sy };
     } else if (tool === 'poly') {
-      const sx = snap(w.x), sy = snap(w.y);
+      const sx = snapX(w.x), sy = snapY(w.y);
       if (!polyPoints) polyPoints = [];
       // finish if clicking near first point
       if (polyPoints.length >= 3) {
@@ -569,18 +578,26 @@
     }
 
     if (drag.type === 'pan') {
+      if (drag.thresh && !drag.panning) {
+        if (Math.hypot(p.x - drag.startX, p.y - drag.startY) < drag.thresh) return;
+        drag.panning = true;
+      }
       view.offX = drag.offX + (p.x - drag.startX);
       view.offY = drag.offY + (p.y - drag.startY);
       draw();
     } else if (drag.type === 'draw-rect') {
-      drag.x1 = snap(w.x); drag.y1 = snap(w.y);
+      drag.x1 = snapX(w.x); drag.y1 = snapY(w.y);
       draw();
       // live preview
       drawRectPreview(drag);
     } else if (drag.type === 'move') {
+      if (!drag.moved) {
+        if (Math.hypot(p.x - drag.startX, p.y - drag.startY) < drag.thresh) return;
+        pushUndo();        // record state just before the first real move
+        drag.moved = true;
+      }
       const nb = { x: snap(w.x - drag.dx), y: snap(w.y - drag.dy) };
       moveRoomTo(drag.room, nb.x, nb.y);
-      drag.moved = true;
       draw();
     } else if (drag.type === 'resize') {
       applyResize(drag, snap(w.x), snap(w.y));
@@ -610,10 +627,9 @@
         popUndo(); // nothing drawn
       }
     } else if (drag.type === 'move') {
-      if (!drag.moved) popUndo();
-      else { markDirty(); save(); }
+      if (drag.moved) { markDirty(); save(); }   // undo was pushed on first move
     } else if (drag.type === 'resize') {
-      renderRoomList(); // area changed — keep the list's ft² current
+      renderInspector(); renderRoomList();        // area changed — refresh fully
       markDirty(); save();
     }
     if (drag.type !== 'poly-cursor') drag = null;
@@ -694,7 +710,7 @@
     w = clamp(w, CELL, worldW() - x);
     h = clamp(h, CELL, worldH() - y);
     Object.assign(r, { x, y, w, h });
-    renderInspector();
+    updateDims();
   }
 
   function moveRoomTo(r, nx, ny) {
@@ -707,7 +723,20 @@
     } else {
       r.x = nx; r.y = ny;
     }
-    renderInspector();
+    updateDims();
+  }
+
+  // cheap: only refresh the dimension line (used live during drag/resize so we
+  // don't rebuild the whole inspector — and its 18 swatches — every frame)
+  function updateDims() {
+    const r = selectedRoom(); if (!r) return;
+    const el = $('room-dims'); if (!el) return;
+    const b = roomBounds(r);
+    const cw = Math.round(b.w / CELL), ch = Math.round(b.h / CELL);
+    const sqft = roomAreaSqft(r).toLocaleString();
+    el.textContent = r.type === 'poly'
+      ? `Polygon · ${r.points.length} points · ${sqft} ft²`
+      : `${cw} × ${ch} cells · ${sqft} ft²`;
   }
 
   // =====================================================================
