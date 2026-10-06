@@ -9,6 +9,8 @@ import { FranchiseService } from '../src/core/franchise/service.js';
 import { StatsEngine } from '../src/core/stats/engine.js';
 import { weeklyRecap } from '../src/core/stats/recap.js';
 import { contractsReport } from '../src/core/contracts.js';
+import { planScheduleChange, weekOpponents, reversePlan } from '../src/core/franchise/schedule.js';
+import { openFranchise } from '../src/core/franchise/reader.js';
 
 const candidates = [process.env.M26_TEST_FILE, '/home/user/bep713/madden-franchise/tests/data/CAREER-TESTSAVE-26'].filter(Boolean);
 const source = candidates.find((p) => fs.existsSync(p));
@@ -65,4 +67,28 @@ test('reads contracts, the salary cap and league news from a real save', { skip:
   assert.ok(recap.stories.length > 0, "Madden's stories for the week are in the recap");
   assert.ok(recap.injuries.some((i) => i.source === 'game-list'), "Madden's own game injury lists are in the recap");
   assert.ok(recap.injuries.length > 20, 'plus the injury report for the week');
+});
+
+test('changes a matchup in a real save, reads it back, and undoes it exactly', { skip: source ? false : 'no Madden 26 test save available' }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'm26fc-'));
+  const work = path.join(dir, 'CAREER-TEST');
+  fs.copyFileSync(source, work);
+  const svc = new FranchiseService({ backupDir: path.join(dir, 'backups') });
+  const league = await svc.open(work);
+  const game = Object.values(league.games).find((g) => g.stage === 'reg' && g.week === 6);
+  const teamId = game.homeTeamId;
+  const target = weekOpponents(league, game).find((o) => !o.bye && o.teamId !== game.homeTeamId && o.teamId !== game.awayTeamId);
+  const plan = planScheduleChange(league, { gameId: game.gameId, teamId, newOpponentId: target.teamId });
+  await svc.applyScheduleChange(plan);
+  const changed = svc.league.games[game.gameId];
+  assert.ok(changed.homeTeamId === target.teamId || changed.awayTeamId === target.teamId, 'the new opponent is in the game');
+  const week = Object.values(svc.league.games).filter((g) => g.stage === 'reg' && g.week === 6);
+  const count = {};
+  for (const g of week) for (const t of [g.homeTeamId, g.awayTeamId]) count[t] = (count[t] || 0) + 1;
+  assert.ok(Object.values(count).every((c) => c === 1), 'every team plays once that week');
+  await svc.applyScheduleChange(reversePlan(plan));
+  const orig = await openFranchise(source);
+  const now = await openFranchise(work);
+  const differing = orig.tables.filter((t, i) => Buffer.compare(Buffer.from(t.data), Buffer.from(now.tables[i].data)) !== 0).map((t) => t.name);
+  assert.deepEqual(differing, [], 'after undo the save is identical to the original');
 });

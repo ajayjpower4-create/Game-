@@ -102,6 +102,20 @@ export class Store {
     return ledger;
   }
 
+  // Schedule changes written with the tool, newest first, for undo.
+  getScheduleLog(leagueKey) {
+    return readJson(path.join(this.leagueDir(leagueKey), 'schedule-changes.json'), { entries: [] });
+  }
+
+  saveScheduleLog(leagueKey, log) {
+    writeJson(path.join(this.leagueDir(leagueKey), 'schedule-changes.json'), log);
+    return log;
+  }
+
+  clearInjuryLedger(leagueKey) {
+    return this.saveInjuryLedger(leagueKey, { entries: {}, loads: 0, updatedAt: null });
+  }
+
   getSettings() {
     return readJson(path.join(this.dataDir, 'settings.json'), { recentFiles: [], schemaDirectory: null, port: 3826 });
   }

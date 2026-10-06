@@ -15,6 +15,8 @@ import { weeklyRecap, recapWeeks } from '../core/stats/recap.js';
 import { boxScore, lineScore } from '../core/stats/boxscore.js';
 import { contractsReport, playerContract } from '../core/contracts.js';
 import { updateLedger, gameInjuryReport } from '../core/injuries/game-injuries.js';
+import { planScheduleChange, weekOpponents, editability, reversePlan } from '../core/franchise/schedule.js';
+import { teamProfile } from '../core/teams.js';
 import { buildLeagueFromCompanion } from '../core/companion/league.js';
 import { classifyPath, extractList } from '../core/companion/normalize.js';
 import { INJURY_TYPES, BODY_PARTS, injuryTypesByPart } from '../core/franchise/injury-catalog.js';
@@ -64,6 +66,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
   app.locals.store = store;
   app.locals.franchise = franchise;
   app.locals.engine = engine;
+  franchise.keepBackups = Number(store.getSettings().backupKeep) || 0;
 
   const companionLeagues = new Map(); // leagueKey -> built league (cached)
   const leagueKeyFor = (platform, leagueId) => `companion-${platform}-${leagueId}`;
@@ -250,6 +253,99 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
     }
   });
 
+  // ---- schedule changes (PC franchise file only)
+  api.get('/leagues/:leagueKey/games/:gameId/schedule-options', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    const game = league.games[req.params.gameId];
+    if (!game) return res.status(404).json({ ok: false, error: 'game not found' });
+    res.json({ ok: true, game: publicGame(game, league), editable: editability(league, game), teams: weekOpponents(league, game) });
+  });
+  const schedPlan = (league, body) => planScheduleChange(league, { gameId: body.gameId, teamId: body.teamId, newOpponentId: body.newOpponentId || null, flipHomeAway: Boolean(body.flipHomeAway) });
+  api.post('/leagues/:leagueKey/schedule/plan', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    try { res.json({ ok: true, plan: schedPlan(league, req.body || {}) }); } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+  });
+  api.post('/leagues/:leagueKey/schedule/apply', async (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    if (league.source !== 'franchise' || !franchise.isOpen) return res.status(400).json({ ok: false, error: 'Schedules can only be changed in an open PC franchise file.' });
+    try {
+      const plan = schedPlan(league, req.body || {});
+      const result = await franchise.applyScheduleChange(plan);
+      trackInjuries(franchise.league.leagueId, franchise.league);
+      engine.clear();
+      const logData = store.getScheduleLog(req.params.leagueKey);
+      const entry = { id: `${Date.now().toString(36)}-${hashString(plan.gameId + plan.newOpponentId).toString(36)}`, at: new Date().toISOString(), plan, lines: plan.lines, backupPath: result.backupPath, undone: false };
+      logData.entries.unshift(entry);
+      store.saveScheduleLog(req.params.leagueKey, logData);
+      res.json({ ok: true, entry, games: result.games.map((g) => publicGame(g, franchise.league)) });
+    } catch (e) {
+      log('schedule change failed', e);
+      res.status(400).json({ ok: false, error: e.message });
+    }
+  });
+  api.get('/leagues/:leagueKey/schedule/changes', (req, res) => res.json({ ok: true, entries: store.getScheduleLog(req.params.leagueKey).entries }));
+  api.post('/leagues/:leagueKey/schedule/undo/:id', async (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league || league.source !== 'franchise' || !franchise.isOpen) return res.status(400).json({ ok: false, error: 'Open the PC franchise file first.' });
+    const logData = store.getScheduleLog(req.params.leagueKey);
+    const entry = logData.entries.find((e) => e.id === req.params.id);
+    if (!entry || entry.undone) return res.status(400).json({ ok: false, error: 'Nothing to undo.' });
+    try {
+      const back = reversePlan(entry.plan);
+      for (const c of back.changes) {
+        const g = league.games[c.gameId];
+        if (!g || g.status === 'played') throw new Error(`${c.label} has been played since, so it cannot be put back.`);
+      }
+      const result = await franchise.applyScheduleChange(back);
+      engine.clear();
+      entry.undone = true;
+      entry.undoneAt = new Date().toISOString();
+      store.saveScheduleLog(req.params.leagueKey, logData);
+      res.json({ ok: true, entry, games: result.games.map((g) => publicGame(g, franchise.league)) });
+    } catch (e) {
+      res.status(400).json({ ok: false, error: e.message });
+    }
+  });
+
+  // ---- teams
+  api.get('/leagues/:leagueKey/teams/:teamId/profile', (req, res) => {
+    const league = getLeague(req.params.leagueKey);
+    if (!league) return res.status(404).json({ ok: false, error: 'league not found' });
+    if (!league.teams[req.params.teamId]) return res.status(404).json({ ok: false, error: 'team not found' });
+    try {
+      const tracker = store.getTracker(req.params.leagueKey);
+      const ledger = ledgerFor(req.params.leagueKey);
+      const profile = engine.memo(`team|${engine.leagueKey(league, tracker)}|${ledger.updatedAt}|${req.params.teamId}|${req.query.stage || ''}`, () => teamProfile(league, engine, tracker, req.params.teamId, { stage: req.query.stage || null, ledger }));
+      res.json({ ok: true, profile });
+    } catch (e) {
+      log('team profile failed', e);
+      res.status(400).json({ ok: false, error: e.message });
+    }
+  });
+
+  // ---- backups, file watching and data tools
+  api.get('/franchise/status', (req, res) => res.json({ ok: true, file: franchise.fileStatus() }));
+  api.get('/franchise/backups', (req, res) => res.json({ ok: true, backups: franchise.listBackups(), keep: franchise.keepBackups || 0 }));
+  api.post('/franchise/backups/restore', async (req, res) => {
+    try {
+      const r = await franchise.restoreBackup((req.body || {}).file);
+      trackInjuries(franchise.league.leagueId, franchise.league);
+      engine.clear();
+      res.json({ ok: true, ...r });
+    } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+  });
+  api.delete('/leagues/:leagueKey/injury-ledger', (req, res) => { store.clearInjuryLedger(req.params.leagueKey); engine.clear(); res.json({ ok: true }); });
+  api.delete('/leagues/:leagueKey/tracker', (req, res) => { store.saveTracker(req.params.leagueKey, { events: [] }); engine.clear(); res.json({ ok: true }); });
+  api.get('/leagues/:leagueKey/export', (req, res) => {
+    const k = req.params.leagueKey;
+    const data = { exportedAt: new Date().toISOString(), leagueKey: k, meta: store.getMeta(k), tracker: store.getTracker(k), injuryLog: store.getInjuryLog(k), injuryLedger: store.getInjuryLedger(k), scheduleChanges: store.getScheduleLog(k), uiSettings: store.getSettings().ui || null };
+    res.setHeader('content-disposition', `attachment; filename="${String(k).replace(/[^\w.-]+/g, '_')}-franchise-control-data.json"`);
+    res.json(data);
+  });
+
   // ---- weekly recap
   api.get('/leagues/:leagueKey/recap', (req, res) => {
     const league = getLeague(req.params.leagueKey);
@@ -414,6 +510,8 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
   api.post('/settings', (req, res) => {
     const settings = { ...store.getSettings(), ...(req.body || {}) };
     store.saveSettings(settings);
+    franchise.keepBackups = Number(settings.backupKeep) || 0;
+    if (franchise.keepBackups && franchise.isOpen) franchise.pruneBackups(franchise.keepBackups);
     if (settings.schemaDirectory) franchise.schemaDirectory = settings.schemaDirectory;
     res.json({ ok: true, settings });
   });

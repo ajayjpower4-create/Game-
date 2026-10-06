@@ -303,6 +303,7 @@ export async function readLeague(franchise, { leagueId, sourceName } = {}) {
     teams[teamId] = {
       teamId,
       teamIndex: r.TeamIndex,
+      rowIndex: r.index,
       abbr: r.ShortName,
       city: r.LongName,
       nick: r.DisplayName,

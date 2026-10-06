@@ -15,6 +15,8 @@
     week: '',
     blockView: 'season',
     recapKey: null,
+    teamPage: null,
+    teamTab: 'overview',
     contractsView: 'league',
     contractsTeam: null,
     weeklyTeam: null,
@@ -28,7 +30,11 @@
   };
 
   // ---------- UI settings (saved in the data folder, applied live)
-  const UI_DEFAULTS = { theme: 'dark', accent: 'blue', textSize: 'normal', density: 'comfortable', sourceTags: true, startPage: 'connect', defaultStage: 'auto', copyFormat: 'aligned', moneyFormat: 'short', myTeams: {}, myTeamFilter: false, stickyHeaders: true, reduceMotion: false };
+  const UI_DEFAULTS = { theme: 'dark', accent: 'blue', textSize: 'normal', density: 'comfortable', sourceTags: true, startPage: 'connect', defaultStage: 'auto', copyFormat: 'aligned', moneyFormat: 'short', myTeams: {}, myTeamFilter: false, stickyHeaders: true, reduceMotion: false,
+    gameTab: 'highlights', leaderLength: 8, hiddenPages: [], autoReload: false, autoReloadSec: 30, confirmWrites: true };
+  const PAGES = [['schedule', 'Schedule & Injury Tool'], ['teams', 'Teams'], ['recap', 'Weekly Recap'], ['highlights', 'Highlights'], ['contracts', 'Contracts & Cap'], ['blocking', 'Blocking'], ['passrush', 'Pass Rush & Missed Sacks'], ['snaps', 'Snap Counts'], ['receiving', 'Targets & Drops'], ['tackling', 'Missed Tackles'], ['penalties', 'Penalties'], ['tracker', 'Game Tracker'], ['injuries', 'Injury Report']];
+  // Writes to the franchise file ask first unless that is switched off.
+  const confirmWrite = (msg) => (ui.confirmWrites === false ? true : confirm(msg));
   const ACCENTS = { blue: '#2f7de3', red: '#e3392f', green: '#23a55a', purple: '#8e5bd8', orange: '#e0822a', teal: '#1ba3a3', gold: '#c9a227' };
   const TEXT_ZOOM = { small: 0.9, normal: 1, large: 1.12, xlarge: 1.25 };
   let ui = { ...UI_DEFAULTS };
@@ -41,6 +47,14 @@
     root.classList.toggle('reduce-motion', Boolean(ui.reduceMotion));
     root.style.setProperty('--accent2', ACCENTS[ui.accent] || ACCENTS.blue);
     document.body.style.zoom = String(TEXT_ZOOM[ui.textSize] || 1);
+    const hidden = new Set(ui.hiddenPages || []);
+    $$('#nav button').forEach((b) => b.classList.toggle('hidden', hidden.has(b.dataset.section)));
+    $$('#nav .nav-group').forEach((g) => {
+      let el = g.nextElementSibling;
+      let any = false;
+      while (el && !el.classList.contains('nav-group')) { if (!el.classList.contains('hidden')) any = true; el = el.nextElementSibling; }
+      g.classList.toggle('hidden', !any);
+    });
   }
   const myTeam = () => (state.leagueKey && ui.myTeams && ui.myTeams[state.leagueKey]) || null;
   async function saveUi(patch) {
@@ -210,7 +224,7 @@
 
   const playerCell = (r) => `${r.playerId ? `<a href="#" class="plink" data-player="${esc(r.playerId)}" title="Game log">` : ''}<b>${esc(r.name)}</b>${r.playerId ? '</a>' : ''} <span class="muted">${esc(r.position)}${r.teamId && !state.teamId ? ' · ' + esc(abbr(r.teamId)) : ''}</span>`;
 
-  function leaders(title, rows, key, { d = 0, suffix = '', n = 8 } = {}) {
+  function leaders(title, rows, key, { d = 0, suffix = '', n = ui.leaderLength || 8 } = {}) {
     return `<div class="card"><h3>${esc(title)}</h3>${(rows || []).slice(0, n).map((r) => `<div class="leader"><div class="who">${esc(r.name)}<span>${esc(r.position)} · ${esc(abbr(r.teamId))}</span></div><div class="n">${fmt(r[key], d)}${suffix}</div></div>`).join('') || '<div class="muted">No games yet.</div>'}</div>`;
   }
 
@@ -383,6 +397,7 @@
     state.schedule = [];
     state.seasonCache.clear();
     if (!state.leagueKey) { render(); return; }
+    if (ui.autoReload) noteFileTime();
     const [l, s] = await Promise.all([api(`/leagues/${state.leagueKey}`), api(`/leagues/${state.leagueKey}/schedule`)]);
     state.league = l.league;
     state.schedule = s.games;
@@ -476,16 +491,27 @@
     return `
       <h1>Schedule &amp; Injury Tool</h1>
       <p class="lead">Pick any game. Played games open on their highlights, with the advanced stats a tab away. Games still to play open on the matchup preview: who wins the one-on-ones up front and how to plan for it. Or choose a player and injure him in any game: the injury lands on a random play and is written into the franchise file with the type, side and weeks you choose.</p>
+      ${canEditSchedule() ? await scheduleChangesHtml() : ''}
       ${weeks.length ? [...byWeek.entries()].map(([k, list]) => `<h2>${esc(list[0].label)}</h2><div class="games">${list.map(gameCard).join('')}</div>`).join('') : '<div class="empty">No games in this part of the season.</div>'}
     `;
   };
+
+  async function scheduleChangesHtml() {
+    let r;
+    try { r = await api(`/leagues/${state.leagueKey}/schedule/changes`); } catch { return ''; }
+    const live = r.entries.filter((e) => !e.undone);
+    if (!r.entries.length) return '<p class="small-note">To swap who a team plays in a game that has not been played yet, use <b>Change matchup</b> on the game.</p>';
+    return `<div class="card"><h3>Schedule changes you made (${live.length} active)</h3><ul class="list">${r.entries.slice(0, 12).map((e) => `<li><span>${e.lines.map(esc).join('<br>')}<div class="small-note">${esc(new Date(e.at).toLocaleString())}${e.undone ? ' · undone' : ''}</div></span>${e.undone ? '' : `<button class="small" data-undo-sched="${esc(e.id)}">Undo</button>`}</li>`).join('')}</ul></div>`;
+  }
+
+  const canEditSchedule = () => Boolean(state.league && state.league.source === 'franchise');
 
   function gameCard(g) {
     const played = g.status === 'played';
     return `<div class="game ${played ? '' : 'unplayed'}" data-game="${esc(g.gameId)}">
       <div class="teams"><span>${esc(g.away)} ${played ? g.awayScore : ''}</span><span class="muted">@</span><span>${esc(g.home)} ${played ? g.homeScore : ''}</span></div>
       <div class="meta"><span>${esc(g.awayName)} at ${esc(g.homeName)}</span><span>${played ? (g.isSimmed ? 'Simmed' : 'Final') : 'Not played'}</span></div>
-      <div class="actions">${played ? `<button class="small blue" data-open-game="${esc(g.gameId)}" data-open-tab="highlights">Highlights</button><button class="small" data-open-game="${esc(g.gameId)}" data-open-tab="blocking">Advanced stats</button>` : `<button class="small blue" data-open-game="${esc(g.gameId)}" data-open-tab="preview">Matchup preview</button>`}<button class="small" data-injure="${esc(g.gameId)}">Injure a player</button></div>
+      <div class="actions">${played ? `<button class="small blue" data-open-game="${esc(g.gameId)}" data-open-tab="highlights">Highlights</button><button class="small" data-open-game="${esc(g.gameId)}" data-open-tab="box">Box score</button>` : `<button class="small blue" data-open-game="${esc(g.gameId)}" data-open-tab="preview">Matchup preview</button>${canEditSchedule() && ['PreSeason', 'RegularSeason'].includes(g.weekType) ? `<button class="small" data-sched="${esc(g.gameId)}">Change matchup</button>` : ''}`}<button class="small" data-injure="${esc(g.gameId)}">Injure a player</button></div>
     </div>`;
   }
 
@@ -549,9 +575,9 @@
     }
     const teamPick = ['highlights', 'box'].includes(state.gameTab) ? '' : `<div class="field"><span>Team</span><select id="game-team"><option value="${esc(g.homeTeamId)}" ${state.gameTeam === g.homeTeamId ? 'selected' : ''}>${esc(g.homeName)}</option><option value="${esc(g.awayTeamId)}" ${state.gameTeam === g.awayTeamId ? 'selected' : ''}>${esc(g.awayName)}</option></select></div>`;
     return `
-      <button id="back-sched">← ${({ highlights: 'Highlights', recap: 'Weekly Recap', contracts: 'Contracts' })[state.backTo] || 'Schedule'}</button>
+      <button id="back-sched">← ${({ highlights: 'Highlights', recap: 'Weekly Recap', contracts: 'Contracts', teams: state.teamPage ? teamName(state.teamPage).displayName : 'Teams' })[state.backTo] || 'Schedule'}</button>
       <h1>${esc(g.label)}: ${played ? `${esc(g.away)} ${g.awayScore} @ ${esc(g.home)} ${g.homeScore}` : `${esc(g.away)} @ ${esc(g.home)} <span class="pill">Not played yet</span>`}</h1>
-      <div class="toolbar">${teamPick}<button data-injure="${esc(g.gameId)}">Injure a player in this game</button>${played ? `<button data-track="${esc(g.gameId)}">Log events in the Game Tracker</button>` : ''}</div>
+      <div class="toolbar">${teamPick}<button data-injure="${esc(g.gameId)}">Injure a player in this game</button>${played ? `<button data-track="${esc(g.gameId)}">Log events in the Game Tracker</button>` : canEditSchedule() && ['PreSeason', 'RegularSeason'].includes(g.weekType) ? `<button data-sched="${esc(g.gameId)}">Change matchup</button>` : ''}<a href="#" class="small" data-team-page="${esc(g.awayTeamId)}">${esc(g.away)} team page</a><a href="#" class="small" data-team-page="${esc(g.homeTeamId)}">${esc(g.home)} team page</a></div>
       <div class="tabs">${tabs.map(([k, l]) => `<button class="${state.gameTab === k ? 'active' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
       ${body}`;
   }
@@ -1032,7 +1058,7 @@
     const powerHtml = x.powerRankings.length ? `<h2>Power rankings</h2>${x.powerRankingsNote ? `<p class="small-note">${esc(x.powerRankingsNote)}</p>` : ''}${table('rc-power', x.powerRankings.map((p) => ({ ...p, name: p.name })), [
       { key: 'rank', label: '#', render: (p) => `<b>${p.rank}</b>` },
       { key: 'move', label: 'Move', render: (p) => move(p.move) },
-      { key: 'abbr', label: 'Team', left: true, render: (p) => `<b>${esc(p.abbr)}</b> <span class="muted">${esc(p.name)}</span>` },
+      { key: 'abbr', label: 'Team', left: true, render: (p) => `<a href="#" data-team-page="${esc(p.teamId)}"><b>${esc(p.abbr)}</b></a> <span class="muted">${esc(p.name)}</span>` },
       { key: 'record', label: 'Record', left: true },
       { key: 'diff', label: 'Pt diff', render: (p) => `${p.diff > 0 ? '+' : ''}${p.diff}` },
       { key: 'overall', label: 'OVR' },
@@ -1189,6 +1215,142 @@
       ${nav}${body}
       ${file ? '' : '<p class="small-note">A Companion App export carries one salary, one bonus, the cap hit and the release numbers for each contract. The year-by-year breakdown, total value and dead money come from the PC franchise file.</p>'}`;
   };
+
+  // ---------- change a matchup
+  async function openScheduleModal(gameId, presetTeam) {
+    const root = $('#modal-root');
+    let opts;
+    try { opts = await api(`/leagues/${state.leagueKey}/games/${gameId}/schedule-options`); } catch (e) { banner(esc(e.message), 'error'); return; }
+    const g = opts.game;
+    if (!opts.editable.ok) { banner(esc(opts.editable.reason), 'error'); return; }
+    const inGame = [g.homeTeamId, g.awayTeamId];
+    let teamId = inGame.includes(presetTeam) ? presetTeam : inGame.includes(myTeam()) ? myTeam() : g.homeTeamId;
+    let newOpp = '';
+    let flip = false;
+    let plan = null;
+    const T = (id) => opts.teams.find((t) => t.teamId === id) || { abbr: '?', name: '?' };
+    const draw = () => {
+      const oldOpp = teamId === g.homeTeamId ? g.awayTeamId : g.homeTeamId;
+      const choices = opts.teams.filter((t) => !inGame.includes(t.teamId));
+      root.innerHTML = `<div class="modal-back" id="sm-back"><div class="modal">
+        <h2>Change matchup · ${esc(g.label)}: ${esc(g.away)} @ ${esc(g.home)}</h2>
+        <p class="small-note">Pick whose game to change and the new opponent. The new opponent leaves his own game that week and your old opponent takes his place there, so every team still plays once that week and no bye weeks move. Written into the franchise file, with a backup first.</p>
+        <div class="teamtabs">${inGame.map((id) => `<button class="teamtab${teamId === id ? ' active' : ''}" data-sm-team="${esc(id)}">${esc(T(id).name)}</button>`).join('')}</div>
+        <div class="form-grid">
+          <div class="field full"><span>New opponent for the ${esc(T(teamId).name)} (instead of ${esc(T(oldOpp).abbr)})</span>
+            <select id="sm-opp"><option value="">Keep ${esc(T(oldOpp).abbr)}</option>${choices.map((t) => `<option value="${esc(t.teamId)}" ${t.bye || t.played ? 'disabled' : ''} ${newOpp === t.teamId ? 'selected' : ''}>${esc(t.abbr)} — ${esc(t.name)}${t.bye ? ' (bye that week)' : t.played ? ' (already played)' : ` (now ${t.home ? 'vs' : '@'} ${esc(T(t.opponentId).abbr)})`}</option>`).join('')}</select></div>
+          <div class="field full"><label class="check"><input type="checkbox" id="sm-flip" ${flip ? 'checked' : ''}> Swap home and away in this game</label></div>
+        </div>
+        <div id="sm-plan">${plan ? `<div class="plan"><div class="headline">What changes</div>${plan.lines.map((l) => `<div>${esc(l)}</div>`).join('')}${plan.notes.length ? `<ul class="tips">${plan.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}</div>` : '<p class="small-note">Pick a new opponent or swap home and away to see what changes.</p>'}</div>
+        <div class="modal-actions"><button id="sm-cancel">Cancel</button><button class="primary" id="sm-apply" ${plan ? '' : 'disabled'}>Write into franchise file</button></div>
+        <p class="small-note">Close the franchise in Madden before writing, then load it again. Every change can be undone from the Schedule page.</p>
+      </div></div>`;
+      $('#sm-cancel').onclick = () => { root.innerHTML = ''; };
+      $('#sm-back').onclick = (e) => { if (e.target.id === 'sm-back') root.innerHTML = ''; };
+      $$('[data-sm-team]', root).forEach((b) => (b.onclick = () => { teamId = b.dataset.smTeam; newOpp = ''; plan = null; draw(); }));
+      $('#sm-opp').onchange = (e) => { newOpp = e.target.value; replan(); };
+      $('#sm-flip').onchange = (e) => { flip = e.target.checked; replan(); };
+      $('#sm-apply').onclick = async () => {
+        if (!plan || !confirmWrite(`Write this into the franchise file?\n\n${plan.lines.join('\n')}\n\nA backup is made first.`)) return;
+        try {
+          const r = await api(`/leagues/${state.leagueKey}/schedule/apply`, { method: 'POST', body: { gameId, teamId, newOpponentId: newOpp || null, flipHomeAway: flip } });
+          root.innerHTML = '';
+          banner(`Schedule changed. ${esc(r.entry.lines.join(' · '))}. Undo it from the Schedule page any time.`, 'ok');
+          await loadLeague();
+        } catch (e) { banner(esc(e.message), 'error'); }
+      };
+    };
+    const replan = async () => {
+      plan = null;
+      if (!newOpp && !flip) { draw(); return; }
+      try { plan = (await api(`/leagues/${state.leagueKey}/schedule/plan`, { method: 'POST', body: { gameId, teamId, newOpponentId: newOpp || null, flipHomeAway: flip } })).plan; } catch (e) { plan = null; draw(); $('#sm-plan').innerHTML = `<p class="small-note injured">${esc(e.message)}</p>`; return; }
+      draw();
+    };
+    draw();
+  }
+
+  // ---------- teams
+  sections.teams = async () => {
+    if (!state.league) return '<div class="empty">Connect a franchise first.</div>';
+    const teams = state.league.teams;
+    if (state.teamPage && !teams.some((t) => t.teamId === state.teamPage)) state.teamPage = null;
+    if (!state.teamPage) {
+      // Every team, grouped by division, with its record.
+      const recs = await api(`/leagues/${state.leagueKey}/recap`).catch(() => null);
+      const power = recs && recs.recap ? new Map(recs.recap.powerRankings.map((p) => [p.teamId, p])) : new Map();
+      const divOf = (t) => t.division || DIVS[t.abbr] || 'Teams';
+      const groups = {};
+      for (const t of teams) (groups[divOf(t)] ||= []).push(t);
+      return `<h1>Teams</h1><p class="lead">Pick a team for everything about it: record and standing, how it is playing, schedule and results, roster, stat leaders, injuries, team news and money.</p>
+        <div class="grid cols-4">${Object.entries(groups).sort(([a], [b]) => a.localeCompare(b)).map(([d, list]) => `<div class="card"><h3>${esc(d)}</h3>${list.map((t) => { const p = power.get(t.teamId); return `<a href="#" class="team-tile ${myTeam() === t.teamId ? 'mine' : ''}" data-team-page="${esc(t.teamId)}"><b>${esc(t.abbr)}</b> <span>${esc(t.displayName)}</span><span class="rec">${p ? `${esc(p.record)} · #${p.rank}` : ''}</span></a>`; }).join('')}</div>`).join('')}</div>`;
+    }
+    const r = await api(`/leagues/${state.leagueKey}/teams/${state.teamPage}/profile`);
+    const x = r.profile;
+    const t = x.team;
+    const tabs = [['overview', 'Overview'], ['schedule', 'Schedule & results'], ['roster', `Roster (${x.rosterCount.total})`], ['stats', 'Stats'], ['injuries', `Injuries (${x.rosterCount.injured})`], ['news', 'News'], ['money', 'Money']];
+    const st = x.standing;
+    const gameLink = (g, tab) => `<a href="#" data-team-game="${esc(g.gameId)}" data-tab2="${tab}">${esc(g.label)}</a>`;
+    const nextCard = x.nextGame ? `<div class="card"><h3>Next game</h3><div class="big">${esc(x.nextGame.label)}: ${x.nextGame.home ? 'vs' : '@'} <b>${esc(x.nextGame.opponentName)}</b>${x.nextGame.opponentRecord ? ` <span class="muted">(${esc(x.nextGame.opponentRecord)})</span>` : ''}</div><div class="toolbar">${gameLink(x.nextGame, 'preview').replace(esc(x.nextGame.label), 'Matchup preview')}${x.canEditSchedule && x.nextGame.editable ? ` <button class="small" data-sched="${esc(x.nextGame.gameId)}" data-sched-team="${esc(x.teamId)}">Change matchup</button>` : ''}</div></div>` : '<div class="card"><h3>Next game</h3><div class="muted">No games left this season.</div></div>';
+    const lastCard = x.lastGame ? `<div class="card"><h3>Last game</h3><div class="big"><span class="${x.lastGame.won ? 'won' : x.lastGame.won === false ? 'lost' : ''}">${esc(x.lastGame.result)}</span> ${x.lastGame.home ? 'vs' : '@'} ${esc(x.lastGame.opponentName)}</div><div class="toolbar">${gameLink(x.lastGame, 'highlights').replace(esc(x.lastGame.label), 'Highlights')} ${gameLink(x.lastGame, 'box').replace(esc(x.lastGame.label), 'Box score')}</div></div>` : '<div class="card"><h3>Last game</h3><div class="muted">No games played yet.</div></div>';
+    const lead = (title, list, unit) => `<div class="card"><h3>${esc(title)}</h3>${list.length ? list.map((l) => `<div class="leader"><div class="who">${who({ ...l, teamId: null })}<div class="small-note">${esc(l.line)}</div></div><div class="n">${l.value}${unit ? ` <span class="muted small">${unit}</span>` : ''}</div></div>`).join('') : '<div class="muted">Nobody yet.</div>'}</div>`;
+    let body = '';
+    if (state.teamTab === 'overview') {
+      body = `<div class="grid cols-2">${nextCard}${lastCard}</div>
+        <div class="grid cols-2" style="margin-top:14px">
+          <div class="card"><h3>Position groups (starters' average OVR)</h3>${Object.entries(x.unitOvr).map(([k, v]) => `<div class="posbar wide"><span class="p">${esc(k)}</span><span class="bar"><i style="width:${Math.max(2, ((v || 0) - 40) * 1.7)}%"></i></span><span class="m">${v ?? '—'}</span></div>`).join('')}</div>
+          <div class="card"><h3>Where they rank (${esc(x.stage === 'pre' ? 'preseason' : x.stage === 'post' ? 'playoffs' : 'regular season')})</h3>${x.ranks.filter((k) => k.value != null).slice(0, 8).map((k) => `<div class="leader"><div class="who">${esc(k.label)}</div><div class="n">${k.value} <span class="muted small">#${k.rank} of ${k.of}</span></div></div>`).join('') || '<div class="muted">No games yet.</div>'}</div>
+        </div>
+        <div class="grid cols-3" style="margin-top:14px">${lead('Passing', x.leaders.passing, 'yds')}${lead('Rushing', x.leaders.rushing, 'yds')}${lead('Receiving', x.leaders.receiving, 'yds')}</div>
+        ${x.injuries.current.length ? `<h3 style="margin-top:16px">Injured now</h3><ul class="list">${x.injuries.current.slice(0, 6).map((p) => `<li><span>${who({ ...p, teamId: null })} · ${esc(p.injury)}</span></li>`).join('')}</ul>` : ''}
+        ${x.news.stories.length ? `<h3 style="margin-top:16px">Latest news</h3>${x.news.stories.slice(0, 2).map((n) => `<div class="card news"><div class="news-head">${esc(n.headline)}</div><div>${esc(n.text)}</div></div>`).join('')}` : ''}`;
+    } else if (state.teamTab === 'schedule') {
+      const rows = [...x.schedule.map((g) => ({ ...g, sortKey: ({ pre: 0, reg: 1, post: 2 }[g.stage] ?? 3) * 100 + g.week })), ...x.byes.map((b) => ({ ...b, sortKey: 100 + b.week }))].sort((a, b) => a.sortKey - b.sortKey);
+      body = `<div class="table-tools"><button class="small" data-copy-table="tm-sched">Copy</button></div><div class="table-wrap"><table class="data" id="tm-sched"><thead><tr><th class="left">Week</th><th class="left">Opponent</th><th>Their record</th><th class="left">Result</th><th>Record after</th><th class="left"></th></tr></thead><tbody>${rows.map((g) => g.bye ? `<tr class="done"><td class="left">${esc(g.label)}</td><td class="left" colspan="5">Bye week</td></tr>` : `<tr><td class="left">${esc(g.label)}</td><td class="left">${g.home ? 'vs' : '@'} <a href="#" data-team-page="${esc(g.opponentId)}"><b>${esc(g.opponent)}</b></a> <span class="muted">${esc(g.opponentName)}</span></td><td>${esc(g.opponentRecord || '—')}</td><td class="left">${g.result ? `<span class="${g.won ? 'won' : g.won === false ? 'lost' : ''}">${esc(g.result)}</span>` : '<span class="muted">Not played</span>'}</td><td>${esc(g.recordAfter || '')}</td><td class="left no-copy">${g.status === 'played' ? `${gameLink(g, 'highlights').replace(esc(g.label), 'Highlights')} · ${gameLink(g, 'box').replace(esc(g.label), 'Box score')}` : `${gameLink(g, 'preview').replace(esc(g.label), 'Preview')}${x.canEditSchedule && g.editable ? ` <button class="small" data-sched="${esc(g.gameId)}" data-sched-team="${esc(x.teamId)}">Change matchup</button>` : ''}`}</td></tr>`).join('')}</tbody></table></div>
+        ${x.canEditSchedule ? '' : '<p class="small-note">Matchups can be changed in a PC franchise file only.</p>'}`;
+    } else if (state.teamTab === 'roster') {
+      body = x.rosterGroups.map((gr) => `<h3>${esc(gr.label)} (${gr.players.length})</h3>${table(`tm-ros-${gr.label.replace(/\W+/g, '')}`, gr.players, [
+        { key: 'name', label: 'Player', left: true, render: (p) => `${playerCell({ ...p, teamId: null })}${p.injury ? ` <span class="injured small">${esc(p.injury)}</span>` : ''}` },
+        { key: 'jerseyNum', label: '#' },
+        { key: 'depth', label: 'Depth', render: (p) => `${esc(p.position)}${p.depth}` },
+        { key: 'overall', label: 'OVR' },
+        { key: 'age', label: 'Age' },
+        { key: 'devTrait', label: 'Dev', left: true },
+        { key: 'yearsPro', label: 'Exp' },
+        { key: 'capHit', label: 'Cap hit', render: (p) => money(p.capHit) },
+        { key: 'yearsLeft', label: 'Yrs left' },
+      ], { defaultSort: 'overall', maxHeight: false })}`).join('');
+    } else if (state.teamTab === 'stats') {
+      const a = x.advanced;
+      body = `<div class="grid cols-2"><div class="card"><h3>Per game, with league rank</h3>${x.ranks.map((k) => `<div class="leader"><div class="who">${esc(k.label)}</div><div class="n">${k.value ?? '—'} ${k.rank ? `<span class="muted small">#${k.rank} of ${k.of}</span>` : ''}</div></div>`).join('')}</div>
+        <div class="card"><h3>More</h3><div class="leader"><div class="who">Third downs</div><div class="n">${esc(x.extra.thirdDown || '—')}</div></div><div class="leader"><div class="who">Red zone</div><div class="n">${esc(x.extra.redZone || '—')}</div></div><div class="leader"><div class="who">Time of possession per game</div><div class="n">${esc(x.extra.possession || '—')}</div></div><div class="leader"><div class="who">Turnover margin</div><div class="n">${x.extra.turnoverMargin > 0 ? '+' : ''}${x.extra.turnoverMargin}</div></div>
+          ${a ? `<h3 style="margin-top:12px">From the tool's advanced stats</h3><div class="leader"><div class="who">Pressures allowed</div><div class="n">${a.pressuresAllowed} <span class="muted small">${a.games ? (a.pressuresAllowed / a.games).toFixed(1) : 0}/g</span></div></div><div class="leader"><div class="who">Pressures by the defense</div><div class="n">${a.pressures}</div></div><div class="leader"><div class="who">Pancakes</div><div class="n">${a.pancakes}</div></div><div class="leader"><div class="who">Missed tackles</div><div class="n">${a.missedTackles}</div></div><div class="leader"><div class="who">Drops</div><div class="n">${a.drops}</div></div><div class="leader"><div class="who">Penalties</div><div class="n">${a.penalties} for ${a.penaltyYards} yds</div></div>` : ''}</div></div>
+        <div class="grid cols-3" style="margin-top:14px">${lead('Passing', x.leaders.passing, 'yds')}${lead('Rushing', x.leaders.rushing, 'yds')}${lead('Receiving', x.leaders.receiving, 'yds')}</div>
+        <div class="grid cols-3" style="margin-top:14px">${lead('Tackles', x.leaders.tackles, 'tkl')}${lead('Sacks', x.leaders.sacks, 'sk')}${lead('Interceptions', x.leaders.interceptions, 'INT')}</div>`;
+    } else if (state.teamTab === 'injuries') {
+      body = `<h3>Injured now (${x.injuries.current.length})</h3>${x.injuries.current.length ? `<ul class="list">${x.injuries.current.map((p) => `<li><span>${who({ ...p, teamId: null })} · ${esc(p.injury)}</span></li>`).join('')}</ul>` : '<div class="muted">Nobody is hurt.</div>'}
+        <h3 style="margin-top:16px">Injury history the tool has seen (${x.injuries.history.length})</h3>${x.injuries.history.length ? `<ul class="list">${x.injuries.history.map((h) => `<li><span>${esc(h.name)} <span class="muted">${esc(h.position || '')}</span> · ${esc(h.injury)}${h.severityLabel ? ` · ${esc(h.severityLabel)}` : ''}${h.healed ? ' · <span class="muted">healed</span>' : ''}</span>${h.gameId ? `<a href="#" data-team-game="${esc(h.gameId)}" data-tab2="injuries">game</a>` : ''}</li>`).join('')}</ul>` : '<div class="muted">None recorded yet.</div>'}`;
+    } else if (state.teamTab === 'news') {
+      const n = x.news;
+      body = !n.available ? '<div class="empty">League news comes from the PC franchise file; a Companion App or EA export does not include it.</div>' : `
+        ${n.stories.length ? n.stories.map((s2) => `<div class="card news">${s2.breaking ? '<span class="pill loss">Breaking</span> ' : ''}<div class="news-head">${esc(s2.headline)}</div><div>${esc(s2.text)}</div></div>`).join('') : '<p class="muted">No news stories about this team yet.</p>'}
+        ${n.posts.length ? `<h3>Around the league</h3><ul class="list">${n.posts.map((p) => `<li><span><b>${esc(p.author || 'Post')}</b>: ${esc(p.text)}</span></li>`).join('')}</ul>` : ''}
+        <h3>Transactions (${n.transactions.length})</h3>${n.transactions.length ? `<div class="table-wrap"><table class="data" id="tm-tx"><thead><tr><th class="left">Player</th><th class="left">Move</th><th class="left">From → To</th><th>Contract</th></tr></thead><tbody>${n.transactions.map((tx) => `<tr><td class="left">${who({ ...tx, teamId: null })}</td><td class="left">${esc(tx.kind)} <span class="muted">${tx.direction === 'in' ? '(joined)' : tx.direction === 'out' ? '(left)' : ''}</span></td><td class="left">${esc(tx.fromAbbr || 'Free agency')} → ${esc(tx.toAbbr || (tx.newStatus === 'Retired' ? 'Retired' : 'Free agency'))}</td><td>${tx.contract && tx.contract.length ? `${tx.contract.length} yr, ${money(tx.contract.total)}` : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">No signings, releases or trades yet.</div>'}`;
+    } else if (state.teamTab === 'money') {
+      const c = x.cap;
+      body = `${c ? `<div class="stat-row card"><div class="stat"><div class="v ${c.room < 0 ? 'injured' : ''}">${money(c.room)}</div><div class="l">cap room</div></div><div class="stat"><div class="v">${money(c.spent)}</div><div class="l">cap used</div></div><div class="stat"><div class="v">${money(c.teamCap)}</div><div class="l">team cap</div></div>${c.deadThisYear != null ? `<div class="stat"><div class="v">${money(c.deadThisYear)}</div><div class="l">dead money</div></div>` : ''}${c.nextYearRoom != null ? `<div class="stat"><div class="v">${money(c.nextYearRoom)}</div><div class="l">room next year</div></div>` : ''}</div>` : '<div class="muted">No cap numbers for this team.</div>'}
+        <h3>Biggest cap hits</h3>${x.topContracts.length ? x.topContracts.map((p) => `<div class="leader"><div class="who">${who({ ...p, teamId: null })}<span>${p.yearsLeft} yr left</span></div><div class="n">${money(p.capHit)}</div></div>`).join('') : '<div class="muted">No contracts on file.</div>'}
+        <div class="toolbar"><a href="#" data-ct-team="${esc(x.teamId)}">Every contract on the team</a></div>`;
+    }
+    const sp = st.power ? `#${st.power.rank} in power rankings` : '';
+    return `<div class="head-row"><button id="team-back">← All teams</button><button class="blue" data-copy-block="team-body">Copy as text</button></div>
+      <div id="team-body">
+      <h1>${esc(t.name)} <span class="muted">${esc(t.abbr)}</span></h1>
+      <div class="stat-row card team-head"><div class="stat"><div class="v">${esc(x.record.text)}</div><div class="l">${esc(x.record.stage === 'pre' ? 'preseason' : 'regular season')} record</div></div>${st.division ? `<div class="stat"><div class="v">${st.division.place}${['st', 'nd', 'rd'][st.division.place - 1] || 'th'}</div><div class="l">in the ${esc(st.division.name)}</div></div>` : ''}${st.power ? `<div class="stat"><div class="v">#${st.power.rank}</div><div class="l">power ranking</div></div>` : ''}<div class="stat"><div class="v">${x.record.diff > 0 ? '+' : ''}${x.record.diff}</div><div class="l">point differential</div></div><div class="stat"><div class="v">${x.record.streak ? esc(x.record.streak.text) : '—'}</div><div class="l">streak</div></div><div class="stat"><div class="v">${t.overall ?? '—'}</div><div class="l">team OVR</div></div>${x.record.form ? `<div class="stat"><div class="v form">${x.record.form.split('').map((c) => `<span class="f-${c}">${c}</span>`).join('')}</div><div class="l">last games</div></div>` : ''}</div>
+      ${st.division ? `<p class="small-note">${esc(st.division.name)}: ${st.division.teams.map((d) => `${esc(d.abbr)} ${esc(d.record)}`).join(' · ')}${sp ? ` · ${esc(sp)}` : ''}</p>` : ''}
+      <div class="tabs">${tabs.map(([k, l]) => `<button class="${state.teamTab === k ? 'active' : ''}" data-team-tab="${k}">${esc(l)}</button>`).join('')}</div>
+      ${body}</div>`;
+  };
+  const DIVS = { BUF: 'AFC East', MIA: 'AFC East', NE: 'AFC East', NYJ: 'AFC East', BAL: 'AFC North', CIN: 'AFC North', CLE: 'AFC North', PIT: 'AFC North', HOU: 'AFC South', IND: 'AFC South', JAX: 'AFC South', TEN: 'AFC South', DEN: 'AFC West', KC: 'AFC West', LAC: 'AFC West', LV: 'AFC West', DAL: 'NFC East', NYG: 'NFC East', PHI: 'NFC East', WAS: 'NFC East', CHI: 'NFC North', DET: 'NFC North', GB: 'NFC North', MIN: 'NFC North', ATL: 'NFC South', CAR: 'NFC South', NO: 'NFC South', TB: 'NFC South', ARI: 'NFC West', LAR: 'NFC West', SEA: 'NFC West', SF: 'NFC West' };
 
   // ---------- tracker
   sections.tracker = async () => {
@@ -1394,7 +1556,7 @@
       setButtons();
       $('#im-schedule').onclick = async () => { try { await api(`/leagues/${state.leagueKey}/injuries/schedule`, { method: 'POST', body: req(plan._salt) }); root.innerHTML = ''; banner('Injury saved. Find it under Injury Report and write it into the file when you are ready.', 'ok'); } catch (e) { banner(esc(e.message), 'error'); } };
       $('#im-apply').onclick = async () => {
-        if (!confirm(`Write this injury into the franchise file now?\n\n${plan.player.name}: ${plan.injury.name}, ${plan.injury.label}.\n\nA backup copy of the file is made first. Make sure Madden is not in this franchise while writing.`)) return;
+        if (!confirmWrite(`Write this injury into the franchise file now?\n\n${plan.player.name}: ${plan.injury.name}, ${plan.injury.label}.\n\nA backup copy of the file is made first. Make sure Madden is not in this franchise while writing.`)) return;
         try { const r = await api(`/leagues/${state.leagueKey}/injuries/apply`, { method: 'POST', body: { ...req(plan._salt), applyMode: 'now' } }); root.innerHTML = ''; banner(`Done. ${esc(r.plan.player.name)} is out: ${esc(r.plan.injury.name)}, ${esc(r.plan.injury.label)}. Backup: <span class="mono">${esc(r.backupPath)}</span>`, 'ok'); await loadLeague(); } catch (e) { banner(esc(e.message), 'error'); }
       };
     };
@@ -1423,7 +1585,7 @@
       <div class="card" style="margin-top:14px">
         <h3>How the app starts and filters</h3>
         <div class="form-grid">
-          <div class="field"><span>Open on this page</span>${opt('ui-startPage', ui.startPage, [['connect', 'Connect'], ['schedule', 'Schedule & Injury Tool'], ['recap', 'Weekly Recap'], ['highlights', 'Highlights'], ['contracts', 'Contracts & Cap'], ['blocking', 'Blocking']])}</div>
+          <div class="field"><span>Open on this page</span>${opt('ui-startPage', ui.startPage, [['connect', 'Connect'], ['schedule', 'Schedule & Injury Tool'], ['teams', 'Teams'], ['recap', 'Weekly Recap'], ['highlights', 'Highlights'], ['contracts', 'Contracts & Cap'], ['blocking', 'Blocking']])}</div>
           <div class="field"><span>Season part to show first</span>${opt('ui-defaultStage', ui.defaultStage, [['auto', 'Whatever has games'], ['pre', 'Preseason'], ['reg', 'Regular season'], ['post', 'Playoffs']])}</div>
           <div class="field"><span>My team${state.league ? ` in ${esc(state.league.name)}` : ''}</span>${state.league ? `<select id="ui-myTeam"><option value="">None</option>${teams.map((t) => `<option value="${esc(t.teamId)}" ${myTeam() === t.teamId ? 'selected' : ''}>${esc(t.abbr)} — ${esc(t.displayName)}</option>`).join('')}</select>` : '<span class="muted">Open a league first</span>'}</div>
         </div>
@@ -1438,6 +1600,29 @@
         </div>
         <div class="modal-actions"><button id="ui-reset">Reset look and feel to defaults</button></div>
         <p class="small-note" id="ui-saved">Changes apply and save right away.</p>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Pages</h3>
+        <div class="form-grid">
+          <div class="field"><span>Played games open on</span>${opt('ui-gameTab', ui.gameTab, [['highlights', 'Highlights'], ['box', 'Box score'], ['blocking', 'Blocking'], ['injuries', 'Injuries']])}</div>
+          <div class="field"><span>Names in each leaderboard</span>${opt('ui-leaderLength', ui.leaderLength, [['5', '5'], ['8', '8'], ['10', '10'], ['15', '15']])}</div>
+        </div>
+        <p class="small-note" style="margin-top:12px">Show these pages in the sidebar:</p>
+        <div class="checks cols">${PAGES.map(([k, l]) => `<label class="check"><input type="checkbox" data-page-toggle="${k}" ${(ui.hiddenPages || []).includes(k) ? '' : 'checked'}> ${esc(l)}</label>`).join('')}</div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Franchise file</h3>
+        <div class="checks">${check('ui-autoReload', ui.autoReload, 'Reload the franchise file by itself when Madden saves it')}${check('ui-confirmWrites', ui.confirmWrites, 'Ask before writing anything into the franchise file')}</div>
+        <div class="form-grid" style="margin-top:10px">
+          <div class="field"><span>Check for a new save every</span>${opt('ui-autoReloadSec', ui.autoReloadSec, [['15', '15 seconds'], ['30', '30 seconds'], ['60', '1 minute'], ['300', '5 minutes']])}</div>
+          <div class="field"><span>Backups to keep (made before every write)</span><select id="set-backupKeep">${[['0', 'All of them'], ['5', 'Last 5'], ['10', 'Last 10'], ['20', 'Last 20'], ['50', 'Last 50']].map(([v, l]) => `<option value="${v}" ${String(s.backupKeep || 0) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        </div>
+        <div id="backup-list">${state.status.franchiseOpen ? '<p class="small-note">Loading backups…</p>' : '<p class="small-note">Open a PC franchise file to see its backups.</p>'}</div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <h3>Your data</h3>
+        <p class="small-note">Everything the tool keeps for ${state.league ? esc(state.league.name) : 'a league'}: Game Tracker events, injuries you made, the injury history and schedule changes.</p>
+        <div class="toolbar">${state.league ? `<a class="pill" href="/api/leagues/${encodeURIComponent(state.leagueKey)}/export" download>Save a copy of this league's data</a><button class="danger" id="data-clear-ledger">Clear injury history</button><button class="danger" id="data-clear-tracker">Clear Game Tracker events</button>` : ''}<button class="danger" id="ui-reset-all">Reset every setting</button></div>
       </div>
       <div class="card" style="margin-top:14px">
         <h3>Connection</h3>
@@ -1456,8 +1641,8 @@
 
   // ---------- render / events
   async function render() {
-    $$('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.section === state.section || (state.section === 'game' && b.dataset.section === (['highlights', 'recap'].includes(state.backTo) ? state.backTo : 'schedule'))));
-    const showFilters = !['connect', 'settings', 'game', 'recap'].includes(state.section);
+    $$('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.section === state.section || (state.section === 'game' && b.dataset.section === (['highlights', 'recap', 'teams'].includes(state.backTo) ? state.backTo : 'schedule'))));
+    const showFilters = !['connect', 'settings', 'game', 'recap', 'teams'].includes(state.section);
     $('#stage-field').classList.toggle('hidden', !showFilters || state.section === 'contracts');
     $('#team-field').classList.toggle('hidden', !showFilters || ['tracker', 'injuries'].includes(state.section));
     const weekOn = showFilters && !['tracker', 'injuries', 'contracts'].includes(state.section) && !(state.section === 'blocking' && state.blockView === 'weekly');
@@ -1494,7 +1679,16 @@
     if (eaUI.showDiag && $('#ea-diag')) api('/ea/diagnostics').then((r) => { const el = $('#ea-diag'); if (el) el.textContent = r.lines.join('\n') || 'nothing yet'; }).catch(() => {});
     on('[data-stats]', 'onclick', (e) => { e.stopPropagation(); state.gameId = e.currentTarget.dataset.stats; state.section = 'game'; render(); });
     on('[data-open-game]', 'onclick', (e) => { e.stopPropagation(); state.gameId = e.currentTarget.dataset.openGame; state.gameTab = e.currentTarget.dataset.openTab; state.backTo = 'schedule'; state.section = 'game'; render(); });
-    on('[data-hl-game]', 'onclick', (e) => { state.gameId = e.currentTarget.dataset.hlGame; state.gameTab = 'highlights'; state.backTo = state.section === 'recap' ? 'recap' : 'highlights'; state.section = 'game'; render(); });
+    on('[data-hl-game]', 'onclick', (e) => { state.gameId = e.currentTarget.dataset.hlGame; state.gameTab = 'highlights'; state.backTo = ['recap', 'teams'].includes(state.section) ? state.section : 'highlights'; state.section = 'game'; render(); });
+    on('[data-sched]', 'onclick', (e) => { e.stopPropagation(); openScheduleModal(e.currentTarget.dataset.sched, e.currentTarget.dataset.schedTeam || null); });
+    on('[data-team-page]', 'onclick', (e) => { e.preventDefault(); e.stopPropagation(); state.teamPage = e.currentTarget.dataset.teamPage; state.teamTab = 'overview'; state.section = 'teams'; render(); });
+    on('[data-team-tab]', 'onclick', (e) => { state.teamTab = e.currentTarget.dataset.teamTab; render(); });
+    on('#team-back', 'onclick', () => { state.teamPage = null; render(); });
+    on('[data-team-game]', 'onclick', (e) => { e.preventDefault(); state.gameId = e.currentTarget.dataset.teamGame; state.gameTab = e.currentTarget.dataset.tab2 || 'highlights'; state.backTo = 'teams'; state.section = 'game'; render(); });
+    on('[data-undo-sched]', 'onclick', async (e) => {
+      if (!confirmWrite('Put this schedule change back in the franchise file? A backup is made first.')) return;
+      try { await api(`/leagues/${state.leagueKey}/schedule/undo/${e.currentTarget.dataset.undoSched}`, { method: 'POST' }); banner('Schedule change undone.', 'ok'); await loadLeague(); } catch (err) { banner(esc(err.message), 'error'); }
+    });
     on('[data-hl-week]', 'onclick', (e) => { state.week = e.currentTarget.dataset.hlWeek; render(); });
     on('[data-bview]', 'onclick', (e) => { state.blockView = e.currentTarget.dataset.bview; render(); });
     on('#bw-team', 'onchange', (e) => { state.weeklyTeam = e.target.value; render(); });
@@ -1505,12 +1699,12 @@
     on('[data-recap]', 'onclick', (e) => { state.recapKey = e.currentTarget.dataset.recap; render(); });
     on('[data-cview]', 'onclick', (e) => { state.contractsView = e.currentTarget.dataset.cview; render(); });
     on('#ct-team', 'onchange', (e) => { state.contractsTeam = e.target.value; render(); });
-    on('[data-ct-team]', 'onclick', (e) => { e.preventDefault(); state.contractsTeam = e.currentTarget.dataset.ctTeam; state.contractsView = 'team'; render(); });
+    on('[data-ct-team]', 'onclick', (e) => { e.preventDefault(); state.contractsTeam = e.currentTarget.dataset.ctTeam; state.contractsView = 'team'; state.section = 'contracts'; render(); });
     on('[data-preview-game]', 'onclick', (e) => { e.preventDefault(); state.gameId = e.currentTarget.dataset.previewGame; state.gameTab = 'preview'; state.backTo = state.section; state.section = 'game'; render(); });
     on('[data-injure]', 'onclick', (e) => { e.stopPropagation(); openInjuryModal(e.currentTarget.dataset.injure, state.gameTeam); });
     on('[data-track]', 'onclick', (e) => { state.gameId = e.currentTarget.dataset.track; state.section = 'tracker'; render(); });
-    on('.game[data-game]', 'onclick', (e) => { const g = state.schedule.find((x) => x.gameId === e.currentTarget.dataset.game); if (g) { state.gameId = g.gameId; state.gameTab = g.status === 'played' ? 'highlights' : 'preview'; state.backTo = 'schedule'; state.section = 'game'; render(); } });
-    on('#back-sched', 'onclick', () => { state.section = ['highlights', 'recap', 'contracts'].includes(state.backTo) ? state.backTo : 'schedule'; render(); });
+    on('.game[data-game]', 'onclick', (e) => { const g = state.schedule.find((x) => x.gameId === e.currentTarget.dataset.game); if (g) { state.gameId = g.gameId; state.gameTab = g.status === 'played' ? ui.gameTab || 'highlights' : 'preview'; state.backTo = 'schedule'; state.section = 'game'; render(); } });
+    on('#back-sched', 'onclick', () => { state.section = ['highlights', 'recap', 'contracts', 'teams'].includes(state.backTo) ? state.backTo : 'schedule'; render(); });
     on('[data-tab]', 'onclick', (e) => { state.gameTab = e.currentTarget.dataset.tab; render(); });
     on('#game-team', 'onchange', (e) => { state.gameTeam = e.target.value; render(); });
     on('#tr-game', 'onchange', (e) => { state.gameId = e.target.value; state.gameTeam = null; render(); });
@@ -1529,21 +1723,45 @@
     });
     on('[data-del-event]', 'onclick', async (e) => { await api(`/leagues/${state.leagueKey}/tracker/${e.currentTarget.dataset.delEvent}`, { method: 'DELETE' }); state.seasonCache.clear(); render(); });
     on('[data-del-inj]', 'onclick', async (e) => { await api(`/leagues/${state.leagueKey}/injuries/log/${e.currentTarget.dataset.delInj}`, { method: 'DELETE' }); render(); });
-    on('[data-heal]', 'onclick', async (e) => { if (!confirm('Heal this player in the franchise file?')) return; try { await api(`/leagues/${state.leagueKey}/injuries/heal`, { method: 'POST', body: { playerId: e.currentTarget.dataset.heal } }); banner('Healed.', 'ok'); await loadLeague(); } catch (err) { banner(esc(err.message), 'error'); } });
+    on('[data-heal]', 'onclick', async (e) => { if (!confirmWrite('Heal this player in the franchise file?')) return; try { await api(`/leagues/${state.leagueKey}/injuries/heal`, { method: 'POST', body: { playerId: e.currentTarget.dataset.heal } }); banner('Healed.', 'ok'); await loadLeague(); } catch (err) { banner(esc(err.message), 'error'); } });
     on('[data-apply-sched]', 'onclick', async (e) => {
       const r = await api(`/leagues/${state.leagueKey}/injuries`);
       const entry = r.log.find((x) => x.id === e.currentTarget.dataset.applySched);
-      if (!entry || !confirm(`Write ${entry.plan.player.name}'s ${entry.plan.injury.name} into the franchise file now? A backup is made first.`)) return;
+      if (!entry || !confirmWrite(`Write ${entry.plan.player.name}'s ${entry.plan.injury.name} into the franchise file now? A backup is made first.`)) return;
       try { await api(`/leagues/${state.leagueKey}/injuries/apply`, { method: 'POST', body: { ...entry.request, applyMode: 'later' } }); await api(`/leagues/${state.leagueKey}/injuries/log/${entry.id}`, { method: 'DELETE' }); banner('Written to the franchise file.', 'ok'); await loadLeague(); } catch (err) { banner(esc(err.message), 'error'); }
     });
     on('[data-ui]', 'onchange', async (e) => {
       const el = e.currentTarget;
       const key = el.dataset.ui;
-      await saveUi({ [key]: el.type === 'checkbox' ? el.checked : el.value });
+      const val = el.type === 'checkbox' ? el.checked : ['leaderLength', 'autoReloadSec'].includes(key) ? Number(el.value) : el.value;
+      await saveUi({ [key]: val });
       const note = $('#ui-saved'); if (note) note.textContent = 'Saved.';
       if (['moneyFormat', 'sourceTags'].includes(key)) render();
+      if (['autoReload', 'autoReloadSec'].includes(key)) startAutoReload();
     });
     on('#ui-myTeam', 'onchange', async (e) => { await saveUi({ myTeams: { ...(ui.myTeams || {}), [state.leagueKey]: e.target.value || null } }); const note = $('#ui-saved'); if (note) note.textContent = 'Saved.'; });
+    on('[data-page-toggle]', 'onchange', async () => {
+      const hidden = $$('[data-page-toggle]').filter((c) => !c.checked).map((c) => c.dataset.pageToggle);
+      await saveUi({ hiddenPages: hidden });
+      const note = $('#ui-saved'); if (note) note.textContent = 'Saved.';
+    });
+    on('#set-backupKeep', 'onchange', async (e) => { try { await api('/settings', { method: 'POST', body: { backupKeep: Number(e.target.value) } }); state.status.settings.backupKeep = Number(e.target.value); banner('Saved. Older backups past that number are removed.', 'ok'); render(); } catch (err) { banner(esc(err.message), 'error'); } });
+    on('#data-clear-ledger', 'onclick', async () => { if (!confirm('Forget every injury the tool has recorded for this league? Injuries already in the franchise file are not touched.')) return; await api(`/leagues/${state.leagueKey}/injury-ledger`, { method: 'DELETE' }); banner('Injury history cleared.', 'ok'); });
+    on('#data-clear-tracker', 'onclick', async () => { if (!confirm('Delete every Game Tracker event you logged for this league?')) return; await api(`/leagues/${state.leagueKey}/tracker`, { method: 'DELETE' }); state.seasonCache.clear(); banner('Game Tracker events cleared.', 'ok'); });
+    on('#ui-reset-all', 'onclick', async () => { if (!confirm('Put every setting back to how it started? Your teams and data are kept.')) return; await saveUi({ ...UI_DEFAULTS, myTeams: ui.myTeams || {} }); render(); });
+    on('[data-restore]', 'onclick', async (e) => {
+      const file = e.currentTarget.dataset.restore;
+      if (!confirm(`Put this backup back in place of the franchise file?\n\n${file}\n\nThe current file is backed up first, so this can be undone the same way.`)) return;
+      try { await api('/franchise/backups/restore', { method: 'POST', body: { file } }); banner('Backup restored. Load the franchise again in Madden to see it.', 'ok'); await loadLeague(); } catch (err) { banner(esc(err.message), 'error'); }
+    });
+    if ($('#backup-list') && state.status.franchiseOpen && !$('#backup-list').dataset.loaded) {
+      $('#backup-list').dataset.loaded = '1';
+      api('/franchise/backups').then((r) => {
+        const el = $('#backup-list'); if (!el) return;
+        el.innerHTML = r.backups.length ? `<p class="small-note">Backups of the open file (${r.backups.length}), newest first:</p><ul class="list">${r.backups.slice(0, 15).map((b) => `<li><span class="small"><span class="mono">${esc(b.file)}</span> · ${esc(new Date(b.modified).toLocaleString())} · ${(b.size / 1048576).toFixed(1)} MB</span><button class="small" data-restore="${esc(b.file)}">Restore</button></li>`).join('')}</ul>` : '<p class="small-note">No backups yet. One is made before every write.</p>';
+        bind();
+      }).catch(() => {});
+    }
     on('#ui-reset', 'onclick', async () => { await saveUi({ theme: UI_DEFAULTS.theme, accent: UI_DEFAULTS.accent, textSize: UI_DEFAULTS.textSize, density: UI_DEFAULTS.density, sourceTags: true, stickyHeaders: true, reduceMotion: false }); render(); });
     on('#set-save', 'onclick', async () => { try { await api('/settings', { method: 'POST', body: { port: Number($('#set-port').value) || 3826, schemaDirectory: $('#set-schema').value || null } }); banner('Saved.', 'ok'); await loadStatus(); } catch (e) { banner(esc(e.message), 'error'); } });
   }
@@ -1581,13 +1799,43 @@
   $$('#nav button').forEach((b) => (b.onclick = () => { state.section = b.dataset.section; render(); }));
   if (window.m26 && window.m26.onMenuOpenFile) window.m26.onMenuOpenFile(openFile);
 
+  // Reload the franchise file by itself when Madden saves it (setting).
+  let reloadTimer = null;
+  let lastMtime = null;
+  // Remember the save time of the file as loaded, so a later save by Madden
+  // (and not the tool's own writes, which reload right away) is noticed.
+  async function noteFileTime() {
+    try { const r = await api('/franchise/status'); lastMtime = r.file ? r.file.modified : null; } catch { /* ignore */ }
+  }
+  function startAutoReload() {
+    if (reloadTimer) clearInterval(reloadTimer);
+    reloadTimer = null;
+    if (!ui.autoReload) return;
+    noteFileTime();
+    reloadTimer = setInterval(async () => {
+      if (!state.status || !state.status.franchiseOpen || document.querySelector('#modal-root .modal')) return;
+      try {
+        const r = await api('/franchise/status');
+        if (!r.file) return;
+        if (lastMtime && r.file.modified !== lastMtime) {
+          await api('/franchise/refresh', { method: 'POST' });
+          await loadStatus();
+          await loadLeague();
+          banner(`Madden saved the franchise; reloaded at ${esc(new Date().toLocaleTimeString())}.`, 'ok');
+        }
+        lastMtime = r.file.modified;
+      } catch { /* try again next time */ }
+    }, Math.max(15, Number(ui.autoReloadSec) || 30) * 1000);
+  }
+
   // Poll for new exports while on the Connect page.
   setInterval(async () => { if (state.section !== 'connect') return; try { const before = JSON.stringify(state.status.leagues); await loadStatus(); if (JSON.stringify(state.status.leagues) !== before) { if (!state.leagueKey) state.leagueKey = state.status.leagues[0] && state.status.leagues[0].leagueKey; await loadLeague(); } } catch {} }, 8000);
 
   (async () => {
     try {
       await loadStatus();
-      if (ui.startPage && sections[ui.startPage] && state.status.leagues.length) state.section = ui.startPage;
+      if (ui.startPage && sections[ui.startPage] && state.status.leagues.length && !(ui.hiddenPages || []).includes(ui.startPage)) state.section = ui.startPage;
+      startAutoReload();
       await loadLeague();
     } catch (e) { banner(esc(e.message), 'error'); }
   })();
