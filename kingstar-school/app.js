@@ -273,7 +273,7 @@
       label: 'Paper assignment',
       short: 'Paper Assignment',
       add: 'Add Paper Assignment',
-      help: 'Done on paper. You type in each student’s grade.',
+      help: 'Done on paper. Students type in the grade they got, and you can change it.',
     },
     test: {
       label: 'Test',
@@ -1179,7 +1179,7 @@
         <p class="aside-note">A score right on a line gets the higher grade.</p>
         <h2 class="aside-h">Assignment types</h2>
         <ul class="legend">
-          <li>${kindIcon('paper')}<span><b>Paper</b> Done on paper. The teacher types in the grade.</span></li>
+          <li>${kindIcon('paper')}<span><b>Paper</b> Done on paper. Type in the grade you got.</span></li>
           <li>${kindIcon('test')}<span><b>Test</b> Take the test, then type in the grade you got.</span></li>
           <li>${kindIcon('link')}<span><b>Link</b> Opens a test. Take it, then type in the grade you got.</span></li>
         </ul>
@@ -1685,7 +1685,6 @@
   function studentStatus(ctx, course, a) {
     const e = entryOf(course.id, a.id, ctx.student.id);
     if (e) return entryChip(e, a);
-    if (a.kind === 'paper') return '<span class="pill">Not graded yet</span>';
     if (isPastDue(a)) return '<span class="pill bad">Not done</span>';
     return '<span class="pill todo">To do</span>';
   }
@@ -1777,7 +1776,7 @@
     const avg = counted.length
       ? counted.reduce((sum, x) => sum + (x.e.t === 'g' ? x.e.s : 0), 0) / counted.length / (Number(a.points) || 1) * 100
       : null;
-    const who = a.kind === 'paper' ? 'Type in each grade.' : 'Students type in their own grade. You can change any of them.';
+    const who = 'Students type in their own grade. You can change any of them.';
     return `<section class="panel">
       <div class="panel-head"><h2>Grades</h2><p class="muted">${done}/${roster.length} graded${avg != null ? ` · class average ${pctChip(avg)}` : ''}</p></div>
       <p class="panel-note">${who} Type <b>ABS</b> for absent (0 points) or <b>EX</b> for exempt, or use the buttons.</p>
@@ -1824,12 +1823,11 @@
       }
       return `<section class="panel"><div class="panel-head"><h2>Your grade</h2></div><div class="result">${big}<div class="result-text">${text}</div></div>${link ? `<div class="panel-body tight">${link}</div>` : ''}</section>`;
     }
-    if (a.kind === 'paper') {
-      return `<section class="panel"><div class="panel-head"><h2>Done on paper</h2></div><div class="panel-body"><p>Turn this in to your teacher on paper. Your grade shows up here after your teacher types it in.</p></div></section>`;
-    }
-    const how = a.kind === 'test'
-      ? 'Take the test, then type in the grade you got.'
-      : 'Open the link and take the test. When you finish, come back and type in the grade you got.';
+    const how = {
+      paper: 'Do this on paper. When you get your grade, type in the grade you got.',
+      test: 'Take the test, then type in the grade you got.',
+      link: 'Open the link and take the test. When you finish, come back and type in the grade you got.',
+    }[a.kind];
     return `<section class="panel">
       <div class="panel-head"><h2>Type in your grade</h2>${isPastDue(a) ? '<span class="pill bad">Past due</span>' : ''}</div>
       <form class="submit" data-form="student-grade" novalidate>
@@ -2082,7 +2080,7 @@
           for (const { a, e } of c.rows) {
             const status = e
               ? entryChip(e, a)
-              : a.kind !== 'paper' && isPastDue(a)
+              : isPastDue(a)
                 ? '<span class="pill bad">Not done</span>'
                 : '<span class="gt-dash">—</span>';
             html += `<div class="gt-row gt-item">
