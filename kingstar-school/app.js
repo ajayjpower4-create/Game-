@@ -2126,6 +2126,7 @@
   // ---------- Views: auto grade (teacher) ----------
 
   const TIERS = [
+    { key: 'terrible', label: 'Terrible' },
     { key: 'normal', label: 'Normal' },
     { key: 'good', label: 'Good' },
     { key: 'perfect', label: 'Perfect' },
@@ -2142,6 +2143,7 @@
     perfect: { good: [98, 100], normal: [95, 100], bad: [88, 96] },
     good: { good: [90, 98], normal: [84, 94], bad: [74, 86] },
     normal: { good: [80, 92], normal: [70, 86], bad: [58, 76] },
+    terrible: { good: [55, 72], normal: [40, 62], bad: [20, 48] },
   };
 
   function autoOf(course) {
@@ -2215,7 +2217,7 @@
 
     const ranges = `<div class="table-scroll"><table class="gtable auto-table">
       <thead><tr><th scope="col">Student is</th><th scope="col">Does good</th><th scope="col">Normal</th><th scope="col">Does bad</th></tr></thead>
-      <tbody>${['perfect', 'good', 'normal']
+      <tbody>${['perfect', 'good', 'normal', 'terrible']
         .map((t) => `<tr><th scope="row">${TIERS.find((x) => x.key === t).label}</th>${['good', 'normal', 'bad'].map((m) => `<td>${rangeText(...AUTO_RANGES[t][m])}</td>`).join('')}</tr>`)
         .join('')}</tbody>
     </table></div>`;
@@ -2235,8 +2237,8 @@
       <h2 class="section-title">Auto Grade</h2>
       <p class="auto-lede">Pick how each student does in this class and which grade types they do good or bad on. Then press <b>Assign grades</b> and every empty grade gets filled in for you. Grades you or your students typed in never change.</p>
       <section class="auto-sec">
-        <div class="auto-sec-head"><h3>Students</h3><span class="muted small">${count('perfect')} perfect · ${count('good')} good · ${count('normal')} normal</span></div>
-        <p class="hint">Normal students mostly get B's and C's. Good students mostly get A's and B's. Perfect students get close to 100.</p>
+        <div class="auto-sec-head"><h3>Students</h3><span class="muted small">${count('perfect')} perfect · ${count('good')} good · ${count('normal')} normal · ${count('terrible')} terrible</span></div>
+        <p class="hint">Terrible students mostly get E's and D's. Normal students mostly get B's and C's. Good students mostly get A's and B's. Perfect students get close to 100.</p>
         ${students}
       </section>
       <section class="auto-sec">

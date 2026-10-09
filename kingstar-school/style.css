@@ -710,7 +710,7 @@ form[data-form="wizard"] { display: flex; flex-direction: column; gap: 16px; }
 .seg-opt.on { background: var(--seg-on); color: #fff; }
 .seg-opt.seg-good.on { background: var(--g-b); }
 .seg-opt.seg-perfect.on { background: var(--g-a); }
-.seg-opt.seg-bad.on { background: var(--g-e); }
+.seg-opt.seg-bad.on, .seg-opt.seg-terrible.on { background: var(--g-e); }
 .auto-table td { font-variant-numeric: tabular-nums; }
 .auto-bar {
   position: sticky; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 5;
