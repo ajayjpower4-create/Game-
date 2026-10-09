@@ -466,15 +466,19 @@
     return t;
   }
 
+  // Writes grade entries (keyed by gkey) into a course's gradebook in one save.
+  // A null entry clears that grade.
+  function putEntries(course, e) {
+    if (Store.get('grades', course.id)) Store.patch('grades', course.id, { e });
+    else Store.put('grades', course.id, { teacherId: course.teacherId, courseId: course.id, e });
+  }
+
+  // `by` is who put the grade in: 't' teacher, 's' student, 'a' Auto Grade.
   function setEntry(courseId, aid, sid, next, by) {
     const course = Store.get('courses', courseId);
     if (!course) return;
     const val = next ? { s: next.t === 'g' ? next.s : null, t: next.t, b: by, at: now() } : null;
-    if (Store.get('grades', courseId)) {
-      Store.patch('grades', courseId, { e: { [gkey(aid, sid)]: val } });
-    } else {
-      Store.put('grades', courseId, { teacherId: course.teacherId, courseId, e: { [gkey(aid, sid)]: val } });
-    }
+    putEntries(course, { [gkey(aid, sid)]: val });
   }
 
   // ---------- Storage ----------
@@ -847,7 +851,7 @@
             list.push({ at: a.createdAt, icon: 'posted', to, html: `<b>${esc(courseTitle(c))}</b> posted ${esc(a.title)}` });
           }
           const e = entryOf(c.id, a.id, ctx.student.id);
-          if (e && e.b === 't' && e.at) {
+          if (e && (e.b === 't' || e.b === 'a') && e.at) {
             list.push({ at: e.at, icon: 'grade', to, html: `A new grade was posted for <b>${esc(a.title)}</b>` });
           }
         }
@@ -904,6 +908,7 @@
     triRight: '<path d="M9 6l7 6-7 6z" fill="currentColor"/>',
     posted: '<path d="M4 20l1-4.5L16 4.5l3.5 3.5-11 11z"/><path d="M13.5 7l3.5 3.5"/>',
     grade: '<path d="M4 12.5l4.5 4.5L20 5.5"/><path d="M4 20h16"/>',
+    wand: '<path d="M4 20L14.5 9.5"/><path d="M12.5 7.5l4 4"/><path d="M17 3v3M15.5 4.5h3M20 8v2M19 9h2M9 4v2M8 5h2"/>',
     copy: '<rect x="8.5" y="8.5" width="11.5" height="11.5" rx="1.8"/><path d="M15.5 8.5V5.2a1.2 1.2 0 0 0-1.2-1.2H5.2A1.2 1.2 0 0 0 4 5.2v9.1a1.2 1.2 0 0 0 1.2 1.2h3.3"/>',
   };
   const ic = (name, cls = '') =>
@@ -1108,7 +1113,7 @@
     const isT = ctx.role === 'teacher';
     if (r.name === 'report') return isT ? viewCourses(ctx) : viewReport(ctx);
     if (r.name === 'classlists') return isT ? viewClassLists(ctx) : viewCourses(ctx);
-    if (['course', 'assignment', 'gradebook', 'grades', 'settings'].includes(r.name)) {
+    if (['course', 'assignment', 'gradebook', 'grades', 'settings', 'autograde'].includes(r.name)) {
       const course = Store.get('courses', r.courseId);
       if (!canSee(ctx, course)) return viewCourses(ctx);
       if (r.name === 'assignment') {
@@ -1117,6 +1122,7 @@
       }
       if (r.name === 'gradebook') return isT ? viewGradebook(ctx, course) : viewStudentGrades(ctx, course);
       if (r.name === 'grades') return isT ? viewGradebook(ctx, course) : viewStudentGrades(ctx, course);
+      if (r.name === 'autograde') return isT ? viewAutoGrade(ctx, course) : viewCourse(ctx, course);
       if (r.name === 'settings') {
         if (!isT) return viewCourse(ctx, course);
         if (!S.ui.settings) initSettings(course.id);
@@ -1443,7 +1449,7 @@
     const seen = getSeen(ctx);
     const unread = notifications(ctx).filter((n) => n.at > seen).length;
     const r = S.route.name;
-    const inCourses = ['courses', 'course', 'assignment', 'gradebook', 'grades', 'settings'].includes(r);
+    const inCourses = ['courses', 'course', 'assignment', 'gradebook', 'grades', 'settings', 'autograde'].includes(r);
     return `<header class="topbar"><div class="topbar-inner">
       <button type="button" class="brand" data-act="nav" data-to="courses" aria-label="KingstarSchool, my courses">${logoMark()}<span class="brand-word"><b>Kingstar</b>School</span></button>
       <nav class="mainnav" aria-label="Main">
@@ -1524,6 +1530,7 @@
       <nav class="side-nav" aria-label="Course">
         ${link('course', 'materials', 'materials', 'Materials')}
         ${isT ? link('gradebook', 'gradebook', 'grades', 'Gradebook') : link('grades', 'grades', 'grades', 'Grades')}
+        ${isT ? link('autograde', 'autograde', 'wand', 'Auto Grade') : ''}
         ${isT ? link('settings', 'settings', 'gear', 'Settings') : ''}
       </nav>
       <div class="side-info">
@@ -1787,7 +1794,7 @@
             .map(({ s, e }) => {
               const miss = !e && isPastDue(a);
               return `<tr>
-                <th scope="row">${esc(s.name)}${e && e.b === 's' ? '<span class="tag">typed by student</span>' : ''}</th>
+                <th scope="row">${esc(s.name)}${e && e.b === 's' ? '<span class="tag">typed by student</span>' : e && e.b === 'a' ? '<span class="tag auto">auto grade</span>' : ''}</th>
                 <td><span class="score-cell"><input class="score-input${e && e.t === 'a' ? ' is-abs' : ''}" id="as-${a.id}-${s.id}" data-grade data-course="${course.id}" data-aid="${a.id}" data-sid="${s.id}" inputmode="decimal" autocomplete="off" value="${esc(displayValue(e))}" placeholder="${miss ? 'Not done' : '—'}" aria-label="Score for ${esc(s.name)}"><span class="of">/ ${fmtNum(a.points)}</span></span></td>
                 <td>${e ? entryChip(e, a) : miss ? '<span class="pill bad">Not done</span>' : '<span class="muted">—</span>'}</td>
                 <td><span class="mark-btns">
@@ -1895,9 +1902,10 @@
         ${opt('all', 'All', g.cat)}${CATS.map((c) => opt(c.key, c.label, g.cat)).join('')}
       </select></label>
       <label class="search" for="gb-q">${ic('search')}<input id="gb-q" type="search" placeholder="Find a student" autocomplete="off" data-ui="gb.q" data-live value="${esc(g.q)}"></label>
-      ${canCopy ? `<button type="button" class="btn push" data-act="copy-grades" title="Copies this whole table so you can paste it into a Google Doc">${ic('copy')} Copy grades</button>` : ''}
+      ${canCopy ? `<button type="button" class="btn push" data-act="nav" data-to="autograde" data-course="${course.id}">${ic('wand')} Auto Grade</button>` : ''}
+      ${canCopy ? `<button type="button" class="btn" data-act="copy-grades" title="Copies this whole table so you can paste it into a Google Doc">${ic('copy')} Copy grades</button>` : ''}
     </div>
-    <p class="gb-legend">Type a score and press Enter. Type <b>ABS</b> for absent (0 points) or <b>EX</b> for exempt, or use the <span class="nowrap">${ic('dots')}</span> button in a cell. A red cell was due and has no grade yet. A blue dot means the student typed the grade in. <b>Copy grades</b> copies the whole table for a Google Doc.</p>`;
+    <p class="gb-legend">Type a score and press Enter. Type <b>ABS</b> for absent (0 points) or <b>EX</b> for exempt, or use the <span class="nowrap">${ic('dots')}</span> button in a cell. A red cell was due and has no grade yet. A blue dot means the student typed the grade in, and a gold dot means Auto Grade filled it in. <b>Copy grades</b> copies the whole table for a Google Doc.</p>`;
     let table;
     if (!d.roster.length) {
       table = '<div class="empty slim"><h2>No students yet</h2><p>Add names to this course\'s class list under Class Lists.</p></div>';
@@ -1930,6 +1938,7 @@
                 e && e.t === 'a' ? 'is-abs' : '',
                 e && e.t === 'x' ? 'is-ex' : '',
                 e && e.b === 's' ? 'by-s' : '',
+                e && e.b === 'a' ? 'by-a' : '',
               ].filter(Boolean).join(' ');
               return `<td class="${cls}"><input class="gb-input" id="gb-${a.id}-${s.id}" data-grade data-course="${course.id}" data-aid="${a.id}" data-sid="${s.id}" inputmode="decimal" autocomplete="off" value="${esc(displayValue(e))}" placeholder="${miss ? 'Not done' : '—'}" aria-label="${esc(s.name)}, ${esc(a.title)}"><button type="button" class="gb-more" data-act="pop" data-pop="cell" data-id="${a.id}.${s.id}" aria-label="More for ${esc(s.name)}, ${esc(a.title)}">${ic('dots')}</button></td>`;
             })
@@ -2112,6 +2121,136 @@
       </div>
       ${courses.length ? courses.map((c) => gradeTree(ctx, c, false)).join('') : `<div class="empty slim"><p>${tab === 'current' ? 'You are not in any courses yet.' : 'No courses from past school years.'}</p></div>`}
     </section></div>`;
+  }
+
+  // ---------- Views: auto grade (teacher) ----------
+
+  const TIERS = [
+    { key: 'normal', label: 'Normal' },
+    { key: 'good', label: 'Good' },
+    { key: 'perfect', label: 'Perfect' },
+  ];
+  const MOODS = [
+    { key: 'bad', label: 'Does bad' },
+    { key: 'normal', label: 'Normal' },
+    { key: 'good', label: 'Does good' },
+  ];
+  const MAX_GOOD_CATS = 2;
+  // The percent of the points a student gets: picked at random inside the
+  // range for how the student does and how they do on that grade type.
+  const AUTO_RANGES = {
+    perfect: { good: [98, 100], normal: [95, 100], bad: [88, 96] },
+    good: { good: [90, 98], normal: [84, 94], bad: [74, 86] },
+    normal: { good: [80, 92], normal: [70, 86], bad: [58, 76] },
+  };
+
+  function autoOf(course) {
+    const a = course.auto || {};
+    return {
+      tiers: { ...(a.tiers || {}) },
+      cats: { minor: 'normal', major: 'normal', practice: 'normal', ...(a.cats || {}) },
+    };
+  }
+
+  function autoScore(points, tier, mood) {
+    const [lo, hi] = (AUTO_RANGES[tier] || AUTO_RANGES.normal)[mood] || AUTO_RANGES.normal.normal;
+    const pct = lo + Math.random() * (hi - lo);
+    return Math.min(points, Math.max(0, Math.round((points * pct) / 100)));
+  }
+
+  // Every student/assignment pair in the course that has no grade yet.
+  function autoEmpty(ctx, course) {
+    const roster = rosterOf(ctx.teacher, course);
+    const slots = [];
+    for (const a of assignmentsOf(course)) {
+      for (const s of roster) if (!entryOf(course.id, a.id, s.id)) slots.push({ a, s });
+    }
+    return { slots, assignments: new Set(slots.map((x) => x.a.id)).size };
+  }
+
+  // Keys of the grades Auto Grade filled in that are still in the gradebook.
+  function autoFilled(course) {
+    const g = Store.get('grades', course.id);
+    const ids = new Set(assignmentsOf(course).map((a) => a.id));
+    return Object.entries((g && g.e) || {})
+      .filter(([k, e]) => e && e.b === 'a' && ids.has(k.split('_')[0]))
+      .map(([k]) => k);
+  }
+
+  function segControl(idBase, label, opts, current, attrs) {
+    return `<div class="seg-ctl" role="radiogroup" aria-label="${esc(label)}">${opts
+      .map(
+        (o) => `<button type="button" role="radio" aria-checked="${o.key === current}" class="seg-opt seg-${o.key}${o.key === current ? ' on' : ''}" id="${idBase}-${o.key}" ${attrs(o)}>${esc(o.label)}</button>`
+      )
+      .join('')}</div>`;
+  }
+
+  function rangeText(lo, hi) {
+    const a = letterFor(lo);
+    const b = letterFor(hi);
+    return `${lo}–${hi}% <span class="muted">(${a === b ? a : `${a} to ${b}`})</span>`;
+  }
+
+  function viewAutoGrade(ctx, course) {
+    const auto = autoOf(course);
+    const roster = rosterOf(ctx.teacher, course);
+    const weights = { ...DEFAULT_WEIGHTS, ...(course.weights || {}) };
+    const { slots, assignments } = autoEmpty(ctx, course);
+    const filled = autoFilled(course).length;
+    const tierOf = (s) => auto.tiers[s.id] || 'normal';
+    const count = (k) => roster.filter((s) => tierOf(s) === k).length;
+    const goodCats = CATS.filter((c) => auto.cats[c.key] === 'good').length;
+
+    const students = roster.length
+      ? `<ul class="auto-list">${roster
+          .map(
+            (s) => `<li class="auto-row"><span class="auto-name">${esc(s.name)}</span>${segControl(`at-${s.id}`, `How ${s.name} does`, TIERS, tierOf(s), (o) => `data-act="auto-tier" data-sid="${s.id}" data-tier="${o.key}"`)}</li>`
+          )
+          .join('')}</ul>`
+      : '<div class="empty slim"><p>This course\'s class list has no students yet. Add names under Class Lists.</p></div>';
+
+    const cats = `<ul class="auto-list">${CATS.map(
+      (c) => `<li class="auto-row"><span class="auto-name">${c.label} <span class="muted small">(${weights[c.key]}% of the grade)</span></span>${segControl(`ac-${c.key}`, `How students do on ${c.label} grades`, MOODS, auto.cats[c.key], (o) => `data-act="auto-cat" data-cat="${c.key}" data-mood="${o.key}"`)}</li>`
+    ).join('')}</ul>`;
+
+    const ranges = `<div class="table-scroll"><table class="gtable auto-table">
+      <thead><tr><th scope="col">Student is</th><th scope="col">Does good</th><th scope="col">Normal</th><th scope="col">Does bad</th></tr></thead>
+      <tbody>${['perfect', 'good', 'normal']
+        .map((t) => `<tr><th scope="row">${TIERS.find((x) => x.key === t).label}</th>${['good', 'normal', 'bad'].map((m) => `<td>${rangeText(...AUTO_RANGES[t][m])}</td>`).join('')}</tr>`)
+        .join('')}</tbody>
+    </table></div>`;
+
+    const bar = `<div class="auto-bar">
+      <div class="auto-bar-text">
+        <b>${slots.length ? `${plural(slots.length, 'empty grade')} to fill` : 'No empty grades'}</b>
+        <span class="muted small">${slots.length ? `in ${plural(assignments, 'assignment')}. Grades already typed in stay the same.` : assignmentsOf(course).length ? 'Every student has a grade on every assignment.' : 'Add assignments under Materials first.'}</span>
+      </div>
+      <div class="auto-bar-btns">
+        ${filled ? `<button type="button" class="btn ghost danger" data-act="auto-clear">${ic('trash')} Remove auto grades (${filled})</button>` : ''}
+        <button type="button" class="btn primary" id="auto-assign" data-act="auto-assign"${slots.length ? '' : ' disabled'}>${ic('wand')} Assign grades</button>
+      </div>
+    </div>`;
+
+    const inner = `${courseHead(ctx, course)}
+      <h2 class="section-title">Auto Grade</h2>
+      <p class="auto-lede">Pick how each student does in this class and which grade types they do good or bad on. Then press <b>Assign grades</b> and every empty grade gets filled in for you. Grades you or your students typed in never change.</p>
+      <section class="auto-sec">
+        <div class="auto-sec-head"><h3>Students</h3><span class="muted small">${count('perfect')} perfect · ${count('good')} good · ${count('normal')} normal</span></div>
+        <p class="hint">Normal students mostly get B's and C's. Good students mostly get A's and B's. Perfect students get close to 100.</p>
+        ${students}
+      </section>
+      <section class="auto-sec">
+        <div class="auto-sec-head"><h3>Grade types</h3><span class="muted small">${goodCats}/${MAX_GOOD_CATS} picked as Does good</span></div>
+        <p class="hint">Pick up to ${MAX_GOOD_CATS} grade types students do good on, and any they do bad on.</p>
+        ${cats}
+      </section>
+      <section class="auto-sec">
+        <div class="auto-sec-head"><h3>What grades they get</h3></div>
+        ${ranges}
+        <p class="hint">Each grade is picked at random inside its range.</p>
+      </section>
+      ${bar}`;
+    return courseShell(ctx, course, 'autograde', inner, false);
   }
 
   // ---------- Views: course settings (teacher) ----------
@@ -2708,6 +2847,65 @@
       range.selectNodeContents(box);
       sel.removeAllRanges();
       sel.addRange(range);
+    },
+    'auto-tier'(el) {
+      const c = clone(Store.get('courses', S.route.courseId));
+      if (!c) return;
+      const auto = autoOf(c);
+      if (el.dataset.tier === 'normal') delete auto.tiers[el.dataset.sid];
+      else auto.tiers[el.dataset.sid] = el.dataset.tier;
+      c.auto = auto;
+      Store.put('courses', c.id, c);
+    },
+    'auto-cat'(el) {
+      const c = clone(Store.get('courses', S.route.courseId));
+      if (!c) return;
+      const auto = autoOf(c);
+      const { cat, mood } = el.dataset;
+      if (mood === 'good' && auto.cats[cat] !== 'good' && CATS.filter((x) => auto.cats[x.key] === 'good').length >= MAX_GOOD_CATS) {
+        toast(`You can pick up to ${MAX_GOOD_CATS} grade types to do good on. Set one back to Normal first.`, 'error');
+        return;
+      }
+      auto.cats[cat] = mood;
+      c.auto = auto;
+      Store.put('courses', c.id, c);
+    },
+    'auto-assign'() {
+      const ctx = me();
+      const course = Store.get('courses', S.route.courseId);
+      if (!ctx || !course) return;
+      const auto = autoOf(course);
+      const { slots, assignments } = autoEmpty(ctx, course);
+      if (!slots.length) {
+        toast('Every student already has a grade on every assignment.');
+        return;
+      }
+      const at = now();
+      const e = {};
+      for (const { a, s } of slots) {
+        const score = autoScore(Number(a.points) || 0, auto.tiers[s.id] || 'normal', auto.cats[a.cat] || 'normal');
+        e[gkey(a.id, s.id)] = { s: score, t: 'g', b: 'a', at };
+      }
+      putEntries(course, e);
+      toast(`Assigned ${plural(slots.length, 'grade')} in ${plural(assignments, 'assignment')}.`);
+    },
+    'auto-clear'() {
+      const course = Store.get('courses', S.route.courseId);
+      if (!course) return;
+      const keys = autoFilled(course);
+      if (!keys.length) return;
+      confirmBox({
+        title: 'Remove auto grades?',
+        body: `This removes the ${plural(keys.length, 'grade')} Auto Grade filled in, so those spots are empty again. Grades you or your students typed in stay.`,
+        ok: 'Remove auto grades',
+        danger: true,
+        onOk() {
+          const e = {};
+          for (const k of keys) e[k] = null;
+          putEntries(course, e);
+          toast(`Removed ${plural(keys.length, 'auto grade')}.`);
+        },
+      });
     },
     'toggle-open'(el) {
       const key = el.dataset.key;
