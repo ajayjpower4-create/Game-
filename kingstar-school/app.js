@@ -1922,6 +1922,7 @@
             <button type="button" class="gb-colbtn" data-act="nav" data-to="assignment" data-course="${course.id}" data-item="${a.id}">${kindIcon(a.kind)}<span>${esc(a.title)}</span></button>
             <span class="gb-colmeta">${esc(CAT_LABEL[a.cat] || 'Minor')} · ${a.mp ? `MP ${a.mp}` : 'No MP'} · /${fmtNum(a.points)}</span>
             <span class="gb-colmeta">Due ${esc(fmtShort(a.due))}</span>
+            <button type="button" class="gb-mood${moodSummary(a) ? ' is-set' : ''}" data-act="pop" data-pop="moods" data-id="${a.id}">${ic('wand')}<span>${esc(moodSummary(a) || 'Who does good or bad?')}</span></button>
           </th>`
           )
           .join('')}
@@ -2136,7 +2137,8 @@
     { key: 'normal', label: 'Normal' },
     { key: 'good', label: 'Does good' },
   ];
-  const MAX_GOOD_CATS = 2;
+  // At most this many kinds of kids can do good on one assignment.
+  const MAX_GOOD_TIERS = 2;
   // The percent of the points a student gets: picked at random inside the
   // range for how the student does and how they do on that grade type.
   const AUTO_RANGES = {
@@ -2148,10 +2150,43 @@
 
   function autoOf(course) {
     const a = course.auto || {};
-    return {
-      tiers: { ...(a.tiers || {}) },
-      cats: { minor: 'normal', major: 'normal', practice: 'normal', ...(a.cats || {}) },
-    };
+    return { tiers: { ...(a.tiers || {}) } };
+  }
+
+  // How each kind of kid does on one assignment: 'good', 'normal' or 'bad'.
+  const moodsOf = (a) => ({ terrible: 'normal', normal: 'normal', good: 'normal', perfect: 'normal', ...((a && a.moods) || {}) });
+
+  // Keeps only the kinds that are not Normal.
+  function cleanMoods(m) {
+    const out = {};
+    for (const t of TIERS) if (m[t.key] === 'good' || m[t.key] === 'bad') out[t.key] = m[t.key];
+    return out;
+  }
+
+  function setMood(m, tier, mood) {
+    if (mood === 'good' && m[tier] !== 'good' && TIERS.filter((t) => m[t.key] === 'good').length >= MAX_GOOD_TIERS) {
+      toast(`Only ${MAX_GOOD_TIERS} kinds of kids can do good on one assignment. Set one back to Normal first.`, 'error');
+      return false;
+    }
+    m[tier] = mood;
+    return true;
+  }
+
+  function moodSummary(a) {
+    const m = moodsOf(a);
+    const pick = (mood) => TIERS.filter((t) => m[t.key] === mood).map((t) => t.label);
+    const parts = [];
+    if (pick('good').length) parts.push(`Good: ${pick('good').join(', ')}`);
+    if (pick('bad').length) parts.push(`Bad: ${pick('bad').join(', ')}`);
+    return parts.join(' · ');
+  }
+
+  // The four "how do these kids do" controls, used in the assignment form,
+  // the gradebook and the Auto Grade page.
+  function moodRows(idBase, moods, attrs) {
+    return `<div class="mood-rows">${TIERS.map(
+      (t) => `<div class="mood-row"><span class="mood-label">${t.label} kids</span>${segControl(`${idBase}-${t.key}`, `How ${t.label.toLowerCase()} kids do`, MOODS, moods[t.key], (o) => attrs(t, o))}</div>`
+    ).join('')}</div>`;
   }
 
   function autoScore(points, tier, mood) {
@@ -2196,12 +2231,10 @@
   function viewAutoGrade(ctx, course) {
     const auto = autoOf(course);
     const roster = rosterOf(ctx.teacher, course);
-    const weights = { ...DEFAULT_WEIGHTS, ...(course.weights || {}) };
     const { slots, assignments } = autoEmpty(ctx, course);
     const filled = autoFilled(course).length;
     const tierOf = (s) => auto.tiers[s.id] || 'normal';
     const count = (k) => roster.filter((s) => tierOf(s) === k).length;
-    const goodCats = CATS.filter((c) => auto.cats[c.key] === 'good').length;
 
     const students = roster.length
       ? `<ul class="auto-list">${roster
@@ -2211,12 +2244,17 @@
           .join('')}</ul>`
       : '<div class="empty slim"><p>This course\'s class list has no students yet. Add names under Class Lists.</p></div>';
 
-    const cats = `<ul class="auto-list">${CATS.map(
-      (c) => `<li class="auto-row"><span class="auto-name">${c.label} <span class="muted small">(${weights[c.key]}% of the grade)</span></span>${segControl(`ac-${c.key}`, `How students do on ${c.label} grades`, MOODS, auto.cats[c.key], (o) => `data-act="auto-cat" data-cat="${c.key}" data-mood="${o.key}"`)}</li>`
-    ).join('')}</ul>`;
+    const items = assignmentsOf(course).sort(byDue);
+    const assignList = items.length
+      ? `<ul class="auto-list">${items
+          .map(
+            (a) => `<li class="auto-row"><span class="auto-name auto-item">${kindIcon(a.kind)}<span class="auto-item-text"><span>${esc(a.title)}</span><span class="muted small">${esc(moodSummary(a) || 'All kids normal')}</span></span></span><button type="button" class="btn small" data-act="pop" data-pop="moods" data-id="${a.id}">${ic('wand')} Who does good or bad</button></li>`
+          )
+          .join('')}</ul>`
+      : '<div class="empty slim"><p>No assignments yet. Add them under Materials.</p></div>';
 
     const ranges = `<div class="table-scroll"><table class="gtable auto-table">
-      <thead><tr><th scope="col">Student is</th><th scope="col">Does good</th><th scope="col">Normal</th><th scope="col">Does bad</th></tr></thead>
+      <thead><tr><th scope="col">Kind of kid</th><th scope="col">Does good</th><th scope="col">Normal</th><th scope="col">Does bad</th></tr></thead>
       <tbody>${['perfect', 'good', 'normal', 'terrible']
         .map((t) => `<tr><th scope="row">${TIERS.find((x) => x.key === t).label}</th>${['good', 'normal', 'bad'].map((m) => `<td>${rangeText(...AUTO_RANGES[t][m])}</td>`).join('')}</tr>`)
         .join('')}</tbody>
@@ -2235,21 +2273,21 @@
 
     const inner = `${courseHead(ctx, course)}
       <h2 class="section-title">Auto Grade</h2>
-      <p class="auto-lede">Pick how each student does in this class and which grade types they do good or bad on. Then press <b>Assign grades</b> and every empty grade gets filled in for you. Grades you or your students typed in never change.</p>
+      <p class="auto-lede">Pick what kind of kid each student is. On each assignment, pick which kinds of kids do good or bad. Then press <b>Assign grades</b> and every empty grade gets filled in for you. Grades you or your students typed in never change.</p>
       <section class="auto-sec">
         <div class="auto-sec-head"><h3>Students</h3><span class="muted small">${count('perfect')} perfect · ${count('good')} good · ${count('normal')} normal · ${count('terrible')} terrible</span></div>
         <p class="hint">Terrible students mostly get E's and D's. Normal students mostly get B's and C's. Good students mostly get A's and B's. Perfect students get close to 100.</p>
         ${students}
       </section>
       <section class="auto-sec">
-        <div class="auto-sec-head"><h3>Grade types</h3><span class="muted small">${goodCats}/${MAX_GOOD_CATS} picked as Does good</span></div>
-        <p class="hint">Pick up to ${MAX_GOOD_CATS} grade types students do good on, and any they do bad on.</p>
-        ${cats}
+        <div class="auto-sec-head"><h3>Assignments</h3></div>
+        <p class="hint">On each assignment, pick which kinds of kids do good or bad. Up to ${MAX_GOOD_TIERS} kinds can do good. You can also do this when you make an assignment or in the gradebook.</p>
+        ${assignList}
       </section>
       <section class="auto-sec">
         <div class="auto-sec-head"><h3>What grades they get</h3></div>
         ${ranges}
-        <p class="hint">Each grade is picked at random inside its range.</p>
+        <p class="hint">Each assignment's Does good or Does bad setting picks the column. Each grade is picked at random inside its range.</p>
       </section>
       ${bar}`;
     return courseShell(ctx, course, 'autograde', inner, false);
@@ -2373,6 +2411,16 @@
         <button type="button" class="pop-item danger" data-act="delete-item" data-id="${it.id}">${ic('trash')} Delete</button>
       </div>`;
     },
+    moods(ctx, pop) {
+      const course = Store.get('courses', S.route.courseId);
+      const a = course && findItem(course, pop.id);
+      if (!a) return '';
+      return `<div class="pop-head"><span class="pop-h">${esc(a.title)}</span></div>
+        <div class="mood-pop">
+          <p class="hint">How each kind of kid does on this assignment when you use Auto Grade. Up to ${MAX_GOOD_TIERS} kinds can do good.</p>
+          ${moodRows(`pm-${a.id}`, moodsOf(a), (t, o) => `data-act="item-mood" data-keep-pop data-aid="${a.id}" data-tier="${t.key}" data-mood="${o.key}"`)}
+        </div>`;
+    },
     cell(ctx, pop) {
       const [aid, sid] = pop.id.split('.');
       const cid = S.route.courseId;
@@ -2422,7 +2470,8 @@
       root.innerHTML = '';
       return;
     }
-    root.innerHTML = `<div class="pop pop-${S.pop.type}">${html}</div>`;
+    const keep = captureFocus(root);
+    root.innerHTML = `<div class="pop pop--${S.pop.type}">${html}</div>`;
     const pop = root.firstElementChild;
     const { rect } = S.pop;
     const vw = document.documentElement.clientWidth;
@@ -2435,6 +2484,7 @@
     if (top + h > vh - 8 && rect.top - h - 6 > 8) top = rect.top - h - 6;
     pop.style.left = `${left}px`;
     pop.style.top = `${top}px`;
+    restoreFocus(keep);
   }
 
   function closePop() {
@@ -2474,7 +2524,12 @@
             <label class="field" for="f-date"><span>Due date</span><input id="f-date" type="date" data-bind="dueDate" value="${esc(d.dueDate)}"></label>
             <label class="field" for="f-time"><span>Due time</span><input id="f-time" type="time" data-bind="dueTime" value="${esc(d.dueTime)}"></label>
           </div>
-          ${d.kind === 'link' ? `<label class="field" for="f-url"><span>Link to the test</span><input id="f-url" type="url" inputmode="url" autocomplete="off" data-bind="url" value="${esc(d.url)}" placeholder="https://"></label>` : ''}`;
+          ${d.kind === 'link' ? `<label class="field" for="f-url"><span>Link to the test</span><input id="f-url" type="url" inputmode="url" autocomplete="off" data-bind="url" value="${esc(d.url)}" placeholder="https://"></label>` : ''}
+          <fieldset class="field">
+            <legend>Auto Grade: who does good or bad</legend>
+            <small>Pick which kinds of kids do good or bad on this assignment. Up to ${MAX_GOOD_TIERS} kinds can do good.</small>
+            ${moodRows('fm', d.moods, (t, o) => `data-act="draft-mood" data-tier="${t.key}" data-mood="${o.key}"`)}
+          </fieldset>`;
       return `<form data-form="item" data-scope="modal" novalidate>
         ${modalHead(title, `<span class="modal-ic">${kindIcon(d.kind, d.color)}</span>`)}
         <div class="modal-body">
@@ -2611,6 +2666,7 @@
         dueDate: due[0] || '',
         dueTime: due[1] || '23:59',
         url: (it && it.url) || '',
+        moods: moodsOf(it),
         parentId: it ? it.parentId || '' : parentId || '',
       },
     });
@@ -2859,18 +2915,19 @@
       c.auto = auto;
       Store.put('courses', c.id, c);
     },
-    'auto-cat'(el) {
+    'item-mood'(el) {
       const c = clone(Store.get('courses', S.route.courseId));
-      if (!c) return;
-      const auto = autoOf(c);
-      const { cat, mood } = el.dataset;
-      if (mood === 'good' && auto.cats[cat] !== 'good' && CATS.filter((x) => auto.cats[x.key] === 'good').length >= MAX_GOOD_CATS) {
-        toast(`You can pick up to ${MAX_GOOD_CATS} grade types to do good on. Set one back to Normal first.`, 'error');
-        return;
-      }
-      auto.cats[cat] = mood;
-      c.auto = auto;
+      const it = c && findItem(c, el.dataset.aid);
+      if (!it) return;
+      const m = moodsOf(it);
+      if (!setMood(m, el.dataset.tier, el.dataset.mood)) return;
+      it.moods = cleanMoods(m);
       Store.put('courses', c.id, c);
+    },
+    'draft-mood'(el) {
+      const d = S.modal && S.modal.d;
+      if (!d || !d.moods) return;
+      if (setMood(d.moods, el.dataset.tier, el.dataset.mood)) renderModal();
     },
     'auto-assign'() {
       const ctx = me();
@@ -2885,7 +2942,8 @@
       const at = now();
       const e = {};
       for (const { a, s } of slots) {
-        const score = autoScore(Number(a.points) || 0, auto.tiers[s.id] || 'normal', auto.cats[a.cat] || 'normal');
+        const tier = auto.tiers[s.id] || 'normal';
+        const score = autoScore(Number(a.points) || 0, tier, moodsOf(a)[tier]);
         e[gkey(a.id, s.id)] = { s: score, t: 'g', b: 'a', at };
       }
       putEntries(course, e);
@@ -3096,6 +3154,7 @@
         } else {
           delete it.url;
         }
+        it.moods = cleanMoods(d.moods);
       }
       if (!m.id) course.items.push(it);
       Store.put('courses', course.id, course);
@@ -3237,7 +3296,7 @@
     if (!fn) return;
     e.preventDefault();
     fn(el, e);
-    if (inPop && el.dataset.act !== 'pop') closePop();
+    if (inPop && el.dataset.act !== 'pop' && !el.hasAttribute('data-keep-pop')) closePop();
   });
 
   document.addEventListener('input', (e) => {
