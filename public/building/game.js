@@ -13,7 +13,7 @@ import {
 import { footprint, isClear, bounds, buildingsOf, snapToDock, evictFrom, siteStats, isSolid } from './site.js';
 import { contains, toLocal as planLocal, clamp, DEG } from './geom.js';
 import { Engine, WEATHER, QUALITY } from './engine/core.js';
-import { World, modelFor, place as placeModel } from './engine/world.js';
+import { World, modelFor, place as placeModel, releaseModel } from './engine/world.js';
 import { Life } from './engine/life.js';
 import { roofItemModel, roofSurfaceY } from './engine/buildings.js';
 import * as THREE from 'three';
@@ -332,17 +332,25 @@ let ghostModel = null;
 let ghostKey = '';
 let ghostOk = null;
 
+function dropGhost() {
+  if (!ghostModel) return;
+  engine.helpers.remove(ghostModel);
+  releaseModel(ghostModel);
+  ghostModel = null;
+  ghostKey = '';
+}
+
 function updateGhost() {
   if (!engine) return;
   const p = ui.pending;
   const key = p ? `${p.kind}:${p.key}` : '';
   if (!p || !ui.ghost) {
-    if (ghostModel) { engine.helpers.remove(ghostModel); ghostModel = null; ghostKey = ''; }
+    dropGhost();
     drawFootprint();
     return;
   }
   if (key !== ghostKey) {
-    if (ghostModel) engine.helpers.remove(ghostModel);
+    dropGhost();
     ghostModel = p.kind === 'roof' ? roofItemModel(p.key).finish(new THREE.Group()) : modelFor({ ...p.obj, id: 'ghost' });
     ghostKey = key;
     ghostOk = null;
@@ -866,7 +874,10 @@ function drawPanel() {
     else if (o.kind === 'booth') html = boothPanel(o);
     else html = propPanel(o);
   }
-  const scroll = body.scrollTop;
+  // Keep the scroll position while editing one thing; start at the top for a new one.
+  const key = `${ui.tab}|${ui.selected}`;
+  const scroll = key === drawPanel.key ? body.scrollTop : 0;
+  drawPanel.key = key;
   body.innerHTML = html;
   body.scrollTop = scroll;
   document.querySelectorAll('.tabs button[data-act="tab"]').forEach((btn) => btn.classList.toggle('active', btn.dataset.value === ui.tab));
@@ -1721,5 +1732,11 @@ document.addEventListener('keydown', (ev) => {
 });
 
 window.addEventListener('beforeunload', save);
+
+// The top bar wraps on narrow screens; the 3D view starts wherever it ends.
+const topbar = document.querySelector('.topbar');
+if (topbar && 'ResizeObserver' in window) {
+  new ResizeObserver(() => document.documentElement.style.setProperty('--top', `${topbar.offsetHeight}px`)).observe(topbar);
+}
 
 if (screen === 'build') buildScreen(); else startScreen();

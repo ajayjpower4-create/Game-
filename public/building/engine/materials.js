@@ -34,9 +34,22 @@ function withSurface(name, extra = {}) {
   };
 }
 
-const night = (mat, key, max) => { nightReg.push({ mat, key, max }); return mat; };
-const wet = (mat) => { wetReg.push({ mat, dry: mat.roughness }); return mat; };
-const shiny = (mat) => { shinyReg.push(mat); return mat; };
+/* The world's current state, so a material made after the clock or the
+ * weather changed starts out matching everything else. */
+const NOW = { night: 0, wet: 0, snow: 0, season: 'summer', env: null, envScale: 1 };
+
+const night = (mat, key, max) => { nightReg.push({ mat, key, max }); mat[key] = max * NOW.night; return mat; };
+const wet = (mat) => {
+  wetReg.push({ mat, dry: mat.roughness });
+  mat.roughness = Math.max(0.08, mat.roughness * (1 - 0.82 * NOW.wet));
+  return mat;
+};
+const shiny = (mat) => {
+  shinyReg.push(mat);
+  mat.userData.baseEnv = mat.envMapIntensity;
+  if (NOW.env) { mat.envMap = NOW.env; mat.envMapIntensity = mat.userData.baseEnv * NOW.envScale; }
+  return mat;
+};
 
 /**
  * Break up the repeat of a big tiled surface: broad procedural noise, at a far
@@ -74,7 +87,9 @@ function antiTile(mat, spanFt = 160, strength = 0.35) {
 }
 
 const snowy = (mat, snowHex = '#f4f7fa') => {
-  snowReg.push({ mat, base: mat.color.clone(), snow: new THREE.Color(snowHex) });
+  const e = { mat, base: mat.color.clone(), snow: new THREE.Color(snowHex) };
+  snowReg.push(e);
+  if (NOW.snow) mat.color.copy(e.base).lerp(e.snow, NOW.snow);
   return mat;
 };
 
@@ -119,7 +134,7 @@ export function glassLit(variant = 0) {
     color: new THREE.Color('#1b2a37'), roughness: 0.04, metalness: 0.1, envMapIntensity: 1.5,
     clearcoat: 1, clearcoatRoughness: 0.03, emissive: new THREE.Color('#ffffff'),
     emissiveMap: interiorTexture(variant + 1), emissiveIntensity: 0,
-  }), 'emissiveIntensity', 1.15)));
+  }), 'emissiveIntensity', 0.62)));
 }
 
 /** See-through glass for balustrades, bus shelters and canopies. */
@@ -238,7 +253,7 @@ export function plastic(hex, rough = 0.55) {
 /** Car paint: metallic base under a clear coat. */
 export function carPaint(hex) {
   return once(`car|${hex}`, () => shiny(new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(hex), roughness: 0.32, metalness: 0.6, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.2,
+    color: new THREE.Color(hex), roughness: 0.35, metalness: 0.45, clearcoat: 0.8, clearcoatRoughness: 0.08, envMapIntensity: 0.75,
   })));
 }
 
@@ -252,7 +267,7 @@ export function tyre() {
 
 export function vehicleGlass() {
   return once('vglass', () => shiny(new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color('#121b24'), roughness: 0.05, metalness: 0.2, clearcoat: 1, envMapIntensity: 1.4,
+    color: new THREE.Color('#0d141b'), roughness: 0.06, metalness: 0.2, clearcoat: 1, envMapIntensity: 0.7,
   })));
 }
 
@@ -294,7 +309,7 @@ export function lightPool(hex = '#ffd99a') {
   return once(`pool|${hex}`, () => night(new THREE.MeshBasicMaterial({
     map: glowTexture(), color: new THREE.Color(hex), transparent: true, opacity: 0,
     blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
-  }), 'opacity', 0.2));
+  }), 'opacity', 0.34));
 }
 
 /** Lettering on a sign — lit from within at night. */
@@ -318,7 +333,7 @@ export const SEASON_LEAF = {
 
 export function leaves(variant = 0) {
   return once(`leaves|${variant}`, () => {
-    const m = std({ ...withSurface('leaves'), color: new THREE.Color(SEASON_LEAF.summer[variant % 3]), roughness: 0.85 });
+    const m = std({ ...withSurface('leaves'), color: new THREE.Color((SEASON_LEAF[NOW.season] || SEASON_LEAF.summer)[variant % 3]), roughness: 0.85 });
     leafReg.push({ mat: m, variant });
     return m;
   });
@@ -345,29 +360,34 @@ export function release(mat) {
 
 /** Give the shiny materials their own copy of the sky to reflect. */
 export function setEnvMap(texture, scale = 1) {
+  NOW.env = texture;
+  NOW.envScale = scale;
   for (const m of shinyReg) {
     m.envMap = texture;
-    if (m.userData.baseEnv == null) m.userData.baseEnv = m.envMapIntensity;
     m.envMapIntensity = m.userData.baseEnv * scale;
   }
 }
 
 /** 0 = full day, 1 = full night. */
 export function setNight(f) {
+  NOW.night = f;
   for (const e of nightReg) e.mat[e.key] = e.max * f;
 }
 
 /** 0 = dry, 1 = soaked: wet ground turns glossy and reflects. */
 export function setWet(f) {
+  NOW.wet = f;
   for (const e of wetReg) e.mat.roughness = Math.max(0.08, e.dry * (1 - 0.82 * f));
 }
 
 /** 0 = none, 1 = blanket. */
 export function setSnow(f) {
+  NOW.snow = f;
   for (const e of snowReg) e.mat.color.copy(e.base).lerp(e.snow, f);
 }
 
 export function setSeason(season) {
+  NOW.season = season;
   const set = SEASON_LEAF[season] || SEASON_LEAF.summer;
   for (const e of leafReg) e.mat.color.set(set[e.variant % 3]);
 }

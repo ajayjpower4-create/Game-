@@ -133,12 +133,12 @@ export function buildGround(state, plan) {
       uv.setXY(i, x, z);
     }
     geo.computeVertexNormals();
-    b.add(geo, M.field('#e9eedd'));
+    b.add(geo, M.field('#e8e6cf'));
   }
 
   /* ---- the lot itself: mown grass, with a low kerb around it ---- */
   if (site.grass !== false) {
-    flat(b, M.grass('#ffffff'), { x: 0, y: 0, w: W, d: D + 3 }, 0.02);
+    flat(b, M.grass('#f2f1e2'), { x: 0, y: 0, w: W, d: D + 3 }, 0.02);
   } else {
     flat(b, M.gravel(), { x: 0, y: 0, w: W, d: D + 3 }, 0.02);
   }

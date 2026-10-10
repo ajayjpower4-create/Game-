@@ -171,7 +171,7 @@ input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px;
 
 body.in-build { overflow: hidden; height: 100dvh; }
 body.in-build .topbar { position: fixed; left: 0; right: 0; top: 0; }
-.workshop { position: fixed; left: 0; right: 0; bottom: 0; top: 61px; }
+.workshop { position: fixed; left: 0; right: 0; bottom: 0; top: var(--top, 61px); }
 .stage { position: absolute; inset: 0; background: #0a0f1b; touch-action: none; overflow: hidden; }
 .stage canvas.gl { display: block; outline: none; }
 
@@ -267,7 +267,6 @@ body.photo .photo-bar {
 }
 
 @media (max-width: 900px) {
-  .workshop { top: 57px; }
   .panel { left: 0; right: 0; top: auto; bottom: 0; width: auto; height: 46%; border-radius: 14px 14px 0 0; }
   .panel.collapsed { height: auto; left: auto; right: 8px; bottom: 8px; border-radius: 12px; }
   .hud.tr { right: 12px; }

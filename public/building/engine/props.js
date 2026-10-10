@@ -867,10 +867,10 @@ function flagpole(B, x, z, h, ctx, color, k) {
   B.add(cylGeo(0.12, 0.25, h, 10), M.metal('#d9dee2', 0.25), { pos: [x, h / 2, z] });
   B.sphere(M.metal('#d6b45a', 0.3), 0.35, x, h + 0.2, z, { seg: 10 });
   B.cyl(M.concrete('#bdb9b1'), 0.9, 1.1, 0.6, x, 0.3, z, { seg: 12 });
-  const geo = new THREE.PlaneGeometry(8, 5, 16, 6).translate(4, 0, 0);
+  const geo = new THREE.PlaneGeometry(7, 4.4, 16, 6).translate(3.5, 0, 0);
   const mat = M.fabric(color);
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x + 0.1, h - 3, z);
+  mesh.position.set(x + 0.1, h - 2.6, z);
   mesh.castShadow = true;
   mesh.userData.flag = { base: geo.attributes.position.array.slice(), phase: k * 1.7 };
   ctx.moving.push(mesh);

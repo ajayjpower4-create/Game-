@@ -37,8 +37,8 @@ export const QUALITY = {
 };
 
 export const WEATHER = {
-  clear: { name: 'Clear', icon: '☀️', clouds: 0.12, density: 0.3, turbidity: 2.4, rayleigh: 1.1, mie: 0.004, fog: 0.00011, sun: 1, wet: 0, snow: 0, rain: 0, flakes: 0 },
-  cloudy: { name: 'Fair weather cloud', icon: '⛅', clouds: 0.42, density: 0.55, turbidity: 3.5, rayleigh: 1.3, mie: 0.006, fog: 0.00014, sun: 0.85, wet: 0, snow: 0, rain: 0, flakes: 0 },
+  clear: { name: 'Clear', icon: '☀️', clouds: 0.12, density: 0.3, turbidity: 1.9, rayleigh: 1.7, mie: 0.004, fog: 0.00011, sun: 1, wet: 0, snow: 0, rain: 0, flakes: 0 },
+  cloudy: { name: 'Fair weather cloud', icon: '⛅', clouds: 0.42, density: 0.55, turbidity: 2.8, rayleigh: 1.6, mie: 0.006, fog: 0.00014, sun: 0.85, wet: 0, snow: 0, rain: 0, flakes: 0 },
   overcast: { name: 'Overcast', icon: '☁️', clouds: 0.92, density: 0.95, turbidity: 9, rayleigh: 2.4, mie: 0.02, fog: 0.00022, sun: 0.22, wet: 0, snow: 0, rain: 0, flakes: 0 },
   rain: { name: 'Rain', icon: '🌧️', clouds: 1, density: 1, turbidity: 12, rayleigh: 2.8, mie: 0.03, fog: 0.00045, sun: 0.1, wet: 1, snow: 0, rain: 1, flakes: 0 },
   storm: { name: 'Thunderstorm', icon: '⛈️', clouds: 1, density: 1, turbidity: 16, rayleigh: 3.4, mie: 0.04, fog: 0.0006, sun: 0.05, wet: 1, snow: 0, rain: 1.8, flakes: 0, lightning: true },
@@ -86,7 +86,7 @@ export class Engine {
     /* ---- renderer ---- */
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false });
     r.outputColorSpace = THREE.SRGBColorSpace;
-    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.toneMapping = THREE.NeutralToneMapping;
     r.toneMappingExposure = 1;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFShadowMap;
@@ -120,6 +120,7 @@ export class Engine {
 
     this.addStars();
     this.addMoon();
+    this.addGlow();
 
     // Layers of the world. The game fills these.
     this.ground = new THREE.Group();
@@ -142,7 +143,7 @@ export class Engine {
     this.envSky.scale.setScalar(1000);
     this.envGround = new THREE.Mesh(new THREE.CircleGeometry(900, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x6f6a60 }));
     this.envGround.position.y = -20;
-    this.envScene.add(this.envSky, this.envGround);
+    this.envScene.add(this.envSky, this.envGround, this.envGlow);
     this.envRT = null;
     this.envKey = '';
 
@@ -210,6 +211,22 @@ export class Engine {
     this.stars.frustumCulled = false;
     this.stars.renderOrder = -1;
     this.scene.add(this.stars);
+  }
+
+  /** After dark the sky is not black: towns light the haze along the horizon. */
+  addGlow() {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { strength: { value: 0 }, horizon: { value: new THREE.Color('#3a4a6e') }, zenith: { value: new THREE.Color('#070b16') } },
+      vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position.z = gl_Position.w; }',
+      fragmentShader: `uniform float strength; uniform vec3 horizon; uniform vec3 zenith; varying vec3 vDir;
+        void main() { float h = max(vDir.y, 0.0); vec3 c = mix(horizon, zenith, pow(h, 0.45)); gl_FragColor = vec4(c * strength, 1.0); }`,
+      side: THREE.BackSide, depthWrite: false, blending: THREE.AdditiveBlending, transparent: true, fog: false,
+    });
+    this.glow = new THREE.Mesh(new THREE.SphereGeometry(800, 32, 16), mat);
+    this.glow.frustumCulled = false;
+    this.glow.renderOrder = -999;
+    this.scene.add(this.glow);
+    this.envGlow = new THREE.Mesh(this.glow.geometry, mat);
   }
 
   addMoon() {
@@ -302,6 +319,8 @@ export class Engine {
       sh.mapSize.set(n, n);
       if (sh.map) { sh.map.dispose(); sh.map = null; }
     }
+    // Coarser shadow maps need a bigger offset to stay clear of acne.
+    sh.normalBias = 0.3 * Math.max(1, 4096 / n);
     this.shadowDirty = true;
   }
 
@@ -393,13 +412,13 @@ export class Engine {
 
     // Sky light: brighter and more even under cloud.
     const overcast = 1 - W.sun;
-    this.hemi.color.set('#1c2c4c').lerp(new THREE.Color(overcast > 0.5 ? '#c3ccd6' : '#c4d3e4'), day);
+    this.hemi.color.set('#26395f').lerp(new THREE.Color(overcast > 0.5 ? '#c3ccd6' : '#c4d3e4'), day);
     this.hemi.groundColor.set('#0b0d12').lerp(new THREE.Color('#6b6253'), day);
-    this.hemi.intensity = this.hemiBase = lerp(0.45, 0.16 + overcast * 0.85, day);
+    this.hemi.intensity = this.hemiBase = lerp(0.62, 0.16 + overcast * 0.85, day);
     this.scene.environmentIntensity = lerp(0.12, 0.3 + overcast * 0.5, day);
 
     // Fog takes the colour of the horizon.
-    const fogDay = new THREE.Color(overcast > 0.5 ? '#aeb5bd' : '#bccbdc');
+    const fogDay = new THREE.Color(overcast > 0.5 ? '#aeb5bd' : '#b3c6dc');
     if (W.snow) fogDay.set('#c9d0d8');
     fogDay.lerp(new THREE.Color('#e3b48d'), golden * 0.55 * W.sun);
     this.scene.fog.color.set('#0a101c').lerp(fogDay, day);
@@ -407,13 +426,14 @@ export class Engine {
     this.envGround.material.color.set('#0c0d10').lerp(new THREE.Color(W.snow ? '#c9ced4' : '#6f6a60'), day);
 
     // Exposure and glow
-    this.renderer.toneMappingExposure = lerp(1.35, 0.82, day) * (W.sun < 0.3 ? 1.25 : 1);
+    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.2 : 1);
     if (this.bloomPass) {
       this.bloomPass.strength = lerp(0.12, 0.7, night);
       this.bloomPass.threshold = lerp(1.1, 0.55, night);
       this.bloomPass.radius = lerp(0.35, 0.6, night);
     }
     this.stars.material.opacity = night * (W.clouds > 0.8 ? 0.08 : 1 - W.clouds * 0.7);
+    this.glow.material.uniforms.strength.value = night * (W.clouds > 0.8 ? 1.4 : 1);
     this.moon.material.opacity = night * (W.clouds > 0.85 ? 0.15 : 1);
     this.moonHalo.material.opacity = night * 0.35 * (W.clouds > 0.85 ? 0.3 : 1);
 
@@ -475,7 +495,7 @@ export class Engine {
       l.color.set(s.color || '#ffd9a0');
       l.angle = (s.angle || 62) * DEG;
       l.distance = s.range || 140;
-      l.intensity = (s.power || 900) * on * 0.3;
+      l.intensity = (s.power || 900) * on * 0.45;
     });
   }
 
@@ -544,7 +564,11 @@ export class Engine {
       const t = dir.y < -0.05 ? cam.position.clone().addScaledVector(dir, -cam.position.y / dir.y) : cam.position.clone().addScaledVector(dir, 120);
       t.y = 0;
       this.controls.target.copy(t);
-      if (cam.position.y < 12) cam.position.y = 40;
+      if (cam.position.y < 30) {
+        // Coming up from the ground: step back and up to a comfortable view.
+        const back = _v2.set(-dir.x, 0, -dir.z).normalize().multiplyScalar(150);
+        cam.position.set(t.x + back.x, 85, t.z + back.z);
+      }
       this.controls.enabled = true;
       this.controls.update();
     } else {
@@ -553,12 +577,19 @@ export class Engine {
       this.look.yaw = Math.atan2(-dir.x, -dir.z);
       this.look.pitch = Math.asin(clamp(dir.y, -1, 1));
       if (mode === 'walk') {
-        // Drop to eye level at the point we were looking at, if we were high up.
-        if (prev === 'orbit' && cam.position.y > 30) {
-          const t = this.controls.target;
-          const back = _v2.set(Math.sin(this.look.yaw), 0, Math.cos(this.look.yaw)).multiplyScalar(60);
-          cam.position.set(t.x + back.x, 5.6, t.z + back.z);
-          this.look.pitch = -0.04;
+        // From up high, come down to eye level a little short of the spot we
+        // were looking at, facing it — and never outside the site.
+        if (cam.position.y > 12) {
+          const d = cam.getWorldDirection(new THREE.Vector3());
+          const spot = prev === 'orbit'
+            ? this.controls.target.clone()
+            : d.y < -0.05 ? cam.position.clone().addScaledVector(d, -cam.position.y / d.y) : cam.position.clone().addScaledVector(d, 80);
+          spot.x = clamp(spot.x, 10, this.lot.width - 10);
+          spot.z = clamp(spot.z, 10, this.lot.depth + 30);
+          const back = _v2.set(Math.sin(this.look.yaw), 0, Math.cos(this.look.yaw)).multiplyScalar(45);
+          cam.position.set(clamp(spot.x + back.x, -150, this.lot.width + 150), 5.6, clamp(spot.z + back.z, -150, this.lot.depth + 100));
+          this.look.pitch = -0.05;
+          if (this.blocked && this.blocked(cam.position.x, cam.position.z)) cam.position.set(spot.x, 5.6, this.lot.depth + 6);
         }
         cam.position.y = 5.6;
         this.look.speed = 7;
@@ -814,6 +845,7 @@ export class Engine {
     // Sky, stars and moon travel with the camera.
     this.sky.position.copy(cam.position);
     this.stars.position.copy(cam.position);
+    this.glow.position.copy(cam.position);
     this.sky.material.uniforms.time.value = this.time;
     if (this.night > 0.02) {
       this.moon.position.copy(cam.position).addScaledVector(this.moonDir, 13500);
@@ -882,7 +914,7 @@ const GRADE = {
   uniforms: {
     tDiffuse: { value: null },
     saturation: { value: 0.9 },
-    tint: { value: new THREE.Vector3(1.03, 1.0, 0.95) },
+    tint: { value: new THREE.Vector3(1.05, 1.0, 0.92) },
     vignette: { value: 0.22 },
   },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,

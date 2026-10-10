@@ -32,7 +32,7 @@ export function place(g, o) {
   g.rotation.y = -(o.rot || 0) * DEG;
 }
 
-function release(g) {
+export function releaseModel(g) {
   for (const d of g.userData.disposables || []) {
     if (d.isMaterial) M.release(d);
     d.dispose?.();
@@ -76,7 +76,7 @@ export class World {
         }
         continue;
       }
-      if (have) { E.objects.remove(have.group); release(have.group); }
+      if (have) { E.objects.remove(have.group); releaseModel(have.group); }
       const g = modelFor(o);
       g.userData.pick = { id: o.id };
       g.userData.obj = o.id;
@@ -87,7 +87,7 @@ export class World {
     for (const [id, it] of this.items) {
       if (seen.has(id)) continue;
       E.objects.remove(it.group);
-      release(it.group);
+      releaseModel(it.group);
       this.items.delete(id);
       changed = true;
     }

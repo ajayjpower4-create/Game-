@@ -260,7 +260,7 @@ function wave(mesh, t) {
   for (let i = 0; i < pos.count; i++) {
     const x = base[i * 3];
     const y = base[i * 3 + 1];
-    const k = x / 8;
+    const k = x / 7;
     pos.setXYZ(i, x * (1 - 0.04 * k), y - k * k * 0.6 + Math.sin(t * 3.1 + x * 0.9 + ph) * 0.08 * k, Math.sin(t * 4 + x * 0.8 + ph) * 0.9 * k + Math.sin(t * 7 + y + x) * 0.15 * k);
   }
   pos.needsUpdate = true;

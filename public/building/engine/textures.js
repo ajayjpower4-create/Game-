@@ -48,21 +48,63 @@ function tileNoise(period, seed) {
   };
 }
 
-/** Fractal noise over a texture of `size` pixels, tiling at its edges. */
+/** Fractal noise over a texture of `size` pixels, tiling at its edges.
+ *  The whole pixel grid is computed up front with lookup tables (fast); any
+ *  other coordinate falls back to evaluating the octaves directly. */
 function fbmField(size, { octaves = 4, base = 4, seed = 1, gain = 0.5 } = {}) {
   const layers = [];
-  for (let o = 0; o < octaves; o++) layers.push({ n: tileNoise(base << o, seed * 31 + o * 7), f: (base << o) / size });
-  return (x, y) => {
+  for (let o = 0; o < octaves; o++) layers.push({ n: tileNoise(base << o, seed * 31 + o * 7), f: (base << o) / size, P: base << o, seed: seed * 31 + o * 7 });
+  let norm = 0;
+  let amp = 1;
+  for (let o = 0; o < octaves; o++) { norm += amp; amp *= gain; }
+  const table = new Float32Array(size * size);
+  amp = 1;
+  for (const L of layers) {
+    const P = L.P;
+    const r = rng(L.seed);
+    const lat = new Float32Array(P * P);
+    for (let i = 0; i < lat.length; i++) lat[i] = r();
+    const x0 = new Int32Array(size);
+    const x1 = new Int32Array(size);
+    const ux = new Float32Array(size);
+    for (let x = 0; x < size; x++) {
+      const fx = x * L.f;
+      const xi = Math.floor(fx);
+      const xf = fx - xi;
+      x0[x] = ((xi % P) + P) % P;
+      x1[x] = (x0[x] + 1) % P;
+      ux[x] = xf * xf * (3 - 2 * xf);
+    }
+    for (let y = 0; y < size; y++) {
+      const fy = y * L.f;
+      const yi = Math.floor(fy);
+      const yf = fy - yi;
+      const r0 = (((yi % P) + P) % P) * P;
+      const r1 = ((((yi % P) + P) % P + 1) % P) * P;
+      const v = yf * yf * (3 - 2 * yf);
+      const row = y * size;
+      for (let x = 0; x < size; x++) {
+        const a = lat[r0 + x0[x]];
+        const b = lat[r0 + x1[x]];
+        const c = lat[r1 + x0[x]];
+        const d = lat[r1 + x1[x]];
+        const u = ux[x];
+        table[row + x] += (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * amp;
+      }
+    }
+    amp *= gain;
+  }
+  for (let i = 0; i < table.length; i++) table[i] /= norm;
+  const slow = (x, y) => {
     let v = 0;
-    let amp = 1;
-    let norm = 0;
+    let a = 1;
     for (const L of layers) {
-      v += L.n(x * L.f, y * L.f) * amp;
-      norm += amp;
-      amp *= gain;
+      v += L.n(x * L.f, y * L.f) * a;
+      a *= gain;
     }
     return v / norm;
   };
+  return (x, y) => ((x | 0) === x && (y | 0) === y && x >= 0 && y >= 0 && x < size && y < size ? table[y * size + x] : slow(x, y));
 }
 
 /* -------------------------------------------------------------- canvases */
@@ -71,6 +113,9 @@ function canvas(w, h = w) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
+  // Keep these canvases in main memory: reading pixels back from a GPU canvas
+  // would stall until every pending WebGL job has finished.
+  c.getContext('2d', { willReadFrequently: true });
   return c;
 }
 
@@ -82,9 +127,9 @@ function paint(c, fn) {
   for (let y = 0; y < c.height; y++) {
     for (let x = 0; x < c.width; x++) {
       const v = fn(x, y);
-      const i = (y * c.width + x) * 4;
+      const i = (y * c.width + x) << 2;
       if (typeof v === 'number') {
-        d[i] = d[i + 1] = d[i + 2] = v;
+        d[i] = v; d[i + 1] = v; d[i + 2] = v;
       } else {
         d[i] = v[0]; d[i + 1] = v[1]; d[i + 2] = v[2];
       }
@@ -106,7 +151,7 @@ function normalMap(h, w, hh, strength = 2) {
     for (let x = 0; x < w; x++) {
       const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
       const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
-      const len = Math.hypot(dx, dy, 1);
+      const len = Math.sqrt(dx * dx + dy * dy + 1);
       const i = (y * w + x) * 4;
       d[i] = (-dx / len * 0.5 + 0.5) * 255;
       d[i + 1] = (dy / len * 0.5 + 0.5) * 255;
@@ -130,6 +175,42 @@ function tex(c, { srgb = true, tileX = 1, tileY = tileX } = {}) {
 }
 
 const clamp255 = (v) => Math.max(0, Math.min(255, v));
+
+/* Direct pixel drawing — far faster than canvas paths for thousands of tiny
+ * marks — and wrapping at the edges, so the result still tiles. */
+function blend(d, w, h, x, y, r, g, b, a) {
+  let xi = x | 0;
+  let yi = y | 0;
+  if (xi < 0) xi += w; else if (xi >= w) xi -= w;
+  if (yi < 0) yi += h; else if (yi >= h) yi -= h;
+  const i = (yi * w + xi) << 2;
+  d[i] = d[i] + (r - d[i]) * a;
+  d[i + 1] = d[i + 1] + (g - d[i + 1]) * a;
+  d[i + 2] = d[i + 2] + (b - d[i + 2]) * a;
+}
+
+function splat(d, w, h, cx, cy, rx, ry, ang, r, g, b, a) {
+  const R = Math.ceil(Math.max(rx, ry));
+  const c = Math.cos(ang);
+  const sn = Math.sin(ang);
+  const ix = Math.round(cx);
+  const iy = Math.round(cy);
+  const irx = 1 / rx;
+  const iry = 1 / ry;
+  for (let y = -R; y <= R; y++) {
+    for (let x = -R; x <= R; x++) {
+      const u = (x * c + y * sn) * irx;
+      const v = (y * c - x * sn) * iry;
+      const q = u * u + v * v;
+      if (q <= 1) blend(d, w, h, ix + x, iy + y, r, g, b, a * (1 - q * 0.4));
+    }
+  }
+}
+
+function stroke(d, w, h, x0, y0, x1, y1, r, g, b, a) {
+  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0)));
+  for (let k = 0; k <= n; k++) blend(d, w, h, Math.round(x0 + ((x1 - x0) * k) / n), Math.round(y0 + ((y1 - y0) * k) / n), r, g, b, a);
+}
 
 /* --------------------------------------------------------------- surfaces */
 
@@ -204,26 +285,24 @@ const builders = {
       const g = n(x, y);
       const k = n2(x, y);
       // Mostly green, with drier straw-coloured patches.
-      const dry = Math.max(0, g - 0.6) * 1.6;
+      const dry = Math.max(0, g - 0.72) * 0.8;
       return [clamp255(66 + g * 26 + k * 14 + dry * 60), clamp255(84 + g * 30 + k * 18 + dry * 30), clamp255(44 + g * 12 + dry * 10)];
     });
     // Blades.
     const ctx = c.getContext('2d');
+    const img = ctx.getImageData(0, 0, s, s);
+    const px = img.data;
     for (let i = 0; i < 14000; i++) {
       const x = r() * s;
       const y = r() * s;
       const l = 2 + r() * 6;
       const shade = r();
-      ctx.strokeStyle = shade > 0.55 ? `rgba(${100 + shade * 50},${130 + shade * 40},${55 + shade * 15},0.42)` : `rgba(28,${46 + shade * 40},18,0.42)`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + (r() - 0.5) * 3, y - l);
-      ctx.stroke();
+      if (shade > 0.55) stroke(px, s, s, x, y, x + (r() - 0.5) * 3, y - l, 100 + shade * 50, 130 + shade * 40, 55 + shade * 15, 0.42);
+      else stroke(px, s, s, x, y, x + (r() - 0.5) * 3, y - l, 28, 46 + shade * 40, 18, 0.42);
     }
+    ctx.putImageData(img, 0, 0);
     const h = new Float32Array(s * s);
-    const id = ctx.getImageData(0, 0, s, s).data;
-    for (let i = 0; i < h.length; i++) h[i] = id[i * 4 + 1] / 255;
+    for (let i = 0; i < h.length; i++) h[i] = px[i * 4 + 1] / 255;
     return { map: tex(c, { tileX: 9 }), normalMap: tex(normalMap(h, s, s, 1.6), { srgb: false, tileX: 9 }), roughnessMap: null };
   },
 
@@ -478,8 +557,8 @@ const builders = {
   },
 
   leaves() {
-    const s = 256;
-    const n = fbmField(s, { base: 8, octaves: 4, seed: 201 });
+    const s = 128;
+    const n = fbmField(s, { base: 4, octaves: 4, seed: 201 });
     const r = rng(203);
     const c = canvas(s);
     paint(c, (x, y) => {
@@ -487,18 +566,21 @@ const builders = {
       return [clamp255(150 + g * 80), clamp255(170 + g * 80), clamp255(130 + g * 60)];
     });
     const ctx = c.getContext('2d');
-    for (let i = 0; i < 2600; i++) {
+    const img = ctx.getImageData(0, 0, s, s);
+    const px = img.data;
+    for (let i = 0; i < 700; i++) {
       const x = r() * s;
       const y = r() * s;
       const k = r();
-      ctx.fillStyle = k > 0.6 ? 'rgba(255,255,230,.45)' : 'rgba(40,60,30,.45)';
-      ctx.beginPath();
-      ctx.ellipse(x, y, 2 + r() * 3, 1 + r() * 2, r() * Math.PI, 0, Math.PI * 2);
-      ctx.fill();
+      const rx = 1.2 + r() * 1.6;
+      const ry = 0.7 + r() * 1.1;
+      const a = r() * Math.PI;
+      if (k > 0.6) splat(px, s, s, x, y, rx, ry, a, 255, 255, 230, 0.45);
+      else splat(px, s, s, x, y, rx, ry, a, 40, 60, 30, 0.45);
     }
-    const id = ctx.getImageData(0, 0, s, s).data;
+    ctx.putImageData(img, 0, 0);
     const h = new Float32Array(s * s);
-    for (let i = 0; i < h.length; i++) h[i] = id[i * 4 + 1] / 255;
+    for (let i = 0; i < h.length; i++) h[i] = px[i * 4 + 1] / 255;
     return { map: tex(c, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 3), { srgb: false, tileX: 4 }), roughnessMap: null };
   },
 
@@ -546,8 +628,15 @@ const builders = {
 const cache = new Map();
 
 /** The texture set for a surface, made on first use. */
+export const texStats = { ms: 0, made: [] };
 export function surface(name) {
-  if (!cache.has(name)) cache.set(name, builders[name]());
+  if (!cache.has(name)) {
+    const t = performance.now();
+    cache.set(name, builders[name]());
+    const ms = performance.now() - t;
+    texStats.ms += ms;
+    texStats.made.push([name, Math.round(ms)]);
+  }
   return cache.get(name);
 }
 

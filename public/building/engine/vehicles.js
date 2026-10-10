@@ -13,16 +13,33 @@ import { Builder } from './builder.js';
 import * as M from './materials.js';
 
 /** Extrude a side profile [[z, y], ...] across the width, centred on x = 0. */
-function profile(B, mat, pts, width, { bevel = 0.35, x = 0 } = {}) {
+function profile(B, mat, pts, width, { bevel = 0.35, x = 0, taper = 0, smooth = false } = {}) {
   const s = new THREE.Shape();
-  s.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
+  if (smooth) {
+    // A closed spline through the points: rounded noses, tails and roofs.
+    s.setFromPoints(new THREE.SplineCurve(pts.map(([a, b]) => new THREE.Vector2(a, b)).concat([new THREE.Vector2(pts[0][0], pts[0][1])])).getPoints(pts.length * 6));
+  } else {
+    s.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
+  }
   s.closePath();
   const bw = Math.min(bevel, width * 0.2);
   const g = new THREE.ExtrudeGeometry(s, { depth: Math.max(0.05, width - bw * 2), bevelEnabled: bw > 0, bevelThickness: bw, bevelSize: bw, bevelSegments: 3, curveSegments: 6 });
   // Shape x is our z; the extrusion runs across the car.
   g.rotateY(-Math.PI / 2);
   g.translate(x + (width - bw * 2) / 2, 0, 0);
+  if (taper) {
+    // Tumblehome: the sides lean in toward the top.
+    const p = g.attributes.position;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (let i = 0; i < p.count; i++) { y0 = Math.min(y0, p.getY(i)); y1 = Math.max(y1, p.getY(i)); }
+    for (let i = 0; i < p.count; i++) {
+      const k = (p.getY(i) - y0) / Math.max(0.01, y1 - y0);
+      p.setX(i, x + (p.getX(i) - x) * (1 - taper * k));
+    }
+    g.computeVertexNormals();
+  }
   B.add(g, mat);
 }
 
@@ -47,46 +64,56 @@ const LIGHT_A = () => (LIT ? M.lamp('#ffa31a', 3) : M.plastic('#c7801a', 0.2));
 function passenger(B, kind, paint, w, L, h) {
   const z0 = -L / 2;
   const P = {
-    car: { belt: 0.56, hood: 0.27, roof0: 0.36, roof1: 0.7, tail: 0.88, ground: 0.55 },
-    hatch: { belt: 0.56, hood: 0.22, roof0: 0.32, roof1: 0.86, tail: 0.98, ground: 0.55 },
-    suv: { belt: 0.58, hood: 0.24, roof0: 0.33, roof1: 0.9, tail: 0.98, ground: 0.75 },
-    police: { belt: 0.56, hood: 0.27, roof0: 0.36, roof1: 0.7, tail: 0.88, ground: 0.55 },
-  }[kind] || { belt: 0.56, hood: 0.27, roof0: 0.36, roof1: 0.7, tail: 0.88, ground: 0.55 };
-  const g = P.ground;
+    car: { belt: 0.56, hood: 0.3, roof0: 0.43, roof1: 0.7, tail: 0.84, deck: 0.04, g: 0.5 },
+    hatch: { belt: 0.55, hood: 0.27, roof0: 0.4, roof1: 0.86, tail: 0.97, deck: 0, g: 0.5 },
+    suv: { belt: 0.58, hood: 0.25, roof0: 0.37, roof1: 0.9, tail: 0.98, deck: 0, g: 0.75 },
+    police: { belt: 0.56, hood: 0.3, roof0: 0.43, roof1: 0.7, tail: 0.84, deck: 0.04, g: 0.5 },
+  }[kind] || { belt: 0.56, hood: 0.3, roof0: 0.43, roof1: 0.7, tail: 0.84, deck: 0.04, g: 0.5 };
+  const g = P.g;
   const belt = h * P.belt;
-  // Lower body: bumpers, wheel arches implied by the bevel.
+  const Z = (t) => z0 + L * t;
+  // Lower body: rounded nose and tail, a hood falling to the grille.
   profile(B, paint, [
-    [z0 + 0.3, g + 0.2], [z0 + L - 0.25, g + 0.2], [z0 + L, g + 0.9], [z0 + L, belt],
-    [z0 + L * P.tail, belt + 0.12], [z0 + L * P.hood, belt + 0.05], [z0 + 0.2, belt - 0.35], [z0, g + 0.95],
-  ], w, { bevel: 0.45 });
-  // Greenhouse: glass all round, then the roof skin on top.
-  const r0 = z0 + L * P.roof0;
-  const r1 = z0 + L * P.roof1;
-  const wsBase = z0 + L * P.hood + 0.3;
-  const rearBase = z0 + L * Math.min(0.97, P.tail);
-  profile(B, M.vehicleGlass(), [[wsBase, belt + 0.02], [rearBase, belt + 0.06], [r1 + 0.15, h - 0.08], [r0 - 0.1, h - 0.08]], w - 0.5, { bevel: 0.22 });
-  profile(B, paint, [[r0 - 0.15, h - 0.12], [r1 + 0.2, h - 0.12], [r1 + 0.05, h], [r0, h]], w - 0.45, { bevel: 0.22 });
-  // Pillars between the windows.
+    [Z(0.02), g + 0.3], [Z(0.98), g + 0.3], [Z(1), g + 0.95], [Z(0.995), belt - 0.15], [Z(P.tail + (1 - P.tail) * 0.5), belt + P.deck * h],
+    [Z(P.tail), belt + 0.08], [Z(P.hood), belt + 0.02], [Z(0.12), belt - 0.32], [Z(0.01), belt - 0.6], [Z(0), g + 0.9],
+  ], w, { bevel: 0.5, smooth: true });
+  // Greenhouse: raked windscreen, glass all round, tapering in to the roof.
+  const r0 = Z(P.roof0);
+  const r1 = Z(P.roof1);
+  profile(B, M.vehicleGlass(), [[Z(P.hood) + 0.15, belt + 0.02], [Z(P.tail) - 0.1, belt + 0.06], [r1 + 0.2, h - 0.12], [r0 - 0.1, h - 0.12]], w - 0.5, { bevel: 0.18, taper: 0.16 });
+  profile(B, paint, [[r0 - 0.3, h - 0.16], [r1 + 0.35, h - 0.16], [r1 + 0.05, h], [r0, h]], (w - 0.5) * 0.84, { bevel: 0.15 });
+  // A, B and C pillars.
   const mid = (r0 + r1) / 2;
-  for (const sx of [-1, 1]) B.box(paint, 0.12, h - belt - 0.15, 0.35, sx * (w / 2 - 0.3), belt + (h - belt) / 2, mid);
-  // Wheels.
-  const r = Math.max(1.05, g + 0.6);
-  for (const wz of [z0 + L * 0.18, z0 + L * 0.8]) for (const sx of [-1, 1]) wheel(B, sx * (w / 2 - 0.42), r, wz, r, 0.75);
-  // Lights, grille, plates and mirrors.
   for (const sx of [-1, 1]) {
-    B.box(LIGHT_W(), 1.2, 0.35, 0.15, sx * (w / 2 - 0.9), belt - 0.45, z0 + 0.12);
-    B.box(LIGHT_R(), 1.1, 0.4, 0.12, sx * (w / 2 - 0.8), belt - 0.25, z0 + L - 0.05);
-    B.box(paint, 0.15, 0.32, 0.6, sx * (w / 2 + 0.12), belt + 0.35, wsBase + 0.6);
+    const xi = sx * (w / 2 - 0.25 - 0.08 * (w / 6));
+    B.box(paint, 0.1, h - belt - 0.12, 0.32, xi * 0.97, belt + (h - belt) / 2, mid);
+    B.tube(paint, [sx * (w / 2 - 0.3), belt + 0.05, Z(P.hood) + 0.25], [sx * (w / 2 - 0.55), h - 0.14, r0 - 0.05], 0.1, 5);
   }
-  B.box(M.plastic('#15181c', 0.6), w * 0.42, 0.45, 0.12, 0, belt - 0.7, z0 + 0.06);
-  B.box(M.plastic('#f2f2ec', 0.5), 1.1, 0.4, 0.06, 0, g + 0.85, z0 + L + 0.02);
-  B.box(M.plastic('#22262b', 0.7), w - 0.2, 0.5, 0.25, 0, g + 0.45, z0 + L - 0.15);
-  B.box(M.plastic('#22262b', 0.7), w - 0.2, 0.5, 0.25, 0, g + 0.45, z0 + 0.15);
+  // Wheels in dark arches.
+  const r = g + 0.68;
+  for (const wz of [Z(0.19), Z(0.79)]) {
+    for (const sx of [-1, 1]) {
+      B.cyl(M.rubber(), r + 0.22, r + 0.22, 0.06, sx * (w / 2 + 0.005), r, wz, { seg: 18, rot: [0, 0, Math.PI / 2] });
+      wheel(B, sx * (w / 2 - 0.3), r, wz, r, 0.7);
+    }
+  }
+  // Lights, grille, plates, mirrors and handles.
+  for (const sx of [-1, 1]) {
+    B.box(LIGHT_W(), 1.1, 0.3, 0.3, sx * (w / 2 - 0.85), belt - 0.5, Z(0.012));
+    B.box(LIGHT_R(), 1.1, 0.32, 0.25, sx * (w / 2 - 0.75), belt - 0.18, Z(0.993));
+    B.box(paint, 0.18, 0.3, 0.55, sx * (w / 2 + 0.15), belt + 0.3, Z(P.hood) + 0.55);
+    B.box(M.plastic('#1b1e22', 0.5), 0.05, 0.08, 0.5, sx * (w / 2 + 0.02), belt - 0.25, mid - 1.2);
+    B.box(M.plastic('#1b1e22', 0.5), 0.05, 0.08, 0.5, sx * (w / 2 + 0.02), belt - 0.25, mid + 1.6);
+  }
+  B.box(M.plastic('#15181c', 0.6), w * 0.4, 0.4, 0.2, 0, g + 0.9, Z(0.006));
+  B.box(M.plastic('#f2f2ec', 0.5), 1.1, 0.38, 0.06, 0, g + 0.95, Z(1) + 0.02);
+  B.box(M.plastic('#22262b', 0.7), w * 0.9, 0.35, 0.3, 0, g + 0.45, Z(1) - 0.12);
+  B.box(M.plastic('#22262b', 0.7), w * 0.9, 0.35, 0.3, 0, g + 0.45, Z(0) + 0.14);
   if (kind === 'police') {
-    B.box(M.plastic('#1b1e22', 0.5), w * 0.7, 0.3, 1.2, 0, h + 0.15, mid);
-    B.box(M.signal('#2a6bff', 3), w * 0.3, 0.25, 0.9, -w * 0.18, h + 0.4, mid);
-    B.box(M.signal('#ff2a2a', 3), w * 0.3, 0.25, 0.9, w * 0.18, h + 0.4, mid);
-    for (const sx of [-1, 1]) B.box(M.plastic('#f4f6f8', 0.4), 0.05, 0.9, L * 0.5, sx * (w / 2 + 0.06), belt - 0.6, z0 + L * 0.5);
+    B.box(M.plastic('#1b1e22', 0.5), w * 0.62, 0.25, 1, 0, h + 0.12, mid);
+    B.box(M.signal('#2a6bff', 3), w * 0.28, 0.22, 0.8, -w * 0.16, h + 0.32, mid);
+    B.box(M.signal('#ff2a2a', 3), w * 0.28, 0.22, 0.8, w * 0.16, h + 0.32, mid);
+    for (const sx of [-1, 1]) B.box(M.plastic('#f4f6f8', 0.4), 0.04, 0.8, L * 0.45, sx * (w / 2 + 0.05), belt - 0.55, mid);
   }
 }
 
@@ -185,7 +212,7 @@ function trailer(B, paint, w, L, h, { reefer = false } = {}) {
   for (const sx of [-1, 1]) {
     B.box(M.metal('#3b3f45', 0.5), 0.35, 3.6, 0.35, sx * 3, 1.9, z0 + 10);
     B.box(M.metal('#3b3f45', 0.5), 0.8, 0.12, 0.8, sx * 3, 0.06, z0 + 10);
-    B.box(M.paint('#e44c1c'), 0.06, 0.5, L * 0.85, sx * (w / 2 + 0.07), y0 + 0.5, 0);
+    B.box(M.painted('#e44c1c', 0.4), 0.04, 0.18, L * 0.85, sx * (w / 2 + 0.05), y0 + 0.45, 0);
     B.box(M.plastic('#15171a', 0.8), 0.08, 1.6, 9, sx * (w / 2 - 0.1), 2.6, z1 - 7);
   }
   B.box(M.metal('#3b3f45', 0.5), w - 1, 0.5, 0.4, 0, 1.8, z1 - 0.4);
