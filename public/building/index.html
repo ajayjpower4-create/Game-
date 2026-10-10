@@ -3,9 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Building Design Simulator — lay out a site and sign it yourself</title>
+<title>Building Design Simulator — design a site in real 3D</title>
 <link rel="stylesheet" href="/building/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗️</text></svg>">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+</script>
 </head>
 <body>
 <header class="topbar">
@@ -21,6 +24,7 @@
 
 <main id="app"></main>
 
+<noscript><p style="padding:20px">This game needs JavaScript and WebGL.</p></noscript>
 <script type="module" src="/building/game.js"></script>
 </body>
 </html>

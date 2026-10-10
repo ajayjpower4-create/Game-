@@ -14,6 +14,9 @@ app.use(express.json({ limit: '256kb' }));
 // index: false so the routes below decide what lives at each path; assets
 // (css/js) are still served straight out of public/.
 app.use(express.static(join(__dirname, 'public'), { index: false }));
+// The building game renders with three.js, served from the installed package so
+// the game works offline and never depends on a CDN being reachable.
+app.use('/vendor/three', express.static(join(__dirname, 'node_modules', 'three'), { index: false, maxAge: '7d' }));
 
 // The homepage is a hub listing every game; each game keeps its own path.
 const page = (...parts) => (req, res) => res.sendFile(join(__dirname, 'public', ...parts));

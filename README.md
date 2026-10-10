@@ -174,139 +174,177 @@ not a substitute for an inspection by a licensed inspector.
 
 # Building Design Simulator
 
-A site editor. Set a lot, put buildings on it, and then edit everything —
-every wall bay, every machine on every roof, every trailer, sign, booth and
-tree. The camera flies around it like a drone.
+A site editor in real-time 3D. Set a lot, put buildings on it, and then edit
+everything — every wall bay, every machine on every roof, every trailer, sign,
+booth and tree — under a sun that moves with the clock, in whatever weather
+you choose.
 
 Open <http://localhost:3000/building>.
 
-## The camera
+## How it looks
 
-It orbits a point on the ground rather than the middle of the lot, so:
+The game renders with WebGL (three.js, served from `node_modules`, so it works
+offline):
 
-- **Drag** to orbit, and a flick keeps turning and eases off.
-- **Right-drag** or shift-drag to pan — the ground stays under the pointer.
-- **Wheel** zooms *at the pointer*, not at the middle of the screen.
-- **Two fingers** pinch to zoom and drag to pan.
-- **Double-click** anything to fly to it; F frames the selection.
-- Tilt runs from 4° (standing at the fence) to 88° (straight down), zoom from
-  0.25× to 12×, and the preset views fly rather than cut.
+- **Sun and sky.** A physical sky model with drifting clouds; the sun's
+  position follows the time of day (east at dawn, south at noon, west at
+  dusk), with warm low light at golden hour and blue hour after sunset. The
+  same sky is baked into an environment map, so glass, car paint, water and
+  wet tarmac reflect it.
+- **Shadows** from a 4K (8K on Ultra) shadow map fitted to the lot, soft-edged,
+  plus ambient occlusion in corners, under eaves and between parked cars.
+- **Night.** Windows light up from inside (not all of them), lamp heads, wall
+  packs, dock lights, canopy downlights and signs glow, the nearest lamps
+  throw real light on the ground, every lamp leaves a pool of light on the
+  asphalt, and bloom softens the bright bits. Stars and a moon come out.
+- **Weather.** Clear, fair-weather cloud, overcast, rain (falling rain, wet
+  reflective ground), thunderstorm (with lightning), fog, and snow (falling
+  snow, white roofs and ground). **Seasons** recolour every tree.
+- **Materials** are generated at start-up as tileable textures with normal
+  and roughness maps, measured in feet: precast panels with joints, ribbed
+  metal, brick in running bond, stone, render, timber boards, composite
+  cassettes, membrane and standing-seam roofs, tiles, asphalt, concrete with
+  joints, block paving, grass — with large-scale variation so no repeat shows.
+- **Buildings are modelled, not painted**: punched windows with reveals,
+  sills and mullions; curtain walls; balconies with glass balustrades;
+  shopfronts with canopies; entrances with lit canopies; loading bays with
+  dock shelters, bumpers, levellers and dock lights; roll-up doors with
+  housings and bollards; open parking decks you can see into; parapets with
+  copings; pitched, hipped, monopitch, barrel and sawtooth roofs with eaves,
+  gutters and barge boards; rainwater pipes; and wall signs with raised,
+  shadowed letters that are lit at night.
+- **Around the lot**: rolling fields to a tree-lined horizon with a town in
+  the haze, a street with kerbs, footways and markings and its own traffic,
+  people walking about, flags that wave and wind turbines that turn.
 
-The scale is fixed against the lot's own diagonal, so swinging round the site
-no longer pumps it in and out — which was the thing that made the old camera
-feel wrong. A compass in the corner shows where north is; click it to face
-north.
+## Cameras
+
+| Mode | Controls |
+| --- | --- |
+| **Orbit** (1) — for editing | Drag to orbit · right-drag to pan · wheel zooms at the pointer · WASD slide · Q/E turn · double-click flies to a thing |
+| **Drone** (2) | WASD fly · Space up · C down · right-drag or drag to look · wheel sets speed · Shift boosts |
+| **Walk** (3) | WASD at eye height · Shift runs · click to look around (Esc frees the mouse) · you cannot walk through walls |
+
+The minimap (top right) shows where you are and which way you face; click it
+to go there. Preset views fly the camera to the front, back, sides, overhead,
+a corner or street level.
 
 ## Everything is an object
 
-Buildings included. Click anything in the view to select it; then turn it in
-15° or 90° steps, duplicate it, nudge it with the arrow keys, drag it around,
-or delete it. Ctrl+Z undoes. So the security sign facing the wrong way can be
-turned to face the right way — or deleted and done again.
+Buildings included. Click anything to select it (it gets a glowing outline);
+drag it to move it; turn it in 15° or 90° steps, duplicate it, nudge it with
+the arrow keys, focus the camera on it, or delete it. Ctrl+Z undoes.
 
-Nothing solid may share ground with anything else solid: drag a trailer into a
-wall — or into another trailer — and it springs back, and a placement that
-would land on something is refused with the footprint drawn in red. Bollards,
-cones, trees and signs are exempt, since they are scatter.
-
-Buildings are the exception, because they are the permanent thing on a lot:
-drop one wherever you like and whatever was standing there is pushed out to
-clear ground. The same happens when you drag, turn or *resize* a building —
-growing a wall over a parked trailer is exactly how things used to end up
-inside buildings.
-
-Back a trailer, box truck or van up near a loading bay and it squares itself
-onto the bay instead of staying at whatever angle you dragged it in at.
+Nothing solid may share ground with anything else solid: drag a trailer into
+a wall — or into another trailer — and it springs back, and a placement that
+would land on something is refused with a red ghost. Bollards, cones, trees
+and signs are scatter and exempt. Buildings go wherever you put them, and
+whatever was standing there is pushed out to clear ground. Back a trailer,
+box truck or van up near a loading bay and it squares itself onto the bay.
 
 ## What you can add
 
-The Add tab holds the catalogue. Pick a thing, then click the ground to drop
-it; shift-click keeps the tool armed for a run of fence or bollards.
-
-- **Buildings** — twenty-four models in three families. *Sheds and industry*:
-  warehouse shell, storage row, workshop, cold store, plant room, cross-dock,
-  sawtooth mill, hangar, high-bay store, data hall. *Offices and shops*: office
-  block, tower, retail strip, car park deck, glass pavilion, big-box store,
-  terrace of units. *Small buildings*: small building, pitched unit, link
-  annex, lodge, kiosk, barn, substation. Put as many on the lot as you like.
-  Each one also takes a cladding (precast panels, ribbed metal, brick courses,
-  plain render) and a roof (flat, pitched, monopitch, barrel arch, sawtooth),
-  so the same box can read as a shed, a brick terrace or an arched hangar.
-- **Roof plant** — 18 machines: packaged AC units, large rooftop units, a
-  chiller, cooling tower, exhaust fan, mushroom vent, flue stack, skylight,
-  skylight monitor, solar array, satellite dish, antenna mast, water tank,
-  stair bulkhead, lift overrun, duct run, pipe rack and a louvred plant screen.
-  None of it appears on its own — you place every piece, on any roof, and drag
-  it around up there.
-- **Booths** — 10 designs: classic cabin, deep canopy, brick gatehouse, glass
+- **49 building models** in five families — sheds and industry (warehouse
+  shell, mega shed, storage row, workshop, cold store, plant room, cross-dock,
+  sawtooth mill, hangar, high-bay store, data hall, factory, repair garage,
+  truck wash, recycling shed, research lab), offices and shops (office block,
+  business-park office, tower, retail strip, glass pavilion, big-box store,
+  supermarket, car showroom, hotel, shops with flats, medical centre, sports
+  hall, car park deck, terrace of units), civic (fire station, school,
+  library, chapel, police station), homes (apartment block, townhouses,
+  detached house) and small buildings (small office, gatehouse HQ, pitched
+  unit, link annex, lodge, kiosk, service-station shop, toilet block,
+  greenhouse, barn, substation). Each takes any of seven claddings, six roof
+  types, wall/trim/roof colours, a glass roof and a parapet.
+- **24 rooftop machines**, placed by hand and dragged around up there:
+  packaged and large rooftop units, chiller, cooling tower, condenser bank,
+  exhaust fan, mushroom vent, flue, brick chimney, skylight, skylight dome,
+  monitor, solar array, green roof, helipad, satellite dish, antenna mast,
+  water tank, stair bulkhead, lift overrun, duct run, pipe rack, plant screen
+  and a roof sign frame.
+- **10 guard booths**: classic cabin, deep canopy, brick gatehouse, glass
   cube, container booth, twin-lane kiosk, pitched hut, raised lookout, round
-  kiosk and a full gate office. Each carries a fascia sign you write yourself.
-- **Props** — fences and walls by the run, guard rails, gate arms, bollards,
-  barriers, cones, monument/pylon/post signs, stop signs, flagpoles, light
-  poles, flood masts, bollard lights, trees, conifers, shrubs, hedges,
-  planters, dumpsters, containers, generators, transformers, silos, pallet
-  stacks, yard canopies, bike racks, benches, picnic tables.
-- **Vehicles** — trailers, tractor units, box trucks, vans, cars, forklifts.
+  kiosk and a gate office — each lit inside at night, each with a fascia sign
+  you write.
+- **108 props** — boundary (mesh, palisade and timber fences, walls, guard
+  rail, gate arm, sliding gate, turnstile, bollards, Jersey barriers, crowd
+  barriers, cones, drums, speed bumps); signs (monument, pylon, billboard,
+  post and direction signs, stop/speed/parking/accessible signs, traffic
+  light, flagpoles); lighting (area lights, double heads, flood masts, street
+  lamps, heritage lanterns, bollard lights, CCTV); planting (broadleaf, oak,
+  maple, birch, conifer, pine, palm, shrubs, hedges, flower beds, planters,
+  boulders, ponds, fountains); yard (dumpsters, skips, compactor, recycling,
+  shipping containers, generator, transformer, LPG and oil tanks, IBCs, gas
+  cage, silo, water tower, pallets, racking, canopies, solar carport, EV
+  chargers, fuel pumps and canopy, bus and smoking shelters, bike racks,
+  benches, picnic tables, bins, hydrant, post box, vending machine, portable
+  toilet, site cabin, scaffold, wind turbine, phone mast, power pole);
+  vehicles (trailer, reefer, tractor unit, box truck, tanker, flatbed, dump
+  truck, mixer, bus, van, pickup, SUV, car, hatchback, police car, ambulance,
+  fire engine, forklift, excavator, tower crane, mobile crane); and people.
 
 ## Walls, bay by bay
 
-Select a building and its four walls come up as grids: one row per floor, one
-column per bay. Pick a brush — window, ribbon glass, full glazing, loading bay,
-roll-up door, entrance, louvre, vent — and paint the bays one at a time, or
-fill and clear a whole wall. Add and remove bays across a wall, change the
-floor count, and the openings follow. Loading bays and doors are ground floor
-only, because that is where they go.
+Select a building and its four walls come up as grids — one row per floor,
+one column per bay. Pick a brush (window, ribbon glass, curtain wall,
+balcony, shopfront, entrance, steel door, loading bay, roll-up door, garage
+door, louvre, vent, open deck) and paint bays one at a time; the 3D model
+rebuilds as you go. "Look at it" flies the camera to that wall. Doors, docks
+and shopfronts only go on the ground floor.
 
-What you put on a wall changes the ground in front of it: a run of loading bays
-gets a poured concrete apron and a truck court that parking will not encroach
-on, and an entrance gets a path and a crossing.
+What you put on a wall changes the ground in front of it: loading bays get a
+concrete truck court with guide lines that parking keeps clear of, roll-up
+doors get an apron, and every entrance gets a path and a zebra crossing.
 
-## The site
+## The site, the world, the numbers
 
-Lot size, and toggles for pavement, parking, parked cars, road markings, the
-street and grass. The parking lays itself out around whatever is on the lot —
-add a building in the middle of the car park and the bays re-flow around it.
-
-## How it draws
-
-One SVG, rebuilt on every change, with cast shadows swept along the sun vector,
-precast joints and ribbed siding, glazing that reflects sky by day and lights
-up cell by cell at night, roofs with coping and membrane seams, and a night
-palette where pole heads pool light on the asphalt and dock lamps wash the wall
-above every bay.
-
-Painter ordering compares objects pairwise rather than by a single depth
-number — a 380-foot shed has a corner nearer the camera than a trailer parked
-in front of its other end, and a single number gets that backwards.
-
-While the camera or a slider is moving the scene draws in a cheap pass; the
-detail comes back when you let go.
+- **Site** — lot size, and switches for pavement, parking (with accessible
+  bays, wheel stops and planted islands), parked cars, markings, the street,
+  and grass or gravel. Snap to grid and docks (hold Alt to place freely).
+- **World** — time of day (or let the clock run, at four speeds), weather,
+  season, traffic and people, and graphics quality (Low, Medium, High, Ultra).
+- **Stats** — floor area, coverage, floor area ratio, parking bays and the
+  ratio per 1,000 sq ft, docks, entrances, windows, trees, and a rough build
+  cost.
+- **Saves** — the site autosaves; keep named copies, open them again, or
+  export and import a `.building.json` file.
+- **Photo mode** (P) hides the editor; take a picture at screen or double
+  resolution. **Measure** draws a line between two points and gives its length.
 
 ## Keys
 
 | Key | What it does |
 | --- | --- |
-| Drag / right-drag / wheel | Orbit · pan · zoom at the pointer |
+| 1 / 2 / 3 | Orbit · Drone · Walk |
 | Click / double-click | Select · fly to it |
-| WASD | Pan the camera |
-| Arrows | Nudge the selection 2 ft (10 ft with shift), or pan when nothing is selected |
-| Q / E | Turn the camera · PgUp/PgDn tilt · +/− zoom |
-| N / F / 0 | Face north · frame the selection · reset the view |
 | R / Shift+R | Turn the selection (or the thing being placed) |
+| Arrows | Nudge the selection 2 ft (10 ft with Shift), relative to the camera |
 | Delete | Delete the selection |
-| Esc | Cancel placement, or deselect |
-| Ctrl+Z / Ctrl+Shift+Z | Undo · redo |
+| F / N | Frame the selection · face north |
+| T / L | Run the clock · jump between day and night |
+| P / M / G | Photo mode · minimap · snapping |
+| Esc | Cancel placement, stop measuring, deselect, or leave Drone/Walk |
+| Ctrl+Z / Ctrl+Shift+Z / Ctrl+D / Ctrl+S | Undo · redo · duplicate · saves |
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `public/building/iso.js` | Projection and unprojection, lit prisms, roof forms, cast-shadow hulls, wall faces, overlap tests |
-| `public/building/camera.js` | The camera: orbit target, fixed scale, zoom-to-cursor, pinch, damping, flights |
-| `public/building/catalog.js` | The object model, item catalogues, presets, save migration, and the rule that nothing stands inside a building |
-| `public/building/parts.js` | Every drawable piece: wall openings, the 18 machines, the 10 booths, props and vehicles |
-| `public/building/scene.js` | Site assembly, ground and marking, depth sort, hit shapes, day/night palette |
-| `public/building/game.js` | The editor: camera, selection, dragging, placement, wall and roof editors, undo |
+| `public/building/geom.js` | Plan geometry: footprints, overlap tests, wall frames |
+| `public/building/catalog.js` | The object model, catalogues, presets, save migration |
+| `public/building/site.js` | Site rules: collisions, eviction, dock snapping, the paving and parking plan, stats |
+| `public/building/engine/core.js` | Renderer, sky, sun and moon, weather, post-processing, cameras, picking |
+| `public/building/engine/textures.js` | Procedural tileable textures and sign lettering |
+| `public/building/engine/materials.js` | PBR materials and the night/wet/snow/season switches |
+| `public/building/engine/builder.js` | Builds models from parts and merges them per material |
+| `public/building/engine/ground.js` | Terrain, street, paving, truck courts, parking, scenery |
+| `public/building/engine/buildings.js` | Buildings: every wall bay, every roof type, signs, roof plant |
+| `public/building/engine/props.js` | Props and booths |
+| `public/building/engine/vehicles.js` | Vehicles |
+| `public/building/engine/nature.js` | Trees and people |
+| `public/building/engine/world.js` | Keeps the 3D scene in step with the save; parked cars; light pools |
+| `public/building/engine/life.js` | Traffic, pedestrians, flags, turbines, rain and snow |
+| `public/building/game.js` | The editor: panels, placement, dragging, undo, saves, photo mode |
 
 Every site in it is invented. It is a toy for sketching a layout, not a set of
 construction documents.
