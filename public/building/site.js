@@ -184,6 +184,11 @@ export function planSite(state) {
     const firstY = blds.length ? Math.min(...blds.map((b) => bounds(footprint(b)).y1)) + 28 : plan.pave.y0 + 20;
     const pitch = STALL.d + 26;
     const doors = plan.walks.map((w) => [w.rect.x + w.rect.w / 2, w.rect.y + w.rect.d / 2]);
+    // Bays stay off anything set down on the ground — ponds, planting, poles,
+    // signs, bins — though a parked vehicle may of course sit in one.
+    const obstacles = state.objects
+      .filter((o) => o.kind === 'prop' && !(PROP_BY_ID[o.type] || {}).vehicle && (PROP_BY_ID[o.type] || {}).cat !== 'People')
+      .map(footprint);
     for (let y = firstY, row = 0; y + STALL.d < Math.min(plan.pave.y1 - 10, lot.depth - 86); y += pitch, row++) {
       const run = [];
       for (let x = plan.pave.x0 + 8; x + STALL.w < plan.pave.x1 - 8; x += STALL.w) {
@@ -191,6 +196,7 @@ export function planSite(state) {
         if (Math.abs(x + STALL.w / 2 - plan.driveX) < 32) continue;
         if (!isClear(state, rect)) continue;
         if (plan.keepClear.some((k) => overlaps(rect, k))) continue;
+        if (obstacles.some((f) => overlaps(rect, f, -0.5))) continue;
         // Accessible bays go nearest the doors.
         const ada = doors.some(([dx, dy]) => Math.hypot(dx - (x + STALL.w / 2), dy - (y + STALL.d / 2)) < 46);
         plan.stalls.push({ x, y, w: STALL.w, d: STALL.d, row, ada });
