@@ -26,20 +26,40 @@ export function bounds(fp) {
   };
 }
 
+/** Centre and half-extents of the axis-aligned box round a footprint. */
+function box(f, m = 0) {
+  const r = f.rot || 0;
+  const hx = f.w / 2 + m;
+  const hy = f.d / 2 + m;
+  const cx = f.x + f.w / 2;
+  const cy = f.y + f.d / 2;
+  if (r % 180 === 0) return [cx, cy, hx, hy, true];
+  if (r % 90 === 0) return [cx, cy, hy, hx, true];
+  const a = r * DEG;
+  const c = Math.abs(Math.cos(a));
+  const s = Math.abs(Math.sin(a));
+  return [cx, cy, hx * c + hy * s, hx * s + hy * c, false];
+}
+
 /** Separating-axis test on two rotated rectangles; margin grows (or, when
- *  negative, shrinks) the first one before testing. */
+ *  negative, shrinks) the first one before testing. Square-on rectangles —
+ *  nearly everything — are settled by their boxes alone. */
 export function overlaps(a, b, margin = 0) {
+  const [ax, ay, aw, ah, aSq] = box(a, margin);
+  const [bx, by, bw, bh, bSq] = box(b);
+  if (Math.abs(ax - bx) > aw + bw || Math.abs(ay - by) > ah + bh) return false;
+  if (aSq && bSq) return true;
   const A = corners({ ...a, w: a.w + margin * 2, d: a.d + margin * 2, x: a.x - margin, y: a.y - margin });
   const B = corners(b);
   for (const ring of [A, B]) {
     for (let i = 0; i < 4; i++) {
       const p = ring[i];
       const q = ring[(i + 1) % 4];
-      const ax = -(q[1] - p[1]);
-      const ay = q[0] - p[0];
+      const nx = -(q[1] - p[1]);
+      const ny = q[0] - p[0];
       let minA = Infinity, maxA = -Infinity, minB = Infinity, maxB = -Infinity;
-      for (const [px, py] of A) { const v = px * ax + py * ay; minA = Math.min(minA, v); maxA = Math.max(maxA, v); }
-      for (const [px, py] of B) { const v = px * ax + py * ay; minB = Math.min(minB, v); maxB = Math.max(maxB, v); }
+      for (const [px, py] of A) { const v = px * nx + py * ny; minA = Math.min(minA, v); maxA = Math.max(maxA, v); }
+      for (const [px, py] of B) { const v = px * nx + py * ny; minB = Math.min(minB, v); maxB = Math.max(maxB, v); }
       if (maxA < minB || maxB < minA) return false;
     }
   }

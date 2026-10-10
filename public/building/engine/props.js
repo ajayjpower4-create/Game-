@@ -849,7 +849,323 @@ const P = {
     B.sphere(M.signal('#ff2a1f', 3), 0.4, jib, top + 7.8, 0, { seg: 8 });
     B.sphere(M.signal('#ff2a1f', 3), 0.4, 0, top + 22.5, 0, { seg: 8 });
   },
+
+  /* ---- roads ---- */
+  road(B, o, { w, d }) { roadStrip(B, w, d, { lanes: 2 }); },
+  lane(B, o, { w, d }) { roadStrip(B, w, d, { lanes: 1 }); },
+  bend(B, o, { w, d }) {
+    // A quarter turn about the footprint's -x/-z corner, 26 ft wide.
+    const R1 = Math.min(w, d) - 1.5;
+    const R0 = R1 - 26;
+    const cx = -w / 2;
+    const cz = -d / 2;
+    ring(B, M.road(), cx, cz, R0, R1, 0, Math.PI / 2, 0.26);
+    arcKerb(B, cx, cz, R1 + 0.5, 0, Math.PI / 2);
+    arcKerb(B, cx, cz, Math.max(1, R0 - 0.5), 0, Math.PI / 2);
+    arcLine(B, M.paint('#e7b416'), cx, cz, (R0 + R1) / 2 - 0.45, 0.32, 0, Math.PI / 2, 0.3);
+    arcLine(B, M.paint('#e7b416'), cx, cz, (R0 + R1) / 2 + 0.45, 0.32, 0, Math.PI / 2, 0.3);
+    arcLine(B, M.paint('#f2f1ea'), cx, cz, R0 + 1.2, 0.35, 0, Math.PI / 2, 0.3);
+    arcLine(B, M.paint('#f2f1ea'), cx, cz, R1 - 1.2, 0.35, 0, Math.PI / 2, 0.3);
+  },
+  tee(B, o, { w, d }) {
+    flatRect(B, M.road(), 0, 0, w, d, 0.26);
+    // The through road runs along x; the branch leaves toward -z.
+    for (const sz of [1]) B.box(M.kerb(), w, 0.5, 1, 0, 0.25, sz * (d / 2 - 0.5));
+    const white = M.paint('#f2f1ea');
+    stripeX(B, M.paint('#e7b416'), -w / 2, w / 2, d / 2 - 13 - 0.45, 0.32);
+    stripeX(B, M.paint('#e7b416'), -w / 2, w / 2, d / 2 - 13 + 0.45, 0.32);
+    for (let x = -11; x < 0; x += 2.4) B.box(white, 1.2, 0.03, 0.6, x, 0.31, -d / 2 + 14);
+    for (let z = -d / 2 + 2; z < -d / 2 + 13; z += 6) B.box(white, 0.35, 0.03, 3, 0, 0.31, z);
+  },
+  cross(B, o, { w, d }) {
+    flatRect(B, M.road(), 0, 0, w, d, 0.26);
+    const white = M.paint('#f2f1ea');
+    for (const [x, z, ry] of [[0, d / 2 - 2, 0], [0, -d / 2 + 2, 0], [w / 2 - 2, 0, Math.PI / 2], [-w / 2 + 2, 0, Math.PI / 2]]) {
+      for (let k = -11; k <= 11; k += 2.4) B.box(white, 1.3, 0.03, 3.2, x + (ry ? 0 : k), 0.31, z + (ry ? k : 0), [0, ry, 0]);
+    }
+    for (const [x, z] of [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]) B.cyl(M.kerb(), 1.2, 1.2, 0.5, x, 0.25, z, { seg: 10 });
+  },
+  roundabout(B, o, { w }) {
+    const R = w / 2;
+    ring(B, M.road(), 0, 0, R * 0.42, R - 1, 0, Math.PI * 2, 0.26, 48);
+    arcKerb(B, 0, 0, R - 0.5, 0, Math.PI * 2, 48);
+    arcKerb(B, 0, 0, R * 0.42 - 0.4, 0, Math.PI * 2, 40);
+    B.add(new THREE.CircleGeometry(R * 0.42 - 0.6, 40).rotateX(-Math.PI / 2), M.grass('#ffffff'), { pos: [0, 0.55, 0] });
+    arcLine(B, M.paint('#f2f1ea'), 0, 0, (R * 0.42 + R) / 2, 0.3, 0, Math.PI * 2, 0.3, 48, 6, 6);
+    plant(B, 'shrub', 31, {});
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.4;
+      B.post(galv(), 0.1, 7, Math.cos(a) * R * 0.32, 0.5, Math.sin(a) * R * 0.32, 6);
+      B.cyl(M.painted('#1f5bb8', 0.4), 1.1, 1.1, 0.08, Math.cos(a) * R * 0.32, 6.6, Math.sin(a) * R * 0.32, { rot: [Math.PI / 2, 0, -a], seg: 16 });
+    }
+  },
+  culdesac(B, o, { w }) {
+    const R = w / 2 - 1;
+    B.add(new THREE.CircleGeometry(R, 40).rotateX(-Math.PI / 2), M.road(), { pos: [0, 0.26, 0] });
+    arcKerb(B, 0, 0, R + 0.5, Math.PI * 0.62, Math.PI * 2.38, 40);
+    B.add(new THREE.CircleGeometry(R * 0.28, 24).rotateX(-Math.PI / 2), M.grass('#ffffff'), { pos: [0, 0.5, 0] });
+    arcKerb(B, 0, 0, R * 0.28, 0, Math.PI * 2, 24);
+    plant(B, 'tree', 47, {});
+  },
+  zebra(B, o, { w, d }) {
+    const white = M.paint('#f2f1ea');
+    for (let x = -w / 2 + 1; x < w / 2 - 0.5; x += 2.6) B.box(white, 1.3, 0.03, d - 1, x + 0.65, 0.32, 0);
+    for (const sx of [-1, 1]) {
+      B.post(M.painted('#1d2125', 0.4), 0.15, 9, sx * (w / 2 + 2), 0, 0, 8);
+      B.sphere(M.lamp('#ffb020', 6), 0.6, sx * (w / 2 + 2), 9.4, 0, { seg: 12 });
+    }
+  },
+
+  /* ---- plant yard ---- */
+  plantyard(B, o, { w, d, h }) {
+    // Louvred screen on three sides, a pair of gates in the front, a slab floor.
+    B.slab(M.concrete('#c9c6bf'), w, 0.35, d, 0, 0, 0);
+    const steel = M.painted('#4d545c', 0.5);
+    const runs = [[-w / 2, -d / 2, w / 2, -d / 2], [-w / 2, -d / 2, -w / 2, d / 2], [w / 2, -d / 2, w / 2, d / 2], [-w / 2, d / 2, -6, d / 2], [6, d / 2, w / 2, d / 2]];
+    for (const [x0, z0, x1, z1] of runs) {
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      const ry = Math.atan2(-(z1 - z0), x1 - x0);
+      B.box(M.louvre(), len, h - 0.8, 0.25, (x0 + x1) / 2, 0.35 + (h - 0.8) / 2, (z0 + z1) / 2, [0, ry, 0]);
+      B.box(steel, len, 0.3, 0.4, (x0 + x1) / 2, h - 0.3, (z0 + z1) / 2, [0, ry, 0]);
+    }
+    for (const [x, z] of [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2], [-6, d / 2], [6, d / 2]]) B.box(steel, 0.5, h, 0.5, x, h / 2, z);
+    for (const sx of [-1, 1]) B.box(M.meshFence(), 5.8, h - 1, 0.05, sx * 3, (h - 1) / 2 + 0.5, d / 2 + 0.2);
+  },
+  lowwall(B, o, { w, d, h }) {
+    const block = M.wall('render', '#cfcbc2');
+    B.box(block, w, h - 0.35, d, 0, (h - 0.35) / 2, 0);
+    B.box(M.concrete('#b8b3a8'), w + 0.2, 0.35, d + 0.3, 0, h - 0.17, 0);
+    for (let x = -w / 2; x <= w / 2 + 0.01; x += Math.min(12, w)) B.box(block, 1.6, h + 0.2, d + 0.4, x, (h + 0.2) / 2, 0);
+  },
+  screenwall(B, o, { w, d, h }) {
+    const steel = M.painted('#4d545c', 0.5);
+    B.box(M.louvre(), w, h - 0.6, d * 0.5, 0, 0.3 + (h - 0.6) / 2, 0);
+    for (let x = -w / 2; x <= w / 2 + 0.01; x += Math.min(10, w)) B.box(steel, 0.5, h, 0.6, x, h / 2, 0);
+    B.box(steel, w, 0.3, d * 0.8, 0, h - 0.15, 0);
+    B.box(M.concrete('#b8b3a8'), w, 0.3, d * 1.3, 0, 0.15, 0);
+  },
+  plantpad(B, o, { w, d, h }) {
+    B.slab(M.concrete('#c9c6bf'), w, h, d, 0, 0, 0);
+    B.box(M.painted('#e7b416', 0.5), w + 0.05, 0.12, d + 0.05, 0, h - 0.1, 0);
+  },
+  pipebridge(B, o, { w, d, h }) {
+    // Steel portals carrying pipes and trays between buildings.
+    const steel = M.painted('#5d646c', 0.5);
+    const n = Math.max(2, Math.round(w / 20) + 1);
+    for (let i = 0; i < n; i++) {
+      const x = -w / 2 + (w * i) / (n - 1);
+      for (const sz of [-1, 1]) {
+        B.box(steel, 0.6, h, 0.6, x, h / 2, sz * (d / 2 - 0.3));
+        B.slab(M.concrete('#a8a59d'), 1.6, 0.4, 1.6, x, 0, sz * (d / 2 - 0.3));
+      }
+      B.box(steel, 0.6, 0.6, d, x, h - 0.3, 0);
+      B.box(steel, 0.5, 0.5, d, x, h - 4, 0);
+    }
+    for (const sz of [-1, 1]) B.box(steel, w, 0.6, 0.4, 0, h - 0.3, sz * (d / 2 - 0.3));
+    const cols = ['#d9dde1', '#c0392b', '#2c5f8a', '#d9dde1'];
+    cols.forEach((c, k) => B.tube(M.painted(c, 0.35), [-w / 2, h + 0.4, -d / 2 + 1 + k * ((d - 2) / 3)], [w / 2, h + 0.4, -d / 2 + 1 + k * ((d - 2) / 3)], 0.35, 10));
+    B.box(M.metal('#8d949b', 0.45), w, 0.15, d * 0.6, 0, h - 3.6, 0);
+  },
+
+  /* ---- gates ---- */
+  heavyboom(B, o, { w }, ctx) {
+    P.gate(B, o, { w }, ctx);
+    // A mesh skirt hangs under the arm to stop people ducking under.
+    const L = w - 2.6;
+    const x0 = -w / 2 + 2.5;
+    for (let x = x0; x < x0 + L; x += 0.6) B.box(M.metal('#c9ced3', 0.35), 0.06, 2.4, 0.06, x, 2.2, 0.2);
+    B.box(M.metal('#c9ced3', 0.35), L, 0.1, 0.1, x0 + L / 2, 1, 0.2);
+  },
+  cantilever(B, o, { w, h }) {
+    const mat = M.painted('#2f4a3a', 0.45);
+    const leaf = w * 0.72;
+    const x0 = -w / 2;
+    B.box(mat, leaf, 0.5, 0.45, x0 + leaf / 2, 0.9, 0);
+    B.box(mat, leaf, 0.35, 0.35, x0 + leaf / 2, h - 1, 0);
+    for (let x = x0 + 0.3; x < x0 + leaf; x += 0.55) B.box(mat, 0.14, h - 1.4, 0.14, x, (h - 1) / 2 + 0.4, 0);
+    // Counterweight tail running on rollers behind the posts.
+    B.box(mat, w - leaf, 0.6, 0.45, x0 + leaf + (w - leaf) / 2, 0.9, 0);
+    B.tube(mat, [x0 + leaf, h - 1, 0], [w / 2, 1.2, 0], 0.16, 6);
+    for (const x of [x0 + leaf + 1, w / 2 - 1]) {
+      B.box(M.painted('#3a4048', 0.45), 0.8, 3.2, 1.6, x, 1.6, 0.9);
+      B.cyl(dark(), 0.35, 0.35, 0.5, x, 1.1, 0.25, { rot: [Math.PI / 2, 0, 0] });
+    }
+    B.box(M.painted('#e7b416', 0.4), leaf, 0.3, 0.05, x0 + leaf / 2, 3, 0.25);
+  },
+  swinggate(B, o, { w, h }) {
+    const mat = M.painted('#2f3d52', 0.45);
+    for (const sx of [-1, 1]) {
+      B.box(M.painted('#2f3d52', 0.45), 0.8, h + 1, 0.8, sx * (w / 2 + 0.4), (h + 1) / 2, 0);
+      B.sphere(mat, 0.55, sx * (w / 2 + 0.4), h + 1.3, 0, { seg: 10 });
+      // Each leaf, slightly ajar.
+      const lw = w / 2 - 0.3;
+      const ang = sx * 0.12;
+      const leaf = new Builder();
+      leaf.box(mat, lw, 0.3, 0.3, -sx * lw / 2, 0.8, 0);
+      leaf.box(mat, lw, 0.3, 0.3, -sx * lw / 2, h - 0.6, 0);
+      for (let x = 0.3; x < lw; x += 0.55) {
+        leaf.box(mat, 0.12, h - 0.8, 0.12, -sx * x, (h - 0.4) / 2 + 0.4, 0);
+        leaf.add(new THREE.ConeGeometry(0.12, 0.4, 4), mat, { pos: [-sx * x, h + 0.1, 0] });
+      }
+      leaf.tube(mat, [0, 0.9, 0], [-sx * lw, h - 0.6, 0], 0.1, 5);
+      for (const [m, geos] of leaf.parts) for (const g of geos) B.add(g, m, { pos: [sx * (w / 2 - 0.1), 0, 0], rot: [0, ang, 0] });
+    }
+    B.box(M.painted('#3a3f45', 0.5), 1, 1.4, 0.8, w / 2 + 0.4, 1.4, 1);
+  },
+  bifold(B, o, { w, h }, ctx) {
+    const frame = M.painted('#3a4048', 0.45);
+    for (const sx of [-1, 1]) {
+      B.box(frame, 1.2, h + 1.5, 1.2, sx * (w / 2 + 0.6), (h + 1.5) / 2, 0);
+      B.box(M.lamp('#ffb020', 5), 0.5, 0.3, 0.5, sx * (w / 2 + 0.6), h + 1.7, 0);
+      // Two leaves per side folded into a shallow V.
+      for (let k = 0; k < 2; k++) {
+        const lw = w / 4 - 0.2;
+        const ang = sx * (k ? -0.35 : 0.35);
+        const x = sx * (w / 2 - lw / 2 - k * lw);
+        const z = k ? 0.8 : 0.4;
+        B.box(M.meshFence(), lw, h - 1, 0.05, x, h / 2, z, [0, ang, 0]);
+        B.box(frame, lw, 0.25, 0.25, x, h - 0.4, z, [0, ang, 0]);
+        B.box(frame, lw, 0.25, 0.25, x, 0.6, z, [0, ang, 0]);
+      }
+    }
+    lightAt(ctx, 0, h + 1.5, 2, { tx: 0, tz: 8, power: 300, range: 40, angle: 70 });
+  },
+  wedge(B, o, { w, d, h }) {
+    const s = new THREE.Shape();
+    s.moveTo(-d / 2, 0); s.lineTo(d / 2, 0); s.lineTo(d / 2 - 1.2, h); s.lineTo(-d / 2 + 0.4, h * 0.25); s.closePath();
+    B.extrude(M.painted('#2b3036', 0.5), s, w, { pos: [-w / 2, 0, 0], rot: [0, Math.PI / 2, 0] });
+    for (let x = -w / 2 + 0.6; x < w / 2; x += 1.6) B.box(M.painted(Math.round(x) % 2 ? '#e7b416' : '#1d2125', 0.45), 0.8, 0.05, 2.8, x + 0.4, h * 0.62, -0.2, [0.5, 0, 0]);
+    B.slab(M.painted('#e7b416', 0.45), 1.2, 3.4, 1.2, w / 2 + 1.2, 0, 0);
+    B.box(M.signal('#ff2a1a', 2.5), 0.4, 0.4, 0.1, w / 2 + 1.2, 2.8, 0.62);
+  },
+  risingbollards(B, o, { w, h }, ctx) {
+    const n = Math.max(2, Math.round(w / 4));
+    for (let i = 0; i < n; i++) {
+      const x = -w / 2 + 1 + ((w - 2) * i) / (n - 1);
+      B.cyl(M.metal('#9aa1a8', 0.3), 0.75, 0.75, 0.08, x, 0.04, 0, { seg: 16 });
+      B.cyl(M.painted('#2b3036', 0.4), 0.55, 0.55, h - 0.3, x, (h - 0.3) / 2, 0, { seg: 16 });
+      B.cyl(M.signal('#ff3a1a', 2), 0.56, 0.56, 0.25, x, h - 0.5, 0, { seg: 16, open: true });
+      B.cyl(M.painted('#2b3036', 0.4), 0.6, 0.6, 0.15, x, h - 0.1, 0, { seg: 16 });
+    }
+    B.slab(M.painted('#d9dde1', 0.45), 1.6, 3.6, 1.2, w / 2 + 1.6, 0, 0);
+    void ctx;
+  },
+  tyrekiller(B, o, { w, d }, ctx) {
+    B.slab(M.metal('#5d646b', 0.5), w, 0.25, d, 0, 0, 0);
+    for (let x = -w / 2 + 0.5; x < w / 2; x += 0.9) {
+      for (const z of [-d / 4, d / 4]) B.add(new THREE.ConeGeometry(0.16, 0.6, 4), M.metal('#c9ced3', 0.3), { pos: [x, 0.5, z], rot: [-0.5, 0, 0] });
+    }
+    B.post(galv(), 0.12, 7, w / 2 + 2, 0, 0, 6);
+    const tex = panelTexture({ text: 'SEVERE TYRE DAMAGE', color: '#ffffff', bg: '#c8102e', aspect: 1.4 });
+    face(B, panelMat(tex, ctx), 2.8, 2, w / 2 + 2, 6.2, 0.12);
+  },
+  pedgate(B, o, { w, h }, ctx) {
+    const mat = M.painted('#2f3d52', 0.45);
+    for (const sx of [-1, 1]) B.box(mat, 0.5, h, 0.5, sx * (w / 2 - 0.25), h / 2, 0);
+    B.box(mat, w - 1, 0.25, 0.2, 0, 1, 0);
+    B.box(mat, w - 1, 0.25, 0.2, 0, h - 0.6, 0);
+    for (let x = -w / 2 + 0.8; x < w / 2 - 0.5; x += 0.5) B.box(mat, 0.1, h - 1.6, 0.1, x, h / 2 + 0.2, 0);
+    B.box(M.painted('#3a3f45', 0.45), 0.5, 4.2, 0.5, w / 2 + 1, 2.1, 0.6);
+    B.box(M.signal('#2ee86a', 2), 0.35, 0.5, 0.05, w / 2 + 1, 3.8, 0.87);
+    lightAt(ctx, 0, h, 1, { power: 120, range: 22, angle: 80, pool: 0.5 });
+  },
+  archgate(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    const clad = M.wall('composite', '#3d434b');
+    for (const sx of [-1, 1]) B.slab(clad, 3.4, h, d, sx * (w / 2 - 1.7), 0, 0);
+    B.slab(clad, w, 5, d, 0, h - 5, 0);
+    const tex = panelTexture({ text: s.text || 'WELCOME', sub: s.sub || '', logo: s.logo || '', color: s.color || '#ffffff', bg: s.bg || '#1f4f9c', aspect: (w - 8) / 4 });
+    const mat = panelMat(tex, ctx);
+    face(B, mat, w - 8, 4, 0, h - 2.5, d / 2 + 0.02);
+    face(B, mat, w - 8, 4, 0, h - 2.5, -d / 2 - 0.02, true);
+    for (const sx of [-1, 1]) for (let x = -w / 2 + 6; x < w / 2 - 4; x += 8) {
+      B.box(M.lamp('#ffffff', 6), 1.6, 0.06, 1.6, x, h - 5.03, sx * 0.6);
+    }
+    lightAt(ctx, 0, h - 5.2, 0, { power: 900, range: 50, angle: 80 });
+  },
 };
+
+/* ------------------------------------------------------------ road kit */
+
+/** An up-facing rectangle centred at (x, z), UVs in world-ish feet. */
+function flatRect(B, mat, x, z, w, d, y) {
+  B.quad(mat, [x - w / 2, y, z + d / 2], [x + w / 2, y, z + d / 2], [x + w / 2, y, z - d / 2], [x - w / 2, y, z - d / 2], [x - w / 2, z + d / 2, x + w / 2, z + d / 2, x + w / 2, z - d / 2, x - w / 2, z - d / 2]);
+}
+
+function stripeX(B, mat, x0, x1, z, width, y = 0.31) {
+  B.box(mat, x1 - x0, 0.03, width, (x0 + x1) / 2, y, z);
+}
+
+/** A straight road along x: carriageway, kerbs, centre and edge lines. */
+function roadStrip(B, w, d, { lanes = 2 } = {}) {
+  flatRect(B, M.road(), 0, 0, w, d - 1, 0.26);
+  for (const sz of [-1, 1]) B.box(M.kerb(), w, 0.5, 0.8, 0, 0.25, sz * (d / 2 - 0.4));
+  const white = M.paint('#f2f1ea');
+  for (const sz of [-1, 1]) stripeX(B, white, -w / 2, w / 2, sz * (d / 2 - 1.8), 0.35);
+  if (lanes === 2) {
+    stripeX(B, M.paint('#e7b416'), -w / 2, w / 2, -0.45, 0.32);
+    stripeX(B, M.paint('#e7b416'), -w / 2, w / 2, 0.45, 0.32);
+  } else {
+    for (let x = -w / 2 + 10; x < w / 2 - 6; x += 30) {
+      B.extrude(white, arrowShape(), 0.02, { pos: [x, 0.3, 0], rot: [-Math.PI / 2, 0, -Math.PI / 2] });
+    }
+  }
+}
+
+function arrowShape() {
+  const s = new THREE.Shape();
+  s.moveTo(-0.5, 0); s.lineTo(0.5, 0); s.lineTo(0.5, 5); s.lineTo(1.5, 5); s.lineTo(0, 7.5); s.lineTo(-1.5, 5); s.lineTo(-0.5, 5); s.closePath();
+  return s;
+}
+
+/** A flat ring segment (road surface round a bend or roundabout). */
+function ring(B, mat, cx, cz, r0, r1, a0, a1, y, seg = 24) {
+  const g = new THREE.RingGeometry(Math.max(0.1, r0), r1, seg, 1, a0, a1 - a0).rotateX(-Math.PI / 2);
+  const uv = g.attributes.uv;
+  const pos = g.attributes.position;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i), pos.getZ(i));
+  // RingGeometry turns the right way for -x/-z after rotateX; mirror z so the
+  // arc sweeps from +x round to +z in our frame.
+  g.scale(1, 1, -1);
+  g.computeVertexNormals();
+  fixUp(g);
+  B.add(g, mat, { pos: [cx, y, cz] });
+}
+
+/** Make sure a flat geometry faces up. */
+function fixUp(g) {
+  const n = g.attributes.normal;
+  if (n.count && n.getY(0) < 0) {
+    const idx = g.index.array;
+    for (let i = 0; i < idx.length; i += 3) { const t = idx[i]; idx[i] = idx[i + 2]; idx[i + 2] = t; }
+    g.index.needsUpdate = true;
+    g.computeVertexNormals();
+  }
+}
+
+function arcKerb(B, cx, cz, r, a0, a1, seg = 18) {
+  for (let i = 0; i < seg; i++) {
+    const t0 = a0 + ((a1 - a0) * i) / seg;
+    const t1 = a0 + ((a1 - a0) * (i + 1)) / seg;
+    const p0 = [cx + Math.cos(t0) * r, cz + Math.sin(t0) * r];
+    const p1 = [cx + Math.cos(t1) * r, cz + Math.sin(t1) * r];
+    const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+    B.box(M.kerb(), len + 0.1, 0.5, 0.8, (p0[0] + p1[0]) / 2, 0.25, (p0[1] + p1[1]) / 2, [0, -Math.atan2(p1[1] - p0[1], p1[0] - p0[0]), 0]);
+  }
+}
+
+function arcLine(B, mat, cx, cz, r, width, a0, a1, y, seg = 24, dash = 0, gap = 0) {
+  for (let i = 0; i < seg; i++) {
+    if (dash && i % 2) continue;
+    const t0 = a0 + ((a1 - a0) * i) / seg;
+    const t1 = a0 + ((a1 - a0) * (i + 1)) / seg;
+    const p0 = [cx + Math.cos(t0) * r, cz + Math.sin(t0) * r];
+    const p1 = [cx + Math.cos(t1) * r, cz + Math.sin(t1) * r];
+    const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+    B.box(mat, len + 0.05, 0.03, width, (p0[0] + p1[0]) / 2, y + 0.02, (p0[1] + p1[1]) / 2, [0, -Math.atan2(p1[1] - p0[1], p1[0] - p0[0]), 0]);
+  }
+  void gap;
+}
 
 function container(B, color, w, d, h, y0) {
   const body = M.wall('rib', color);

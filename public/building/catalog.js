@@ -97,7 +97,30 @@ export const ROOF_KIT = [
   { id: 'pipes', name: 'Pipe rack', icon: '〰️', w: 20, d: 4, h: 3.4 },
   { id: 'screen', name: 'Plant screen', icon: '🚧', w: 22, d: 16, h: 7 },
   { id: 'billboard', name: 'Roof sign frame', icon: '🪧', w: 30, d: 3, h: 12 },
+  // Heavy plant: big enough to need its own steel to stand on.
+  { id: 'ahu', name: 'Air handling unit', icon: '🏭', w: 42, d: 12, h: 11, big: true },
+  { id: 'chiller-xl', name: 'Big air-cooled chiller', icon: '🧊', w: 44, d: 9, h: 9, big: true },
+  { id: 'tower-twin', name: 'Twin-cell cooling tower', icon: '🌫️', w: 30, d: 15, h: 17, big: true },
+  { id: 'rtu-mega', name: '50-ton rooftop unit', icon: '🟦', w: 30, d: 10, h: 8, big: true },
+  { id: 'drycooler', name: 'Dry cooler bank', icon: '🌀', w: 38, d: 10, h: 8, big: true },
+  // Smaller kit.
+  { id: 'vrf', name: 'VRF condenser', icon: '❄️', w: 6, d: 3, h: 6 },
+  { id: 'erv', name: 'Energy recovery unit', icon: '♻️', w: 12, d: 6, h: 5 },
+  { id: 'kitchenfan', name: 'Kitchen upblast fan', icon: '🍳', w: 5, d: 5, h: 4.5 },
+  { id: 'boilerflues', name: 'Boiler flue cluster', icon: '🔥', w: 7, d: 7, h: 15 },
+  { id: 'pumpskid', name: 'Pump skid', icon: '⚙️', w: 10, d: 6, h: 4 },
 ];
+
+/* Ductwork and pipework, drawn as runs from point to point. */
+export const RUNS = [
+  { id: 'duct', name: 'Rectangular duct', icon: '▭', size: 3, color: '#b8bfc6' },
+  { id: 'spiral', name: 'Round duct', icon: '◯', size: 2.4, color: '#c3c9cf' },
+  { id: 'pipes', name: 'Insulated pipes', icon: '〰️', size: 2, color: '#d9dde1' },
+  { id: 'tray', name: 'Cable tray', icon: '🔌', size: 2, color: '#8d949b' },
+  { id: 'conduit', name: 'Conduit bundle', icon: '➰', size: 1, color: '#9aa1a8' },
+  { id: 'gas', name: 'Gas main', icon: '🟨', size: 0.8, color: '#e2b31b' },
+];
+export const RUN_BY_ID = Object.fromEntries(RUNS.map((r) => [r.id, r]));
 
 /* ------------------------------------------------------------ guard booths */
 
@@ -128,15 +151,40 @@ export const PROPS = [
   P('Boundary', 'woodfence', 'Timber fence', '🪵', 40, 0.8, 6, { len: true }),
   P('Boundary', 'wall', 'Boundary wall', '🧱', 40, 1.4, 7, { len: true, solid: true }),
   P('Boundary', 'guardrail', 'Guard rail', '➖', 30, 0.8, 2.6, { len: true }),
-  P('Boundary', 'gate', 'Gate arm', '⛔', 30, 3, 5),
-  P('Boundary', 'slidegate', 'Sliding gate', '🚪', 32, 1.4, 7, { len: true }),
-  P('Boundary', 'turnstile', 'Turnstile', '🎫', 6, 4, 7.5, { solid: true }),
+  // gates
+  P('Gates', 'gate', 'Gate arm', '⛔', 30, 3, 5),
+  P('Gates', 'heavyboom', 'Heavy boom with skirt', '🚧', 30, 3, 6),
+  P('Gates', 'slidegate', 'Sliding gate', '🚪', 32, 1.4, 7, { len: true }),
+  P('Gates', 'cantilever', 'Cantilever gate', '➡️', 34, 2, 8.5, { len: true }),
+  P('Gates', 'swinggate', 'Double swing gates', '🚪', 24, 1.6, 8, { len: true }),
+  P('Gates', 'bifold', 'Bi-folding speed gate', '🪗', 22, 2, 8),
+  P('Gates', 'wedge', 'Road blocker', '🛑', 12, 7, 3, { solid: true }),
+  P('Gates', 'risingbollards', 'Rising bollards', '🟠', 14, 2, 3.4),
+  P('Gates', 'tyrekiller', 'Tyre killer', '🦔', 14, 2.6, 0.6),
+  P('Gates', 'pedgate', 'Pedestrian gate', '🚶', 7, 2, 8),
+  P('Gates', 'turnstile', 'Turnstile', '🎫', 6, 4, 7.5, { solid: true }),
+  P('Gates', 'archgate', 'Entrance portal', '⛩️', 42, 4, 22, { sign: true }),
   P('Boundary', 'bollard', 'Bollard', '🟡', 1.5, 1.5, 3.6),
   P('Boundary', 'barrier', 'Concrete barrier', '🚏', 12, 2, 3.2, { solid: true }),
   P('Boundary', 'crowdbarrier', 'Crowd barrier', '🚥', 8, 1.6, 3.6),
   P('Boundary', 'cone', 'Traffic cone', '🔶', 1.6, 1.6, 2.4),
   P('Boundary', 'drum', 'Traffic drum', '🛢️', 2, 2, 3.4),
   P('Boundary', 'speedbump', 'Speed bump', '〰️', 24, 3, 0.35, { len: true }),
+  // roads
+  P('Roads', 'road', 'Two-lane road', '🛣️', 80, 26, 0.3, { len: true, road: true }),
+  P('Roads', 'lane', 'Service lane', '➖', 80, 14, 0.3, { len: true, road: true }),
+  P('Roads', 'bend', 'Road bend', '↪️', 60, 60, 0.3, { road: true }),
+  P('Roads', 'tee', 'T-junction', '⊥', 40, 40, 0.3, { road: true }),
+  P('Roads', 'cross', 'Crossroads', '➕', 40, 40, 0.3, { road: true }),
+  P('Roads', 'roundabout', 'Roundabout', '🔄', 110, 110, 0.3, { road: true }),
+  P('Roads', 'culdesac', 'Turning head', '⭕', 70, 70, 0.3, { road: true }),
+  P('Roads', 'zebra', 'Zebra crossing', '🦓', 26, 10, 0.1),
+  // plant yard
+  P('Plant yard', 'plantyard', 'Plant compound', '🔲', 44, 26, 8),
+  P('Plant yard', 'lowwall', 'Low wall', '🧱', 30, 1.2, 4.5, { len: true, solid: true }),
+  P('Plant yard', 'screenwall', 'Louvred screen', '🟫', 30, 1, 8, { len: true, solid: true }),
+  P('Plant yard', 'plantpad', 'Concrete plinth', '⬜', 24, 14, 0.8),
+  P('Plant yard', 'pipebridge', 'Pipe bridge', '🌉', 40, 6, 16, { len: true }),
   // signs
   P('Signs', 'monument', 'Monument sign', '🪧', 26, 3, 17, { sign: true, solid: true }),
   P('Signs', 'pylon', 'Pylon sign', '🛑', 14, 3, 28, { sign: true }),
@@ -553,7 +601,17 @@ export function makeBuilding(style, over = {}) {
 /** The footprint an object occupies on the ground. */
 export function footprint(o) {
   if (o.kind === 'building') return { x: o.x, y: o.y, w: o.w, d: o.d, rot: o.rot || 0 };
-  const spec = o.kind === 'booth' ? BOOTH_BY_ID[o.design] : PROP_BY_ID[o.type];
+  if (o.kind === 'run') {
+    // The ground a duct or pipe run passes over: the box round its points.
+    const pts = o.points && o.points.length ? o.points : [{ x: 0, y: 0 }];
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    const pad = (o.size || 2) / 2 + 1;
+    const x0 = Math.min(...xs) - pad;
+    const y0 = Math.min(...ys) - pad;
+    return { x: x0, y: y0, w: Math.max(...xs) + pad - x0, d: Math.max(...ys) + pad - y0, rot: 0 };
+  }
+  const spec = o.kind === 'booth' ? BOOTH_BY_ID[o.design] : o.kind === 'plant' ? ROOF_BY_ID[o.type] : PROP_BY_ID[o.type];
   return {
     x: o.x, y: o.y, rot: o.rot || 0,
     w: o.w != null ? o.w : (spec ? spec.w : 8),
@@ -563,7 +621,8 @@ export function footprint(o) {
 
 export function objHeight(o) {
   if (o.kind === 'building') return buildingHeight(o);
-  const spec = o.kind === 'booth' ? BOOTH_BY_ID[o.design] : PROP_BY_ID[o.type];
+  if (o.kind === 'run') return Math.max(1, ...(o.points || []).map((p) => p.z || 0));
+  const spec = o.kind === 'booth' ? BOOTH_BY_ID[o.design] : o.kind === 'plant' ? ROOF_BY_ID[o.type] : PROP_BY_ID[o.type];
   return o.h != null ? o.h : (spec ? spec.h : 8);
 }
 
@@ -571,8 +630,8 @@ export function objHeight(o) {
 export function pruneInsideBuildings(objects) {
   const walls = objects.filter((o) => o.kind === 'building').map(footprint);
   return objects.filter((o) => {
-    if (o.kind === 'building') return true;
-    const spec = o.kind === 'booth' ? { solid: true } : PROP_BY_ID[o.type];
+    if (o.kind === 'building' || o.kind === 'run') return true;
+    const spec = o.kind === 'booth' || o.kind === 'plant' ? { solid: true } : PROP_BY_ID[o.type];
     if (!spec || !spec.solid) return true;
     return !walls.some((w) => overlaps(footprint(o), w, -0.5));
   });

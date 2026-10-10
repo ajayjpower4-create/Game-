@@ -10,7 +10,8 @@ import * as THREE from 'three';
 import { Builder } from './builder.js';
 import * as M from './materials.js';
 import { rng } from './textures.js';
-import { corners } from '../geom.js';
+import { corners, bounds } from '../geom.js';
+import { PROP_BY_ID, footprint } from '../catalog.js';
 
 const DEG = Math.PI / 180;
 
@@ -163,6 +164,18 @@ export function buildGround(state, plan) {
     slab(b, M.kerb(), { x: x0, y: R.y1, w: x1 - x0, d: 1 }, 0, 0.5);
     flat(b, M.paving(), { x: x0, y: R.y1 + 1, w: x1 - x0, d: 8 }, 0.5);
     flat(b, M.grass('#f2f5ea'), { x: x0, y: R.y1 + 9, w: x1 - x0, d: 28 }, 0.03);
+    // Where the drive and any side road meet the street, the footway drops
+    // and the tarmac runs through to the carriageway.
+    const mouths = [[plan.drive.x0, plan.drive.x1]];
+    for (const o of state.objects) {
+      if (o.kind !== 'prop' || !(PROP_BY_ID[o.type] || {}).road) continue;
+      const bb = bounds(footprint(o));
+      if (bb.y1 >= D - 4 && bb.y0 <= D + 12) mouths.push([bb.x0, bb.x1]);
+    }
+    for (const [mx0, mx1] of mouths) {
+      flat(b, M.road(), { x: mx0, y: D - 2, w: mx1 - mx0, d: R.y0 - (D - 2) + 0.6 }, 0.54);
+      for (const ex of [mx0 - 1.5, mx1 + 0.5]) slab(b, M.kerb(), { x: ex, y: D + 3, w: 1, d: R.kerb - D - 2 }, 0, 0.56);
+    }
     // A crossing where the drive meets the street.
     const dx = plan.driveX;
     for (let z = R.y0 + 3; z < R.y1 - 3; z += 3) stripe(b, white, dx + 30, z, dx + 42, z, 1.5, 0.08);

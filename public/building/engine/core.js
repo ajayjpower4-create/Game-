@@ -82,6 +82,14 @@ export class Engine {
     this.fps = 60;
     this.paused = false;
     this.photo = false;
+    // Adaptive resolution: the render scale drops when frames run long and
+    // climbs back when there is headroom, so the view stays smooth.
+    this.autoRes = true;
+    this.res = { scale: 1, t: 0, n: 0, good: 0, slow: 0, trial: null, hold: 0 };
+    this.shadowAt = -1;
+    this.cullAt = 0;
+    this.envAt = -9;
+    this.envStale = false;
 
     /* ---- renderer ---- */
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false });
@@ -91,6 +99,8 @@ export class Engine {
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFShadowMap;
     r.shadowMap.autoUpdate = false;
+    // Count the whole frame (every pass), not just the last one.
+    r.info.autoReset = false;
     r.domElement.className = 'gl';
     r.domElement.tabIndex = 0;
     host.appendChild(r.domElement);
@@ -113,6 +123,9 @@ export class Engine {
     this.sun.shadow.bias = -0.00025;
     this.sun.shadow.normalBias = 0.35;
     this.sun.shadow.radius = 2.2;
+    // Small things too far away to see are skipped by the camera (layer 1)
+    // but still cast their shadows.
+    this.sun.shadow.camera.layers.enable(1);
     s.add(this.sun, this.sun.target);
 
     this.hemi = new THREE.HemisphereLight(0xbcd3ee, 0x5a5246, 0.6);
@@ -179,7 +192,7 @@ export class Engine {
     this.loop = this.loop.bind(this);
     this.raf = requestAnimationFrame(this.loop);
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) this.clock.reset?.();
+      if (!document.hidden) { this.clock.reset?.(); this.res.t = 0; this.res.n = 0; }
     });
   }
 
@@ -348,6 +361,87 @@ export class Engine {
     this.shadowDirty = true;
   }
 
+  /** The pixel ratio this quality level asks for, before any adaptive scaling. */
+  get baseRatio() {
+    return Math.min(window.devicePixelRatio || 1, QUALITY[this.quality].ratio);
+  }
+
+  /** Watch the frame rate and trade resolution for smoothness. */
+  adapt() {
+    const a = this.res;
+    const now = performance.now();
+    a.n += 1;
+    if (!a.t) a.t = now;
+    // Real time, not the clamped frame step, so very slow frames count fully.
+    if (now - a.t < 1500) return;
+    // A window that spans a long stall (the first build, a big rebuild) says
+    // nothing about steady frame rate.
+    if (now - a.t > 5000) { a.t = now; a.n = 0; return; }
+    const fps = (a.n * 1000) / (now - a.t);
+    a.t = now;
+    a.n = 0;
+    if (!this.autoRes || this.photo) return;
+    const min = 0.5;
+    if (a.trial) {
+      // A step down that bought nothing (a 30 fps battery-saver cap, or a slow
+      // CPU rather than GPU) is undone, and not tried again for a while.
+      if (fps < a.trial.fps * 1.08) {
+        this.setRenderScale(a.trial.scale);
+        a.hold = now + 30000;
+      }
+      a.trial = null;
+      return;
+    }
+    if (fps < 42 && a.scale > min && !(now < a.hold)) {
+      a.good = 0;
+      a.trial = { fps, scale: a.scale };
+      this.setRenderScale(Math.max(min, a.scale * 0.85));
+    } else if (fps > 56 && a.scale < 1) {
+      a.good += 1;
+      if (a.good >= 3) { a.good = 0; this.setRenderScale(Math.min(1, a.scale * 1.12)); }
+    } else a.good = 0;
+    // Still slow at the lowest scale: tell the game once.
+    a.slow = fps < 28 && (a.scale <= min + 0.01 || now < a.hold) ? a.slow + 1 : 0;
+    if (a.slow === 4 && this.onSlow) this.onSlow(fps);
+  }
+
+  setRenderScale(scale) {
+    if (Math.abs(scale - this.res.scale) < 0.01) return;
+    this.res.scale = scale;
+    this.resize();
+  }
+
+  setAutoRes(on) {
+    this.autoRes = on;
+    if (!on) this.setRenderScale(1);
+  }
+
+  /**
+   * Things smaller than a few pixels on screen are not worth a draw call. The
+   * game hands over every placed model with a size; this moves the far, tiny
+   * ones to layer 1, which only the sun's shadow camera still renders.
+   */
+  cullSmall() {
+    const items = this.cullItems;
+    if (!items) return;
+    const cam = this.camera;
+    const k = (this.host.clientHeight / 2) / Math.tan((cam.fov * DEG) / 2);
+    for (const it of items) {
+      const g = it.group;
+      let hide = false;
+      if (it.radius && !this.selectionObjects.includes(g)) {
+        const d = cam.position.distanceTo(it.centre);
+        hide = (it.radius * k) / Math.max(1, d) < 2.2;
+      }
+      if (hide === !!it.hidden) continue;
+      it.hidden = hide;
+      g.traverse((o) => {
+        if (!o.isMesh && !o.isLine && !o.isPoints) return;
+        if (hide) { o.layers.disable(0); o.layers.enable(1); } else { o.layers.enable(0); o.layers.disable(1); }
+      });
+    }
+  }
+
   setQuality(name) {
     if (!QUALITY[name] || name === this.quality) return;
     this.quality = name;
@@ -359,7 +453,7 @@ export class Engine {
   resize() {
     const w = Math.max(1, this.host.clientWidth);
     const h = Math.max(1, this.host.clientHeight);
-    const ratio = Math.min(window.devicePixelRatio || 1, QUALITY[this.quality].ratio);
+    const ratio = this.baseRatio * this.res.scale;
     this.renderer.setPixelRatio(ratio);
     this.renderer.setSize(w, h, false);
     this.renderer.domElement.style.width = `${w}px`;
@@ -483,12 +577,17 @@ export class Engine {
     this.shadowDirty = true;
     this.moved = true;
 
-    // The environment map only needs re-baking when the sky has really changed.
+    // The environment map only needs re-baking when the sky has really changed,
+    // and while the clock runs (time-lapse especially) at most every second or
+    // so; a bake that is skipped is picked up by the frame loop shortly after.
     const key = `${Math.round(this.env.hour * 4)}|${this.env.weather}`;
-    if (force || key !== this.envKey) {
+    const sameSky = this.envKey && this.envKey.split('|')[1] === this.env.weather;
+    if (force || (key !== this.envKey && (!sameSky || this.time - this.envAt >= 1))) {
       this.envKey = key;
+      this.envAt = this.time;
+      this.envStale = false;
       this.bakeEnv();
-    }
+    } else if (key !== this.envKey) this.envStale = true;
     M.setEnvMap(this.envRT.texture, lerp(0.12, 1, day) * this.skyGain);
   }
 
@@ -545,6 +644,7 @@ export class Engine {
       this.outline.enabled = this.selectionObjects.length > 0;
     }
     this.moved = true;
+    this.cullSmall();
   }
 
   /* =============================================================== picking */
@@ -860,6 +960,7 @@ export class Engine {
     const dt = Math.min(0.1, this.clock.getDelta());
     this.time += dt;
     this.fps = lerp(this.fps, 1 / Math.max(dt, 1e-3), 0.05);
+    this.adapt();
 
     this.stepFlight(dt);
     this.drive(dt);
@@ -904,16 +1005,33 @@ export class Engine {
       this.updatePool();
       this.lightsDirty = false;
     }
-    if (this.shadowDirty) {
+    // Shadows are re-drawn when something changes, but at most fifteen times a
+    // second: dragging a trailer or running the clock no longer re-renders the
+    // whole shadow map every frame.
+    if (this.shadowDirty && this.time - this.shadowAt >= 1 / 15) {
       this.renderer.shadowMap.needsUpdate = true;
       this.shadowDirty = false;
+      this.shadowAt = this.time;
+    }
+    if (this.envStale && this.time - this.envAt >= 1) {
+      this.envStale = false;
+      this.envKey = `${Math.round(this.env.hour * 4)}|${this.env.weather}`;
+      this.envAt = this.time;
+      this.bakeEnv();
+      M.setEnvMap(this.envRT.texture, lerp(0.12, 1, this.day) * this.skyGain);
+    }
+    if (this.moved || this.time - this.cullAt > 0.5) {
+      this.cullAt = this.time;
+      this.cullSmall();
     }
     this.moved = false;
+    this.renderer.info.reset();
     this.composer.render(dt);
   }
 
   /** Render once and hand back the image (for photos). */
   capture(type = 'image/png') {
+    this.renderer.info.reset();
     this.composer.render(0);
     return this.renderer.domElement.toDataURL(type, 0.92);
   }
@@ -932,7 +1050,7 @@ export class Engine {
 
   get info() {
     const i = this.renderer.info;
-    return { calls: i.render.calls, triangles: i.render.triangles, fps: this.fps };
+    return { calls: i.render.calls, triangles: i.render.triangles, fps: this.fps, scale: this.res.scale };
   }
 
   dispose() {

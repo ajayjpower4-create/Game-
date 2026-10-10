@@ -256,19 +256,32 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   unit, link annex, lodge, kiosk, service-station shop, toilet block,
   greenhouse, barn, substation). Each takes any of seven claddings, six roof
   types, wall/trim/roof colours, a glass roof and a parapet.
-- **24 rooftop machines**, placed by hand and dragged around up there:
+- **34 machines**, placed by hand on any roof — or on the ground, where they
+  stand on a concrete plinth — and dragged around once they are down:
   packaged and large rooftop units, chiller, cooling tower, condenser bank,
   exhaust fan, mushroom vent, flue, brick chimney, skylight, skylight dome,
   monitor, solar array, green roof, helipad, satellite dish, antenna mast,
-  water tank, stair bulkhead, lift overrun, duct run, pipe rack, plant screen
-  and a roof sign frame.
+  water tank, stair bulkhead, lift overrun, duct run, pipe rack, plant screen,
+  a roof sign frame, a VRF condenser, energy recovery unit, kitchen upblast
+  fan, boiler flue cluster and pump skid — and five **heavy units** that sit
+  on steel dunnage with a grated walkway, handrails and a cat ladder: an air
+  handling unit, a big air-cooled chiller, a twin-cell cooling tower, a
+  50-ton rooftop unit and a dry cooler bank.
 - **10 guard booths**: classic cabin, deep canopy, brick gatehouse, glass
   cube, container booth, twin-lane kiosk, pitched hut, raised lookout, round
   kiosk and a gate office — each lit inside at night, each with a fascia sign
   you write.
-- **108 props** — boundary (mesh, palisade and timber fences, walls, guard
-  rail, gate arm, sliding gate, turnstile, bollards, Jersey barriers, crowd
-  barriers, cones, drums, speed bumps); signs (monument, pylon, billboard,
+- **130 props** — boundary (mesh, palisade and timber fences, walls, guard
+  rail, bollards, Jersey barriers, crowd barriers, cones, drums, speed bumps);
+  **12 gates** (gate arm, heavy boom with skirt, sliding, cantilever, double
+  swing and bi-folding speed gates, road blocker, rising bollards, tyre
+  killer, pedestrian gate, turnstile and an entrance portal that carries your
+  sign); **side roads** (two-lane road, service lane, bend, T-junction,
+  crossroads, roundabout, turning head and zebra crossing — a straight road
+  or junction laid across a fence, hedge or boundary wall cuts an opening in
+  it, and a road that reaches the street gets a dropped kerb); the **plant
+  yard** (louvred plant compound, low wall, screen wall, concrete plinth and a
+  pipe bridge, for machinery beside the building); signs (monument, pylon, billboard,
   post and direction signs, stop/speed/parking/accessible signs, traffic
   light, flagpoles); lighting (area lights, double heads, flood masts, street
   lamps, heritage lanterns, bollard lights, CCTV); planting (broadleaf, oak,
@@ -282,6 +295,35 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   vehicles (trailer, reefer, tractor unit, box truck, tanker, flatbed, dump
   truck, mixer, bus, van, pickup, SUV, car, hatchback, police car, ambulance,
   fire engine, forklift, excavator, tower crane, mobile crane); and people.
+
+## Ducts and pipes
+
+Six kinds — rectangular duct, round (spiral) duct, insulated flow-and-return
+pipes, cable tray, conduit and a gas main. Pick one under **Ducts & pipes**
+and click your way along: start on a machine (the run leaves from its top),
+on a roof, on a wall or on the ground, and each click adds a corner. Runs
+turn square corners by themselves — up first, across at the higher level,
+down at the far end — so a duct can leave a rooftop unit, cross the roof,
+drop down the wall and run across the yard to the next building. Double-click
+or Enter finishes, Backspace takes back the last point, Esc stops. Whatever
+is underneath holds a run up: stands on a roof, brackets on a wall, sleepers
+on the ground and steel portals over open ground. A selected machine, on a roof or
+on the ground, has a "Run duct or pipe from this machine" button, and a
+selected run can be extended, shortened, restyled, resized, recoloured or
+dragged. Runs follow a building when it moves.
+
+## Doors and entrances
+
+Select a building and open **Doors & entrances**: every door it has is listed
+— entrances, steel doors, shopfronts, roll-up and garage doors and loading
+bays — with buttons to slide it a bay left or right (round the corner at the
+end of a wall), move it round to the next wall, change its type, fly the
+camera to it, or take it out (the bay goes back to whatever the rest of that
+wall is). Or turn on **door mode** and do it in 3D: click any wall of the
+building to put a door there, drag a door along the wall or round a corner to
+move it, and click a door to change it or take it out. The path, zebra
+crossing, truck court or apron in front of a door moves with it, and the
+people walking about head for the new doors.
 
 ## Walls, bay by bay
 
@@ -303,9 +345,14 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
   and grass or gravel. Snap to grid and docks (hold Alt to place freely).
 - **World** — time of day (or let the clock run, at four speeds), weather,
   season, traffic and people, and graphics quality (Low, Medium, High, Ultra).
+  **Adaptive resolution** (on by default) lowers the render resolution a
+  little when frames run long and raises it again when they don't; a step
+  that doesn't actually help (say, a 30 fps battery-saver cap) is undone.
+  Phones, tablets and small laptops start on Medium.
 - **Stats** — floor area, coverage, floor area ratio, parking bays and the
-  ratio per 1,000 sq ft, docks, entrances, windows, trees, and a rough build
-  cost.
+  ratio per 1,000 sq ft, docks, entrances, windows, rooftop and ground
+  machines, duct and pipe runs and their length, side road pieces, trees, and
+  a rough build cost.
 - **Saves** — the site autosaves; keep named copies, open them again, or
   export and import a `.building.json` file.
 - **Photo mode** (P) hides the editor; take a picture at screen or double
@@ -323,7 +370,8 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 | F / N | Frame the selection · face north |
 | T / L | Run the clock · jump between day and night |
 | P / M / G | Photo mode · minimap · snapping |
-| Esc | Cancel placement, stop measuring, deselect, or leave Drone/Walk |
+| Enter / Backspace | Finish a duct or pipe run · take back its last point |
+| Esc | Cancel placement or drawing, leave door mode, stop measuring, deselect, or leave Drone/Walk |
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+D / Ctrl+S | Undo · redo · duplicate · saves |
 
 ## Layout
@@ -339,12 +387,24 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 | `public/building/engine/builder.js` | Builds models from parts and merges them per material |
 | `public/building/engine/ground.js` | Terrain, street, paving, truck courts, parking, scenery |
 | `public/building/engine/buildings.js` | Buildings: every wall bay, every roof type, signs, roof plant |
-| `public/building/engine/props.js` | Props and booths |
+| `public/building/engine/props.js` | Props and booths, side roads, gates, plant-yard walls |
+| `public/building/engine/runs.js` | Duct and pipe runs, their supports, square-cornered routing |
 | `public/building/engine/vehicles.js` | Vehicles |
 | `public/building/engine/nature.js` | Trees and people |
 | `public/building/engine/world.js` | Keeps the 3D scene in step with the save; parked cars; light pools |
 | `public/building/engine/life.js` | Traffic, pedestrians, flags, turbines, rain and snow |
 | `public/building/game.js` | The editor: panels, placement, dragging, undo, saves, photo mode |
+
+## Performance
+
+Edits stay quick on big sites: the paving and parking plan is worked out with
+a coarse box test before any exact one (about twenty times faster), and a
+change rebuilds only the objects it touches. Shadows are redrawn only when
+something changes, at most fifteen times a second; the sky's reflection map
+is re-baked at most once a second while the clock runs; things too small to
+see from where the camera is are skipped (their shadows stay); parked cars
+are instanced. The frame-rate counter (World tab) shows frames per second,
+draw calls, triangles and the current render scale.
 
 Every site in it is invented. It is a toy for sketching a layout, not a set of
 construction documents.

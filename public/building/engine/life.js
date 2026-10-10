@@ -10,6 +10,8 @@ import { rng } from './textures.js';
 import { VEHICLE_COLORS } from '../catalog.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+const TMP = { m: new THREE.Matrix4(), q: new THREE.Quaternion(), one: new THREE.Vector3(1, 1, 1), up: new THREE.Vector3(0, 1, 0), at: new THREE.Vector3() };
+
 const KINDS = [['car', 6, 15, 4.8, 5], ['hatch', 5.8, 13, 4.9, 3], ['suv', 6.4, 16, 6, 4], ['van', 6.6, 18, 8, 2], ['pickup', 6.6, 18, 6.2, 2], ['boxtruck', 8, 26, 12.5, 1], ['bus', 8.4, 40, 10.5, 0.4]];
 
 export class Life {
@@ -112,14 +114,10 @@ export class Life {
   }
 
   tick(dt, t) {
-    const E = this.E;
     // Traffic
     if (this.meshes) {
-      const m = new THREE.Matrix4();
-      const q = new THREE.Quaternion();
-      const one = new THREE.Vector3(1, 1, 1);
+      const { m, q, one, up, at } = TMP;
       const W = this.state ? this.state.lot.width : 600;
-      const up = new THREE.Vector3(0, 1, 0);
       for (const c of this.cars) {
         c.x += c.dir * c.speed * dt;
         if (c.dir > 0 && c.x > W + 1900) c.x = -1900;
@@ -134,7 +132,7 @@ export class Life {
           if (c.k !== k) continue;
           // Model fronts point -z; turn them to face along the lane.
           q.setFromAxisAngle(up, c.dir > 0 ? -Math.PI / 2 : Math.PI / 2);
-          m.compose(new THREE.Vector3(c.x, 0.05, c.z), q, one);
+          m.compose(at.set(c.x, 0.05, c.z), q, one);
           mesh.setMatrixAt(i++, m);
         }
         mesh.instanceMatrix.needsUpdate = true;
@@ -161,7 +159,6 @@ export class Life {
       }
     }
     this.stepWeather(dt);
-    E.moved = true;
   }
 
   /* ------------------------------------------------------------ weather */

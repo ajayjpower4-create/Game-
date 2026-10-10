@@ -6,7 +6,8 @@
  * a whole car park. */
 
 import * as THREE from 'three';
-import { buildBuilding } from './buildings.js';
+import { buildBuilding, roofItemModel, roofSurfaceY } from './buildings.js';
+import { buildRun } from './runs.js';
 import { buildProp } from './props.js';
 import { buildGround } from './ground.js';
 import { vehicleModel } from './vehicles.js';
@@ -14,19 +15,67 @@ import { disposeTree } from './builder.js';
 import * as M from './materials.js';
 import { rng } from './textures.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { planSite, footprint } from '../site.js';
+import { planSite, footprint, buildingsOf } from '../site.js';
+import { contains, toLocal } from '../geom.js';
 import { VEHICLE_COLORS } from '../catalog.js';
 
 const DEG = Math.PI / 180;
+const _box = new THREE.Box3();
+const _sphere = new THREE.Sphere();
+
+/** Where a placed model is and how big, for the engine's small-object culling. */
+function measure(it) {
+  if (!it.cull) return;
+  it.group.updateMatrixWorld(true);
+  _box.setFromObject(it.group);
+  if (_box.isEmpty()) { it.cull.radius = 0; return; }
+  _box.getBoundingSphere(_sphere);
+  it.cull.centre.copy(_sphere.center);
+  it.cull.radius = _sphere.radius;
+}
+
+/** What is underneath a plan point: the roof height of a building there, and
+ *  whether a wall is close enough to bracket a duct to. */
+export function makeUnder(state) {
+  const blds = buildingsOf(state).map((b) => ({ b, fp: footprint(b) }));
+  return (x, y) => {
+    let roof = null;
+    let wall = false;
+    for (const { b, fp } of blds) {
+      if (contains(fp, x, y)) {
+        const [lx, ly] = toLocal(fp, x, y);
+        const h = roofSurfaceY(b, lx + b.w / 2, ly + b.d / 2);
+        roof = roof == null ? h : Math.max(roof, h);
+      } else if (contains({ ...fp, x: fp.x - 3, y: fp.y - 3, w: fp.w + 6, d: fp.d + 6 }, x, y)) {
+        wall = true;
+      }
+    }
+    return { roof, wall };
+  };
+}
 
 /** Build the 3D model for any object, positioned on the site. */
-export function modelFor(o) {
-  const g = o.kind === 'building' ? buildBuilding(o) : buildProp(o);
+export function modelFor(o, under) {
+  let g;
+  if (o.kind === 'building') g = buildBuilding(o);
+  else if (o.kind === 'plant') {
+    g = roofItemModel(o.type, { ground: true }).finish(new THREE.Group());
+    g.userData = { lights: [], moving: [], disposables: [] };
+  } else if (o.kind === 'run') {
+    g = buildRun(o, under).finish(new THREE.Group());
+    g.userData = { lights: [], moving: [], disposables: [] };
+  } else g = buildProp(o);
   place(g, o);
   return g;
 }
 
 export function place(g, o) {
+  if (o.kind === 'run') {
+    // Runs are built where their points are.
+    g.position.set(0, 0, 0);
+    g.rotation.y = 0;
+    return;
+  }
   const f = footprint(o);
   g.position.set(f.x + f.w / 2, o.kind === 'building' ? 0 : 0.02, f.y + f.d / 2);
   g.rotation.y = -(o.rot || 0) * DEG;
@@ -61,27 +110,34 @@ export class World {
     const E = this.engine;
     const seen = new Set();
     let changed = false;
+    // Runs stand on whatever is under them, so they rebuild when buildings move.
+    const layout = JSON.stringify(buildingsOf(state).map((b) => [b.x, b.y, b.w, b.d, b.rot, b.floors, b.height, b.roofType, b.parapet]));
+    const under = makeUnder(state);
     for (const o of state.objects) {
       seen.add(o.id);
       // Moving or turning something only re-places its model.
       const { x, y, rot, ...shape } = o;
-      const sig = JSON.stringify(shape);
+      const sig = JSON.stringify(shape) + (o.kind === 'run' ? layout : '');
       const at = `${x}|${y}|${rot}`;
       const have = this.items.get(o.id);
       if (have && have.sig === sig) {
         if (have.at !== at) {
           place(have.group, o);
           have.at = at;
+          measure(have);
           changed = true;
         }
         continue;
       }
       if (have) { E.objects.remove(have.group); releaseModel(have.group); }
-      const g = modelFor(o);
+      const g = modelFor(o, under);
       g.userData.pick = { id: o.id };
       g.userData.obj = o.id;
       E.objects.add(g);
-      this.items.set(o.id, { sig, at, group: g });
+      // Buildings are never small enough to skip; everything else may be.
+      const it = { sig, at, group: g, cull: o.kind === 'building' ? null : { group: g, centre: new THREE.Vector3(), radius: 0 } };
+      measure(it);
+      this.items.set(o.id, it);
       changed = true;
     }
     for (const [id, it] of this.items) {
@@ -93,7 +149,8 @@ export class World {
     }
     // The ground follows the plan.
     const plan = planSite(state);
-    const gsig = JSON.stringify([state.lot, state.site, plan.pave, plan.drive, plan.aprons.map((a) => a.rect), plan.rollAprons, plan.walks, plan.stalls.length, plan.stalls[0], plan.islands, plan.crossings.length]);
+    const roads = state.objects.filter((o) => o.kind === 'prop' && /^(road|lane|bend|tee|cross|roundabout|culdesac)$/.test(o.type)).map((o) => [o.x, o.y, o.w, o.d, o.rot]);
+    const gsig = JSON.stringify([state.lot, state.site, plan.pave, plan.drive, plan.aprons.map((a) => a.rect), plan.rollAprons, plan.walks, plan.stalls.length, plan.stalls[0], plan.stalls[plan.stalls.length - 1], plan.islands, plan.crossings.length, roads]);
     if (gsig !== this.groundSig) {
       this.groundSig = gsig;
       if (this.groundGroup) { E.ground.remove(this.groundGroup); disposeTree(this.groundGroup); }
@@ -103,6 +160,7 @@ export class World {
       changed = true;
     }
     if (changed) {
+      E.cullItems = [...this.items.values()].filter((it) => it.cull).map((it) => it.cull);
       this.collectLights();
       E.shadowDirty = true;
       E.moved = true;

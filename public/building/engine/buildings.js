@@ -729,10 +729,154 @@ function fanTop(B, x, y, z, r) {
   for (let k = 0; k < 3; k++) B.box(M.metal('#5d646b', 0.5), r * 1.9, 0.08, 0.12, x, y + 0.58, z, [0, (k * Math.PI) / 3, 0]);
 }
 
-export function roofItemModel(type) {
+/* ------------------------------------------------------------ heavy plant */
+
+/** Structural steel ("dunnage") that heavy plant stands on, with a grated
+ *  service walkway and handrail along one side. Returns the deck height. */
+function dunnage(B, w, d) {
+  const lift = 2.6;
+  const steel = M.painted('#4d545c', 0.55);
+  const nx = Math.max(2, Math.round(w / 12) + 1);
+  for (let i = 0; i < nx; i++) {
+    const x = -w / 2 + 1 + ((w - 2) * i) / (nx - 1);
+    for (const z of [-d / 2 + 0.8, d / 2 - 0.8]) {
+      B.box(steel, 0.7, lift, 0.7, x, lift / 2, z);
+      B.box(M.rubber(), 1.4, 0.12, 1.4, x, 0.06, z);
+    }
+  }
+  // Beams: two long girders, cross members at every column line.
+  for (const z of [-d / 2 + 0.8, d / 2 - 0.8]) B.box(steel, w + 1, 0.8, 0.5, 0, lift - 0.4, z);
+  for (let i = 0; i < nx; i++) B.box(steel, 0.45, 0.7, d - 1, -w / 2 + 1 + ((w - 2) * i) / (nx - 1), lift - 0.35, 0);
+  // Walkway on the +z side, with a handrail and a cat ladder down.
+  const grate = M.metal('#7d858c', 0.55);
+  B.box(grate, w, 0.15, 3, 0, lift - 0.05, d / 2 + 1.5);
+  for (let x = -w / 2; x <= w / 2 + 0.01; x += Math.max(4, w / Math.round(w / 6))) {
+    B.box(M.painted('#e7b416', 0.45), 0.15, 3.6, 0.15, x, lift + 1.8, d / 2 + 3);
+    B.box(steel, 0.4, lift, 0.4, x, lift / 2, d / 2 + 3);
+  }
+  B.box(M.painted('#e7b416', 0.45), w, 0.15, 0.15, 0, lift + 3.6, d / 2 + 3);
+  B.box(M.painted('#e7b416', 0.45), w, 0.12, 0.12, 0, lift + 1.9, d / 2 + 3);
+  for (const sx of [-1, 1]) B.box(M.painted('#e7b416', 0.45), 0.12, lift, 0.12, -w / 2 - 0.6 + sx * 0.6, lift / 2, d / 2 + 2.2);
+  for (let y = 0.5; y < lift; y += 0.9) B.box(M.painted('#e7b416', 0.45), 1.2, 0.08, 0.08, -w / 2 - 0.6, y, d / 2 + 2.2);
+  return lift;
+}
+
+/** A row of big condenser fans on top of a unit. */
+function fanRow(B, x0, x1, y, z, n, r) {
+  for (let i = 0; i < n; i++) fanTop(B, x0 + ((x1 - x0) * (i + 0.5)) / n, y, z, r);
+}
+
+/** Access doors with handles down one side of an air handler. */
+function doors(B, w, h, z, n) {
+  const door = M.painted('#bfc4c9', 0.45);
+  for (let i = 0; i < n; i++) {
+    const x = -w / 2 + (w * (i + 0.5)) / n;
+    B.box(door, w / n - 1.2, h - 2, 0.08, x, h / 2, z);
+    B.box(M.metal('#5d646b', 0.4), 0.15, 0.6, 0.12, x + w / n / 2 - 1.2, h / 2, z + 0.05);
+    B.box(M.metal('#5d646b', 0.4), 0.15, 0.6, 0.12, x + w / n / 2 - 1.2, h / 2 + 1.5, z + 0.05);
+  }
+}
+
+function bigUnit(B, type, w, d, h) {
+  const unit = M.painted('#d3d7db', 0.42);
+  const seam = M.painted('#aeb4ba', 0.5);
+  const dark = M.painted('#7d848b', 0.5);
+  switch (type) {
+    case 'ahu': {
+      // Sections: intake, filters, coils, fan, discharge — each its own casing.
+      const sec = [0.12, 0.18, 0.2, 0.28, 0.22];
+      let x = -w / 2;
+      sec.forEach((f, i) => {
+        const len = w * f;
+        const hh = i === 3 ? h : h - 0.8;
+        B.slab(unit, len - 0.15, hh, d, x + len / 2, 0, 0);
+        B.box(seam, 0.25, hh + 0.1, d + 0.1, x + len, hh / 2, 0);
+        x += len;
+      });
+      doors(B, w * 0.9, h - 1.5, d / 2 + 0.05, 7);
+      // Weather hood and louvres on the intake end, a duct stub off the top.
+      B.box(M.louvre(), 0.1, h * 0.7, d * 0.8, -w / 2 - 0.05, h * 0.45, 0);
+      B.box(unit, 2, 0.3, d * 0.9, -w / 2 - 1, h * 0.85, 0, [0, 0, -0.35]);
+      B.slab(unit, 6, 3, d * 0.6, w * 0.32, h, 0);
+      B.box(seam, w, 0.4, d + 0.3, 0, h - 0.2, 0);
+      B.slab(dark, 3, 4, 1.4, w * 0.36, 0, -d / 2 - 0.7);
+      break;
+    }
+    case 'chiller-xl': {
+      B.slab(dark, w, 1, d, 0, 0, 0);
+      for (const sz of [-1, 1]) B.box(M.louvre(), w - 0.6, h - 2.6, 0.12, 0, 1 + (h - 2.6) / 2, sz * d * 0.42, [sz * 0.16, 0, 0]);
+      for (let x = -w / 2 + 4; x < w / 2; x += 5.5) B.box(unit, 0.3, h - 1.2, d * 0.95, x, 1 + (h - 1.2) / 2, 0);
+      B.slab(unit, w, 0.5, d, 0, h - 0.6, 0);
+      fanRow(B, -w / 2 + 3, w / 2 - 6, h - 0.1, -d * 0.24, 7, 1.8);
+      fanRow(B, -w / 2 + 3, w / 2 - 6, h - 0.1, d * 0.24, 7, 1.8);
+      // Control panel at one end.
+      B.slab(unit, 5, h - 1, d, w / 2 - 2.5, 1, 0);
+      B.box(M.painted('#3a3f45', 0.5), 0.1, 2.4, 2, w / 2 + 0.05, h * 0.55, 0);
+      break;
+    }
+    case 'tower-twin': {
+      for (const sx of [-1, 1]) {
+        const cx = sx * w / 4;
+        B.slab(unit, w / 2 - 0.4, h * 0.55, d, cx, 0, 0);
+        for (const [rx, rz, ry] of [[cx, d / 2 + 0.06, 0], [cx, -d / 2 - 0.06, 0]]) B.box(M.louvre(), w / 2 - 1.4, h * 0.3, 0.1, rx, h * 0.22, rz, [0, ry, 0]);
+        B.box(M.louvre(), 0.1, h * 0.3, d - 1.4, cx + sx * (w / 4 - 0.15), h * 0.22, 0);
+        B.slab(seam, w / 2 - 0.4, 0.4, d, cx, h * 0.55, 0);
+        B.cyl(unit, d * 0.36, d * 0.42, h * 0.38, cx, h * 0.55 + h * 0.19 + 0.4, 0, { seg: 26 });
+        B.cyl(M.rubber(), d * 0.33, d * 0.33, 0.06, cx, h + 0.42, 0, { seg: 26 });
+        B.cyl(M.metal('#5d646b', 0.5), 0.4, 0.4, 0.5, cx, h + 0.3, 0, { seg: 10 });
+      }
+      // Top deck handrail and a stair.
+      for (const sz of [-1, 1]) B.box(M.painted('#e7b416', 0.45), w, 0.12, 0.12, 0, h * 0.55 + 3.6, sz * (d / 2 - 0.1));
+      for (let i = 0; i < 10; i++) B.box(M.metal('#8a9198', 0.4), 2.6, 0.15, 0.9, w / 2 + 1.6, 0.4 + i * (h * 0.55 / 10), -d / 2 + 1 + i * 0.9);
+      break;
+    }
+    case 'rtu-mega': {
+      B.slab(M.painted('#6d737a', 0.6), w + 0.6, 0.8, d + 0.6, 0, 0, 0);
+      B.slab(unit, w, h - 0.8, d, 0, 0.8, 0);
+      for (let x = -w / 2 + w * 0.12; x < w / 2; x += w * 0.25) B.box(seam, 0.2, h - 0.8, d + 0.08, x, 0.8 + (h - 0.8) / 2, 0);
+      for (const sz of [-1, 1]) B.box(M.louvre(), w * 0.4, h * 0.5, 0.08, w * 0.22, h * 0.5, sz * (d / 2 + 0.04));
+      fanRow(B, w * 0.02, w * 0.48, h, 0, 3, 2);
+      B.box(unit, 3, 0.3, d * 0.9, -w / 2 - 1.5, h * 0.8, 0, [0, 0, -0.4]);
+      B.box(M.louvre(), 0.08, h * 0.45, d * 0.8, -w / 2 - 0.05, h * 0.5, 0);
+      B.slab(dark, w * 0.3, 0.6, d * 0.8, -w * 0.2, h, 0);
+      break;
+    }
+    case 'drycooler': {
+      // V-bank: two inclined coil faces meeting at a ridge, fans along the top.
+      for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) B.box(M.metal('#8a9198', 0.45), 0.5, h * 0.35, 0.5, x * (w / 2 - 0.5), h * 0.17, z * (d / 2 - 0.5));
+      B.slab(dark, w, 0.6, d, 0, h * 0.33, 0);
+      for (const sz of [-1, 1]) B.box(M.louvre(), w - 0.4, (h * 0.6) / Math.cos(0.42), 0.15, 0, h * 0.33 + h * 0.3, sz * d * 0.25, [-sz * 0.42, 0, 0]);
+      B.slab(unit, w, 0.5, d * 0.92, 0, h - 0.5, 0);
+      for (const sx of [-1, 1]) B.box(unit, 0.2, h * 0.62, d * 0.9, sx * w / 2, h * 0.64, 0);
+      fanRow(B, -w / 2 + 1, w / 2 - 1, h, 0, 6, 2.1);
+      break;
+    }
+    default:
+      B.slab(unit, w, h, d, 0, 0, 0);
+  }
+}
+
+export function roofItemModel(type, { ground = false } = {}) {
   const B = new Builder();
   const spec = ROOF_BY_ID[type] || { w: 8, d: 6, h: 3 };
   const { w, d, h } = spec;
+  if (spec.big) {
+    // Heavy plant stands on steel on a roof, on a concrete plinth on the ground.
+    let lift = 0.8;
+    if (ground) B.slab(M.concrete('#bdb9b1'), w + 3, 0.8, d + 3, 0, 0, 0);
+    else lift = dunnage(B, w, d);
+    const U = new Builder();
+    bigUnit(U, type, w, d, h);
+    for (const [m, geos] of U.parts) for (const g of geos) B.add(g, m, { pos: [0, lift, 0] });
+    return B;
+  }
+  if (ground) {
+    // Small kit on the ground sits on its own pad.
+    const P = roofItemModel(type);
+    B.slab(M.concrete('#bdb9b1'), w + 1.6, 0.5, d + 1.6, 0, 0, 0);
+    for (const [m, geos] of P.parts) for (const g of geos) B.add(g, m, { pos: [0, 0.5, 0] });
+    return B;
+  }
   const unit = M.painted('#c9cdd1', 0.45);
   const unitDark = M.painted('#8d949b', 0.5);
   const steel = M.metal('#8a9198', 0.45);
@@ -968,6 +1112,63 @@ export function roofItemModel(type) {
       }
       B.box(M.painted('#2c3138', 0.5), w, h * 0.55, 0.4, 0, h * 0.68, 0.3);
       B.box(steel, w, 0.3, 1.2, 0, h * 0.38, 0.8);
+      break;
+    }
+    case 'vrf': {
+      B.slab(curb, w + 0.4, 0.5, d + 0.4, 0, 0, 0);
+      B.slab(unit, w, h - 0.5, d, 0, 0.5, 0);
+      for (const sz of [-1, 1]) B.box(M.louvre(), w * 0.9, h * 0.65, 0.06, 0, h * 0.45, sz * (d / 2 + 0.03));
+      fanTop(B, -w / 4, h, 0, 1.25);
+      fanTop(B, w / 4, h, 0, 1.25);
+      B.box(M.metal('#5d646b', 0.4), 0.8, 0.8, 0.3, w / 2 - 0.6, 1, d / 2 + 0.15);
+      break;
+    }
+    case 'erv': {
+      B.slab(curb, w + 0.6, 0.8, d + 0.6, 0, 0, 0);
+      B.slab(unit, w, h - 0.8, d, 0, 0.8, 0);
+      for (const sx of [-1, 1]) {
+        B.box(unit, 2, 2.2, d * 0.7, sx * (w / 2 + 1), h * 0.6, 0, [0, 0, sx * 0.25]);
+        B.box(M.louvre(), 0.06, 1.6, d * 0.6, sx * (w / 2 + 1.9), h * 0.55, 0);
+      }
+      B.box(unitDark, w * 0.5, 0.2, d * 0.9, 0, h + 0.1, 0);
+      break;
+    }
+    case 'kitchenfan': {
+      B.slab(curb, w, 1.4, d, 0, 0, 0);
+      B.cyl(unitDark, w * 0.42, w * 0.42, 1.2, 0, 2, 0, { seg: 20 });
+      B.cyl(unit, w * 0.22, w * 0.46, 1, 0, 3.1, 0, { seg: 20, open: true });
+      B.cyl(M.rubber(), w * 0.2, w * 0.2, 0.05, 0, 3.4, 0, { seg: 20 });
+      B.box(M.metal('#5d646b', 0.4), 1.2, 0.8, 0.8, w / 2 + 0.4, 1.4, 0);
+      B.slab(M.painted('#3a3f45', 0.6), 1.6, 0.4, 1.2, w / 2 + 0.4, 0, 0);
+      break;
+    }
+    case 'boilerflues': {
+      B.slab(curb, w, 0.8, d, 0, 0, 0);
+      [[-1.6, -1.6, 1], [1.6, -1.6, 0.85], [-1.6, 1.6, 0.75], [1.6, 1.6, 0.9]].forEach(([x, z, k]) => {
+        const hh = h * k;
+        B.cyl(steel, 0.6, 0.7, hh, x, hh / 2 + 0.8, z, { seg: 12 });
+        B.cyl(M.metal('#3b3f44', 0.5), 0.8, 0.8, 0.4, x, hh * 0.6, z, { seg: 12 });
+        B.cyl(steel, 1.1, 1.1, 0.12, x, hh + 1.4, z, { seg: 12 });
+        for (const [a, b2] of [[0.5, 0.5], [-0.5, -0.5]]) B.box(steel, 0.06, 0.6, 0.06, x + a, hh + 1.1, z + b2);
+      });
+      B.tube(steel, [-1.6, h * 0.6, -1.6], [-w * 1.2, 0, -w * 1.2], 0.04, 3);
+      B.tube(steel, [1.6, h * 0.6, 1.6], [w * 1.2, 0, w * 1.2], 0.04, 3);
+      break;
+    }
+    case 'pumpskid': {
+      B.slab(M.painted('#4d545c', 0.55), w, 0.5, d, 0, 0, 0);
+      for (const x of [-w / 4, w / 4]) {
+        B.cyl(M.painted('#2c5f8a', 0.4), 0.9, 0.9, 2.6, x, 1.6, 0, { rot: [0, 0, Math.PI / 2], seg: 16 });
+        B.cyl(M.painted('#2c5f8a', 0.4), 0.7, 0.7, 1.4, x + 1.6, 1.6, 0, { rot: [0, 0, Math.PI / 2], seg: 14 });
+        B.slab(M.painted('#2c5f8a', 0.4), 1.2, 1, 1.2, x - 0.8, 0.5, 0);
+      }
+      B.tube(M.painted('#c0392b', 0.4), [-w / 2, 3.2, -d / 4], [w / 2, 3.2, -d / 4], 0.35, 10);
+      B.tube(M.painted('#2c5f8a', 0.4), [-w / 2, 3.2, d / 4], [w / 2, 3.2, d / 4], 0.35, 10);
+      for (const x of [-w / 4, w / 4]) {
+        B.tube(M.painted('#c0392b', 0.4), [x, 2.4, 0], [x, 3.2, -d / 4], 0.25, 8);
+        B.tube(M.painted('#2c5f8a', 0.4), [x, 2.4, 0], [x, 3.2, d / 4], 0.25, 8);
+      }
+      B.slab(M.painted('#3a3f45', 0.5), 1.4, 3, 1, w / 2 - 0.7, 0.5, d / 2 - 0.5);
       break;
     }
     default:

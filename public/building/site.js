@@ -12,7 +12,7 @@ export const buildingsOf = (state) => state.objects.filter((o) => o.kind === 'bu
 /* Things with enough bulk that two of them in the same place is a glitch, not a
  * design. Scatter — bollards, cones, signs, planting — is left free to touch. */
 export const isSolid = (o) => {
-  if (o.kind === 'building' || o.kind === 'booth') return true;
+  if (o.kind === 'building' || o.kind === 'booth' || o.kind === 'plant') return true;
   if (o.kind !== 'prop') return false;
   const spec = PROP_BY_ID[o.type];
   return !!(spec && spec.solid);
@@ -187,16 +187,23 @@ export function planSite(state) {
     // Bays stay off anything set down on the ground — ponds, planting, poles,
     // signs, bins — though a parked vehicle may of course sit in one.
     const obstacles = state.objects
-      .filter((o) => o.kind === 'prop' && !(PROP_BY_ID[o.type] || {}).vehicle && (PROP_BY_ID[o.type] || {}).cat !== 'People')
+      .filter((o) => (o.kind === 'prop' && !(PROP_BY_ID[o.type] || {}).vehicle && (PROP_BY_ID[o.type] || {}).cat !== 'People')
+        || (o.kind === 'run' && (o.points || []).some((p) => (p.z || 0) < 6)))
       .map(footprint);
+    // Everything a bay must stay off, with margins, boxed once so each row
+    // only tests the few things that reach into it.
+    const blockers = [
+      ...state.objects.filter(isSolid).map((o) => [footprint(o), -0.5]),
+      ...plan.keepClear.map((k) => [k, 0]),
+      ...obstacles.map((f) => [f, -0.5]),
+    ].map(([f, m]) => ({ f, m, b: bounds(f) }));
     for (let y = firstY, row = 0; y + STALL.d < Math.min(plan.pave.y1 - 10, lot.depth - 86); y += pitch, row++) {
       const run = [];
+      const near = blockers.filter((k) => k.b.y1 >= y - 1 && k.b.y0 <= y + STALL.d + 1);
       for (let x = plan.pave.x0 + 8; x + STALL.w < plan.pave.x1 - 8; x += STALL.w) {
         const rect = { x, y, w: STALL.w, d: STALL.d, rot: 0 };
         if (Math.abs(x + STALL.w / 2 - plan.driveX) < 32) continue;
-        if (!isClear(state, rect)) continue;
-        if (plan.keepClear.some((k) => overlaps(rect, k))) continue;
-        if (obstacles.some((f) => overlaps(rect, f, -0.5))) continue;
+        if (near.some((k) => k.b.x1 >= x - 1 && k.b.x0 <= x + STALL.w + 1 && overlaps(rect, k.f, k.m))) continue;
         // Accessible bays go nearest the doors.
         const ada = doors.some(([dx, dy]) => Math.hypot(dx - (x + STALL.w / 2), dy - (y + STALL.d / 2)) < 46);
         plan.stalls.push({ x, y, w: STALL.w, d: STALL.d, row, ada });
@@ -244,6 +251,18 @@ export function siteStats(state, plan = planSite(state)) {
     props: state.objects.filter((o) => o.kind === 'prop').length,
     booths: state.objects.filter((o) => o.kind === 'booth').length,
     roofItems: blds.reduce((s, b) => s + (b.roofItems || []).length, 0),
+    groundPlant: state.objects.filter((o) => o.kind === 'plant').length,
+    runs: state.objects.filter((o) => o.kind === 'run').length,
+    runLength: state.objects.filter((o) => o.kind === 'run').reduce((s, o) => s + runLength(o), 0),
+    roads: state.objects.filter((o) => o.kind === 'prop' && (PROP_BY_ID[o.type] || {}).road).length,
     trees: state.objects.filter((o) => o.kind === 'prop' && /tree|conifer|palm|birch|maple|pine/.test(o.type)).length,
   };
+}
+
+/** Length of a duct or pipe run along its points, in feet. */
+export function runLength(o) {
+  const p = o.points || [];
+  let L = 0;
+  for (let i = 1; i < p.length; i++) L += Math.hypot(p[i].x - p[i - 1].x, p[i].y - p[i - 1].y, (p[i].z || 0) - (p[i - 1].z || 0));
+  return L;
 }
