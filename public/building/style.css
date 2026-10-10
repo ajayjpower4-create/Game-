@@ -267,12 +267,18 @@ body.photo .photo-bar {
 }
 
 @media (max-width: 900px) {
-  .panel { left: 0; right: 0; top: auto; bottom: 0; width: auto; height: 46%; border-radius: 14px 14px 0 0; }
+  .panel { left: 0; right: 0; top: auto; bottom: 0; width: auto; height: 42%; border-radius: 14px 14px 0 0; }
   .panel.collapsed { height: auto; left: auto; right: 8px; bottom: 8px; border-radius: 12px; }
-  .hud.tr { right: 12px; }
-  #minimap { width: 132px; height: 102px; }
-  .hud.bottom { left: 8px; right: 8px; bottom: calc(46% + 8px); padding: 6px; }
-  .hud.bottom .chip.icon { width: 32px; min-height: 30px; font-size: 15px; }
+  .hud.tl { left: 8px; top: 8px; }
+  .hud.tr { right: 8px; top: 8px; gap: 6px; }
+  #minimap { width: 104px; height: 80px; border-radius: 9px; }
+  .compass { width: 36px; height: 36px; font-size: 14px; }
+  .seg .lbl { display: none; }
+  .seg button { padding: 7px 10px; font-size: 15px; }
+  .hud.bottom { left: 8px; right: 8px; bottom: calc(42% + 8px); padding: 6px; flex-wrap: nowrap; overflow-x: auto; gap: 6px; }
+  .hud.bottom input[type=range] { min-width: 90px; }
+  .hud.bottom .sep { display: none; }
+  .hud.bottom .chip.icon { width: 32px; min-height: 30px; font-size: 15px; flex: none; }
   .hintbar { display: none; }
   .hud.tl .seg.small { display: none; }
   .topbar .tools .btn { padding: 6px 8px; min-height: 34px; font-size: 13px; }

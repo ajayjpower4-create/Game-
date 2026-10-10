@@ -191,9 +191,9 @@ function buildScreen() {
     <div class="loading" id="loading"><div class="spinner"></div><p>Pouring concrete and mixing paint…</p></div>
     <div class="hud tl">
       <div class="seg" id="camModes">
-        <button data-act="cam" data-value="orbit" title="Orbit and edit (1)">🛰️ Orbit</button>
-        <button data-act="cam" data-value="drone" title="Fly like a drone (2)">🚁 Drone</button>
-        <button data-act="cam" data-value="walk" title="Walk the site (3)">🚶 Walk</button>
+        <button data-act="cam" data-value="orbit" title="Orbit and edit (1)">🛰️<span class="lbl"> Orbit</span></button>
+        <button data-act="cam" data-value="drone" title="Fly like a drone (2)">🚁<span class="lbl"> Drone</span></button>
+        <button data-act="cam" data-value="walk" title="Walk the site (3)">🚶<span class="lbl"> Walk</span></button>
       </div>
       <div class="seg small">
         ${['aerial', 'front', 'corner', 'back', 'left', 'right', 'top', 'street'].map((v) => `<button data-act="view" data-value="${v}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}

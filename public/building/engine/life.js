@@ -185,7 +185,7 @@ export class Life {
     const sp = new Float32Array(n * 3);
     const sg = new THREE.BufferGeometry();
     sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-    this.snow = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.45, transparent: true, opacity: 0.9, depthWrite: false }));
+    this.snow = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0.8, depthWrite: false }));
     this.snow.frustumCulled = false;
     this.snow.visible = false;
     this.E.fx.add(this.rain, this.snow);
@@ -218,13 +218,20 @@ export class Life {
       this.rain.geometry.computeBoundingSphere();
     }
     if (snowOn) {
+      // Snow falls in a shallow layer near the ground, so an aerial view still
+      // sees the site through it.
       const arr = this.snow.geometry.attributes.position.array;
       const t = performance.now() / 1000;
-      this.drops.forEach((d, i) => {
-        d[1] -= 5 * dt * d[3];
-        if (d[1] < base) d[1] += 320;
-        arr.set([c.x + d[0] + Math.sin(t * 0.7 + i) * 2.5, d[1], c.z + d[2] + Math.cos(t * 0.5 + i * 1.3) * 2.5], i * 3);
-      });
+      const top = Math.min(140, Math.max(40, camY * 0.6));
+      const n = Math.min(this.drops.length, 4500);
+      for (let i = 0; i < n; i++) {
+        const d = this.drops[i];
+        const y = ((d[1] - t * 4.5 * d[3]) % top + top) % top;
+        arr[i * 3] = c.x + d[0] + Math.sin(t * 0.7 + i) * 2.5;
+        arr[i * 3 + 1] = y;
+        arr[i * 3 + 2] = c.z + d[2] + Math.cos(t * 0.5 + i * 1.3) * 2.5;
+      }
+      this.snow.geometry.setDrawRange(0, n);
       this.snow.geometry.attributes.position.needsUpdate = true;
     }
   }

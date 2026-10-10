@@ -40,10 +40,16 @@ const NOW = { night: 0, wet: 0, snow: 0, season: 'summer', env: null, envScale: 
 
 const night = (mat, key, max) => { nightReg.push({ mat, key, max }); mat[key] = max * NOW.night; return mat; };
 const wet = (mat) => {
-  wetReg.push({ mat, dry: mat.roughness });
-  mat.roughness = Math.max(0.08, mat.roughness * (1 - 0.82 * NOW.wet));
+  const e = { mat, dry: mat.roughness, base: mat.color.clone() };
+  wetReg.push(e);
+  applyWet(e, NOW.wet);
   return mat;
 };
+/* Wet ground darkens and turns glossy. */
+function applyWet(e, f) {
+  e.mat.roughness = Math.max(0.08, e.dry * (1 - 0.8 * f));
+  e.mat.color.copy(e.base).multiplyScalar(1 - 0.38 * f);
+}
 const shiny = (mat) => {
   shinyReg.push(mat);
   mat.userData.baseEnv = mat.envMapIntensity;
@@ -86,10 +92,31 @@ function antiTile(mat, spanFt = 160, strength = 0.35) {
   return mat;
 }
 
-const snowy = (mat, snowHex = '#f4f7fa') => {
-  const e = { mat, base: mat.color.clone(), snow: new THREE.Color(snowHex) };
-  snowReg.push(e);
-  if (NOW.snow) mat.color.copy(e.base).lerp(e.snow, NOW.snow);
+/* Snow settles on whatever faces the sky — ground, roofs, the tops of cars
+ * and trees — and nowhere else. One shared uniform drives every material. */
+const SNOW_U = { value: 0 };
+const SNOW_GLSL = `
+  {
+    vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+    float facing = dot(normal, upV);
+    float cover = snowAmount * smoothstep(0.35, 0.8, facing);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.95), cover);
+    roughnessFactor = mix(roughnessFactor, 0.75, cover);
+    metalnessFactor = mix(metalnessFactor, 0.0, cover);
+  }`;
+
+const snowy = (mat) => {
+  snowReg.push({ mat });
+  const prev = mat.onBeforeCompile;
+  const prevKey = mat.customProgramCacheKey === THREE.Material.prototype.customProgramCacheKey ? null : mat.customProgramCacheKey;
+  mat.onBeforeCompile = (sh, r) => {
+    if (prev) prev.call(mat, sh, r);
+    sh.uniforms.snowAmount = SNOW_U;
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float snowAmount;')
+      .replace('#include <lights_physical_fragment>', `${SNOW_GLSL}\n#include <lights_physical_fragment>`);
+  };
+  mat.customProgramCacheKey = () => `${prevKey ? prevKey.call(mat) : ''}|snow`;
   return mat;
 };
 
@@ -252,9 +279,9 @@ export function plastic(hex, rough = 0.55) {
 
 /** Car paint: metallic base under a clear coat. */
 export function carPaint(hex) {
-  return once(`car|${hex}`, () => shiny(new THREE.MeshPhysicalMaterial({
+  return once(`car|${hex}`, () => snowy(shiny(new THREE.MeshPhysicalMaterial({
     color: new THREE.Color(hex), roughness: 0.35, metalness: 0.45, clearcoat: 0.8, clearcoatRoughness: 0.08, envMapIntensity: 0.75,
-  })));
+  }))));
 }
 
 export function chrome() {
@@ -335,12 +362,12 @@ export function leaves(variant = 0) {
   return once(`leaves|${variant}`, () => {
     const m = std({ ...withSurface('leaves'), color: new THREE.Color((SEASON_LEAF[NOW.season] || SEASON_LEAF.summer)[variant % 3]), roughness: 0.85 });
     leafReg.push({ mat: m, variant });
-    return m;
+    return snowy(m);
   });
 }
 
 export function needles() {
-  return once('needles', () => std({ ...withSurface('leaves'), color: new THREE.Color('#2f4d32'), roughness: 0.9 }));
+  return once('needles', () => snowy(std({ ...withSurface('leaves'), color: new THREE.Color('#2f4d32'), roughness: 0.9 })));
 }
 
 export function bark(hex = '#6b5340') {
@@ -377,13 +404,13 @@ export function setNight(f) {
 /** 0 = dry, 1 = soaked: wet ground turns glossy and reflects. */
 export function setWet(f) {
   NOW.wet = f;
-  for (const e of wetReg) e.mat.roughness = Math.max(0.08, e.dry * (1 - 0.82 * f));
+  for (const e of wetReg) applyWet(e, f);
 }
 
 /** 0 = none, 1 = blanket. */
 export function setSnow(f) {
   NOW.snow = f;
-  for (const e of snowReg) e.mat.color.copy(e.base).lerp(e.snow, f);
+  SNOW_U.value = f;
 }
 
 export function setSeason(season) {

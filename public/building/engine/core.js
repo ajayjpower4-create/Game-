@@ -39,11 +39,11 @@ export const QUALITY = {
 export const WEATHER = {
   clear: { name: 'Clear', icon: '☀️', clouds: 0.12, density: 0.3, turbidity: 1.9, rayleigh: 1.7, mie: 0.004, fog: 0.00011, sun: 1, wet: 0, snow: 0, rain: 0, flakes: 0 },
   cloudy: { name: 'Fair weather cloud', icon: '⛅', clouds: 0.42, density: 0.55, turbidity: 2.8, rayleigh: 1.6, mie: 0.006, fog: 0.00014, sun: 0.85, wet: 0, snow: 0, rain: 0, flakes: 0 },
-  overcast: { name: 'Overcast', icon: '☁️', clouds: 0.92, density: 0.95, turbidity: 9, rayleigh: 2.4, mie: 0.02, fog: 0.00022, sun: 0.22, wet: 0, snow: 0, rain: 0, flakes: 0 },
-  rain: { name: 'Rain', icon: '🌧️', clouds: 1, density: 1, turbidity: 12, rayleigh: 2.8, mie: 0.03, fog: 0.00045, sun: 0.1, wet: 1, snow: 0, rain: 1, flakes: 0 },
-  storm: { name: 'Thunderstorm', icon: '⛈️', clouds: 1, density: 1, turbidity: 16, rayleigh: 3.4, mie: 0.04, fog: 0.0006, sun: 0.05, wet: 1, snow: 0, rain: 1.8, flakes: 0, lightning: true },
-  fog: { name: 'Fog', icon: '🌫️', clouds: 0.7, density: 0.7, turbidity: 14, rayleigh: 3, mie: 0.05, fog: 0.0024, sun: 0.3, wet: 0.35, snow: 0, rain: 0, flakes: 0 },
-  snow: { name: 'Snow', icon: '🌨️', clouds: 0.95, density: 0.9, turbidity: 10, rayleigh: 2.6, mie: 0.03, fog: 0.0007, sun: 0.28, wet: 0, snow: 1, rain: 0, flakes: 1 },
+  overcast: { name: 'Overcast', icon: '☁️', clouds: 0.92, density: 0.95, turbidity: 9, rayleigh: 1.4, mie: 0.02, fog: 0.00022, sun: 0.1, wet: 0, snow: 0, rain: 0, flakes: 0 },
+  rain: { name: 'Rain', icon: '🌧️', clouds: 1, density: 1, turbidity: 12, rayleigh: 1.4, mie: 0.03, fog: 0.00045, sun: 0.04, wet: 1, snow: 0, rain: 1, flakes: 0 },
+  storm: { name: 'Thunderstorm', icon: '⛈️', clouds: 1, density: 1, turbidity: 16, rayleigh: 1.4, mie: 0.04, fog: 0.0006, sun: 0.02, wet: 1, snow: 0, rain: 1.8, flakes: 0, lightning: true },
+  fog: { name: 'Fog', icon: '🌫️', clouds: 0.7, density: 0.7, turbidity: 14, rayleigh: 1.4, mie: 0.05, fog: 0.0024, sun: 0.2, wet: 0.35, snow: 0, rain: 0, flakes: 0 },
+  snow: { name: 'Snow', icon: '🌨️', clouds: 0.95, density: 0.9, turbidity: 10, rayleigh: 1.4, mie: 0.03, fog: 0.00042, sun: 0.12, wet: 0, snow: 1, rain: 0, flakes: 1 },
 };
 
 export const CAMERA_MODES = ['orbit', 'drone', 'walk'];
@@ -143,7 +143,7 @@ export class Engine {
     this.envSky.scale.setScalar(1000);
     this.envGround = new THREE.Mesh(new THREE.CircleGeometry(900, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x6f6a60 }));
     this.envGround.position.y = -20;
-    this.envScene.add(this.envSky, this.envGround, this.envGlow);
+    this.envScene.add(this.envSky, this.envGround, this.envGlow, this.envDeck);
     this.envRT = null;
     this.envKey = '';
 
@@ -227,6 +227,30 @@ export class Engine {
     this.glow.renderOrder = -999;
     this.scene.add(this.glow);
     this.envGlow = new THREE.Mesh(this.glow.geometry, mat);
+
+    // A grey cloud deck for overcast, rain and snow: the physical sky model
+    // cannot do a dull sky without turning it pink.
+    const deck = new THREE.ShaderMaterial({
+      uniforms: { opacity: { value: 0 }, top: { value: new THREE.Color('#aab1b9') }, horizon: { value: new THREE.Color('#cdd1d6') }, t: { value: 0 } },
+      vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position.z = gl_Position.w; }',
+      fragmentShader: `uniform float opacity; uniform vec3 top; uniform vec3 horizon; uniform float t; varying vec3 vDir;
+        float h(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
+        float n(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+        void main() {
+          float y = max(vDir.y, 0.0);
+          vec2 uv = vDir.xz / (y + 0.12) * 1.6 + vec2(t * 0.02, t * 0.01);
+          float c = n(uv) * 0.5 + n(uv * 2.3) * 0.3 + n(uv * 5.1) * 0.2;
+          vec3 col = mix(horizon, top, pow(y, 0.6)) * (0.88 + c * 0.24);
+          gl_FragColor = vec4(col, opacity * smoothstep(-0.25, 0.02, vDir.y + 0.1));
+        }`,
+      side: THREE.BackSide, depthWrite: false, transparent: true, fog: false,
+    });
+    this.deck = new THREE.Mesh(this.glow.geometry, deck);
+    this.deck.frustumCulled = false;
+    this.deck.renderOrder = -998;
+    this.scene.add(this.deck);
+    this.envDeck = new THREE.Mesh(this.glow.geometry, deck);
   }
 
   addMoon() {
@@ -414,8 +438,12 @@ export class Engine {
     const overcast = 1 - W.sun;
     this.hemi.color.set('#26395f').lerp(new THREE.Color(overcast > 0.5 ? '#c3ccd6' : '#c4d3e4'), day);
     this.hemi.groundColor.set('#0b0d12').lerp(new THREE.Color('#6b6253'), day);
-    this.hemi.intensity = this.hemiBase = lerp(0.62, 0.16 + overcast * 0.85, day);
-    this.scene.environmentIntensity = lerp(0.12, 0.3 + overcast * 0.5, day);
+    const gloom = 1 - Math.min(0.5, (W.rain || 0) * 0.32);
+    this.hemi.intensity = this.hemiBase = lerp(0.62, (0.16 + overcast * 0.85 + golden * 0.5 * W.sun) * gloom, day);
+    // A hazy sky model is far brighter than a clear one; even it out.
+    const skyGain = 1 / (1 + Math.max(0, W.turbidity - 2) * 0.3);
+    this.skyGain = skyGain;
+    this.scene.environmentIntensity = lerp(0.12, (0.3 + overcast * 0.5) * skyGain, day);
 
     // Fog takes the colour of the horizon.
     const fogDay = new THREE.Color(overcast > 0.5 ? '#aeb5bd' : '#b3c6dc');
@@ -426,14 +454,22 @@ export class Engine {
     this.envGround.material.color.set('#0c0d10').lerp(new THREE.Color(W.snow ? '#c9ced4' : '#6f6a60'), day);
 
     // Exposure and glow
-    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.2 : 1);
+    // Like a camera, open up as the light gets low.
+    const lowSun = golden * W.sun * smooth(-4, 2, e);
+    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.2 : 1) * (1 + lowSun * 1.7) * (1 - 0.42 * W.snow * day);
     if (this.bloomPass) {
-      this.bloomPass.strength = lerp(0.12, 0.7, night);
-      this.bloomPass.threshold = lerp(1.1, 0.55, night);
+      // Bloom sees light before exposure: by day only the sun's glints bloom.
+      this.bloomPass.strength = lerp(0.06, 0.7, night);
+      this.bloomPass.threshold = lerp(4.5, 0.55, night);
       this.bloomPass.radius = lerp(0.35, 0.6, night);
     }
     this.stars.material.opacity = night * (W.clouds > 0.8 ? 0.08 : 1 - W.clouds * 0.7);
     this.glow.material.uniforms.strength.value = night * (W.clouds > 0.8 ? 1.4 : 1);
+    const du = this.deck.material.uniforms;
+    du.opacity.value = smooth(0.6, 0.95, W.clouds) * 0.96;
+    const dark = Math.min(1, (W.rain || 0) * 0.6);
+    du.top.value.set('#090c12').lerp(new THREE.Color('#b2b9c1').lerp(new THREE.Color('#6f7880'), dark), day);
+    du.horizon.value.set('#10141b').lerp(new THREE.Color('#d2d6da').lerp(new THREE.Color('#9aa1a8'), dark), day);
     this.moon.material.opacity = night * (W.clouds > 0.85 ? 0.15 : 1);
     this.moonHalo.material.opacity = night * 0.35 * (W.clouds > 0.85 ? 0.3 : 1);
 
@@ -453,7 +489,7 @@ export class Engine {
       this.envKey = key;
       this.bakeEnv();
     }
-    M.setEnvMap(this.envRT.texture, lerp(0.12, 1, day));
+    M.setEnvMap(this.envRT.texture, lerp(0.12, 1, day) * this.skyGain);
   }
 
   bakeEnv() {
@@ -846,6 +882,8 @@ export class Engine {
     this.sky.position.copy(cam.position);
     this.stars.position.copy(cam.position);
     this.glow.position.copy(cam.position);
+    this.deck.position.copy(cam.position);
+    this.deck.material.uniforms.t.value = this.time;
     this.sky.material.uniforms.time.value = this.time;
     if (this.night > 0.02) {
       this.moon.position.copy(cam.position).addScaledVector(this.moonDir, 13500);
