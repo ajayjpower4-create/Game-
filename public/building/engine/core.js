@@ -456,7 +456,7 @@ export class Engine {
     // Exposure and glow
     // Like a camera, open up as the light gets low.
     const lowSun = golden * W.sun * smooth(-4, 2, e);
-    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.2 : 1) * (1 + lowSun * 1.7) * (1 - 0.42 * W.snow * day);
+    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.35 : 1) * (1 + lowSun * 1.7) * (1 + 0.15 * W.snow * day);
     if (this.bloomPass) {
       // Bloom sees light before exposure: by day only the sun's glints bloom.
       this.bloomPass.strength = lerp(0.06, 0.7, night);
