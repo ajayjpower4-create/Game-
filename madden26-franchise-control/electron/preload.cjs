@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('m26', {
   isElectron: true,
   pickFranchiseFile: () => ipcRenderer.invoke('pick-franchise-file'),
+  pickFcFile: () => ipcRenderer.invoke('pick-fc-file'),
   pickDirectory: () => ipcRenderer.invoke('pick-directory'),
   serverInfo: () => ipcRenderer.invoke('server-info'),
   openPath: (p) => ipcRenderer.invoke('open-path', p),

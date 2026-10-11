@@ -280,3 +280,55 @@ tr.mine td:first-child { box-shadow: inset 3px 0 0 var(--accent2); }
 .toolbar a { margin-right: 8px; }
 .checks.cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .posbar.wide { grid-template-columns: 130px 1fr 40px; margin-bottom: 6px; }
+/* ---- Madden 26 / FC 26 switch */
+.game-switch { display: flex; gap: 4px; margin-top: 10px; }
+.game-switch button { flex: 1; padding: 5px 6px; font-size: 12px; }
+.game-switch button.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+[data-game="fc26"] #nav, [data-game="fc26"] .madden-only { display: none !important; }
+[data-game="madden"] #fc-nav, [data-game="madden"] .fc-only, html:not([data-game]) #fc-nav, html:not([data-game]) .fc-only { display: none !important; }
+#fc-nav { display: flex; flex-direction: column; padding: 10px; gap: 2px; overflow: auto; }
+#fc-nav button { text-align: left; background: transparent; border: 0; color: var(--text); padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+#fc-nav button:hover { background: var(--bg3); }
+#fc-nav button.active { background: var(--accent2); color: #fff; }
+/* ---- FC 26 pages */
+.fc-hero { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.fc-club { font-size: 22px; font-weight: 800; }
+.fc-rating { display: inline-block; min-width: 34px; text-align: center; padding: 1px 6px; border-radius: 6px; font-weight: 700; font-size: 12px; }
+.r-great { background: #12402a; color: #7ff0b0; }
+.r-good { background: #123a3a; color: #8ce6e6; }
+.r-ok { background: var(--bg3); color: var(--text); }
+.r-poor { background: #4a1410; color: #ffb3ae; }
+[data-theme="light"] .r-great { background: #d9f4e5; color: #11683d; }
+[data-theme="light"] .r-good { background: #d6f1f1; color: #0d5e5e; }
+[data-theme="light"] .r-poor { background: #fbdcd9; color: #8e1d16; }
+.fc-bar { height: 6px; background: var(--bg3); border-radius: 4px; overflow: hidden; margin: 4px 0 8px; }
+.fc-bar span { display: block; height: 100%; background: var(--accent2); }
+.fc-spark { display: flex; align-items: flex-end; gap: 3px; height: 110px; margin: 6px 0 12px; }
+.fc-spark span { flex: 1; max-width: 22px; border-radius: 3px 3px 0 0; }
+.fc-spark span.r-great { background: var(--good); }
+.fc-spark span.r-good { background: #1ba3a3; }
+.fc-spark span.r-ok { background: var(--muted); }
+.fc-spark span.r-poor { background: var(--bad); }
+.fc-period { display: grid; grid-template-columns: 78px 1fr 60px; gap: 8px; align-items: center; margin: 5px 0; font-size: 13px; }
+.fc-period .bars span { display: block; height: 7px; border-radius: 3px; margin: 2px 0; min-width: 2px; }
+.fc-period .bars .for { background: var(--good); }
+.fc-period .bars .against { background: var(--bad); }
+.fc-period .num { text-align: right; color: var(--muted); }
+.fc-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-bottom: 18px; }
+.fc-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; }
+.fc-tile span { color: var(--muted); font-size: 12px; }
+.fc-tile.mine { border-color: var(--accent2); }
+.fc-match .fc-match-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.fc-match { margin-bottom: 10px; }
+.fc-form .pill { margin-right: 2px; }
+.form-grid { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.fc-edit input[type=number], .fc-edit input[type=text], .fc-edit select { min-width: 0; padding: 4px 6px; }
+.fc-edit input[type=text] { min-width: 160px; }
+.fc-edit select { max-width: 220px; }
+input[type=date] { background: var(--bg3); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+textarea { background: var(--bg3); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+ul.tight { margin: 4px 0; padding-left: 18px; }
+ul.tight li { margin: 3px 0; }
+.card:has(> table.fc-edit) { overflow-x: auto; }
+.fc-edit .i-injury { min-width: 120px; width: 150px; }
+.form-grid input[type=number] { min-width: 0; width: 90px; }

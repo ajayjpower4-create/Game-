@@ -9,11 +9,13 @@ files:
   - src/**
   - ui/**
   - schemas/**
+  - fc26-data/**
   - package.json
   - "!**/*.map"
 asarUnpack:
   - node_modules/madden-franchise/**
   - schemas/**
+  - fc26-data/**
 win:
   target:
     - target: nsis

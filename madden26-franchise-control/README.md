@@ -9,6 +9,7 @@ The file is also in this repo at [`download/Madden26FranchiseControl-portable.ex
 1. Download it and double-click it. It is not code-signed, so Windows SmartScreen will show a warning the first time: click **More info → Run anyway**.
 2. Windows Firewall will ask to allow the app on private networks. Say **yes**, or the Madden Companion App on your phone cannot send your league to it.
 3. The app opens. Go to **Connect**, click **Sign in with EA**, sign in, pick your franchise and click **Download**. (Or open your PC franchise file, or export from the Madden Companion App.)
+4. For **FC 26** Career Mode, click **FC 26** at the top of the sidebar and open your career save (see [FC 26](#fc-26)).
 
 A Windows desktop mod for **Madden NFL 26 franchise mode**. Connect your franchise and get the stats Madden never shows you, plus an injury tool that lets you decide who gets hurt in which game.
 
@@ -123,6 +124,35 @@ On any game that has not been played (Schedule page, a team's schedule, or the g
 
 Settings has a look-and-feel section: dark, light or high-contrast theme, accent color, text size, compact tables, showing or hiding the R / ~ / T source letters, and sticky table headers. You can pick the page the app opens on, the season part it shows first, and your team in each league (highlighted in every table, and optionally the default filter). Copy can put plain lined-up text, a Discord code block, or tab-separated columns for Excel and Google Sheets on the clipboard, and money can show as $36.33M or $36,330,000. It also covers the pages: which tab a played game opens on, how many names each leaderboard shows, and which pages appear in the sidebar. For the franchise file you can have the tool reload the file by itself whenever Madden saves it, choose whether it asks before every write, keep only the last 5 / 10 / 20 / 50 backups, and restore any backup with one click (the current file is backed up first). Under your data you can save a copy of everything the tool keeps for a league (Game Tracker events, injuries you made, injury history, schedule changes), clear the injury history or the Game Tracker, or reset every setting. Everything saves to the data folder and applies immediately.
 
+## FC 26
+
+The same app also does EA SPORTS FC 26 Career Mode. Click **FC 26** at the top of the sidebar to switch (and **Madden 26** to switch back). FC 26 has its own pages, its own career picker, and its own data; nothing on the Madden side changes.
+
+**Connect.** The tool finds FC 26 saves in `Documents\FC 26\settings` or `%LOCALAPPDATA%\EA SPORTS FC 26\settings` (OneDrive included). Career saves have *Career* in the name; squad files start with *Squads* and open too (clubs, tables and players, no career parts). Save in game first; the tool reads what FC last wrote. **The FC 26 side only ever reads saves; it never writes to them.**
+
+**What comes from the save:**
+- **League tables** for every league: played, won, drawn, lost, goals, points, points per game, home and away records, last season's finish.
+- **Clubs:** squad, starting XI, club ratings, captain, rival, wages, budgets, transfers in and out with fees, loans, fixtures.
+- **Players:** OVR, potential, OVR change, positions, age, nation, attributes, contract (wage, role, length), loans and suspensions.
+- **This season's numbers:** league goals, appearances and cards for every player.
+- **Match ratings:** every rated match with minutes and position, giving average rating, last-five form, best and worst games, 8.0+ games, consistency and minutes.
+- **The manager:** board confidence, budgets, season-by-season history, trophies, biggest win and heaviest defeat.
+- **Also:** Team of the Week picks, last season's goals, assists and clean sheets by competition, and agreed deals.
+
+Player names: a career save stores names only for players the game made or you edited; everyone else's name lives in FC's own data. The tool ships a name list for the 18,405 players in FC 26 (keyed by EA's player ids, built with `scripts/build-fc26-names.mjs` from a SoFIFA-format list). Academy players and regens the save has no name for show as *Academy player #id*; you can name them on their player page.
+
+**Match Log.** FC keeps scores, scorers, assists, cards, injuries and the match facts only while the game is running. Log a match after you play it: the score, every goal with its minute, scorer, assist and type, cards, injuries with weeks out, the match stats screen (possession, shots, xG, passes and so on), player ratings and man of the match. Matches the save rated can be logged in one click, which fills in who played, minutes and ratings from the save. Each match gets its story: comebacks, leads lost, late winners and equalisers, braces and hat-tricks, red cards, injuries, and xG against goals.
+
+**Advanced Stats** come from the Match Log:
+- **Records:** by venue and competition, and against top, middle and bottom-third opponents.
+- **Clean sheets:** for the team, and for goalkeepers and defenders who played 60 minutes or more.
+- **Game state:** scoring first and conceding first, comebacks, points dropped from winning positions, late goals.
+- **Goals:** when they come (by 15-minute period) and how (open play, header, penalty, free kick).
+- **Match stats per game:** shot conversion, goals minus xG, and xG against minus goals against.
+- **Streaks and results:** current and longest streaks, biggest results.
+- **Players:** goals, assists, per 90 (minutes from the save where the log has none), minutes per goal involvement and share of the team's goals.
+- **Also:** penalties, headers, braces and hat-tricks, man of the match, best scorer-assister partnerships, and an injury list with return dates.
+
 ## Running from source
 
 ```bash
@@ -135,6 +165,8 @@ npm run dist:win   # build the Windows installer + portable exe into dist/
 ```
 
 Set `M26_TEST_FILE=<path to a CAREER file>` to run the franchise-file test against your own save.
+
+FC 26 saves are read with this project's own reader for EA's T3DB database format, following the layout in the MIT-licensed [fc26-mcp](https://pypi.org/project/fc26-mcp/) parser and using its copy of EA's FC 26 table definitions.
 
 Franchise file reading and writing uses the open-source [madden-franchise](https://github.com/bep713/madden-franchise) library (the same engine behind the Madden Franchise Editor). Schemas for Madden 26 are bundled; if a future title update changes the save format, point Settings → schema folder at a newer schema.
 
@@ -152,7 +184,9 @@ src/core/teams.js     everything about one team
 src/core/franchise/schedule.js  planning schedule changes
 src/core/injuries/    per-game injury report and the injury ledger
 src/core/tracker/     Game Tracker events and overrides
-ui/              the app's pages
+src/core/fc26/        FC 26: save reader (t3db.js), career model, stats, Match Log, save finder
+ui/              the app's pages (fc26.js is the FC 26 side)
 schemas/         extra Madden 26 franchise schemas
+fc26-data/       EA's FC 26 table definitions (via fc26-mcp, MIT) and the player name list
 tests/           node --test suite
 ```

@@ -65,7 +65,7 @@ function createWindow() {
     Menu.buildFromTemplate(items).popup({ window: mainWindow });
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'File', submenu: [{ label: 'Open Franchise File…', accelerator: 'CmdOrCtrl+O', click: () => mainWindow.webContents.send('menu:open-file') }, { type: 'separator' }, { role: 'quit' }] },
+    { label: 'File', submenu: [{ label: 'Open File…', accelerator: 'CmdOrCtrl+O', click: () => mainWindow.webContents.send('menu:open-file') }, { type: 'separator' }, { role: 'quit' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { label: 'Help', submenu: [{ label: 'Show data folder', click: () => shell.openPath(process.env.M26FC_DATA_DIR) }] },
@@ -78,6 +78,22 @@ ipcMain.handle('pick-franchise-file', async () => {
     defaultPath: await maddenSettingsDir(),
     properties: ['openFile'],
     filters: [{ name: 'Madden franchise files', extensions: ['*'] }],
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+ipcMain.handle('pick-fc-file', async () => {
+  let defaultPath = path.join(os.homedir(), 'Documents');
+  try {
+    const { fcSettingsDirs } = await import('../src/core/fc26/locate.js');
+    const found = fcSettingsDirs();
+    if (found.length) defaultPath = found[0];
+  } catch { /* plain guess */ }
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Open an FC 26 career save',
+    defaultPath: fs.existsSync(defaultPath) ? defaultPath : os.homedir(),
+    properties: ['openFile'],
+    filters: [{ name: 'FC 26 saves', extensions: ['*'] }],
   });
   if (result.canceled || !result.filePaths.length) return null;
   return result.filePaths[0];

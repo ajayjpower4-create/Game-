@@ -31,7 +31,7 @@
 
   // ---------- UI settings (saved in the data folder, applied live)
   const UI_DEFAULTS = { theme: 'dark', accent: 'blue', textSize: 'normal', density: 'comfortable', sourceTags: true, startPage: 'connect', defaultStage: 'auto', copyFormat: 'aligned', moneyFormat: 'short', myTeams: {}, myTeamFilter: false, stickyHeaders: true, reduceMotion: false,
-    gameTab: 'highlights', leaderLength: 8, hiddenPages: [], autoReload: false, autoReloadSec: 30, confirmWrites: true };
+    gameTab: 'highlights', leaderLength: 8, hiddenPages: [], autoReload: false, autoReloadSec: 30, confirmWrites: true, game: 'madden' };
   const PAGES = [['schedule', 'Schedule & Injury Tool'], ['teams', 'Teams'], ['recap', 'Weekly Recap'], ['highlights', 'Highlights'], ['contracts', 'Contracts & Cap'], ['blocking', 'Blocking'], ['passrush', 'Pass Rush & Missed Sacks'], ['snaps', 'Snap Counts'], ['receiving', 'Targets & Drops'], ['tackling', 'Missed Tackles'], ['penalties', 'Penalties'], ['tracker', 'Game Tracker'], ['injuries', 'Injury Report']];
   // Writes to the franchise file ask first unless that is switched off.
   const confirmWrite = (msg) => (ui.confirmWrites === false ? true : confirm(msg));
@@ -47,6 +47,12 @@
     root.classList.toggle('reduce-motion', Boolean(ui.reduceMotion));
     root.style.setProperty('--accent2', ACCENTS[ui.accent] || ACCENTS.blue);
     document.body.style.zoom = String(TEXT_ZOOM[ui.textSize] || 1);
+    const fc = ui.game === 'fc26';
+    root.dataset.game = fc ? 'fc26' : 'madden';
+    $('#brand-title').textContent = fc ? 'FC 26' : 'Madden 26';
+    $('#brand-sub').textContent = fc ? 'Career Control' : 'Franchise Control';
+    $('#btn-open-file').textContent = fc ? 'Open career save' : 'Open franchise file';
+    $$('[data-game]').forEach((b) => b.classList.toggle('active', (b.dataset.game === 'fc26') === fc));
     const hidden = new Set(ui.hiddenPages || []);
     $$('#nav button').forEach((b) => b.classList.toggle('hidden', hidden.has(b.dataset.section)));
     $$('#nav .nav-group').forEach((g) => {
@@ -1642,7 +1648,23 @@
   };
 
   // ---------- render / events
+  const isFc = () => ui.game === 'fc26' && window.FC26;
+  async function renderFc() {
+    const nav = window.FC26.navSection();
+    $$('#fc-nav button').forEach((b) => b.classList.toggle('active', b.dataset.fcNav === nav));
+    const content = $('#content');
+    content.innerHTML = '<div class="muted">Loading…</div>';
+    try {
+      content.innerHTML = window.FC26.section() === 'settings' ? window.FC26.settingsCard() + await sections.settings() : await window.FC26.html();
+    } catch (e) {
+      content.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    }
+    bind();
+    window.FC26.bind(content);
+  }
+
   async function render() {
+    if (isFc()) return renderFc();
     $$('#nav button').forEach((b) => b.classList.toggle('active', b.dataset.section === state.section || (state.section === 'game' && b.dataset.section === (['highlights', 'recap', 'teams'].includes(state.backTo) ? state.backTo : 'schedule'))));
     const showFilters = !['connect', 'settings', 'game', 'recap', 'teams'].includes(state.section);
     $('#stage-field').classList.toggle('hidden', !showFilters || state.section === 'contracts');
@@ -1776,6 +1798,7 @@
   }
 
   async function openFile() {
+    if (isFc()) return window.FC26.pickFile();
     if (window.m26) { const p = await window.m26.pickFranchiseFile(); if (p) await openPath(p); }
     else { state.section = 'connect'; render(); banner('Paste the full path to your CAREER file in the box on the Connect page.', ''); }
   }
@@ -1819,12 +1842,20 @@
 
   $('#btn-open-file').onclick = openFile;
   $('#btn-copy-page').onclick = async (e) => { const btn = e.currentTarget; copied(btn, await copyText(nodeToText($('#content')))); };
-  $('#btn-refresh').onclick = async () => { banner('Refreshing…'); try { if (state.status.franchiseOpen && state.league && state.league.source === 'franchise') await api('/franchise/refresh', { method: 'POST' }); await loadStatus(); await loadLeague(); banner(''); } catch (e) { if (e.details) fileErrorBanner('Could not reload the file', e, state.league && state.league.filePath); else banner(esc(e.message), 'error'); } };
+  $('#btn-refresh').onclick = async () => { if (isFc()) return window.FC26.refresh(); banner('Refreshing…'); try { if (state.status.franchiseOpen && state.league && state.league.source === 'franchise') await api('/franchise/refresh', { method: 'POST' }); await loadStatus(); await loadLeague(); banner(''); } catch (e) { if (e.details) fileErrorBanner('Could not reload the file', e, state.league && state.league.filePath); else banner(esc(e.message), 'error'); } };
   $('#league-select').onchange = async (e) => { state.leagueKey = e.target.value; state.gameId = null; await loadLeague(); };
   $('#stage-select').onchange = (e) => { state.stage = e.target.value; state.week = ''; fillWeeks(); render(); };
   $('#week-select').onchange = (e) => { state.week = e.target.value; render(); };
   $('#team-select').onchange = (e) => { state.teamId = e.target.value; render(); };
   $$('#nav button').forEach((b) => (b.onclick = () => { state.section = b.dataset.section; render(); }));
+  $$('#fc-nav button').forEach((b) => (b.onclick = () => { window.FC26.setSection(b.dataset.fcNav); render(); }));
+  $('#fc-career-select').onchange = (e) => { window.FC26.setCareer(e.target.value); render(); };
+  $$('[data-game]').forEach((b) => (b.onclick = async () => {
+    await saveUi({ game: b.dataset.game });
+    banner('');
+    if (isFc()) await window.FC26.loadStatus();
+    render();
+  }));
   if (window.m26 && window.m26.onMenuOpenFile) window.m26.onMenuOpenFile(openFile);
 
   // Reload the franchise file by itself when Madden saves it (setting).
@@ -1857,11 +1888,16 @@
   }
 
   // Poll for new exports while on the Connect page.
-  setInterval(async () => { if (state.section !== 'connect') return; try { const before = JSON.stringify(state.status.leagues); await loadStatus(); if (JSON.stringify(state.status.leagues) !== before) { if (!state.leagueKey) state.leagueKey = state.status.leagues[0] && state.status.leagues[0].leagueKey; await loadLeague(); } } catch {} }, 8000);
+  setInterval(async () => { if (isFc() || state.section !== 'connect') return; try { const before = JSON.stringify(state.status.leagues); await loadStatus(); if (JSON.stringify(state.status.leagues) !== before) { if (!state.leagueKey) state.leagueKey = state.status.leagues[0] && state.status.leagues[0].leagueKey; await loadLeague(); } } catch {} }, 8000);
 
+  if (window.FC26) window.FC26.init({ api, banner, render, table, copyText, copied, nodeToText });
   (async () => {
     try {
       await loadStatus();
+      if (isFc()) {
+        await window.FC26.loadStatus().catch(() => {});
+        if ((document.getElementById('fc-career-select') || {}).value) window.FC26.setSection('overview'); else window.FC26.setSection('connect');
+      }
       if (ui.startPage && sections[ui.startPage] && state.status.leagues.length && !(ui.hiddenPages || []).includes(ui.startPage)) state.section = ui.startPage;
       startAutoReload();
       await loadLeague();

@@ -25,6 +25,7 @@ import { addEvent, removeEvent, EVENT_TYPES } from '../core/tracker/tracker.js';
 import { BUNDLED_SCHEMA_DIR } from '../core/franchise/reader.js';
 import { findFranchiseFiles } from '../core/franchise/locate.js';
 import { describeSaveCheck } from '../core/franchise/savefile.js';
+import { fcRoutes } from './fc26-routes.js';
 import { positionRank, group as positionGroup, GROUP_LABEL, GROUP_ORDER } from '../core/positions.js';
 import { hashString } from '../core/rng.js';
 import { EAAccountService } from '../core/ea/account.js';
@@ -103,6 +104,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
 
   const api = express.Router();
   api.use(express.json({ limit: '2mb' }));
+  app.locals.fc = fcRoutes(api, { store, dataDir: store.dataDir, log });
 
   // ---- status / leagues
   api.get('/status', (req, res) => {

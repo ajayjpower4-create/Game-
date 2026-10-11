@@ -38,7 +38,7 @@ const mb = (n) => `${(n / 1048576).toFixed(2)} MB`;
 function readErrorMessage(e, filePath) {
   const name = path.basename(filePath);
   if (e.code === 'ENOENT') return `${name} is not there any more. Madden may have renamed or replaced it; pick it again from the list.`;
-  if (e.code === 'EBUSY') return `Windows says ${name} is in use. Madden is probably still saving it. Wait a few seconds and open it again.`;
+  if (e.code === 'EBUSY') return `Windows says ${name} is in use. the game is probably still saving it. Wait a few seconds and open it again.`;
   if (e.code === 'EACCES' || e.code === 'EPERM') return `Windows would not let this app read ${name}. If it is in OneDrive, right-click it and choose "Always keep on this device", then try again.`;
   // Windows reports cloud-file failures (OneDrive not running, file not
   // downloaded) with codes Node does not name.
