@@ -6,6 +6,13 @@ import path from 'node:path';
 import { openFranchise, readLeague, tableByUniqueIdOrName, readFields, TABLE_IDS, PLAYER_READ_FIELDS } from './reader.js';
 import { planInjury, applyPlanToRecord, healFields } from './injuries.js';
 import { hashString } from '../rng.js';
+import { SaveFileError } from './savefile.js';
+import { packChecked, writeChecked, maddenRunning, WriteRefused } from './safewrite.js';
+
+// Where an error came from, for the "copy details" text.
+function whereFrom(e) {
+  return String((e && e.stack) || '').split('\n').slice(1, 5).map((l) => l.trim().replace(/^at /, '').replace(/\(.*[\\/](node_modules[\\/])?/, '(')).join(' < ');
+}
 
 export class FranchiseService {
   constructor({ schemaDirectory, backupDir } = {}) {
@@ -14,6 +21,7 @@ export class FranchiseService {
     this.filePath = null;
     this.league = null;
     this.openedAt = null;
+    this.maddenCheck = maddenRunning;
   }
 
   get isOpen() {
@@ -32,11 +40,24 @@ export class FranchiseService {
       // eslint-disable-next-line no-console
       console.warn(`Opened a Madden ${franchise.gameYear} file; tool is built for Madden 26.`);
     }
-    const league = await readLeague(franchise, { leagueId: this.leagueIdFor(filePath), sourceName: path.basename(filePath) });
+    const check = franchise.saveCheck || {};
+    const schema = franchise.schemaList && franchise.schemaList.meta ? { ...franchise.schemaList.meta } : null;
+    check.schemaUsed = schema ? `${schema.major}_${schema.minor}` : null;
+    let league;
+    try {
+      league = await readLeague(franchise, { leagueId: this.leagueIdFor(filePath), sourceName: path.basename(filePath) });
+    } catch (e) {
+      throw new SaveFileError(`${path.basename(filePath)} opened, but reading the league out of it failed: ${e.message}`, { code: 'READ_LEAGUE', details: { ...check, parseError: e.message, where: whereFrom(e) } });
+    }
     league.filePath = filePath;
     league.gameYear = franchise.gameYear;
-    league.schema = franchise.schemaList && franchise.schemaList.meta ? { ...franchise.schemaList.meta } : null;
-    league.fileCheck = franchise.saveCheck || null;
+    league.schema = schema;
+    league.fileCheck = check;
+    // Writing is only safe with the exact layout this save uses.
+    league.writeBlocked = schema && check.schemaMajor != null && schema.major !== check.schemaMajor
+      ? `This save uses Madden layout ${check.schemaMajor}_${check.schemaMinor}, and the tool only has ${schema.major}_${schema.minor}. Reading works, but changing the file is switched off so it cannot be damaged.`
+      : null;
+    if (league.writeBlocked) league.warnings = [...(league.warnings || []), league.writeBlocked];
     if (league.fileCheck && league.fileCheck.repaired) {
       league.warnings = [...(league.warnings || []), `The franchise data in this save was not closed off properly, so the tool recovered it. All ${league.fileCheck.tableCount} tables are there. If you use the injury tool or change the schedule, the tool writes a clean copy, and backs up the original first.`];
     }
@@ -56,6 +77,19 @@ export class FranchiseService {
     this.league = null;
   }
 
+  // Checks before any write: Madden closed, a layout the tool knows exactly.
+  assertCanWrite() {
+    if (!this.isOpen) throw new Error('No franchise file is open');
+    if (this.league.writeBlocked) throw new WriteRefused(this.league.writeBlocked, 'LAYOUT');
+    if (this.maddenCheck()) throw new WriteRefused('Madden is running. Close Madden completely, then try again. Changing a franchise while Madden is open can make Madden overwrite the change or clash with it.', 'MADDEN_RUNNING');
+  }
+
+  // Write a changed franchise: checked, temp file, read back, swapped in.
+  commit(franchise, allowedTables) {
+    const { file, unpacked } = packChecked(franchise, allowedTables);
+    writeChecked(this.filePath, file, unpacked);
+  }
+
   backup() {
     const dir = this.backupDir || path.join(path.dirname(this.filePath), 'franchise-control-backups');
     fs.mkdirSync(dir, { recursive: true });
@@ -69,7 +103,7 @@ export class FranchiseService {
   // Apply a planned injury to the open file. `expectedName` guards against
   // writing to the wrong row if the file changed on disk since it was read.
   async applyInjury({ playerId, gameId, injuryKey, weeks, side, placeOnIR, salt }) {
-    if (!this.isOpen) throw new Error('No franchise file is open');
+    this.assertCanWrite();
     const player = this.league.players[playerId];
     if (!player) throw new Error(`Unknown player ${playerId}`);
     const game = gameId ? this.league.games[gameId] : null;
@@ -96,7 +130,7 @@ export class FranchiseService {
       throw new Error('The franchise file changed since it was opened. Re-open it and try again.');
     }
     const written = applyPlanToRecord(record, plan);
-    await franchise.save();
+    this.commit(franchise, [playerT]);
     await this.refresh();
     return { plan, written, backupPath };
   }
@@ -106,7 +140,7 @@ export class FranchiseService {
   // file is re-read afterwards to confirm the new matchups, and the backup is
   // put back if they do not match.
   async applyScheduleChange(plan) {
-    if (!this.isOpen) throw new Error('No franchise file is open');
+    this.assertCanWrite();
     const backupPath = this.backup();
     const franchise = await openFranchise(this.filePath, { schemaDirectory: this.schemaDirectory });
     const gameT = tableByUniqueIdOrName(franchise, TABLE_IDS.SeasonGame, 'SeasonGame');
@@ -133,7 +167,7 @@ export class FranchiseService {
       rec.HomeTeam = teamT.getBinaryReferenceToRecord(rowOf(c.after.home));
       rec.AwayTeam = teamT.getBinaryReferenceToRecord(rowOf(c.after.away));
     }
-    await franchise.save();
+    this.commit(franchise, [gameT]);
     await this.refresh();
     const wrong = plan.changes.filter((c) => {
       const g = this.league.games[c.gameId];
@@ -150,9 +184,14 @@ export class FranchiseService {
   // Backups of the open file, newest first.
   listBackups() {
     if (!this.filePath) return [];
-    const dir = this.backupDir || path.join(path.dirname(this.filePath), 'franchise-control-backups');
+    return this.backupsFor(this.filePath);
+  }
+
+  // Backups the tool made of any save, open or not, newest first.
+  backupsFor(filePath) {
+    const dir = this.backupDir || path.join(path.dirname(filePath), 'franchise-control-backups');
     if (!fs.existsSync(dir)) return [];
-    const base = path.basename(this.filePath);
+    const base = path.basename(filePath);
     return fs.readdirSync(dir)
       .filter((f) => f.startsWith(`${base}.`) && f.endsWith('.bak'))
       .map((f) => { const st = fs.statSync(path.join(dir, f)); return { file: f, path: path.join(dir, f), size: st.size, modified: st.mtime.toISOString() }; })
@@ -168,9 +207,27 @@ export class FranchiseService {
     return removed;
   }
 
+  // Put a backup back over a save that will not open. The save as it is now
+  // is kept next to the backups first, so nothing is lost.
+  async restoreFileBackup(filePath, file) {
+    if (this.maddenCheck()) throw new WriteRefused('Madden is running. Close Madden completely, then restore the backup.', 'MADDEN_RUNNING');
+    const b = this.backupsFor(filePath).find((x) => x.file === file);
+    if (!b) throw new Error('That backup is not in the backup folder.');
+    const dir = path.dirname(b.path);
+    const kept = path.join(dir, `${path.basename(filePath)}.${new Date().toISOString().replace(/[:.]/g, '-')}.before-restore`);
+    if (fs.existsSync(filePath)) fs.copyFileSync(filePath, kept);
+    const temp = path.join(path.dirname(filePath), `.${path.basename(filePath)}.franchise-control-tmp`);
+    fs.copyFileSync(b.path, temp);
+    if (!fs.readFileSync(temp).equals(fs.readFileSync(b.path))) { fs.unlinkSync(temp); throw new Error('The backup did not copy cleanly; nothing was changed.'); }
+    fs.renameSync(temp, filePath);
+    const league = await this.open(filePath);
+    return { restored: b, kept, league };
+  }
+
   // Put a backup back in place of the open file (backing up the current one first).
   async restoreBackup(file) {
     if (!this.isOpen) throw new Error('No franchise file is open');
+    if (this.maddenCheck()) throw new WriteRefused('Madden is running. Close Madden completely, then restore the backup.', 'MADDEN_RUNNING');
     const b = this.listBackups().find((x) => x.file === file);
     if (!b) throw new Error('That backup is not in the backup folder.');
     const safety = this.backup();
@@ -186,7 +243,7 @@ export class FranchiseService {
   }
 
   async heal(playerId) {
-    if (!this.isOpen) throw new Error('No franchise file is open');
+    this.assertCanWrite();
     const player = this.league.players[playerId];
     if (!player) throw new Error(`Unknown player ${playerId}`);
     const backupPath = this.backup();
@@ -198,7 +255,7 @@ export class FranchiseService {
     const fields = healFields();
     const written = {};
     for (const [k, v] of Object.entries(fields)) if (k in record.fields) { record[k] = v; written[k] = record[k]; }
-    await franchise.save();
+    this.commit(franchise, [playerT]);
     await this.refresh();
     return { written, backupPath };
   }

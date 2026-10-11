@@ -1788,18 +1788,38 @@
       banner(`Opened ${esc(r.summary.name)}: ${r.summary.counts.teams} teams, ${r.summary.counts.players} players, ${r.summary.counts.played} games played.`, 'ok');
       await loadStatus();
       await loadLeague();
-    } catch (e) { fileErrorBanner('Could not open the file', e); }
+    } catch (e) { fileErrorBanner('Could not open the file', e, filePath); }
   }
-  // A file error with the checked details and a button to copy them.
-  function fileErrorBanner(title, e) {
-    banner(`<b>${esc(title)}.</b> ${esc(e.message)}${e.details ? `<details class="file-details"><summary>File details</summary><pre class="mono">${esc(e.details)}</pre><button class="small" id="btn-copy-file-details">Copy details</button></details>` : ''}`, 'error');
+  // A file error with the checked details, a button to copy them, and the
+  // tool's backups of that file if it has any.
+  async function fileErrorBanner(title, e, filePath = null) {
+    const details = e.details || `Error: ${e.message}`;
+    banner(`<b>${esc(title)}.</b> ${esc(e.message)}<details class="file-details"><summary>File details</summary><pre class="mono">${esc(details)}</pre><button class="small" id="btn-copy-file-details">Copy details</button></details><div id="file-backups"></div>`, 'error');
     const b = $('#btn-copy-file-details');
-    if (b) b.onclick = async () => copied(b, await copyText(`${title}: ${e.message}\n\n${e.details}`));
+    if (b) b.onclick = async () => copied(b, await copyText(`${title}: ${e.message}\n\n${details}`));
+    if (!filePath) return;
+    let list = [];
+    try { list = (await api(`/franchise/file-backups?path=${encodeURIComponent(filePath)}`)).backups || []; } catch { list = []; }
+    const box = $('#file-backups');
+    if (!box || !list.length) return;
+    box.innerHTML = `<div class="file-details"><b>Backups the tool made of this file</b> (one is saved before every injury, heal or schedule change):<ul class="list">${list.slice(0, 8).map((x) => `<li><span>${esc(new Date(x.modified).toLocaleString())} <span class="muted">· ${(x.size / 1048576).toFixed(2)} MB</span></span><button class="small" data-restore-file="${esc(x.file)}" data-when="${esc(new Date(x.modified).toLocaleString())}">Restore this one</button></li>`).join('')}</ul><div class="small-note">Restoring puts that copy back. Anything played in Madden after that time is lost from this file. The file as it is now is kept next to the backups (ending in .before-restore), so you can go back. Close Madden first.</div></div>`;
+    $$('[data-restore-file]').forEach((btn) => (btn.onclick = async () => {
+      const when = btn.dataset.when;
+      if (!confirm(`Put back the backup from ${when}?\n\nAnything played after that is lost from this file. The current file is kept as a .before-restore copy.`)) return;
+      btn.disabled = true;
+      try {
+        const r = await api('/franchise/file-backups/restore', { method: 'POST', body: { filePath, file: btn.dataset.restoreFile } });
+        state.leagueKey = r.leagueKey;
+        banner(`Restored the backup from ${esc(when)} and opened it: ${r.summary.counts.teams} teams, ${r.summary.counts.played} games played. The file as it was is kept as ${esc(r.kept.split(/[\\/]/).pop())}.`, 'ok');
+        await loadStatus();
+        await loadLeague();
+      } catch (err) { btn.disabled = false; fileErrorBanner('Could not restore that backup', err); }
+    }));
   }
 
   $('#btn-open-file').onclick = openFile;
   $('#btn-copy-page').onclick = async (e) => { const btn = e.currentTarget; copied(btn, await copyText(nodeToText($('#content')))); };
-  $('#btn-refresh').onclick = async () => { banner('Refreshing…'); try { if (state.status.franchiseOpen && state.league && state.league.source === 'franchise') await api('/franchise/refresh', { method: 'POST' }); await loadStatus(); await loadLeague(); banner(''); } catch (e) { if (e.details) fileErrorBanner('Could not reload the file', e); else banner(esc(e.message), 'error'); } };
+  $('#btn-refresh').onclick = async () => { banner('Refreshing…'); try { if (state.status.franchiseOpen && state.league && state.league.source === 'franchise') await api('/franchise/refresh', { method: 'POST' }); await loadStatus(); await loadLeague(); banner(''); } catch (e) { if (e.details) fileErrorBanner('Could not reload the file', e, state.league && state.league.filePath); else banner(esc(e.message), 'error'); } };
   $('#league-select').onchange = async (e) => { state.leagueKey = e.target.value; state.gameId = null; await loadLeague(); };
   $('#stage-select').onchange = (e) => { state.stage = e.target.value; state.week = ''; fillWeeks(); render(); };
   $('#week-select').onchange = (e) => { state.week = e.target.value; render(); };

@@ -338,6 +338,27 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
       res.json({ ok: true, ...r });
     } catch (e) { res.status(400).json({ ok: false, error: e.message }); }
   });
+  // Backups of a save that will not open, and putting one back.
+  api.get('/franchise/file-backups', (req, res) => {
+    const filePath = String(req.query.path || '');
+    if (!filePath) return res.status(400).json({ ok: false, error: 'path is required' });
+    res.json({ ok: true, backups: franchise.backupsFor(filePath) });
+  });
+  api.post('/franchise/file-backups/restore', async (req, res) => {
+    const { filePath, file } = req.body || {};
+    if (!filePath || !file) return res.status(400).json({ ok: false, error: 'filePath and file are required' });
+    try {
+      const r = await franchise.restoreFileBackup(filePath, file);
+      const league = r.league;
+      trackInjuries(league.leagueId, league);
+      engine.clear();
+      store.setMeta(league.leagueId, { name: league.name, source: 'franchise', filePath });
+      res.json({ ok: true, leagueKey: league.leagueId, summary: summarizeLeague(league), restored: r.restored, kept: r.kept });
+    } catch (e) {
+      log('restore failed', e);
+      res.status(400).json({ ok: false, error: e.message, code: e.code || null, details: e.details ? describeSaveCheck(e.details) : null });
+    }
+  });
   api.delete('/leagues/:leagueKey/injury-ledger', (req, res) => { store.clearInjuryLedger(req.params.leagueKey); engine.clear(); res.json({ ok: true }); });
   api.delete('/leagues/:leagueKey/tracker', (req, res) => { store.saveTracker(req.params.leagueKey, { events: [] }); engine.clear(); res.json({ ok: true }); });
   api.get('/leagues/:leagueKey/export', (req, res) => {
@@ -602,6 +623,7 @@ export function summarizeLeague(league) {
     counts: { players: Object.keys(league.players).length, games: games.length, played: games.filter((g) => g.status === 'played').length, teams: Object.keys(league.teams).length },
     weeks: [...new Set(games.map((g) => `${g.stage}:${g.week}:${g.weekType}`))].map((k) => { const [stage, week, weekType] = k.split(':'); return { stage, week: Number(week), weekType, label: (games.find((g) => g.stage === stage && g.week === Number(week)) || {}).label }; }).sort((a, b) => ({ pre: 0, reg: 1, post: 2 }[a.stage] - { pre: 0, reg: 1, post: 2 }[b.stage]) || a.week - b.week),
     warnings: league.warnings || [],
+    writeBlocked: league.writeBlocked || null,
     filePath: league.filePath || null,
     schema: league.schema || null,
     exportInfo: league.exportInfo || null,

@@ -12,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { prepareSave, SaveFileError } from './savefile.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -132,6 +133,17 @@ export async function loadFranchiseLibrary() {
   return mod.default || mod.FranchiseFile || mod;
 }
 
+let libVersion = null;
+function libraryVersion() {
+  if (libVersion) return libVersion;
+  try {
+    libVersion = `madden-franchise ${createRequire(import.meta.url)('madden-franchise/package.json').version}`;
+  } catch {
+    libVersion = 'madden-franchise';
+  }
+  return libVersion;
+}
+
 // Opens a save after checking it (savefile.js). The library reads the file
 // itself, so it is handed the exact bytes that were checked.
 export async function openFranchise(filePath, { schemaDirectory } = {}) {
@@ -164,7 +176,7 @@ export async function openFranchise(filePath, { schemaDirectory } = {}) {
   info.tablesRead = franchise.tables ? franchise.tables.length : null;
   // A recovered file is only trusted when every table is there.
   if (prepared.repaired && info.tableCount != null && info.tablesRead !== info.tableCount) throw prepared.damagedError();
-  franchise.saveCheck = { ...info, repaired: prepared.repaired };
+  franchise.saveCheck = { ...info, repaired: prepared.repaired, library: libraryVersion() };
   return franchise;
 }
 

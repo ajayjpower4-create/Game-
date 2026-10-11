@@ -102,6 +102,8 @@ export function inspectSave(buf, size = buf.length) {
       info.year = 19;
       info.game = 'Madden';
     }
+    info.schemaMajor = buf.readUInt32LE(0x3e);
+    info.schemaMinor = buf.readUInt32LE(0x42);
     info.compressedLength = buf.readUIntLE(LENGTH_OFFSET, 3);
     info.compressedEnd = DATA_OFFSET + info.compressedLength;
     info.zlibHeader = buf.length > DATA_OFFSET ? buf[DATA_OFFSET] === 0x78 : null;
@@ -203,6 +205,9 @@ export function describeSaveCheck(info) {
     info.modified ? `Saved: ${info.modified}` : null,
     info.container ? `Container: ${info.container}` : null,
     info.label ? `Made by: ${info.label}` : null,
+    info.schemaMajor != null ? `Save layout: ${info.schemaMajor}_${info.schemaMinor}` : null,
+    info.schemaUsed ? `Layout the tool used: ${info.schemaUsed}` : null,
+    info.library ? `File library: ${info.library}` : null,
     info.compressedLength != null ? `Compressed data: ${info.compressedLength} bytes (ends at ${info.compressedEnd}, file has ${info.size})` : null,
     info.zlibHeader != null ? `Data header found: ${info.zlibHeader ? 'yes' : 'no'}` : null,
     info.inflateError ? `Unpack error: ${info.inflateError}` : null,
@@ -212,6 +217,7 @@ export function describeSaveCheck(info) {
     info.tableCount != null ? `Tables in header: ${info.tableCount}` : null,
     info.tablesRead != null ? `Tables read: ${info.tablesRead}` : null,
     info.parseError ? `Parse error: ${info.parseError}` : null,
+    info.where ? `Where: ${info.where}` : null,
     info.readError ? `Read error: ${info.readError}` : null,
     info.unstable ? 'The file kept changing while it was read.' : null,
     info.attempts > 1 ? `Read attempts: ${info.attempts}` : null,
