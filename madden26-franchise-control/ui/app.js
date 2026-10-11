@@ -70,6 +70,8 @@
     if (!res.ok || body.ok === false) {
       const err = new Error(body.error || `HTTP ${res.status}`);
       if (body.help) err.help = body.help;
+      if (body.details) err.details = body.details;
+      if (body.code) err.code = body.code;
       throw err;
     }
     return body;
@@ -233,7 +235,7 @@
     let found = { files: [], searched: [] };
     try { found = await api('/franchise/detect'); } catch { /* listed as none */ }
     const list = found.files.length
-      ? `<ul class="list">${found.files.map((f) => `<li><span><b>${esc(f.league)}</b> <span class="muted">· Madden ${f.year || '?'} · saved ${esc(new Date(f.modified).toLocaleString())}</span><br><span class="small-note mono">${esc(f.path)}</span></span><button class="small blue" data-open-recent="${esc(f.path)}">Open</button></li>`).join('')}</ul>`
+      ? `<ul class="list">${found.files.map((f) => `<li><span><b>${esc(f.league)}</b> <span class="muted">· ${esc(f.game || 'Madden')}${f.year ? ` ${f.year}` : ''} · saved ${esc(new Date(f.modified).toLocaleString())}</span>${f.cutShort ? ' <span class="pill loss" title="The file on disk is shorter than its own header says. Madden or OneDrive may still be writing it.">incomplete on disk</span>' : ''}<br><span class="small-note mono">${esc(f.path)}</span></span><button class="small blue" data-open-recent="${esc(f.path)}">Open</button></li>`).join('')}</ul>`
       : `<p class="small-note">No franchise files found on this PC. Looked in: ${found.searched.length ? found.searched.map((d) => `<span class="mono">${esc(d)}</span>`).join(', ') : 'nowhere, no Madden folder exists here'}.</p>`;
     return `<div class="card">
       <h3>Franchise file on this PC (unlocks the injury tool)</h3>
@@ -1786,12 +1788,18 @@
       banner(`Opened ${esc(r.summary.name)}: ${r.summary.counts.teams} teams, ${r.summary.counts.players} players, ${r.summary.counts.played} games played.`, 'ok');
       await loadStatus();
       await loadLeague();
-    } catch (e) { banner(`Could not open the file: ${esc(e.message)}`, 'error'); }
+    } catch (e) { fileErrorBanner('Could not open the file', e); }
+  }
+  // A file error with the checked details and a button to copy them.
+  function fileErrorBanner(title, e) {
+    banner(`<b>${esc(title)}.</b> ${esc(e.message)}${e.details ? `<details class="file-details"><summary>File details</summary><pre class="mono">${esc(e.details)}</pre><button class="small" id="btn-copy-file-details">Copy details</button></details>` : ''}`, 'error');
+    const b = $('#btn-copy-file-details');
+    if (b) b.onclick = async () => copied(b, await copyText(`${title}: ${e.message}\n\n${e.details}`));
   }
 
   $('#btn-open-file').onclick = openFile;
   $('#btn-copy-page').onclick = async (e) => { const btn = e.currentTarget; copied(btn, await copyText(nodeToText($('#content')))); };
-  $('#btn-refresh').onclick = async () => { banner('Refreshing…'); try { if (state.status.franchiseOpen && state.league && state.league.source === 'franchise') await api('/franchise/refresh', { method: 'POST' }); await loadStatus(); await loadLeague(); banner(''); } catch (e) { banner(esc(e.message), 'error'); } };
+  $('#btn-refresh').onclick = async () => { banner('Refreshing…'); try { if (state.status.franchiseOpen && state.league && state.league.source === 'franchise') await api('/franchise/refresh', { method: 'POST' }); await loadStatus(); await loadLeague(); banner(''); } catch (e) { if (e.details) fileErrorBanner('Could not reload the file', e); else banner(esc(e.message), 'error'); } };
   $('#league-select').onchange = async (e) => { state.leagueKey = e.target.value; state.gameId = null; await loadLeague(); };
   $('#stage-select').onchange = (e) => { state.stage = e.target.value; state.week = ''; fillWeeks(); render(); };
   $('#week-select').onchange = (e) => { state.week = e.target.value; render(); };

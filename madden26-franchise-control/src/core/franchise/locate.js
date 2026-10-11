@@ -1,6 +1,7 @@
 // Finds the Madden franchise files already on this PC, so nobody has to go
 // hunting for them. Madden keeps each franchise as a file named CAREER-<league>
-// inside "Documents\Madden NFL <year>\settings".
+// inside "Documents\Madden NFL <year>\saves" (older years and some installs use
+// "settings" instead).
 //
 // The catch on Windows is that "Documents" moves. OneDrive takes it over on
 // most machines now, business accounts put it under "OneDrive - Company", and
@@ -10,6 +11,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { readHeader } from './savefile.js';
 
 export const MADDEN_YEARS = [27, 26, 25];
 const FRANCHISE_NAME = /^CAREER/i;
@@ -33,15 +35,19 @@ export function documentsCandidates(home = os.homedir(), env = process.env) {
   return out;
 }
 
-// Every "Madden NFL <year>\settings" folder that exists on this machine.
+export const SAVE_FOLDERS = ['saves', 'settings'];
+
+// Every "Madden NFL <year>\saves" and "\settings" folder on this machine.
 export function settingsDirs({ home, env, years = MADDEN_YEARS } = {}) {
   const found = [];
   for (const docs of documentsCandidates(home, env)) {
     for (const year of years) {
-      const dir = path.join(docs, `Madden NFL ${year}`, 'settings');
-      try {
-        if (fs.statSync(dir).isDirectory()) found.push({ dir, year });
-      } catch { /* not on this machine */ }
+      for (const folder of SAVE_FOLDERS) {
+        const dir = path.join(docs, `Madden NFL ${year}`, folder);
+        try {
+          if (fs.statSync(dir).isDirectory()) found.push({ dir, year });
+        } catch { /* not on this machine */ }
+      }
     }
   }
   return found;
@@ -52,13 +58,17 @@ function describe(filePath, year) {
   const name = path.basename(filePath);
   // "CAREER-MYLEAGUE" is the league the user named in game.
   const label = name.replace(FRANCHISE_NAME, '').replace(/^[-_\s]+/, '').trim();
+  // The file says which game wrote it; trust that over the folder name.
+  const header = readHeader(filePath);
   return {
     path: filePath,
     name,
     league: label || name,
-    year,
+    year: (header && header.year) || year,
+    game: (header && header.game) || 'Madden',
     size: stat.size,
     modified: stat.mtime.toISOString(),
+    cutShort: header ? header.complete === false : false,
   };
 }
 

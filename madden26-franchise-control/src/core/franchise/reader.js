@@ -9,8 +9,10 @@
 //   - PRESSURES / TARGETS / ROUTESRUN on career offensive rows
 //   - InjuryCache on each game: the injuries the game itself handed out
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { prepareSave, SaveFileError } from './savefile.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const BUNDLED_SCHEMA_DIR = path.resolve(HERE, '../../../schemas');
@@ -130,10 +132,40 @@ export async function loadFranchiseLibrary() {
   return mod.default || mod.FranchiseFile || mod;
 }
 
+// Opens a save after checking it (savefile.js). The library reads the file
+// itself, so it is handed the exact bytes that were checked.
 export async function openFranchise(filePath, { schemaDirectory } = {}) {
   const Franchise = await loadFranchiseLibrary();
   const settings = { schemaDirectory: schemaDirectory || BUNDLED_SCHEMA_DIR, autoUnempty: false };
-  return Franchise.create(filePath, settings);
+  const prepared = prepareSave(filePath);
+  const { info } = prepared;
+  const target = path.resolve(filePath);
+  const realRead = fs.readFileSync;
+  let pending;
+  fs.readFileSync = function readChecked(p, ...rest) {
+    if (!rest.length && typeof p === 'string' && path.resolve(p) === target) return prepared.buffer;
+    return realRead.call(this, p, ...rest);
+  };
+  try {
+    pending = Franchise.create(filePath, settings);
+  } catch (e) {
+    info.parseError = e.message;
+    throw prepared.repaired ? prepared.damagedError() : new SaveFileError(`${info.file} unpacked, but Madden's tables in it could not be read (${e.message}). A Madden update may have changed the save format.`, { code: 'PARSE', details: info });
+  } finally {
+    fs.readFileSync = realRead;
+  }
+  let franchise;
+  try {
+    franchise = await pending;
+  } catch (e) {
+    info.parseError = e.message;
+    throw prepared.repaired ? prepared.damagedError() : new SaveFileError(`${info.file} unpacked, but Madden's tables in it could not be read (${e.message}). A Madden update may have changed the save format.`, { code: 'PARSE', details: info });
+  }
+  info.tablesRead = franchise.tables ? franchise.tables.length : null;
+  // A recovered file is only trusted when every table is there.
+  if (prepared.repaired && info.tableCount != null && info.tablesRead !== info.tableCount) throw prepared.damagedError();
+  franchise.saveCheck = { ...info, repaired: prepared.repaired };
+  return franchise;
 }
 
 // Field names a table can read. The offset table is only built once records

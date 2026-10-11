@@ -36,6 +36,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .banner { margin: 12px 20px 0; padding: 10px 14px; border-radius: 8px; background: #3a2a10; border: 1px solid var(--warn); color: #ffd98a; }
 .banner.error { background: #3a1412; border-color: var(--bad); color: #ffb3ae; }
 .banner.ok { background: #10301f; border-color: var(--good); color: #b6f0d0; }
+.file-details { margin-top: 8px; }
+.file-details pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; margin: 6px 0; padding: 8px; background: rgba(0,0,0,.25); border-radius: 6px; color: inherit; }
 .hidden { display: none !important; }
 .content { padding: 18px 20px 40px; overflow: auto; flex: 1; }
 h1 { font-size: 22px; margin: 0 0 4px; }

@@ -36,6 +36,10 @@ export class FranchiseService {
     league.filePath = filePath;
     league.gameYear = franchise.gameYear;
     league.schema = franchise.schemaList && franchise.schemaList.meta ? { ...franchise.schemaList.meta } : null;
+    league.fileCheck = franchise.saveCheck || null;
+    if (league.fileCheck && league.fileCheck.repaired) {
+      league.warnings = [...(league.warnings || []), `The franchise data in this save was not closed off properly, so the tool recovered it. All ${league.fileCheck.tableCount} tables are there. If you use the injury tool or change the schedule, the tool writes a clean copy, and backs up the original first.`];
+    }
     this.filePath = filePath;
     this.league = league;
     this.openedAt = new Date().toISOString();

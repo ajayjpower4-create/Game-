@@ -24,6 +24,7 @@ import { planInjury } from '../core/franchise/injuries.js';
 import { addEvent, removeEvent, EVENT_TYPES } from '../core/tracker/tracker.js';
 import { BUNDLED_SCHEMA_DIR } from '../core/franchise/reader.js';
 import { findFranchiseFiles } from '../core/franchise/locate.js';
+import { describeSaveCheck } from '../core/franchise/savefile.js';
 import { positionRank, group as positionGroup, GROUP_LABEL, GROUP_ORDER } from '../core/positions.js';
 import { hashString } from '../core/rng.js';
 import { EAAccountService } from '../core/ea/account.js';
@@ -136,7 +137,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
       res.json({ ok: true, leagueKey: league.leagueId, summary: summarizeLeague(league) });
     } catch (e) {
       log('open failed', e);
-      res.status(400).json({ ok: false, error: e.message });
+      res.status(400).json({ ok: false, error: e.message, code: e.code || null, details: e.details ? describeSaveCheck(e.details) : null });
     }
   });
 
@@ -147,7 +148,7 @@ export function createApp({ store, franchise, engine, dataDir, secretBox = null,
       engine.clear();
       res.json({ ok: true, leagueKey: league.leagueId, summary: summarizeLeague(league) });
     } catch (e) {
-      res.status(400).json({ ok: false, error: e.message });
+      res.status(400).json({ ok: false, error: e.message, code: e.code || null, details: e.details ? describeSaveCheck(e.details) : null });
     }
   });
 

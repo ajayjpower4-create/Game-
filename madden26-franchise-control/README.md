@@ -52,7 +52,7 @@ Madden 26 franchises live on EA's servers. There are three ways the tool gets at
 
 > Worth knowing: EA publishes no official API for this, so the tool signs in as the Madden Companion App and reads only your own leagues, the same approach the open-source [Snallabot](https://github.com/snallabot/snallabot-service) Discord bot has used for years. It is unofficial, it is not endorsed by EA, and EA could change how it works at any time. It only ever reads; it never writes anything back to EA's servers. If you would rather not use an unofficial client, the Companion App export below does the same job with EA's own export button.
 
-**PC:** Madden keeps a local copy of each franchise in `Documents\Madden NFL 26\settings` (the file is named `CAREER-<your league name>`). Open it in the tool. EA's cloud sync uploads it again the next time you save in game.
+**PC:** Madden keeps a local copy of each franchise in `Documents\Madden NFL 26\saves` (some installs use `settings`; if Documents is in OneDrive it is under `OneDrive\Documents`). The file is named `CAREER-<your league name>`. Open it in the tool. EA's cloud sync uploads it again the next time you save in game.
 
 **Companion App export:** the **Madden Companion App** on your phone has an **Export** feature that sends the whole league to any address you type in. This program listens for that export too. Same Wi-Fi, type the address the tool shows you on the Connect page, export "All", done.
 
