@@ -285,3 +285,5 @@ body.photo .photo-bar {
   .hud.tl .seg.small { display: none; }
   .topbar .tools .btn { padding: 6px 8px; min-height: 34px; font-size: 13px; }
 }
+.fixedit { border: 1px solid var(--accent-2); border-radius: var(--radius); padding: 10px 12px; margin-top: 10px; background: var(--panel-2); }
+.fixedit h4 { margin: 0 0 8px; font-size: 14px; }

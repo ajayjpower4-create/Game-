@@ -9,7 +9,8 @@
 import * as THREE from 'three';
 import { Builder, cylGeo } from './builder.js';
 import * as M from './materials.js';
-import { rng } from './textures.js';
+import { rng, panelTexture, signTexture, safetyTexture, screenTexture } from './textures.js';
+import { cameraHead, markCones } from './cameras.js';
 import { plant, person } from './nature.js';
 import { vehicleModel } from './vehicles.js';
 import { PROP_BY_ID, BOOTH_BY_ID } from '../catalog.js';
@@ -19,64 +20,6 @@ const DEG = Math.PI / 180;
 /* ------------------------------------------------------------ text panels */
 
 /** A sign face with wrapped lines of text on a coloured ground. */
-function panelTexture({ text = '', sub = '', logo = '', color = '#ffffff', bg = '#1d2c44', aspect = 4, border = true, align = 'center' }) {
-  const W = 1024;
-  const H = Math.max(64, Math.round(W / aspect));
-  const c = document.createElement('canvas');
-  c.width = W;
-  c.height = H;
-  const g = c.getContext('2d');
-  g.fillStyle = bg;
-  g.fillRect(0, 0, W, H);
-  if (border) {
-    g.strokeStyle = 'rgba(255,255,255,.25)';
-    g.lineWidth = Math.max(3, H * 0.02);
-    g.strokeRect(H * 0.05, H * 0.05, W - H * 0.1, H - H * 0.1);
-  }
-  const fam = '"Helvetica Neue", Helvetica, Arial, sans-serif';
-  const words = String(text).split(/\s+/).filter(Boolean);
-  const pad = W * 0.06;
-  const logoW = logo ? H * 0.5 : 0;
-  const maxW = W - pad * 2 - logoW;
-  // Find the biggest font that fits in up to four lines.
-  let size = H * 0.5;
-  let lines = [];
-  for (; size > 12; size *= 0.92) {
-    g.font = `800 ${size}px ${fam}`;
-    lines = [];
-    let cur = '';
-    for (const w of words) {
-      const t = cur ? `${cur} ${w}` : w;
-      if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
-    }
-    if (cur) lines.push(cur);
-    const total = lines.length * size * 1.12 + (sub ? size * 0.7 : 0);
-    if (lines.length <= 4 && total < H * 0.8 && lines.every((l) => g.measureText(l).width <= maxW)) break;
-  }
-  g.fillStyle = color;
-  g.textBaseline = 'middle';
-  g.textAlign = align;
-  const total = lines.length * size * 1.12 + (sub ? size * 0.7 : 0);
-  let y = H / 2 - total / 2 + size * 0.56;
-  const x = align === 'center' ? W / 2 + logoW / 2 : pad + logoW;
-  if (logo) {
-    g.font = `${size * 1.3}px ${fam}`;
-    g.textAlign = 'center';
-    g.fillText(logo, pad + logoW / 2 - (align === 'center' ? 0 : 0), H / 2);
-    g.textAlign = align;
-  }
-  g.font = `800 ${size}px ${fam}`;
-  for (const l of lines) { g.fillText(l, x, y); y += size * 1.12; }
-  if (sub) {
-    g.font = `600 ${size * 0.5}px ${fam}`;
-    g.fillText(sub, x, y + size * 0.05);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 8;
-  return t;
-}
-
 /** Lit panel material: the face glows softly after dark. */
 function panelMat(tex, ctx) {
   const m = M.signFace(tex);
@@ -104,6 +47,107 @@ function lightAt(ctx, x, y, z, { tx = x, tz = z, color = '#ffe2b8', power = 900,
 function shoebox(B, x, y, z, rotY = 0) {
   B.box(M.painted('#3a3f45', 0.45), 2.6, 0.45, 1.6, x, y, z, [0, rotY, 0]);
   B.box(M.lamp('#fff3e0', 9), 2.2, 0.06, 1.2, x, y - 0.25, z, [0, rotY, 0]);
+}
+
+/* --------------------------------------------------------------- cameras */
+
+const DEG2 = Math.PI / 180;
+
+/** A tapered galvanised pole on a concrete base. */
+function camPole(B, h, rTop, rBase) {
+  B.slab(M.concrete('#a8a59d'), Math.max(1.4, rBase * 6), 0.6, Math.max(1.4, rBase * 6), 0, 0, 0);
+  B.add(cylGeo(rTop, rBase, h - 0.6, 12), M.metal('#a9b0b6', 0.35), { pos: [0, 0.6 + (h - 0.6) / 2, 0] });
+}
+
+/** A camera head at `at` on a pole prop, facing `yaw` degrees round from the front. */
+function mountCam(B, ctx, kind, at, yaw, o) {
+  const tmp = new Builder();
+  const { moving } = cameraHead(tmp, kind, {
+    color: o.color || '#f2f3f4', tilt: Math.max(0, Math.min(80, o.tilt ?? 25)), pan: 0,
+    ir: o.ir !== false, cover: !!o.cover, range: Math.max(10, Math.min(300, o.range || 90)), wall: false,
+  });
+  for (const [mat, geos] of tmp.parts) for (const g of geos) B.add(g, mat, { pos: at, rot: [0, yaw * DEG2, 0] });
+  if (moving) {
+    const holder = new THREE.Group();
+    holder.position.set(at[0], at[1], at[2]);
+    holder.rotation.y = yaw * DEG2;
+    holder.add(moving);
+    ctx.extra.push(holder);
+    ctx.moving.push(moving);
+  }
+}
+
+/** A feather flag's print: the words run up the flag, as they do on real ones. */
+function featherTexture(text, color, bg) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 1280;
+  const g = c.getContext('2d');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, 256, 1280);
+  g.fillStyle = 'rgba(255,255,255,.18)';
+  g.fillRect(0, 0, 38, 1280);
+  g.save();
+  g.translate(140, 640);
+  g.rotate(-Math.PI / 2);
+  g.fillStyle = color;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  let size = 150;
+  g.font = `900 ${size}px Helvetica, Arial, sans-serif`;
+  const tw = g.measureText(text).width;
+  if (tw > 1100) { size *= 1100 / tw; g.font = `900 ${size}px Helvetica, Arial, sans-serif`; }
+  g.fillText(text, 0, 0);
+  g.restore();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+/** A "you are here" site map, drawn from a seed so each board is its own. */
+function mapTexture({ title = 'SITE MAP', bg = '#1d2c44', seed = 1 }) {
+  const W = 1024;
+  const H = 680;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  const r = rng(seed);
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#e9edf1';
+  g.fillRect(30, 90, W - 60, H - 120);
+  g.fillStyle = '#9fc58a';
+  g.fillRect(30, 90, W - 60, 40);
+  g.fillStyle = '#b8bec6';
+  g.fillRect(30, H - 110, W - 60, 50);
+  g.fillRect(W * 0.3, 130, 46, H - 240);
+  const names = ['RECEPTION', 'WAREHOUSE', 'GOODS IN', 'OFFICES', 'CANTEEN', 'WORKSHOP'];
+  for (let i = 0; i < 4; i++) {
+    const x = 60 + (i % 2) * (W * 0.42) + (i % 2 ? 90 : 0);
+    const y = 160 + Math.floor(i / 2) * 180;
+    const bw = 220 + r() * 120;
+    g.fillStyle = ['#46b4ff', '#f2c318', '#8fe3c0', '#ff8a65'][i];
+    g.fillRect(x, y, bw, 130);
+    g.fillStyle = '#1d2c44';
+    g.font = '700 26px Helvetica, Arial, sans-serif';
+    g.fillText(names[Math.floor(r() * names.length)], x + 14, y + 72);
+  }
+  g.fillStyle = '#c8102e';
+  g.beginPath();
+  g.arc(W * 0.33, H - 150, 16, 0, Math.PI * 2);
+  g.fill();
+  g.font = '800 24px Helvetica, Arial, sans-serif';
+  g.fillText('YOU ARE HERE', W * 0.33 + 26, H - 142);
+  g.fillStyle = '#ffffff';
+  g.font = '800 54px Helvetica, Arial, sans-serif';
+  g.textAlign = 'center';
+  g.fillText(title, W / 2, 62);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
 }
 
 /* ------------------------------------------------------------- the props */
@@ -334,6 +378,156 @@ const P = {
   flags3(B, o, s, ctx) {
     ['#1f4f9c', '#c0392b', '#1f7a54'].forEach((c, i) => flagpole(B, (i - 1) * 6.5, 0, 34 - Math.abs(i - 1) * 3, ctx, c, i));
   },
+  aframe(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    const lean = Math.atan2(d / 2, h);
+    const L = h / Math.cos(lean);
+    const tex = panelTexture({ text: s.text || 'OPEN', sub: s.sub || '', logo: s.logo || '', color: s.color || '#ffffff', bg: s.bg || '#1d1f22', aspect: (w - 0.5) / (L - 0.7) });
+    const mat = M.printFace(tex, { rough: 0.7 });
+    ctx.disposables.push(tex, mat);
+    for (const side of [1, -1]) {
+      const n = [0, Math.sin(lean), side * Math.cos(lean)];
+      const c = [0, h / 2, side * (d / 4)];
+      B.box(M.wood('#6e5238'), w, L, 0.14, ...c, [-side * lean, 0, 0]);
+      B.add(new THREE.PlaneGeometry(w - 0.5, L - 0.7), mat, { pos: [c[0] + n[0] * 0.08, c[1] + n[1] * 0.08, c[2] + n[2] * 0.08], rot: side > 0 ? [-lean, 0, 0] : [lean, Math.PI, 0] });
+    }
+    B.box(M.metal('#8d949b', 0.4), 0.08, 0.08, d * 0.7, -w / 2 + 0.3, h * 0.35, 0);
+    B.box(M.metal('#8d949b', 0.4), 0.08, 0.08, d * 0.7, w / 2 - 0.3, h * 0.35, 0);
+  },
+  ledboard(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    for (const x of [-w / 2 + 1, w / 2 - 1]) B.post(galv(), 0.3, h - 4, x, 0, 0, 10);
+    B.slab(M.painted('#1b1e22', 0.4), w, 5, d, 0, h - 5, 0);
+    const tex = screenTexture({ text: s.text || 'WELCOME', sub: s.sub || '', color: s.color || '#ffb020', bg: s.bg || '#05070a', aspect: (w - 0.8) / 4.2 });
+    const mat = M.screenFace(tex);
+    ctx.disposables.push(tex, mat);
+    face(B, mat, w - 0.8, 4.2, 0, h - 2.5, d / 2 + 0.02);
+    B.slab(M.concrete('#a8a59d'), w * 0.3, 0.6, 2, -w / 2 + 1, 0, 0);
+    B.slab(M.concrete('#a8a59d'), w * 0.3, 0.6, 2, w / 2 - 1, 0, 0);
+  },
+  totem(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    const bg = s.bg || '#1d2c44';
+    B.slab(M.concrete('#a8a59d'), w + 0.6, 0.5, d + 0.6, 0, 0, 0);
+    B.slab(M.painted(bg, 0.45), w, h - 0.5, d, 0, 0.5, 0);
+    B.slab(M.painted(s.color && s.color !== '#ffffff' ? s.color : '#46b4ff', 0.4), w + 0.05, 0.6, d + 0.05, 0, h - 1.6, 0);
+    const lines = String(s.text || 'RECEPTION').split('/').map((t) => t.trim()).filter(Boolean).slice(0, 5);
+    lines.forEach((t, i) => {
+      const tex = panelTexture({ text: t, color: '#ffffff', bg, aspect: (w - 0.5) / 1.1, border: false });
+      const m = panelMat(tex, ctx);
+      const y = h - 2.6 - i * 1.35;
+      face(B, m, w - 0.5, 1.1, 0, y, d / 2 + 0.02);
+      face(B, m, w - 0.5, 1.1, 0, y, -d / 2 - 0.02, true);
+    });
+  },
+  entrywall(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    B.slab(M.brickMat('#8f5a45'), w, h, d, 0, 0, 0);
+    B.slab(M.concrete('#cfcac0'), w + 0.4, 0.35, d + 0.4, 0, h, 0);
+    for (const x of [-w / 2, w / 2]) B.slab(M.brickMat('#7f4f3c'), 2, h + 0.9, d + 0.5, x, 0, 0);
+    const aspect = (w - 6) / Math.min(2.6, h - 1.4);
+    const tex = signTexture({ text: s.text || 'WELCOME', sub: s.sub || '', logo: s.logo || '', color: s.color || '#e9e4d8', width: 2048, height: Math.max(96, Math.round(2048 / aspect)) });
+    const mat = M.signFace(tex);
+    ctx.disposables.push(tex, mat);
+    face(B, mat, w - 6, Math.min(2.6, h - 1.4), 0, h * 0.55, d / 2 + 0.06);
+    for (const x of [-w / 4, w / 4]) {
+      B.box(M.painted('#2e3338', 0.5), 0.8, 0.4, 0.6, x, 0.2, d / 2 + 2);
+      lightAt(ctx, x, 0.5, d / 2 + 2, { tx: x, tz: d / 2, power: 90, range: 14, angle: 50, pool: 0.25 });
+    }
+    // Low planters in front of the end piers, clear of the lettering.
+    for (const x of [-w / 2 + 1, w / 2 - 1]) {
+      B.slab(M.concrete('#cfcac0'), 2.6, 1.1, 2.2, x, 0, d / 2 + 1.4);
+      B.sphere(M.leaves(1), 1.15, x, 1.7, d / 2 + 1.4, { sy: 0.7, seg: 10 });
+    }
+  },
+  feather(B, o, { h }, ctx) {
+    const s = o.sign || {};
+    B.slab(M.plastic('#1d1f22', 0.7), 2, 0.3, 2, 0, 0, 0);
+    // A bent fibreglass pole and a teardrop of printed fabric.
+    const shape = new THREE.Shape();
+    const fh = h - 2;
+    shape.moveTo(0, 0);
+    shape.lineTo(0, fh);
+    shape.quadraticCurveTo(2.6, fh + 0.3, 2.4, fh - 3);
+    shape.quadraticCurveTo(2.2, fh * 0.4, 1.4, 0);
+    shape.closePath();
+    const g = new THREE.ShapeGeometry(shape, 12);
+    g.computeBoundingBox();
+    const uv = g.attributes.uv;
+    const p = g.attributes.position;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, p.getX(i) / 2.6, p.getY(i) / (fh + 0.3));
+    const tex = featherTexture(s.text || 'OPEN', s.color || '#ffffff', s.bg || '#c0392b');
+    const mat = M.printFace(tex, { rough: 0.9, side: THREE.DoubleSide });
+    ctx.disposables.push(tex, mat);
+    B.add(g, mat, { pos: [0.1, 1.6, 0] });
+    B.tube(M.painted('#d9dde2', 0.4), [0, 0.3, 0], [0, fh + 1.2, 0], 0.07, 6);
+    B.tube(M.painted('#d9dde2', 0.4), [0, fh + 1.2, 0], [1.6, fh + 1.75, 0], 0.06, 6);
+  },
+  gantry(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    const steel2 = M.painted('#9aa1a8', 0.45);
+    for (const x of [-w / 2 + 1, w / 2 - 1]) {
+      B.slab(M.concrete('#a8a59d'), 3, 1, 3, x, 0, 0);
+      B.add(cylGeo(0.55, 0.65, h - 1, 12), steel2, { pos: [x, 1 + (h - 1) / 2, 0] });
+    }
+    // A box truss across the top.
+    for (const [y, z] of [[h - 0.4, -1], [h - 0.4, 1], [h - 3.4, -1], [h - 3.4, 1]]) B.box(steel2, w - 2, 0.3, 0.3, 0, y, z);
+    for (let x = -w / 2 + 2; x <= w / 2 - 2; x += 3) {
+      B.tube(steel2, [x, h - 3.4, -1], [x + 1.5, h - 0.4, -1], 0.08, 4);
+      B.tube(steel2, [x, h - 3.4, 1], [x + 1.5, h - 0.4, 1], 0.08, 4);
+    }
+    const lines = [s.text || 'GOODS IN ➜', s.sub || ''].filter(Boolean);
+    const pw = (w - 6) / lines.length - 1;
+    lines.forEach((t, i) => {
+      const x = -w / 2 + 3 + pw / 2 + i * (pw + 1);
+      B.box(M.painted('#2b3036', 0.5), pw + 0.3, 6.3, 0.3, x, h - 5.2, 1.3);
+      const tex = panelTexture({ text: t, color: s.color || '#ffffff', bg: s.bg || '#1f6b3a', aspect: pw / 6, border: true });
+      face(B, panelMat(tex, ctx), pw, 6, x, h - 5.2, 1.47);
+    });
+  },
+  siterules(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    for (const x of [-w / 2 + 0.6, w / 2 - 0.6]) B.post(galv(), 0.15, h, x, 0, 0, 8);
+    B.box(M.painted('#f4f4f0', 0.5), w, 5.4, 0.15, 0, h - 3, 0.1);
+    const tex = safetyTexture({ head: s.sub || 'SITE RULES', text: s.text || 'HI-VIS • HARD HATS • 5 MPH', bg: s.bg || '#1f4f9c', color: s.color && s.color !== '#ffffff' ? s.color : '#ffffff', aspect: w / 5.4 });
+    const mat = M.printFace(tex, { rough: 0.5 });
+    ctx.disposables.push(tex, mat);
+    face(B, mat, w - 0.1, 5.3, 0, h - 3, 0.19);
+  },
+  mapboard(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    for (const x of [-w / 2 + 0.4, w / 2 - 0.4]) B.post(M.painted('#2b3036', 0.5), 0.16, h, x, 0, 0, 8);
+    B.box(M.painted(s.bg || '#1d2c44', 0.45), w, 5, 0.3, 0, h - 2.8, 0);
+    B.box(M.painted(s.bg || '#1d2c44', 0.45), w + 0.6, 0.3, 0.9, 0, h - 0.15, 0);
+    const tex = mapTexture({ title: s.text || 'SITE MAP', bg: s.bg || '#1d2c44', seed: hashId(o.id || 'm') });
+    face(B, panelMat(tex, ctx), w - 0.5, 4.6, 0, h - 2.8, 0.17);
+  },
+  radarsign(B, o, { w, h }, ctx) {
+    const s = o.sign || {};
+    B.post(galv(), 0.14, h, 0, 0, 0, 8);
+    B.box(M.painted('#1b1e22', 0.4), w, 2.8, 0.6, 0, h - 1.6, 0.35);
+    const tex = screenTexture({ text: s.text || '23', sub: s.sub || 'YOUR SPEED', color: s.color || '#ffb020', bg: s.bg || '#050608', aspect: (w - 0.4) / 2.4 });
+    const mat = M.screenFace(tex);
+    ctx.disposables.push(tex, mat);
+    face(B, mat, w - 0.4, 2.4, 0, h - 1.6, 0.66);
+    B.box(M.painted('#f4f4f0', 0.4), w, 1.4, 0.1, 0, h - 4, 0.12);
+    const plate = panelTexture({ text: 'SLOW DOWN', color: '#c8102e', bg: '#f4f4f0', aspect: w / 1.4, border: false });
+    face(B, panelMat(plate, ctx), w - 0.1, 1.3, 0, h - 4, 0.18);
+    B.box(M.painted('#2b3036', 0.4), 1, 0.7, 0.1, 0, h - 5.8, 0.1);
+    B.add(new THREE.BoxGeometry(0.9, 0.6, 0.05), M.painted('#1b2a44', 0.25), { pos: [0, h + 0.4, 0], rot: [-0.6, 0, 0] });
+  },
+  hoarding(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    for (let x = -w / 2; x <= w / 2 + 0.01; x += Math.max(4, w / Math.max(1, Math.round(w / 8)))) {
+      B.box(M.wood('#8a6b4a'), 0.35, h, 0.35, x, h / 2, -0.4);
+      B.box(M.wood('#8a6b4a'), 0.25, 0.25, 2.4, x, h * 0.3, -1.4, [0.7, 0, 0]);
+    }
+    B.box(M.wood('#d7c4a3'), w, h, 0.12, 0, h / 2, -0.15);
+    const tex = panelTexture({ text: s.text || 'COMING SOON', sub: s.sub || '', logo: s.logo || '', color: s.color || '#ffffff', bg: s.bg || '#1f4f9c', aspect: w / h, border: false });
+    const mat = M.printFace(tex, { rough: 0.55 });
+    ctx.disposables.push(tex, mat);
+    face(B, mat, w - 0.1, h - 0.1, 0, h / 2, -0.08);
+  },
 
   /* ---- lighting ---- */
   pole(B, o, s, ctx) {
@@ -389,14 +583,86 @@ const P = {
     B.cyl(M.painted('#3a3f45', 0.45), 0.5, 0.5, 0.25, 0, 3.85, 0, { seg: 14 });
     lightAt(ctx, 0, 3.4, 0, { power: 60, range: 14, angle: 85, pool: 0.5 });
   },
-  cctv(B) {
-    B.add(cylGeo(0.2, 0.32, 20, 10), M.painted('#e9ecee', 0.4), { pos: [0, 10, 0] });
-    for (const a of [0.6, 2.6]) {
-      B.box(M.painted('#e9ecee', 0.4), 0.3, 0.3, 1.6, Math.sin(a) * 0.8, 19.4, Math.cos(a) * 0.8, [0, a, 0]);
-      B.box(M.painted('#f4f6f8', 0.35), 0.7, 0.6, 1.6, Math.sin(a) * 1.8, 19.1, Math.cos(a) * 1.8, [0.3, a, 0]);
-      B.box(M.vehicleGlass(), 0.5, 0.4, 0.1, Math.sin(a) * 2.6, 18.9, Math.cos(a) * 2.6, [0.3, a, 0]);
+  /* ---- CCTV ---- */
+  cctv(B, o, { h }, ctx) {
+    camPole(B, h, 0.18, 0.3);
+    B.box(galv(), 3, 0.25, 0.25, 0, h - 0.6, 0.15);
+    mountCam(B, ctx, 'bullet', [-1.3, h - 0.95, 0.3], -28, o);
+    mountCam(B, ctx, 'bullet', [1.3, h - 0.95, 0.3], 28, o);
+    B.sphere(galv(), 0.32, 0, h + 0.05, 0, { sy: 0.6, seg: 10 });
+  },
+  cctvbullet(B, o, { h }, ctx) {
+    camPole(B, h, 0.12, 0.18);
+    B.box(galv(), 0.18, 0.18, 0.7, 0, h - 0.4, 0.3);
+    mountCam(B, ctx, 'bullet', [0, h - 0.6, 0.65], 0, o);
+  },
+  cctvdome(B, o, { h }, ctx) {
+    camPole(B, h, 0.16, 0.26);
+    // A gooseneck arm out to the dome.
+    B.tube(galv(), [0, h - 0.4, 0], [0, h + 0.2, 0.8], 0.12, 8);
+    B.tube(galv(), [0, h + 0.2, 0.8], [0, h, 1.6], 0.12, 8);
+    mountCam(B, ctx, 'dome', [0, h - 0.1, 1.6], 0, o);
+  },
+  cctvptz(B, o, { h }, ctx) {
+    camPole(B, h, 0.24, 0.4);
+    B.slab(M.painted('#3a3f45', 0.5), 1.2, 0.2, 1.2, 0, h, 0);
+    B.box(galv(), 0.25, 0.25, 1.4, 0, h - 0.3, 0.7);
+    mountCam(B, ctx, 'ptz', [0, h - 0.45, 1.3], 0, o);
+    B.box(M.painted('#d9dde2', 0.4), 0.9, 1.4, 0.5, 0, h - 3, -0.45);
+  },
+  cctvmulti(B, o, { h }, ctx) {
+    B.slab(M.concrete('#a8a59d'), 3.4, 1.2, 3.4, 0, 0, 0);
+    // A tapering square mast with a platform and four cameras at the top.
+    B.add(new THREE.CylinderGeometry(0.45, 0.85, h - 1.2, 4).rotateY(Math.PI / 4), galv(), { pos: [0, 1.2 + (h - 1.2) / 2, 0] });
+    B.slab(M.metal('#7d858c', 0.5), 3.2, 0.2, 3.2, 0, h - 1.4, 0);
+    for (const [x, z] of [[-1.5, -1.5], [1.5, -1.5], [1.5, 1.5], [-1.5, 1.5]]) B.post(yellow(), 0.05, 1.1, x, h - 1.2, z, 4);
+    [0, 90, 180, 270].forEach((yaw) => {
+      const a = yaw * DEG2;
+      mountCam(B, ctx, 'bullet', [Math.sin(a) * 1.2, h - 0.9, Math.cos(a) * 1.2], yaw, o);
+    });
+    B.sphere(M.signal('#ff2a1f', 2.5), 0.18, 0, h + 0.35, 0, { seg: 8 });
+    B.post(galv(), 0.05, 0.4, 0, h - 1.2, 0, 6);
+  },
+  cctvanpr(B, o, { w, h }, ctx) {
+    camPole(B, h, 0.16, 0.26);
+    const reach = Math.max(3, w - 1.5);
+    B.box(galv(), reach, 0.3, 0.3, reach / 2, h - 0.2, 0);
+    B.tube(galv(), [0, h - 2.2, 0], [reach * 0.45, h - 0.35, 0], 0.08, 6);
+    mountCam(B, ctx, 'bullet', [reach, h - 0.6, 0.2], 0, { ...o, tilt: o.tilt ?? 15 });
+    // The infrared flash beside it, and the warning plate on the post.
+    B.box(M.painted('#2b2f34', 0.5), 0.8, 0.6, 0.5, reach - 1.1, h - 0.8, 0.3);
+    B.box(M.lamp('#ff2a1f', 1.2), 0.6, 0.4, 0.05, reach - 1.1, h - 0.8, 0.56);
+    const tex = panelTexture({ text: 'ANPR CAMERAS IN OPERATION', color: '#1d1f22', bg: '#f2c318', aspect: 1.6 });
+    face(B, panelMat(tex, ctx), 1.6, 1, 0, 6, 0.3);
+    B.box(M.painted('#f2c318', 0.5), 1.7, 1.1, 0.06, 0, 6, 0.24);
+  },
+  cctvtower(B, o, { w, d, h }, ctx) {
+    // A trailer with outriggers, a telescopic mast, cameras and a solar panel.
+    const body = M.painted(o.color === '#2b2f34' ? '#e6e8ea' : '#e7b416', 0.45);
+    B.slab(M.painted('#3a3f45', 0.5), w - 1.6, 0.5, d - 2, 0, 1.4, 0);
+    B.slab(body, w - 1.2, 2.4, d - 4.5, 0, 1.9, -0.6);
+    for (const x of [-(w - 1.2) / 2 - 0.3, (w - 1.2) / 2 + 0.3]) {
+      B.add(cylGeo(1.05, 1.05, 0.7, 16).rotateZ(Math.PI / 2), M.rubber(), { pos: [x, 1.05, -0.6] });
+      B.add(cylGeo(0.55, 0.55, 0.75, 12).rotateZ(Math.PI / 2), M.metal('#9aa1a8', 0.4), { pos: [x, 1.05, -0.6] });
     }
-    B.sphere(M.painted('#e9ecee', 0.35), 0.5, 0, 20.1, 0, { sy: 0.6, seg: 12 });
+    B.tube(M.painted('#3a3f45', 0.5), [-0.9, 1.6, (d - 2) / 2], [0, 1.6, d / 2], 0.12, 6);
+    B.tube(M.painted('#3a3f45', 0.5), [0.9, 1.6, (d - 2) / 2], [0, 1.6, d / 2], 0.12, 6);
+    for (const [x, z] of [[-w / 2 + 0.4, -d / 2 + 0.8], [w / 2 - 0.4, -d / 2 + 0.8], [-w / 2 + 0.4, d / 2 - 2.2], [w / 2 - 0.4, d / 2 - 2.2]]) {
+      B.box(M.painted('#3a3f45', 0.5), 0.3, 1.6, 0.3, x, 0.9, z);
+      B.slab(M.painted('#3a3f45', 0.5), 1, 0.12, 1, x, 0, z);
+    }
+    // Solar panel on a tilted frame.
+    B.add(new THREE.BoxGeometry(w - 1.4, 0.12, 4.6), M.painted('#1b2a44', 0.25), { pos: [0, 5.2, -2.4], rot: [-0.45, 0, 0] });
+    B.box(M.painted('#3a3f45', 0.5), 0.2, 1.2, 0.2, 0, 4.6, -2.4);
+    // Telescopic mast in three sections.
+    const top = Math.max(8, h);
+    const seg = (top - 4.3) / 3;
+    [0.34, 0.27, 0.2].forEach((r, i) => B.add(cylGeo(r, r, seg + 0.4, 10), galv(), { pos: [0, 4.3 + seg * i + seg / 2, 1.6] }));
+    mountCam(B, ctx, 'ptz', [0, top - 0.2, 2.2], 0, o);
+    mountCam(B, ctx, 'bullet', [-0.6, top - 0.5, 1.4], -150, { ...o, cover: false });
+    mountCam(B, ctx, 'bullet', [0.6, top - 0.5, 1.4], 150, { ...o, cover: false });
+    B.box(galv(), 1.6, 0.2, 0.2, 0, top - 0.3, 1.6);
+    B.sphere(M.signal('#2a7bff', 2.5), 0.2, 0, top + 0.25, 1.6, { seg: 8 });
   },
 
   /* ---- planting ---- */
@@ -1409,7 +1675,7 @@ const PLANTS = new Set(['tree', 'oak', 'maple', 'birch', 'conifer', 'pine', 'pal
 export function buildProp(o) {
   const group = new THREE.Group();
   const B = new Builder();
-  const ctx = { lights: [], moving: [], disposables: [] };
+  const ctx = { lights: [], moving: [], disposables: [], extra: [] };
   const isBooth = o.kind === 'booth';
   const spec = isBooth ? BOOTH_BY_ID[o.design] : PROP_BY_ID[o.type];
   const dims = {
@@ -1440,7 +1706,9 @@ export function buildProp(o) {
     B.slab(M.painted('#9aa1a8', 0.5), dims.w, dims.h, dims.d, 0, 0, 0);
   }
   B.finish(group);
-  for (const m of ctx.moving) group.add(m);
+  for (const m of ctx.moving) if (!m.parent) group.add(m);
+  for (const x of ctx.extra) group.add(x);
+  markCones(group);
   group.userData = { lights: ctx.lights, moving: ctx.moving, disposables: ctx.disposables };
   return group;
 }

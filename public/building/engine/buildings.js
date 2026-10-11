@@ -13,12 +13,14 @@
  * the front (the N wall faces +z), y up, origin at the footprint centre. */
 
 import * as THREE from 'three';
-import { Builder, cylGeo } from './builder.js';
+import { Builder, cylGeo, boxGeo } from './builder.js';
 import * as M from './materials.js';
-import { signTexture } from './textures.js';
-import { buildingHeight, ROOF_BY_ID } from '../catalog.js';
+import { signTexture, panelTexture, neonTexture, safetyTexture, screenTexture } from './textures.js';
+import { cameraHead, markCones } from './cameras.js';
+import { buildingHeight, ROOF_BY_ID, isCam } from '../catalog.js';
 
 const DEG = Math.PI / 180;
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 export const PARAPET = 3.5;
 
 /* ----------------------------------------------------------------- frames */
@@ -665,58 +667,282 @@ function signAspect(text, sub, logo) {
   return Math.max(1.2, Math.max(main * 0.46, small * 0.2) / 0.92);
 }
 
-function wallSign(b, B, ctx, H, fh) {
-  const s = b.sign || {};
-  if (!s.on || (!s.text && !s.logo)) return null;
-  const info = ctx.faces[s.face || 'N'];
-  if (!info) return null;
-  const { F, f, cols, cw, grid } = info;
-  const aspect = signAspect(s.text, s.sub, s.logo);
-  const size = Math.max(0.4, Math.min(2.5, s.size || 1));
-  const P = (!b.roofType || b.roofType === 'flat') && b.parapet ? PARAPET : 0;
+/* ---------------------------------------------------------- wall fixtures */
+
+const LETTERS = new Set(['letters', 'number', 'rooftop']);
+
+/**
+ * Where a fixture sits on its wall: centre `s` along it, centre height `y`,
+ * and its size — worked out the same way for drawing it and for clicking on it.
+ * Lettering takes its width from the words; an "auto" name sign sits where the
+ * old single sign always did, centred high on the wall.
+ */
+export function fixtureRect(b, fx) {
+  const H = buildingHeight(b);
   const n = floors(b);
-  // Single-storey sheds carry their name high on the blank upper wall; taller
-  // buildings carry it in the band above the top-floor windows.
-  let hgt;
-  let cy;
-  if (n === 1) {
-    hgt = Math.min(13, Math.max(3, H * 0.17)) * size;
-    cy = Math.max(hgt / 2 + 9, H + P - hgt / 2 - 2.6);
-  } else {
-    hgt = Math.min(10, fh * 0.62) * size;
-    cy = H - fh / 2 + 0.6;
+  const fh = H / n;
+  const P = (!b.roofType || b.roofType === 'flat') && b.parapet ? PARAPET : 0;
+  const len = fx.face === 'N' || fx.face === 'S' ? b.w : b.d;
+  let { s, y, w, h } = fx;
+  if (LETTERS.has(fx.type)) {
+    const aspect = fx.type === 'number' ? signAspect(fx.text, '', '') : signAspect(fx.text, fx.sub, fx.logo);
+    if (fx.auto) {
+      const size = clamp(fx.size || 1, 0.4, 2.5);
+      if (n === 1) {
+        h = Math.min(13, Math.max(3, H * 0.17)) * size;
+        y = Math.max(h / 2 + 9, H + P - h / 2 - 2.6);
+      } else {
+        h = Math.min(10, fh * 0.62) * size;
+        y = H - fh / 2 + 0.6;
+      }
+      s = len / 2;
+    }
+    w = h * aspect;
+    if (w > len * 0.95) { w = len * 0.95; h = w / aspect; }
   }
-  let wid = hgt * aspect;
-  if (wid > f.len * 0.84) {
-    wid = f.len * 0.84;
-    hgt = wid / aspect;
-  }
-  const sc = f.len / 2;
-  // A backing panel when there are openings behind the letters.
-  const c0 = Math.max(0, Math.floor((sc - wid / 2) / cw));
-  const c1 = Math.min(cols - 1, Math.floor((sc + wid / 2) / cw));
-  let busy = false;
-  for (let r = 0; r < n; r++) {
-    const row = grid[Math.min(r, grid.length - 1)] || [];
-    const base = r * fh;
+  const along = fx.type === 'blade' ? 1.2 : Math.min(w, len);
+  s = clamp(s, along / 2, len - along / 2);
+  if (fx.type === 'rooftop') y = H + P + 1.5 + h / 2;
+  else y = clamp(y, h / 2 + 0.3, Math.max(h / 2 + 0.3, H + P - h / 2));
+  return { face: fx.face, s, y, w, h, len };
+}
+
+/** Put geometry built in a sign's own frame (x along the wall, z out of it) onto the wall. */
+function put(B, F, geo, mat, s, y, dp) {
+  B.add(geo, mat, { pos: F.p(s, y, dp), rot: [0, F.rotY, 0] });
+}
+
+/** Material for a printed sign face: lit from inside at night, or just printed. */
+function faceMat(tex, lit, out, opts) {
+  let m;
+  if (lit) {
+    m = M.signFace(tex);
+    m.transparent = false;
+    m.alphaTest = 0;
+  } else m = M.printFace(tex, opts);
+  out.disposables.push(tex, m);
+  return m;
+}
+
+/** Do any openings show behind this rectangle of wall? */
+function busyBehind(info, b, fh, r) {
+  const { cols, cw, grid } = info;
+  const c0 = Math.max(0, Math.floor((r.s - r.w / 2) / cw));
+  const c1 = Math.min(cols - 1, Math.floor((r.s + r.w / 2) / cw));
+  for (let row = 0; row < floors(b); row++) {
+    const cells = grid[Math.min(row, grid.length - 1)] || [];
     for (let c = c0; c <= c1; c++) {
-      const t = row[c] || 'blank';
+      const t = cells[c] || 'blank';
       if (t === 'blank') continue;
-      const lo = base + openingBottom(t, fh);
-      const hi = base + openingTop(t, fh);
-      if (hi > cy - hgt / 2 - 0.4 && lo < cy + hgt / 2 + 0.4) busy = true;
+      const lo = row * fh + openingBottom(t, fh);
+      const hi = row * fh + openingTop(t, fh);
+      if (hi > r.y - r.h / 2 - 0.4 && lo < r.y + r.h / 2 + 0.4) return true;
     }
   }
-  if (busy) F.box(ctx.panelMat, sc - wid / 2 - 2, sc + wid / 2 + 2, cy - hgt / 2 - 1, cy + hgt / 2 + 1, 0, 0.45);
-  const off = busy ? 0.5 : 0.05;
-  const texH = Math.max(96, Math.min(512, Math.round(2048 / aspect)));
-  const tex = signTexture({ text: s.text || '', sub: s.sub || '', logo: s.logo || '', color: s.color || '#1f4f9c', width: 2048, height: texH });
-  const face = M.signFace(tex);
-  const shade = new THREE.MeshBasicMaterial({ map: tex, color: 0x000000, transparent: true, opacity: 0.45, alphaTest: 0.1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-  // The letters stand off the wall; a soft offset copy reads as their shadow.
-  F.rect(shade, sc - wid / 2 + 0.12, sc + wid / 2 + 0.12, cy - hgt / 2 - 0.16, cy + hgt / 2 - 0.16, off + 0.06, true);
-  F.rect(face, sc - wid / 2, sc + wid / 2, cy - hgt / 2, cy + hgt / 2, off + 0.32, true);
-  return [tex, face, shade];
+  return false;
+}
+
+const FIX = {
+  /* Raised letters standing off the wall, with a soft shadow copy behind. */
+  letters(B, info, fx, r, ctx, out, env) {
+    const { F } = info;
+    const num = fx.type === 'number';
+    const aspect = num ? signAspect(fx.text, '', '') : signAspect(fx.text, fx.sub, fx.logo);
+    // The texture keeps the lettering's own proportions, short words included.
+    const texW = aspect >= 4 ? 2048 : Math.max(256, Math.round(512 * aspect));
+    const texH = Math.max(64, Math.round(texW / aspect));
+    const tex = signTexture({ text: fx.text || '', sub: num ? '' : fx.sub || '', logo: num ? '' : fx.logo || '', color: fx.color || '#1f4f9c', width: texW, height: texH });
+    const roof = fx.type === 'rooftop';
+    let back = !!fx.bg;
+    if (!back && fx.auto) back = busyBehind(info, env.b, env.fh, r);
+    const pad = Math.max(0.5, r.h * 0.22);
+    const s0 = r.s - r.w / 2;
+    const s1 = r.s + r.w / 2;
+    const y0 = r.y - r.h / 2;
+    const y1 = r.y + r.h / 2;
+    let dp = 0;
+    if (roof) {
+      // A steel frame on the roof behind the wall top holds the letters up.
+      const steel = M.painted('#4d545c', 0.5);
+      dp = -1.6;
+      const base = env.top;
+      const n = Math.max(2, Math.round(r.w / 8) + 1);
+      for (let i = 0; i < n; i++) {
+        const x = s0 + 0.4 + ((r.w - 0.8) * i) / (n - 1);
+        F.box(steel, x - 0.18, x + 0.18, base, y1 - 0.4, dp - 0.9, dp - 0.55);
+        F.box(steel, x - 0.12, x + 0.12, base, base + 0.3, dp - 2.6, dp + 0.3);
+      }
+      for (const yy of [y0 + r.h * 0.2, y1 - r.h * 0.25]) F.box(steel, s0, s1, yy - 0.15, yy + 0.15, dp - 0.9, dp - 0.6);
+    }
+    if (back) {
+      const mat = fx.bg ? M.painted(fx.bg, 0.45) : ctx.panelMat;
+      F.box(mat, s0 - pad, s1 + pad, y0 - pad * 0.5, y1 + pad * 0.5, dp, dp + 0.45);
+    }
+    const off = dp + (back ? 0.5 : 0.05);
+    let face;
+    if (fx.lit !== false) face = M.signFace(tex);
+    else face = M.printFace(tex, { cutout: true });
+    const shade = new THREE.MeshBasicMaterial({ map: tex, color: 0x000000, transparent: true, opacity: 0.45, alphaTest: 0.1, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const sh = r.h * 0.03;
+    F.rect(shade, s0 + sh, s1 + sh, y0 - sh, y1 - sh, off + 0.06, true);
+    F.rect(face, s0, s1, y0, y1, off + 0.32, true);
+    out.disposables.push(tex, face, shade);
+  },
+
+  /* A box sign lit from inside. */
+  lightbox(B, info, fx, r, ctx, out) {
+    const { F } = info;
+    const [s0, s1, y0, y1] = [r.s - r.w / 2, r.s + r.w / 2, r.y - r.h / 2, r.y + r.h / 2];
+    F.box(M.painted('#2b3036', 0.4), s0 - 0.22, s1 + 0.22, y0 - 0.22, y1 + 0.22, 0, 0.9);
+    const tex = panelTexture({ text: fx.text, sub: fx.sub, logo: fx.logo, color: fx.color, bg: fx.bg || '#1f4f9c', aspect: r.w / r.h });
+    F.rect(faceMat(tex, fx.lit !== false, out), s0, s1, y0, y1, 0.93, true);
+  },
+
+  /* A flat panel across a shopfront, trimmed top and bottom. */
+  fascia(B, info, fx, r, ctx, out) {
+    const { F } = info;
+    const [s0, s1, y0, y1] = [r.s - r.w / 2, r.s + r.w / 2, r.y - r.h / 2, r.y + r.h / 2];
+    F.box(M.painted(fx.bg || '#1d2c44', 0.45), s0, s1, y0, y1, 0, 0.4);
+    const trim = M.metal('#aab1b8', 0.3);
+    F.box(trim, s0 - 0.1, s1 + 0.1, y1, y1 + 0.14, 0, 0.5);
+    F.box(trim, s0 - 0.1, s1 + 0.1, y0 - 0.14, y0, 0, 0.5);
+    const tex = panelTexture({ text: fx.text, sub: fx.sub, logo: fx.logo, color: fx.color, bg: fx.bg || '#1d2c44', aspect: r.w / r.h, border: false });
+    F.rect(faceMat(tex, !!fx.lit, out), s0, s1, y0, y1, 0.42, true);
+  },
+
+  /* A double-sided sign sticking out from the wall on a bracket. */
+  blade(B, info, fx, r, ctx, out) {
+    const { F } = info;
+    const reach = Math.max(1.5, r.w);
+    const y0 = r.y - r.h / 2;
+    const y1 = r.y + r.h / 2;
+    const steel = M.painted('#2e3338', 0.45);
+    F.box(steel, r.s - 0.5, r.s + 0.5, y1 - 0.2, y1 + 0.9, 0, 0.16);
+    F.box(steel, r.s - 0.09, r.s + 0.09, y1 + 0.15, y1 + 0.4, 0, reach + 1.1);
+    F.box(steel, r.s - 0.5, r.s + 0.5, y0 - 0.2, y0 + 0.5, 0, 0.16);
+    F.box(steel, r.s - 0.07, r.s + 0.07, y0 + 0.1, y0 + 0.3, 0, 0.7);
+    for (const x of [0.75, reach + 0.55]) put(B, F, cylGeo(0.05, 0.05, 0.4, 6), steel, r.s, y1 + 0.1, x);
+    put(B, F, boxGeo(0.42, r.h, reach), M.painted('#2b3036', 0.4), r.s, r.y, 0.7 + reach / 2);
+    const tex = panelTexture({ text: fx.text, sub: fx.sub, logo: fx.logo, color: fx.color, bg: fx.bg || '#c0392b', aspect: (reach - 0.3) / (r.h - 0.3) });
+    const mat = faceMat(tex, fx.lit !== false, out);
+    put(B, F, new THREE.PlaneGeometry(reach - 0.3, r.h - 0.3).rotateY(Math.PI / 2), mat, r.s + 0.22, r.y, 0.7 + reach / 2);
+    put(B, F, new THREE.PlaneGeometry(reach - 0.3, r.h - 0.3).rotateY(-Math.PI / 2), mat, r.s - 0.22, r.y, 0.7 + reach / 2);
+  },
+
+  /* A round logo disc with a polished rim. */
+  roundel(B, info, fx, r, ctx, out) {
+    const { F } = info;
+    const rad = Math.min(r.w, r.h) / 2;
+    put(B, F, cylGeo(rad, rad, 0.6, 40).rotateX(Math.PI / 2).translate(0, 0, 0.3), M.painted('#2b3036', 0.4), r.s, r.y, 0);
+    put(B, F, new THREE.TorusGeometry(rad * 0.98, Math.max(0.06, rad * 0.025), 6, 48), M.metal('#c5ccd2', 0.25), r.s, r.y, 0.6);
+    const tex = panelTexture({ text: fx.text, logo: '', color: fx.color, bg: fx.bg || '#1f4f9c', aspect: 1, border: false });
+    const logoTex = fx.logo ? signTexture({ text: fx.logo, color: fx.color || '#ffffff', bg: fx.bg || '#1f4f9c', width: 512, height: 512, weight: 400 }) : null;
+    put(B, F, new THREE.CircleGeometry(rad * 0.94, 48), faceMat(logoTex || tex, fx.lit !== false, out), r.s, r.y, 0.62);
+    if (logoTex) out.disposables.push(tex);
+  },
+
+  /* Glowing script on stand-offs. */
+  neon(B, info, fx, r, ctx, out) {
+    const { F } = info;
+    const tex = neonTexture({ text: fx.text || 'Open', color: fx.color || '#ff4fd8', aspect: r.w / r.h });
+    const mat = M.neonFace(tex);
+    out.disposables.push(tex, mat);
+    F.rect(mat, r.s - r.w / 2, r.s + r.w / 2, r.y - r.h / 2, r.y + r.h / 2, 0.45, true);
+    F.rect(M.acrylic(), r.s - r.w / 2 - 0.3, r.s + r.w / 2 + 0.3, r.y - r.h / 2 - 0.3, r.y + r.h / 2 + 0.3, 0.38, true);
+    for (const [ds, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      put(B, F, cylGeo(0.06, 0.06, 0.4, 6).rotateX(Math.PI / 2).translate(0, 0, 0.2), M.metal('#c5ccd2', 0.3), r.s + ds * (r.w / 2), r.y + dy * (r.h / 2), 0);
+    }
+  },
+
+  /* An LED video wall in a slim frame. */
+  screen(B, info, fx, r, ctx, out) {
+    const { F } = info;
+    const [s0, s1, y0, y1] = [r.s - r.w / 2, r.s + r.w / 2, r.y - r.h / 2, r.y + r.h / 2];
+    F.box(M.painted('#1b1e22', 0.4), s0 - 0.35, s1 + 0.35, y0 - 0.35, y1 + 0.35, 0, 0.8);
+    const tex = screenTexture({ text: fx.text, sub: fx.sub, color: fx.color, bg: fx.bg || '#0b3d91', aspect: r.w / r.h });
+    const mat = M.screenFace(tex);
+    out.disposables.push(tex, mat);
+    F.rect(mat, s0, s1, y0, y1, 0.82, true);
+  },
+
+  /* A fabric banner tied to the wall at its corners, with a gentle ripple. */
+  banner(B, info, fx, r, ctx, out) {
+    const { F } = info;
+    const tex = panelTexture({ text: fx.text, sub: fx.sub, logo: fx.logo, color: fx.color, bg: fx.bg || '#c0392b', aspect: r.w / r.h, border: false });
+    const mat = faceMat(tex, false, out, { rough: 0.92, side: THREE.DoubleSide });
+    const g = new THREE.PlaneGeometry(r.w, r.h, 24, 1);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) p.setZ(i, 0.45 + Math.sin((p.getX(i) / r.w) * Math.PI * 3) * Math.min(0.18, r.w * 0.008));
+    g.computeVertexNormals();
+    put(B, F, g, mat, r.s, r.y, 0);
+    const rope = M.painted('#d9d6cf', 0.8);
+    for (const [ds, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      const a = F.p(r.s + ds * (r.w / 2 - 0.3), r.y + dy * (r.h / 2 - 0.3), 0.45);
+      const c = F.p(r.s + ds * (r.w / 2 + 0.3), r.y + dy * (r.h / 2 + 0.3), 0.02);
+      B.tube(rope, a, c, 0.04, 4);
+      B.sphere(M.metal('#c5ccd2', 0.3), 0.09, ...a, { seg: 6 });
+    }
+  },
+
+  /* A small engraved metal plate, screwed on. */
+  plaque(B, info, fx, r, ctx, out) {
+    const { F } = info;
+    const [s0, s1, y0, y1] = [r.s - r.w / 2, r.s + r.w / 2, r.y - r.h / 2, r.y + r.h / 2];
+    F.box(M.metal(fx.bg || '#c3c8cd', 0.3), s0, s1, y0, y1, 0, 0.1);
+    const tex = panelTexture({ text: fx.text, sub: fx.sub, logo: fx.logo, color: fx.color || '#2b3036', bg: fx.bg || '#c3c8cd', aspect: r.w / r.h, border: true });
+    F.rect(faceMat(tex, false, out, { rough: 0.35, metal: 0.55 }), s0, s1, y0, y1, 0.11, true);
+    for (const [ds, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      B.sphere(M.metal('#8d949b', 0.3), 0.05, ...F.p(r.s + ds * (r.w / 2 - 0.15), r.y + dy * (r.h / 2 - 0.15), 0.12), { seg: 6, sz: 0.4 });
+    }
+  },
+
+  /* A rigid safety sign: header band, warning triangle, message. */
+  safety(B, info, fx, r, ctx, out) {
+    const { F } = info;
+    const [s0, s1, y0, y1] = [r.s - r.w / 2, r.s + r.w / 2, r.y - r.h / 2, r.y + r.h / 2];
+    F.box(M.painted('#f4f4f0', 0.5), s0, s1, y0, y1, 0, 0.08);
+    const tex = safetyTexture({ head: fx.sub || 'WARNING', text: fx.text, bg: fx.bg || '#f2c318', color: fx.color || '#1d1f22', aspect: r.w / r.h });
+    F.rect(faceMat(tex, false, out, { rough: 0.5 }), s0, s1, y0, y1, 0.09, true);
+  },
+};
+FIX.number = FIX.letters;
+FIX.rooftop = FIX.letters;
+
+/** Signs and cameras on a building's walls. Returns what the building must own. */
+function fixtures(b, B, ctx, H, fh, top) {
+  const out = { disposables: [], moving: [], holders: [] };
+  for (const fx of b.fixtures || []) {
+    const info = ctx.faces[fx.face];
+    if (!info) continue;
+    const r = fixtureRect(b, fx);
+    try {
+      if (isCam(fx.type)) camera(B, info, fx, r, out);
+      else if (FIX[fx.type]) FIX[fx.type](B, info, fx, r, ctx, out, { b, H, fh, top });
+    } catch (e) {
+      console.warn('Could not build', fx.type, e);
+    }
+  }
+  return out;
+}
+
+/** A camera on the wall: built in its own mount frame, then fixed in place. */
+function camera(B, info, fx, r, out) {
+  const { F } = info;
+  const tmp = new Builder();
+  const { moving } = cameraHead(tmp, fx.type.slice(4), {
+    color: fx.color, tilt: clamp(fx.tilt ?? 25, 0, 80), pan: clamp(fx.pan ?? 0, -85, 85),
+    ir: fx.ir !== false, cover: !!fx.cover, range: clamp(fx.range || 90, 10, 300), wall: true,
+  });
+  const at = F.p(r.s, r.y, 0);
+  for (const [mat, geos] of tmp.parts) for (const g of geos) B.add(g, mat, { pos: at, rot: [0, F.rotY, 0] });
+  if (moving) {
+    const holder = new THREE.Group();
+    holder.position.set(at[0], at[1], at[2]);
+    holder.rotation.y = F.rotY;
+    holder.add(moving);
+    out.holders.push(holder);
+    out.moving.push(moving);
+  }
 }
 
 /* ------------------------------------------------------------ roof plant */
@@ -1214,14 +1440,17 @@ export function buildBuilding(b) {
   if (flat) flatRoof(b, B, ctx, H);
   else pitchedRoof(b, B, ctx, H);
   downpipes(b, B, ctx, H);
-  const signBits = wallSign(b, B, ctx, H, fh);
+  const fx = fixtures(b, B, ctx, H, fh, top);
 
   // A plinth line where the walls meet the ground hides any gap with the paving.
   B.slab(M.concrete('#9c9a94'), b.w + 0.6, 0.35, b.d + 0.6, 0, -0.1, 0);
 
   B.finish(group);
+  for (const h of fx.holders) group.add(h);
+  markCones(group);
   group.userData.lights = ctx.lights.filter((l) => l.power > 0);
-  group.userData.disposables = signBits || [];
+  group.userData.disposables = fx.disposables;
+  group.userData.moving = fx.moving;
 
   // Rooftop machines, each one pickable on its own.
   (b.roofItems || []).forEach((it, i) => {

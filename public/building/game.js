@@ -9,13 +9,14 @@ import {
   SITE_PRESETS, BUILDING_STYLES, BUILDING_GROUPS, ROOF_KIT, BOOTHS, PROPS, PROP_BY_ID, ROOF_BY_ID, BOOTH_BY_ID,
   CELLS, CLADDINGS, ROOF_TYPES, WALL_COLORS, SIGN_COLORS, LOGOS, freshState, normalize, makeBuilding,
   buildingHeight, wallCols, newId, PROP_CATS, RUNS, RUN_BY_ID,
+  WALL_SIGNS, WALL_CAMS, FIXTURE_BY_ID, makeFixture, isCam, CAM_COLORS,
 } from './catalog.js';
 import { footprint, isClear, bounds, buildingsOf, snapToDock, evictFrom, siteStats, isSolid, runLength } from './site.js';
 import { contains, corners, overlaps, toLocal as planLocal, toWorld as planWorld, wallFrames, clamp, DEG } from './geom.js';
 import { Engine, WEATHER, QUALITY } from './engine/core.js';
 import { World, modelFor, place as placeModel, releaseModel, makeUnder } from './engine/world.js';
 import { Life } from './engine/life.js';
-import { roofItemModel, roofSurfaceY } from './engine/buildings.js';
+import { roofItemModel, roofSurfaceY, fixtureRect, PARAPET } from './engine/buildings.js';
 import { buildRun, squarePath } from './engine/runs.js';
 import * as THREE from 'three';
 
@@ -46,6 +47,10 @@ const ui = {
   draw: null,          // a duct or pipe run being drawn
   doors: null,         // { id } while placing doors on a building in 3D
   doorType: 'door',    // what door mode puts in
+  fix: null,           // { id } while placing signs and cameras on a building in 3D
+  fixType: 'letters',  // what a click on a wall puts there
+  fixSel: null,        // the fixture being edited
+  attach: null,        // { id } a pole camera waiting to be fixed to a wall
   ortho: true,         // runs turn square corners
   speed: 1,
 };
@@ -319,6 +324,12 @@ function refreshSelection() {
   }
   engine.setSelection(target ? [target] : []);
   if (ui.doors && ui.selected !== ui.doors.id) { ui.doors = null; drawDoorMark(null); drawHud(); }
+  if (ui.fix && ui.selected !== ui.fix.id) { ui.fix = null; drawDoorMark(null); drawHud(); }
+  const sb = selected();
+  if (ui.fixSel && !(sb && fixtureById(sb, ui.fixSel))) ui.fixSel = null;
+  // The highlight follows the chosen sign; with nothing chosen it goes away.
+  if (ui.fixSel && sb) drawWallMark(sb, fixtureRect(sb, fixtureById(sb, ui.fixSel)), 0x46b4ff);
+  else if (!ui.fix && !ui.doors && !ui.attach) drawDoorMark(null);
   drawFootprint();
 }
 
@@ -407,6 +418,12 @@ function drawHud() {
         const L = runLength({ points: ui.draw.points });
         text = n ? `${(RUN_BY_ID[ui.draw.style] || {}).name}: ${n} points, ${Math.round(L)} ft · click to continue · double-click or Enter to finish · Backspace undoes a point · Esc stops`
           : `${(RUN_BY_ID[ui.draw.style] || {}).name}: click a machine, roof, wall or the ground to start`;
+      } else if (ui.fix) {
+        const b = byId(ui.fix.id);
+        const name = (FIXTURE_BY_ID[ui.fixType] || {}).name || 'sign';
+        text = `Signs & cameras on ${b ? b.name : 'this building'}: click a wall to put up ${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name.toLowerCase()} · drag one to move it · click one to edit it · Delete takes it down · Esc when done`;
+      } else if (ui.attach) {
+        text = 'Click a wall of any building to mount the camera there · Esc cancels';
       } else if (ui.doors) {
         const b = byId(ui.doors.id);
         const name = cellSpec(ui.doorType).name.toLowerCase();
@@ -416,7 +433,7 @@ function drawHud() {
       else text = 'Drag to orbit · right-drag to pan · wheel zooms · click to select · drag a selected thing to move it · double-click to fly to it';
     }
     hb.textContent = text;
-    hb.classList.toggle('warn', !!ui.pending || !!ui.doors);
+    hb.classList.toggle('warn', !!ui.pending || !!ui.doors || !!ui.fix || !!ui.attach);
     hb.classList.toggle('bad', !!blocked);
   }
 }
@@ -709,6 +726,9 @@ function buildingPanel(b) {
     ${objActions(b)}
     <div class="field"><label for="p-name">Name</label>
       <input id="p-name" type="text" maxlength="40" value="${esc(b.name)}" data-act="rename"></div>
+    <div class="divider"></div>
+    ${fixtureEditor(b)}
+    <div class="divider"></div>
     <div class="field"><label for="p-w">Width<b>${fmt(b.w)} ft</b></label>
       <input id="p-w" type="range" min="16" max="800" step="2" value="${Math.round(b.w)}" data-act="num" data-key="w"></div>
     <div class="field"><label for="p-d">Depth<b>${fmt(b.d)} ft</b></label>
@@ -742,14 +762,7 @@ function buildingPanel(b) {
     ${wallEditor(b)}
     <div class="divider"></div>
     ${roofEditor(b)}
-    <div class="divider"></div>
-    <h3>Sign</h3>
-    <div class="toggles"><button class="toggle${b.sign.on ? ' on' : ''}" data-act="signtoggle">
-      <span>Name on the wall</span><span class="pill">${b.sign.on ? 'On' : 'Off'}</span></button></div>
-    <div class="field" style="margin-top:10px"><label>Which wall</label><div class="chips">
-      ${['N', 'E', 'S', 'W'].map((f) => `<button class="chip${b.sign.face === f ? ' on' : ''}" data-act="sign" data-key="face" data-value="${f}">${{ N: 'Front', E: 'Right', S: 'Back', W: 'Left' }[f]}</button>`).join('')}
-    </div></div>
-    ${signFields('b', b.sign, { sub: true, size: true })}`;
+`;
 }
 
 function boothPanel(o) {
@@ -779,7 +792,28 @@ function propPanel(o) {
     ${spec.color || ['dumpster', 'skip', 'flag'].includes(o.type) ? `<div class="field"><label>Colour</label><div class="chips">
       ${['#d9dde2', '#1d2735', '#7d2f2f', '#1e2229', '#f1f2f4', '#35543f', '#8d5a24', '#2c4a7c', '#c0392b', '#c9a227', '#b5482f', '#1f5b8a'].map((c) => `<button class="chip swatch${o.color === c ? ' on' : ''}" style="background:${c}" data-act="set" data-key="color" data-value="${c}"></button>`).join('')}
     </div></div>` : ''}
-    ${spec.sign ? `<div class="divider"></div><h3>Sign</h3>${signFields('s', o.sign || {}, { bg: true, sub: o.type === 'billboard' || o.type === 'monument' })}` : ''}`;
+    ${spec.sign ? `<div class="divider"></div><h3>Sign</h3>${signFields('s', o.sign || {}, { bg: true, sub: !!spec.sub || o.type === 'billboard' || o.type === 'monument' })}` : ''}
+    ${spec.cam ? camFields(o, spec) : ''}`;
+}
+
+/** Settings shared by every pole camera. */
+function camFields(o, spec) {
+  const toggle = (key, label, on) => `<button class="toggle${on ? ' on' : ''}" data-act="cam-toggle" data-key="${key}"><span>${label}</span><span class="pill">${on ? 'On' : 'Off'}</span></button>`;
+  const h = o.h != null ? o.h : spec.h;
+  const armed = ui.attach && ui.attach.id === o.id;
+  return `<div class="divider"></div><h3>Camera</h3>
+    <div class="field"><label>Colour</label><div class="chips">${CAM_COLORS.map((c) => `<button class="chip swatch${(o.color || '#f2f3f4') === c.hex ? ' on' : ''}" style="background:${c.hex}" title="${c.name}" data-act="set" data-key="color" data-value="${c.hex}"></button>`).join('')}</div></div>
+    <div class="field"><label for="c-h">Mount height<b>${Math.round(h)} ft</b></label>
+      <input id="c-h" type="range" min="${spec.hMin || 6}" max="${spec.hMax || 60}" step="1" value="${Math.round(h)}" data-act="num" data-key="h"></div>
+    <div class="field"><label for="c-tilt">Tilt down<b>${Math.round(o.tilt ?? 25)}°</b></label>
+      <input id="c-tilt" type="range" min="0" max="80" step="1" value="${o.tilt ?? 25}" data-act="num" data-key="tilt"></div>
+    <p class="note">Turn it with ↺ / ↻ above (or R) to aim it.</p>
+    <div class="toggles">${toggle('cover', 'Show what it sees', !!o.cover)}${toggle('ir', 'Night vision (IR)', o.ir !== false)}</div>
+    ${o.cover ? `<div class="field"><label for="c-range">View distance<b>${Math.round(o.range || 90)} ft</b></label>
+      <input id="c-range" type="range" min="20" max="250" step="5" value="${o.range || 90}" data-act="num" data-key="range"></div>` : ''}
+    ${PROP_CAM[o.type] && o.type !== 'cctvtower' ? `<div class="row tight">${armed
+    ? '<button class="btn primary" data-act="cam-attach-cancel">Now click a building wall… (cancel)</button>'
+    : '<button class="btn" data-act="cam-attach">📌 Mount it on a building wall</button>'}</div>` : ''}`;
 }
 
 function plantPanel(o) {
@@ -948,6 +982,8 @@ function statsPanel() {
       ${row('Entrances', s.doors)}
       ${row('Windows', s.windows)}
       ${row('Guard booths', s.booths)}
+      ${row('Wall signs', s.wallSigns)}
+      ${row('CCTV cameras', s.cameras)}
       ${row('Rooftop machines', s.roofItems)}
       ${row('Machines on the ground', s.groundPlant)}
       ${row('Duct and pipe runs', s.runs ? `${s.runs} · ${fmt(s.runLength)} ft` : '0')}
@@ -1083,8 +1119,18 @@ function swapBays(b, a, z) {
  *  height on the wall counts, so tall sheds are as easy to hit as houses. */
 const _dRay = new THREE.Vector3();
 function bayAt(ev, b) {
+  const hit = wallHit(ev, b);
+  if (!hit) return null;
+  const cols = wallCols(b, hit.face);
+  return { ...hit, col: clamp(Math.floor(hit.t / (hit.f.len / cols)), 0, cols - 1), cols };
+}
+
+/** Where the pointer meets one of a building's walls: which wall, how far along
+ *  it (t) and how high (y). `above` lets it reach over the top, for rooftop signs. */
+function wallHit(ev, b, above = 1) {
   const ray = engine.rayFrom(ev).ray;
   const H = buildingHeight(b);
+  const P = (!b.roofType || b.roofType === 'flat') && b.parapet ? PARAPET : 0;
   let best = null;
   for (const [face, f] of Object.entries(wallFrames(footprint(b)))) {
     const nx = f.n[0];
@@ -1095,12 +1141,11 @@ function bayAt(ev, b) {
     const k = ((f.o[0] - ray.origin.x) * nx + (f.o[1] - ray.origin.z) * nz) / facing;
     if (k <= 0) continue;
     const p = _dRay.copy(ray.origin).addScaledVector(ray.direction, k);
-    if (p.y < -1 || p.y > H + 1) continue;
+    if (p.y < -1 || p.y > H + P + above) continue;
     const t = (p.x - f.o[0]) * f.u[0] + (p.z - f.o[1]) * f.u[1];
     if (t < 0 || t > f.len) continue;
     if (best && best.k < k) continue;
-    const cols = wallCols(b, face);
-    best = { face, col: clamp(Math.floor(t / (f.len / cols)), 0, cols - 1), k, f, cols };
+    best = { face, t, y: p.y, k, f };
   }
   return best;
 }
@@ -1128,9 +1173,20 @@ function drawDoorMark(b, bay, color = 0x5fd08a) {
   doorMark.visible = true;
 }
 
+/** The same see-through slab, over any rectangle of wall (a sign or camera). */
+function drawWallMark(b, r, color) {
+  if (!b || !r) { drawDoorMark(null); return; }
+  drawDoorMark(b, { face: r.face, col: 0 }, color);
+  const f = wallFrames(footprint(b))[r.face];
+  const out = r.out || 0.6;
+  doorMark.scale.set(Math.max(0.6, r.w + 0.4), Math.max(0.6, r.h + 0.4), Math.max(0.8, out * 2));
+  doorMark.position.set(f.o[0] + f.u[0] * r.s + f.n[0] * out * 0.5, r.y, f.o[1] + f.u[1] * r.s + f.n[1] * out * 0.5);
+}
+
 function setDoorMode(b) {
   ui.doors = b ? { id: b.id } : null;
   if (b) {
+    ui.fix = null;
     if (ui.pending) { ui.pending = null; ui.ghost = null; updateGhost(); }
     if (ui.draw) cancelDraw();
     if (ui.measure) stopMeasure();
@@ -1168,6 +1224,171 @@ function stepBay(b, face, col, step) {
     break;
   }
   return { face: FACES[f], col: c };
+}
+
+/* ------------------------------------------------- signs and cameras on walls */
+
+const FACE_ORDER = ['N', 'E', 'S', 'W'];
+const LETTER_TYPES = new Set(['letters', 'number', 'rooftop']);
+const LIT_TYPES = new Set(['letters', 'lightbox', 'fascia', 'blade', 'roundel', 'number', 'rooftop']);
+const BG_TYPES = new Set(['letters', 'lightbox', 'fascia', 'blade', 'roundel', 'screen', 'banner', 'plaque', 'safety']);
+const SUB_TYPES = new Set(['letters', 'lightbox', 'fascia', 'screen', 'banner', 'plaque', 'safety']);
+const LOGO_TYPES = new Set(['letters', 'lightbox', 'fascia', 'blade', 'roundel', 'banner']);
+const SIZE_LIMITS = {
+  letters: [1, 20], number: [1, 20], rooftop: [3, 30], lightbox: [2, 60], fascia: [4, 120], blade: [1.5, 8],
+  roundel: [2, 30], neon: [3, 40], screen: [4, 80], banner: [4, 80], plaque: [1, 8], safety: [1, 8],
+};
+/* Which pole camera a wall camera becomes, and back. */
+const CAM_PROP = { 'cam-bullet': 'cctvbullet', 'cam-dome': 'cctvdome', 'cam-ptz': 'cctvptz', 'cam-turret': 'cctvbullet' };
+const PROP_CAM = { cctv: 'cam-bullet', cctvbullet: 'cam-bullet', cctvdome: 'cam-dome', cctvptz: 'cam-ptz', cctvmulti: 'cam-bullet', cctvanpr: 'cam-bullet', cctvtower: 'cam-ptz' };
+
+const fixtureById = (b, id) => (b && b.fixtures || []).find((f) => f.id === id) || null;
+const fixName = (fx) => (FIXTURE_BY_ID[fx.type] || {}).name || fx.type;
+
+/** The fixture on a building under the pointer, if any. */
+function fixtureAt(ev, b) {
+  const hit = wallHit(ev, b, 40);
+  if (!hit) return null;
+  let best = null;
+  for (const fx of b.fixtures || []) {
+    if (fx.face !== hit.face) continue;
+    const r = fixtureRect(b, fx);
+    const hw = (fx.type === 'blade' ? 1 : r.w / 2) + 0.6;
+    const hh = r.h / 2 + 0.6;
+    if (Math.abs(hit.t - r.s) <= hw && Math.abs(hit.y - r.y) <= hh) {
+      const d = Math.abs(hit.t - r.s) + Math.abs(hit.y - r.y);
+      if (!best || d < best.d) best = { fx, r, d, hit };
+    }
+  }
+  return best;
+}
+
+/** Stop an "auto" name sign moving about on its own once it has been touched. */
+function pinFixture(b, fx) {
+  if (!fx.auto) return;
+  const r = fixtureRect(b, fx);
+  fx.auto = false;
+  fx.s = r.s;
+  fx.y = r.y;
+  fx.h = r.h;
+  fx.w = r.w;
+}
+
+function setFixMode(b) {
+  ui.fix = b ? { id: b.id } : null;
+  if (b) {
+    ui.doors = null;
+    if (ui.pending) { ui.pending = null; ui.ghost = null; updateGhost(); }
+    if (ui.draw) cancelDraw();
+    if (ui.measure) stopMeasure();
+  }
+  drawDoorMark(null);
+  drawPanel();
+  drawHud();
+}
+
+function fixtureEditor(b) {
+  const on = ui.fix && ui.fix.id === b.id;
+  const list = (b.fixtures || []).map((fx) => {
+    const spec = FIXTURE_BY_ID[fx.type] || {};
+    const label = isCam(fx.type) ? spec.name : (fx.text || fx.logo || spec.name);
+    return `<li class="${ui.fixSel === fx.id ? 'on' : ''}"><span><button class="linkish" data-act="fix-sel" data-value="${fx.id}">${spec.icon || '▫'} ${esc(String(label).slice(0, 28))}</button>
+      <small class="sub">${esc(spec.name || '')} · ${FACE_NAME[fx.face]} wall</small></span>
+      <span><button class="btn tiny" data-act="fix-look" data-value="${fx.id}" title="Fly to it">👁</button>
+      <button class="btn tiny danger" data-act="fix-del" data-value="${fx.id}" title="Take it down">✕</button></span></li>`;
+  }).join('');
+  const chip = (f) => `<button class="item${ui.fixType === f.id ? ' on' : ''}" data-act="fix-type" data-value="${f.id}" title="${esc(f.name)}"><span class="ic">${f.icon}</span><span class="nm">${esc(f.name)}</span></button>`;
+  const sel = fixtureById(b, ui.fixSel);
+  return `<h3>Signs &amp; cameras</h3>
+    <p class="hint">Pick a sign or camera, then click any wall of this building in the 3D view to put it there. Drag one to
+      move it along the wall, up or down, or round the corner; click one to edit it below.</p>
+    <div class="row tight"><button class="btn${on ? ' primary' : ''}" data-act="fix-mode">${on ? '✓ Done placing' : '🪧 Place signs &amp; cameras in 3D'}</button></div>
+    <div class="field" style="margin-top:10px"><label>Signs</label><div class="grid-items small">${WALL_SIGNS.map(chip).join('')}</div></div>
+    <div class="field"><label>Cameras</label><div class="grid-items small">${WALL_CAMS.map(chip).join('')}</div></div>
+    ${list ? `<ul class="objlist scroll">${list}</ul>` : '<p class="note">Nothing on these walls yet.</p>'}
+    ${sel ? fixtureFields(b, sel) : ''}`;
+}
+
+/** Everything about one sign or camera. */
+function fixtureFields(b, fx) {
+  const spec = FIXTURE_BY_ID[fx.type] || {};
+  const r = fixtureRect(b, fx);
+  const cam = isCam(fx.type);
+  const sw = (key, list, cur) => list.map((c) => `<button class="chip swatch${(cur || '') === c.hex ? ' on' : ''}" style="background:${c.hex || 'transparent'}" title="${c.name}" data-act="fx-set" data-key="${key}" data-value="${c.hex}">${c.hex ? '' : '∅'}</button>`).join('');
+  const toggle = (key, label, onv) => `<button class="toggle${onv ? ' on' : ''}" data-act="fx-toggle" data-key="${key}"><span>${label}</span><span class="pill">${onv ? 'On' : 'Off'}</span></button>`;
+  const slider = (key, label, min, max, step, val, unit) => `<div class="field"><label for="fx-${key}">${label}<b>${Math.round(val * 10) / 10}${unit}</b></label>
+      <input id="fx-${key}" type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-act="fx-num" data-key="${key}"></div>`;
+  let body = '';
+  if (cam) {
+    body = `<div class="field"><label>Colour</label><div class="chips">${sw('color', CAM_COLORS, fx.color)}</div></div>
+      ${slider('tilt', 'Tilt down', 0, 80, 1, fx.tilt ?? 25, '°')}
+      ${slider('pan', 'Turn left / right', -85, 85, 1, fx.pan ?? 0, '°')}
+      ${slider('y', 'Height on the wall', 2, Math.round(buildingHeight(b) + 2), 0.5, r.y, ' ft')}
+      <div class="toggles">${toggle('cover', 'Show what it sees', fx.cover)}${toggle('ir', 'Night vision (IR)', fx.ir !== false)}</div>
+      ${fx.cover ? slider('range', 'View distance', 20, 250, 5, fx.range || 90, ' ft') : ''}
+      <div class="row tight"><button class="btn" data-act="fix-topole">🗼 Put it on a pole instead</button></div>`;
+  } else {
+    const [lo, hi] = SIZE_LIMITS[fx.type] || [1, 60];
+    body = `<div class="field"><label for="fx-text">${fx.type === 'safety' ? 'Message' : fx.type === 'number' ? 'Number' : 'Text'}</label>
+        <input id="fx-text" type="text" maxlength="60" value="${esc(fx.text || '')}" data-act="fx-text" data-key="text"></div>
+      ${SUB_TYPES.has(fx.type) ? `<div class="field"><label for="fx-sub">${fx.type === 'safety' ? 'Heading' : 'Second line'}</label>
+        <input id="fx-sub" type="text" maxlength="60" value="${esc(fx.sub || '')}" data-act="fx-text" data-key="sub" placeholder="Optional"></div>` : ''}
+      ${LOGO_TYPES.has(fx.type) ? `<div class="field"><label>Logo</label><div class="chips">${LOGOS.map((l) => `<button class="chip glyph${(fx.logo || '') === l ? ' on' : ''}" data-act="fx-set" data-key="logo" data-value="${l}">${l || '—'}</button>`).join('')}</div></div>` : ''}
+      <div class="field"><label>${fx.type === 'neon' ? 'Neon colour' : 'Text colour'}</label><div class="chips">${sw('color', [...SIGN_COLORS, { hex: '#ff4fd8', name: 'Pink neon' }, { hex: '#38f2ff', name: 'Cyan neon' }], fx.color)}</div></div>
+      ${BG_TYPES.has(fx.type) ? `<div class="field"><label>${fx.type === 'letters' ? 'Backing panel' : 'Panel colour'}</label><div class="chips">${sw('bg', [...(fx.type === 'letters' ? [{ hex: '', name: 'None' }] : []), ...SIGN_COLORS, { hex: '#f2c318', name: 'Safety yellow' }, { hex: '#c3c8cd', name: 'Brushed metal' }], fx.bg)}</div></div>` : ''}
+      ${LETTER_TYPES.has(fx.type) ? slider('h', 'Letter height', lo, hi, 0.5, r.h, ' ft')
+        : `${slider('w', fx.type === 'blade' ? 'Sticks out' : 'Width', lo, hi, 0.5, fx.w, ' ft')}${slider('h', 'Height', fx.type === 'blade' ? 2 : lo * 0.4, fx.type === 'blade' ? 20 : hi * 0.6, 0.5, fx.h, ' ft')}`}
+      ${fx.type !== 'rooftop' ? slider('y', 'Height on the wall', 1, Math.round(buildingHeight(b) + 4), 0.5, r.y, ' ft') : ''}
+      ${LIT_TYPES.has(fx.type) ? `<div class="toggles">${toggle('lit', 'Lit at night', fx.lit !== false)}</div>` : ''}`;
+  }
+  return `<div class="fixedit"><h4>${spec.icon || ''} ${esc(spec.name || fx.type)}</h4>
+    <div class="row tight">
+      <button class="btn tiny" data-act="fix-nudge" data-value="-1,0" title="Left">◀</button>
+      <button class="btn tiny" data-act="fix-nudge" data-value="1,0" title="Right">▶</button>
+      <button class="btn tiny" data-act="fix-nudge" data-value="0,1" title="Up">▲</button>
+      <button class="btn tiny" data-act="fix-nudge" data-value="0,-1" title="Down">▼</button>
+      <button class="btn tiny" data-act="fix-dup" title="Another one beside it">⧉ Copy</button>
+      <button class="btn tiny danger" data-act="fix-del" data-value="${fx.id}">✕ Remove</button>
+    </div>
+    <div class="field" style="margin-top:8px"><label>Wall</label><div class="chips">${FACE_ORDER.map((f) => `<button class="chip${fx.face === f ? ' on' : ''}" data-act="fix-face" data-value="${f}">${FACE_NAME[f]}</button>`).join('')}</div></div>
+    ${body}</div>`;
+}
+
+/** A wall camera taken down and put on its own pole in front of the wall. */
+function cameraToPole(b, fx) {
+  const r = fixtureRect(b, fx);
+  const f = wallFrames(footprint(b))[fx.face];
+  const type = CAM_PROP[fx.type] || 'cctvbullet';
+  const spec = PROP_BY_ID[type];
+  const px = f.o[0] + f.u[0] * r.s + f.n[0] * 4;
+  const py = f.o[1] + f.u[1] * r.s + f.n[1] * 4;
+  const rot = Math.round(Math.atan2(-f.n[0], f.n[1]) / DEG - (fx.pan || 0));
+  const o = {
+    id: newId('p'), kind: 'prop', type, x: px - spec.w / 2, y: py - spec.d / 2, rot,
+    h: Math.max(spec.hMin || 8, Math.round(r.y + 2)), color: fx.color, tilt: fx.tilt ?? 25, cover: !!fx.cover, range: fx.range || 90, ir: fx.ir !== false,
+  };
+  b.fixtures = b.fixtures.filter((x) => x !== fx);
+  state.objects.push(o);
+  return o;
+}
+
+/** A pole camera fixed to the wall that was clicked. */
+function poleToWall(o, ev) {
+  let best = null;
+  for (const b of state.objects) {
+    if (b.kind !== 'building') continue;
+    const hit = wallHit(ev, b);
+    if (hit && (!best || hit.k < best.hit.k)) best = { b, hit };
+  }
+  if (!best) return null;
+  const { b, hit } = best;
+  const fx = makeFixture(PROP_CAM[o.type] || 'cam-bullet', hit.face, hit.t, clamp(hit.y, 3, buildingHeight(b)), {
+    color: o.color || '#f2f3f4', tilt: o.tilt ?? 25, cover: !!o.cover, range: o.range || 90, ir: o.ir !== false,
+  });
+  b.fixtures = b.fixtures || [];
+  b.fixtures.push(fx);
+  state.objects = state.objects.filter((x) => x !== o);
+  return { b, fx };
 }
 
 /* ------------------------------------------------------------- side roads */
@@ -1223,7 +1444,7 @@ function armItem(kind, key) {
   const make = () => {
     if (kind === 'building') {
       const b = makeBuilding(key);
-      b.sign.on = false;
+      b.fixtures = [];
       return b;
     }
     if (kind === 'booth') return { id: 'ghost', kind: 'booth', design: key, rot: 0, x: 0, y: 0, sign: { text: 'SECURITY', color: '#ffffff', logo: '🛡️' } };
@@ -1231,7 +1452,8 @@ function armItem(kind, key) {
     const spec = PROP_BY_ID[key];
     return {
       id: 'ghost', kind: 'prop', type: key, rot: 0, x: 0, y: 0, ...(spec.len ? { w: spec.w, d: spec.d } : {}),
-      ...(spec.sign ? { sign: { text: key === 'monument' ? 'ALL VISITORS MUST CHECK IN AT SECURITY' : 'SIGN', color: '#ffffff', logo: '' } } : {}),
+      ...(spec.sign ? { sign: { text: key === 'monument' ? 'ALL VISITORS MUST CHECK IN AT SECURITY' : spec.text || 'SIGN', sub: spec.sub || '', color: spec.textColor || '#ffffff', bg: spec.bg || '', logo: '' } } : {}),
+      ...(spec.cam ? { color: '#f2f3f4', tilt: 25, cover: true, range: 60, ir: true } : {}),
     };
   };
   const names = { building: (BUILDING_STYLES[key] || {}).name, booth: (BOOTH_BY_ID[key] || {}).name, roof: (ROOF_BY_ID[key] || {}).name, prop: (PROP_BY_ID[key] || {}).name };
@@ -1353,8 +1575,29 @@ function onDown(ev) {
   if (!engine || engine.mode !== 'orbit') return;
   press = { x: ev.clientX, y: ev.clientY, button: ev.button, shift: ev.shiftKey, alt: ev.altKey };
   engine.controls.enabled = true;
-  if (ev.button !== 0 || ui.pending || ui.measure || ui.draw) return;
+  if (ev.button !== 0 || ui.pending || ui.measure || ui.draw || ui.attach) return;
   const hit = engine.pick(ev);
+  const fixB = ui.fix && byId(ui.fix.id);
+  if (fixB) {
+    // Sign mode: a press on a sign grabs it; a press on bare wall leaves the
+    // camera free, and a click there puts up the chosen sign or camera.
+    const at = fixtureAt(ev, fixB);
+    if (at && (!hit || hit.id === fixB.id || hit.distance > at.hit.k - 2)) {
+      engine.controls.enabled = false;
+      pinFixture(fixB, at.fx);
+      const r = fixtureRect(fixB, at.fx);
+      drag = { mode: 'fix', id: fixB.id, fid: at.fx.id, grab: { ds: at.hit.t - r.s, dy: at.hit.y - r.y }, moved: false, t: 0 };
+      if (ui.fixSel !== at.fx.id) { ui.fixSel = at.fx.id; drawPanel(); }
+      drawWallMark(fixB, r, 0x46b4ff);
+      return;
+    }
+    const wh = wallHit(ev, fixB, 40);
+    if (wh && (!hit || hit.id === fixB.id || hit.distance > wh.k - 2)) {
+      drag = { mode: 'fixadd', id: fixB.id, hit: wh, moved: false };
+      return;
+    }
+    if (hit && hit.id === fixB.id) return;
+  }
   const doorB = ui.doors && byId(ui.doors.id);
   if (doorB) {
     // Door mode: a press on a door grabs it; a press anywhere else on this
@@ -1375,6 +1618,13 @@ function onDown(ev) {
   engine.controls.enabled = false;
   const wasSelected = ui.selected === id;
   ui.selected = id;
+  // Clicking a sign or camera on a building opens it for editing.
+  const ob = hit.roof == null ? byId(id) : null;
+  let fixChanged = false;
+  if (ob && ob.kind === 'building') {
+    const at = fixtureAt(ev, ob);
+    if (at && ui.fixSel !== at.fx.id) { ui.fixSel = at.fx.id; fixChanged = true; }
+  }
   const roof = selectedRoof();
   if (roof) {
     const y = roofSurfaceY(roof.b, roof.item.dx, roof.item.dy);
@@ -1384,7 +1634,7 @@ function onDown(ev) {
     if (o && o.kind === 'run') drag = { mode: 'run', id, start: engine.groundAt(ev, 0), from: o.points.map((p) => ({ ...p })), moved: false };
     else if (o) drag = { mode: 'move', id, start: engine.groundAt(ev, 0), from: { x: o.x, y: o.y }, moved: false };
   }
-  if (!wasSelected) {
+  if (!wasSelected || fixChanged) {
     ui.tab = 'edit';
     refreshSelection();
     drawPanel();
@@ -1396,6 +1646,7 @@ function onMove(ev) {
   if (!engine || engine.mode !== 'orbit') return;
   if (drag && press) {
     if (drag.mode === 'door' && !drag.door) return;    // orbiting
+    if (drag.mode === 'fixadd') return;
     const dist = Math.hypot(ev.clientX - press.x, ev.clientY - press.y);
     if (!drag.moved && dist < 5) return;
     if (!drag.moved) { snapshot(); drag.moved = true; }
@@ -1411,6 +1662,22 @@ function onMove(ev) {
       drawFootprint();
       if (footLine && drag.bad) footLine.material.color.set(0xf0524d);
       engine.shadowDirty = true;
+      drawHud();
+    } else if (drag.mode === 'fix') {
+      const b = byId(drag.id);
+      const fx = fixtureById(b, drag.fid);
+      const hit = fx && wallHit(ev, b, 40);
+      if (!hit) return;
+      if (hit.face !== fx.face) { fx.face = hit.face; drag.grab = { ds: 0, dy: 0 }; }
+      fx.s = hit.t - drag.grab.ds;
+      fx.y = hit.y - drag.grab.dy;
+      const r = fixtureRect(b, fx);
+      fx.s = r.s;
+      fx.y = r.y;
+      drawWallMark(b, r, 0x46b4ff);
+      const now = performance.now();
+      if (now - drag.t > 90) { drag.t = now; syncWorld(); }
+      ui.hint = `${fixName(fx)} — ${FACE_NAME[fx.face].toLowerCase()} wall, ${Math.round(r.y)} ft up`;
       drawHud();
     } else if (drag.mode === 'door') {
       const b = byId(drag.id);
@@ -1477,8 +1744,41 @@ function onMove(ev) {
   }
   // Hover: a pointer hand over things that can be picked.
   const now = performance.now();
-  if (ev.buttons || now - hoverT < (ui.doors ? 40 : 90)) return;
+  if (ev.buttons || now - hoverT < (ui.doors || ui.fix || ui.attach ? 40 : 90)) return;
   hoverT = now;
+  const fixB = ui.fix && byId(ui.fix.id);
+  if (fixB) {
+    const at = fixtureAt(ev, fixB);
+    const cv = engine.renderer.domElement;
+    if (at) {
+      drawWallMark(fixB, at.r, 0x46b4ff);
+      cv.style.cursor = 'grab';
+      return;
+    }
+    const wh = wallHit(ev, fixB, 40);
+    if (wh) {
+      const spec = FIXTURE_BY_ID[ui.fixType] || {};
+      drawWallMark(fixB, fixtureRect(fixB, { ...spec, type: ui.fixType, face: wh.face, s: wh.t, y: wh.y }), 0x5fd08a);
+      cv.style.cursor = 'copy';
+    } else {
+      drawDoorMark(null);
+      cv.style.cursor = '';
+    }
+    return;
+  }
+  if (ui.attach) {
+    // Show where the camera would go on whichever wall is under the pointer.
+    let best = null;
+    for (const b of state.objects) {
+      if (b.kind !== 'building') continue;
+      const wh = wallHit(ev, b);
+      if (wh && (!best || wh.k < best.wh.k)) best = { b, wh };
+    }
+    if (best) drawWallMark(best.b, { face: best.wh.face, s: best.wh.t, y: best.wh.y, w: 2, h: 2 }, 0x5fd08a);
+    else drawDoorMark(null);
+    engine.renderer.domElement.style.cursor = best ? 'copy' : '';
+    return;
+  }
   const doorB = ui.doors && byId(ui.doors.id);
   if (doorB) {
     const bay = bayAt(ev, doorB);
@@ -1495,6 +1795,50 @@ function onUp(ev) {
   if (!engine) return;
   const wasClick = press && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) < 5 && press.button === 0;
   engine.controls.enabled = true;
+  if (drag && (drag.mode === 'fix' || drag.mode === 'fixadd')) {
+    const b = byId(drag.id);
+    const d = drag;
+    drag = null;
+    press = null;
+    if (!b) return;
+    if (d.mode === 'fix') {
+      if (d.moved) { ui.hint = ''; commit(); } else drawPanel();
+      const fx = fixtureById(b, d.fid);
+      if (fx) drawWallMark(b, fixtureRect(b, fx), 0x46b4ff);
+      return;
+    }
+    if (wasClick) {
+      snapshot();
+      const fx = makeFixture(ui.fixType, d.hit.face, d.hit.t, d.hit.y);
+      b.fixtures = b.fixtures || [];
+      b.fixtures.push(fx);
+      const r = fixtureRect(b, fx);
+      fx.s = r.s;
+      fx.y = r.y;
+      ui.fixSel = fx.id;
+      flashHint(`${fixName(fx)} put up — drag it to move it, or change it in the panel.`);
+      commit();
+      drawWallMark(b, fixtureRect(b, fx), 0x46b4ff);
+    }
+    return;
+  }
+  if (ui.attach && wasClick && ev.target === engine.renderer.domElement) {
+    press = null;
+    drag = null;
+    const o = byId(ui.attach.id);
+    if (!o) { ui.attach = null; return drawHud(); }
+    snapshot();
+    const res = poleToWall(o, ev);
+    if (!res) { undoStack.pop(); flashHint('Click a building wall to mount the camera there.'); return; }
+    ui.attach = null;
+    ui.selected = res.b.id;
+    ui.fixSel = res.fx.id;
+    ui.tab = 'edit';
+    drawDoorMark(null);
+    flashHint('Camera mounted on the wall.');
+    commit();
+    return;
+  }
   if (drag && drag.mode === 'door') {
     const b = byId(drag.id);
     const d = drag;
@@ -1887,6 +2231,120 @@ function applyAction(el, ev) {
       return setDoorMode(ui.doors && ui.doors.id === o.id ? null : o);
     }
     case 'door-type': ui.doorType = value; drawPanel(); return drawHud();
+    case 'fix-mode': {
+      if (!o || o.kind !== 'building') return;
+      return setFixMode(ui.fix && ui.fix.id === o.id ? null : o);
+    }
+    case 'fix-type': {
+      ui.fixType = value;
+      if (o && o.kind === 'building' && !(ui.fix && ui.fix.id === o.id)) return setFixMode(o);
+      drawPanel();
+      return drawHud();
+    }
+    case 'fix-sel': {
+      ui.fixSel = value;
+      const fx = fixtureById(o, value);
+      if (fx) drawWallMark(o, fixtureRect(o, fx), 0x46b4ff);
+      return drawPanel();
+    }
+    case 'fix-look': {
+      const fx = fixtureById(o, value);
+      if (!fx) return;
+      ui.fixSel = fx.id;
+      drawPanel();
+      const r = fixtureRect(o, fx);
+      const f = wallFrames(footprint(o))[fx.face];
+      const yaw = { N: 0, E: 90, S: 180, W: -90 }[fx.face] - (o.rot || 0);
+      drawWallMark(o, r, 0x46b4ff);
+      return engine.flyTo({ x: f.o[0] + f.u[0] * r.s, y: r.y, z: f.o[1] + f.u[1] * r.s, dist: Math.max(30, r.w * 1.7 + 25), yaw: yaw * DEG, pitch: 8 * DEG });
+    }
+    case 'fix-del': {
+      if (!o || o.kind !== 'building') return;
+      snapshot();
+      o.fixtures = (o.fixtures || []).filter((f) => f.id !== value);
+      if (ui.fixSel === value) ui.fixSel = null;
+      drawDoorMark(null);
+      return commit();
+    }
+    case 'fix-dup': {
+      const fx = fixtureById(o, ui.fixSel);
+      if (!fx) return;
+      snapshot();
+      pinFixture(o, fx);
+      const r = fixtureRect(o, fx);
+      const c = { ...JSON.parse(JSON.stringify(fx)), id: newId('f') };
+      const gap = (fx.type === 'blade' ? 4 : r.w) + 2;
+      c.s = r.s + gap <= r.len - r.w / 2 ? r.s + gap : r.s - gap;
+      o.fixtures.push(c);
+      ui.fixSel = c.id;
+      return commit();
+    }
+    case 'fix-face': {
+      const fx = fixtureById(o, ui.fixSel);
+      if (!fx || fx.face === value) return;
+      snapshot();
+      pinFixture(o, fx);
+      const r = fixtureRect(o, fx);
+      fx.s = (r.s / r.len) * (value === 'N' || value === 'S' ? o.w : o.d);
+      fx.face = value;
+      return commit();
+    }
+    case 'fix-nudge': {
+      const fx = fixtureById(o, ui.fixSel);
+      if (!fx) return;
+      snapshot();
+      pinFixture(o, fx);
+      const [dx, dy] = value.split(',').map(Number);
+      const step = clamp(fixtureRect(o, fx).w / 8, 0.5, 4);
+      fx.s += dx * step;
+      fx.y += dy * step;
+      const r = fixtureRect(o, fx);
+      fx.s = r.s;
+      fx.y = r.y;
+      return commit();
+    }
+    case 'fx-set': {
+      const fx = fixtureById(o, ui.fixSel);
+      if (!fx) return;
+      snapshot();
+      fx[key] = value;
+      return commit();
+    }
+    case 'fx-toggle': {
+      const fx = fixtureById(o, ui.fixSel);
+      if (!fx) return;
+      snapshot();
+      const cur = key === 'lit' || key === 'ir' ? fx[key] !== false : !!fx[key];
+      fx[key] = !cur;
+      return commit();
+    }
+    case 'fix-topole': {
+      const fx = fixtureById(o, ui.fixSel);
+      if (!fx || !isCam(fx.type)) return;
+      snapshot();
+      const p = cameraToPole(o, fx);
+      ui.fixSel = null;
+      ui.fix = null;
+      ui.selected = p.id;
+      drawDoorMark(null);
+      flashHint('On its own pole now — drag it, turn it, or raise it higher.');
+      return commit();
+    }
+    case 'cam-attach': {
+      if (!o || o.kind !== 'prop') return;
+      ui.attach = { id: o.id };
+      if (ui.pending) { ui.pending = null; ui.ghost = null; updateGhost(); }
+      drawHud();
+      return drawPanel();
+    }
+    case 'cam-attach-cancel': ui.attach = null; drawDoorMark(null); drawHud(); return drawPanel();
+    case 'cam-toggle': {
+      if (!o) return;
+      snapshot();
+      const cur = key === 'ir' ? o.ir !== false : !!o[key];
+      o[key] = !cur;
+      return commit();
+    }
     case 'door-slide':
     case 'door-wall':
     case 'door-swap':
@@ -2001,12 +2459,6 @@ function applyAction(el, ev) {
       if (!o) return;
       snapshot();
       o[key] = !o[key];
-      return commit();
-    }
-    case 'signtoggle': {
-      if (!o) return;
-      snapshot();
-      o.sign.on = !o.sign.on;
       return commit();
     }
     case 'sign': {
@@ -2175,7 +2627,7 @@ document.addEventListener('change', (ev) => {
   const act = el.dataset.act;
   const o = selected();
   if (o && o.kind === 'building' && act === 'num') evictFrom(state, o);
-  if (['num', 'lot', 'sign', 'sign-num', 'rename'].includes(act)) {
+  if (['num', 'lot', 'sign', 'sign-num', 'rename', 'fx-text', 'fx-num', 'cam-num'].includes(act)) {
     save();
     syncWorld();
     drawPanel();
@@ -2226,7 +2678,7 @@ document.addEventListener('input', (ev) => {
     if (key === 'floors') setFloors(o, num);
     else if (key === 'height') o.height = num;
     else o[key] = num;
-    if (label) label.textContent = key === 'floors' ? String(num) : `${Math.round(num)} ft`;
+    if (label) label.textContent = key === 'floors' ? String(num) : key === 'tilt' ? `${Math.round(num)}°` : `${Math.round(num)} ft`;
     queueSave();
     return queueSync();
   }
@@ -2235,6 +2687,21 @@ document.addEventListener('input', (ev) => {
     if (!o) return;
     o.name = el.value;
     return queueSave();
+  }
+  if (act === 'fx-text' || act === 'fx-num') {
+    const o = selected();
+    const fx = fixtureById(o, ui.fixSel);
+    if (!fx) return;
+    once();
+    const key = el.dataset.key;
+    if (act === 'fx-text') fx[key] = el.value;
+    else {
+      pinFixture(o, fx);
+      fx[key] = num;
+      if (label) label.textContent = `${Math.round(num * 10) / 10}${key === 'tilt' || key === 'pan' ? '°' : ' ft'}`;
+    }
+    queueSave();
+    return queueSync();
   }
   if (act === 'sign' || act === 'sign-num') {
     const o = selected();
@@ -2266,6 +2733,8 @@ document.addEventListener('keydown', (ev) => {
     if (engine.mode !== 'orbit' && !document.pointerLockElement) return setCam('orbit');
     if (ui.measure) return stopMeasure();
     if (ui.doors) return setDoorMode(null);
+    if (ui.fix) return setFixMode(null);
+    if (ui.attach) { ui.attach = null; drawDoorMark(null); drawHud(); return drawPanel(); }
     if (ui.pending) { ui.pending = null; ui.ghost = null; updateGhost(); drawPanel(); return drawHud(); }
     ui.selected = null;
     refreshSelection();
@@ -2291,7 +2760,12 @@ document.addEventListener('keydown', (ev) => {
   if (key === 'm') { prefs.minimap = !prefs.minimap; savePrefs(); return drawMinimap(true); }
   if (key === 'g') { prefs.snap = !prefs.snap; savePrefs(); flashHint(`Snapping ${prefs.snap ? 'on' : 'off'}.`); return; }
   if (engine.mode !== 'orbit') return;
-  if (ev.key === 'Delete' || ev.key === 'Backspace') { if (ui.selected) { deleteSelected(); ev.preventDefault(); } return; }
+  if (ev.key === 'Delete' || ev.key === 'Backspace') {
+    // With signs being placed, Delete takes down the chosen sign, not the building.
+    if (ui.fix && ui.fixSel) { ev.preventDefault(); return applyAction({ dataset: { act: 'fix-del', value: ui.fixSel } }); }
+    if (ui.selected) { deleteSelected(); ev.preventDefault(); }
+    return;
+  }
   if (key === 'r') {
     if (ui.pending) {
       ui.pending.obj.rot = ((ui.pending.obj.rot || 0) + (ev.shiftKey ? -15 : 15) + 360) % 360;

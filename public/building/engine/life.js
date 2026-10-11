@@ -155,6 +155,11 @@ export class Life {
       if (!mv || !mv.length) continue;
       for (const part of mv) {
         if (part.userData.spin) part.rotation.z += part.userData.spin.speed * dt;
+        if (part.userData.pan) {
+          // PTZ cameras patrol back and forth.
+          const pz = part.userData.pan;
+          part.rotation.y = pz.base + Math.sin(t * pz.speed + pz.phase) * pz.range;
+        }
         if (part.userData.flag) wave(part, t);
       }
     }

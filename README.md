@@ -271,7 +271,7 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   cube, container booth, twin-lane kiosk, pitched hut, raised lookout, round
   kiosk and a gate office — each lit inside at night, each with a fascia sign
   you write.
-- **130 props** — boundary (mesh, palisade and timber fences, walls, guard
+- **146 props** — boundary (mesh, palisade and timber fences, walls, guard
   rail, bollards, Jersey barriers, crowd barriers, cones, drums, speed bumps);
   **12 gates** (gate arm, heavy boom with skirt, sliding, cantilever, double
   swing and bi-folding speed gates, road blocker, rising bollards, tyre
@@ -283,8 +283,14 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   yard** (louvred plant compound, low wall, screen wall, concrete plinth and a
   pipe bridge, for machinery beside the building); signs (monument, pylon, billboard,
   post and direction signs, stop/speed/parking/accessible signs, traffic
-  light, flagpoles); lighting (area lights, double heads, flood masts, street
-  lamps, heritage lanterns, bollard lights, CCTV); planting (broadleaf, oak,
+  light, flagpoles, A-board, LED message board, wayfinding totem, entrance
+  wall with lettering, feather flag, overhead gantry sign, site rules board,
+  site map board, speed display sign and printed hoarding — each with its
+  own words and colours); lighting (area lights, double heads, flood masts,
+  street lamps, heritage lanterns, bollard lights); **CCTV** (twin-camera
+  pole, bullet camera post, dome camera pole, PTZ mast whose camera sweeps
+  back and forth, four-camera mast, ANPR camera on an arm, and a mobile CCTV
+  tower on a trailer — see below); planting (broadleaf, oak,
   maple, birch, conifer, pine, palm, shrubs, hedges, flower beds, planters,
   boulders, ponds, fountains); yard (dumpsters, skips, compactor, recycling,
   shipping containers, generator, transformer, LPG and oil tanks, IBCs, gas
@@ -311,6 +317,34 @@ on the ground and steel portals over open ground. A selected machine, on a roof 
 on the ground, has a "Run duct or pipe from this machine" button, and a
 selected run can be extended, shortened, restyled, resized, recoloured or
 dragged. Runs follow a building when it moves.
+
+## Signs and cameras on buildings
+
+Select a building and open **Signs & cameras** (right under its name). Pick
+one of 12 signs — channel letters, a lightbox, a fascia panel, a projecting
+blade sign, a logo roundel, neon script, an LED screen, a fabric banner, a
+name plaque, a safety notice, a building number or rooftop letters on a steel
+frame — or one of 4 wall cameras (bullet, dome, PTZ, turret), then click any
+wall of the building in the 3D view to put it there. As many as you like, on
+any wall. Drag one to slide it along the wall, up or down, or round the
+corner; click one (in or out of placing mode) to edit it: its words and
+second line, logo, text and panel colours, size, height on the wall, which
+wall it is on, whether it lights up at night, plus nudge, copy and remove.
+Delete takes the chosen one down; Esc stops placing. Lit signs, neon and
+screens glow after dark. Sites saved before this keep their name signs —
+each one becomes channel letters in the same place.
+
+## CCTV
+
+Every camera — on a pole or on a wall — has settings: its **colour** (white,
+black, grey, beige, blue, red, green or yellow), **mount height** (a pole goes
+from a few feet to 100 ft on the masts), **tilt**, which way it points (turn
+the pole, or pan a wall camera), **night vision** (a ring of IR LEDs that glows
+red after dark) and **Show what it sees**: a soft see-through cone of its
+view, with an adjustable view distance, for planning coverage. A pole camera
+can be **mounted on a building wall** (click "Mount it on a building wall",
+then the wall), and a wall camera can be **put on a pole** in front of the
+wall, keeping its settings.
 
 ## Doors and entrances
 
@@ -371,7 +405,8 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 | T / L | Run the clock · jump between day and night |
 | P / M / G | Photo mode · minimap · snapping |
 | Enter / Backspace | Finish a duct or pipe run · take back its last point |
-| Esc | Cancel placement or drawing, leave door mode, stop measuring, deselect, or leave Drone/Walk |
+| Delete (placing signs) | Take down the chosen sign or camera |
+| Esc | Cancel placement or drawing, leave door or sign mode, stop measuring, deselect, or leave Drone/Walk |
 | Ctrl+Z / Ctrl+Shift+Z / Ctrl+D / Ctrl+S | Undo · redo · duplicate · saves |
 
 ## Layout
@@ -389,11 +424,20 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 | `public/building/engine/buildings.js` | Buildings: every wall bay, every roof type, signs, roof plant |
 | `public/building/engine/props.js` | Props and booths, side roads, gates, plant-yard walls |
 | `public/building/engine/runs.js` | Duct and pipe runs, their supports, square-cornered routing |
+| `public/building/engine/cameras.js` | CCTV heads, brackets and coverage cones, shared by poles and walls |
 | `public/building/engine/vehicles.js` | Vehicles |
 | `public/building/engine/nature.js` | Trees and people |
 | `public/building/engine/world.js` | Keeps the 3D scene in step with the save; parked cars; light pools |
 | `public/building/engine/life.js` | Traffic, pedestrians, flags, turbines, rain and snow |
 | `public/building/game.js` | The editor: panels, placement, dragging, undo, saves, photo mode |
+
+## Robustness
+
+Every model is checked as it is assembled: a face with no area (two corners
+in the same place) gets a proper normal instead of a zero one. A zero normal
+becomes "not a number" in the shader, and bloom spreads that over the whole
+screen — which is what used to turn the view black whenever the hangar or the
+sports hall (both with barrel roofs) was on screen.
 
 ## Performance
 

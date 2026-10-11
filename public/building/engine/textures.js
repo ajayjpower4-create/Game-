@@ -715,6 +715,197 @@ export function signTexture({ text = '', sub = '', logo = '', color = '#ffffff',
   return t;
 }
 
+/** A painted or printed panel: background, optional border, text wrapped to fit
+ *  in up to four lines, an optional logo on the left and a smaller second line. */
+export function panelTexture({ text = '', sub = '', logo = '', color = '#ffffff', bg = '#1d2c44', aspect = 4, border = true, align = 'center' }) {
+  const W = 1024;
+  const H = Math.max(64, Math.round(W / aspect));
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  if (border) {
+    g.strokeStyle = 'rgba(255,255,255,.25)';
+    g.lineWidth = Math.max(3, H * 0.02);
+    g.strokeRect(H * 0.05, H * 0.05, W - H * 0.1, H - H * 0.1);
+  }
+  const fam = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const pad = W * 0.06;
+  const logoW = logo ? H * 0.5 : 0;
+  const maxW = W - pad * 2 - logoW;
+  // Find the biggest font that fits in up to four lines.
+  let size = H * 0.5;
+  let lines = [];
+  for (; size > 12; size *= 0.92) {
+    g.font = `800 ${size}px ${fam}`;
+    lines = [];
+    let cur = '';
+    for (const w of words) {
+      const t = cur ? `${cur} ${w}` : w;
+      if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
+    }
+    if (cur) lines.push(cur);
+    const total = lines.length * size * 1.12 + (sub ? size * 0.7 : 0);
+    if (lines.length <= 4 && total < H * 0.8 && lines.every((l) => g.measureText(l).width <= maxW)) break;
+  }
+  g.fillStyle = color;
+  g.textBaseline = 'middle';
+  g.textAlign = align;
+  const total = lines.length * size * 1.12 + (sub ? size * 0.7 : 0);
+  let y = H / 2 - total / 2 + size * 0.56;
+  const x = align === 'center' ? W / 2 + logoW / 2 : pad + logoW;
+  if (logo) {
+    g.font = `${size * 1.3}px ${fam}`;
+    g.textAlign = 'center';
+    g.fillText(logo, pad + logoW / 2 - (align === 'center' ? 0 : 0), H / 2);
+    g.textAlign = align;
+  }
+  g.font = `800 ${size}px ${fam}`;
+  for (const l of lines) { g.fillText(l, x, y); y += size * 1.12; }
+  if (sub) {
+    g.font = `600 ${size * 0.5}px ${fam}`;
+    g.fillText(sub, x, y + size * 0.05);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+/** Neon script: glowing tubes on a clear backing, in a handwritten face. */
+export function neonTexture({ text = 'Open', color = '#ff4fd8', aspect = 4.5 }) {
+  const W = 1024;
+  const H = Math.max(96, Math.round(W / aspect));
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  const fam = '"Brush Script MT", "Segoe Script", "Snell Roundhand", cursive';
+  let size = H * 0.7;
+  g.font = `italic 700 ${size}px ${fam}`;
+  const tw = g.measureText(text || ' ').width;
+  if (tw > W * 0.9) { size *= (W * 0.9) / tw; g.font = `italic 700 ${size}px ${fam}`; }
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.lineJoin = 'round';
+  // Halo, coloured tube, white-hot core.
+  g.shadowColor = color;
+  g.shadowBlur = size * 0.25;
+  g.strokeStyle = color;
+  g.lineWidth = size * 0.09;
+  g.strokeText(text, W / 2, H / 2);
+  g.shadowBlur = size * 0.08;
+  g.strokeText(text, W / 2, H / 2);
+  g.shadowBlur = 0;
+  g.strokeStyle = 'rgba(255,255,255,.85)';
+  g.lineWidth = size * 0.025;
+  g.strokeText(text, W / 2, H / 2);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = ANISO;
+  return t;
+}
+
+/** A safety sign: a coloured header band with its word, the message below. */
+export function safetyTexture({ head = 'WARNING', text = '', bg = '#f2c318', color = '#1d1f22', aspect = 0.75 }) {
+  const W = 512;
+  const H = Math.max(64, Math.round(W / aspect));
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  g.fillStyle = '#fbfbf8';
+  g.fillRect(0, 0, W, H);
+  const band = H * 0.3;
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, band);
+  g.strokeStyle = '#1d1f22';
+  g.lineWidth = W * 0.02;
+  g.strokeRect(g.lineWidth / 2, g.lineWidth / 2, W - g.lineWidth, H - g.lineWidth);
+  const fam = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+  // A warning triangle beside the header word.
+  const tri = band * 0.62;
+  const tx = W * 0.08;
+  const ty = band / 2;
+  g.fillStyle = '#1d1f22';
+  g.beginPath(); g.moveTo(tx + tri / 2, ty - tri / 2); g.lineTo(tx + tri, ty + tri / 2); g.lineTo(tx, ty + tri / 2); g.closePath(); g.fill();
+  g.fillStyle = bg;
+  g.font = `900 ${tri * 0.7}px ${fam}`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('!', tx + tri / 2, ty + tri * 0.12);
+  g.fillStyle = color;
+  let hs = band * 0.5;
+  g.font = `900 ${hs}px ${fam}`;
+  const hw = g.measureText(head).width;
+  if (hw > W * 0.7) { hs *= (W * 0.7) / hw; g.font = `900 ${hs}px ${fam}`; }
+  g.fillText(head, W * 0.56, band / 2);
+  // The message, wrapped.
+  g.fillStyle = '#1d1f22';
+  const words = String(text).split(/\s+/).filter(Boolean);
+  let size = (H - band) * 0.22;
+  let lines = [];
+  for (; size > 10; size *= 0.92) {
+    g.font = `800 ${size}px ${fam}`;
+    lines = [];
+    let cur = '';
+    for (const w of words) {
+      const s = cur ? `${cur} ${w}` : w;
+      if (g.measureText(s).width > W * 0.84 && cur) { lines.push(cur); cur = w; } else cur = s;
+    }
+    if (cur) lines.push(cur);
+    if (lines.length * size * 1.15 < (H - band) * 0.8 && lines.every((l) => g.measureText(l).width <= W * 0.84)) break;
+  }
+  let y = band + (H - band) / 2 - ((lines.length - 1) * size * 1.15) / 2;
+  for (const l of lines) { g.fillText(l, W / 2, y); y += size * 1.15; }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = ANISO;
+  return t;
+}
+
+/** An LED screen showing a message: a deep gradient, bright text, fine pixel grid. */
+export function screenTexture({ text = '', sub = '', color = '#ffffff', bg = '#0b3d91', aspect = 16 / 9 }) {
+  const W = 1024;
+  const H = Math.max(64, Math.round(W / aspect));
+  const c = canvas(W, H);
+  const g = c.getContext('2d');
+  const base = new THREE.Color(bg);
+  const lite = base.clone().lerp(new THREE.Color('#ffffff'), 0.25);
+  const grad = g.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, `#${lite.getHexString()}`);
+  grad.addColorStop(1, `#${base.clone().multiplyScalar(0.55).getHexString()}`);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, W, H);
+  // A swoosh for a bit of design.
+  g.fillStyle = 'rgba(255,255,255,.08)';
+  g.beginPath(); g.ellipse(W * 0.85, H * 1.1, W * 0.6, H * 0.55, -0.3, 0, Math.PI * 2); g.fill();
+  const fam = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+  g.fillStyle = color;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  let size = H * (sub ? 0.26 : 0.32);
+  g.font = `900 ${size}px ${fam}`;
+  const tw = g.measureText(text || ' ').width;
+  if (tw > W * 0.88) { size *= (W * 0.88) / tw; g.font = `900 ${size}px ${fam}`; }
+  g.fillText(text, W / 2, sub ? H * 0.42 : H / 2);
+  if (sub) {
+    let ss = Math.min(size * 0.45, H * 0.11);
+    g.font = `600 ${ss}px ${fam}`;
+    const sw = g.measureText(sub).width;
+    if (sw > W * 0.88) { ss *= (W * 0.88) / sw; g.font = `600 ${ss}px ${fam}`; }
+    g.fillText(sub, W / 2, H * 0.7);
+  }
+  // LED pixel grid.
+  g.fillStyle = 'rgba(0,0,0,.18)';
+  const step = Math.max(4, Math.round(W / 180));
+  for (let x = 0; x < W; x += step) g.fillRect(x, 0, 1, H);
+  for (let y = 0; y < H; y += step) g.fillRect(0, y, W, 1);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = ANISO;
+  return t;
+}
+
 /** A soft radial spot, for light pools on the ground and lamp glows. */
 export function glowTexture() {
   if (cache.has('glow')) return cache.get('glow');

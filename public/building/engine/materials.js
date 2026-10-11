@@ -349,6 +349,60 @@ export function signFace(texture) {
   return night(m, 'emissiveIntensity', 0.9);
 }
 
+/** Neon tubes: coloured by day, blazing after dark. */
+export function neonFace(texture) {
+  const mat = std({
+    map: texture, transparent: true, alphaTest: 0.04, roughness: 0.3, depthWrite: false,
+    emissive: new THREE.Color('#ffffff'), emissiveMap: texture, emissiveIntensity: 0,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  return night(mat, 'emissiveIntensity', 2.6);
+}
+
+/** An LED screen: always on, brighter than anything painted. */
+export function screenFace(texture) {
+  return std({ map: texture, emissive: new THREE.Color('#ffffff'), emissiveMap: texture, emissiveIntensity: 0.85, roughness: 0.22, metalness: 0 });
+}
+
+/** A printed or painted face that does not light up (banners, plaques, safety signs). */
+export function printFace(texture, { rough = 0.6, metal = 0, side = THREE.FrontSide, cutout = false } = {}) {
+  const m = std({ map: texture, roughness: rough, metalness: metal, side });
+  if (cutout) {
+    // Letters with nothing between them.
+    m.transparent = true;
+    m.alphaTest = 0.05;
+    m.polygonOffset = true;
+    m.polygonOffsetFactor = -2;
+    m.polygonOffsetUnits = -2;
+  }
+  return m;
+}
+
+/** Clear acrylic, as behind neon tubes. */
+export function acrylic() {
+  return once('acrylic', () => std({ color: new THREE.Color('#ffffff'), transparent: true, opacity: 0.1, roughness: 0.05, metalness: 0, depthWrite: false }));
+}
+
+/** See-through tint for camera coverage cones: strongest at the lens, fading out to the far end. */
+export function coverage(hex = '#46b4ff') {
+  return once(`coverage|${hex}`, () => {
+    const c = document.createElement('canvas');
+    c.width = 4;
+    c.height = 128;
+    const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, 128);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.55, '#5a5a5a');
+    grad.addColorStop(1, '#000000');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 4, 128);
+    const fade = new THREE.CanvasTexture(c);
+    return new THREE.MeshBasicMaterial({
+      color: new THREE.Color(hex), alphaMap: fade, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, fog: true,
+    });
+  });
+}
+
 /* --------------------------------------------------------------- planting */
 
 export const SEASON_LEAF = {

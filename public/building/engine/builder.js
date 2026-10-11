@@ -71,7 +71,20 @@ export class Builder {
     const pos = new Float32Array([...a, ...b, ...c, ...d]);
     const ab = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
     const ad = new THREE.Vector3(d[0] - a[0], d[1] - a[1], d[2] - a[2]);
-    const n = new THREE.Vector3().crossVectors(ab, ad).normalize();
+    // Newell's normal over all four corners, so a quad with two corners in the
+    // same place (really a triangle) still gets a true normal. A zero normal
+    // turns into NaN in the shader, and bloom spreads that over the screen.
+    const n = new THREE.Vector3();
+    const v = [a, b, c, d];
+    for (let i = 0; i < 4; i++) {
+      const p = v[i];
+      const q = v[(i + 1) % 4];
+      n.x += (p[1] - q[1]) * (p[2] + q[2]);
+      n.y += (p[2] - q[2]) * (p[0] + q[0]);
+      n.z += (p[0] - q[0]) * (p[1] + q[1]);
+    }
+    if (n.lengthSq() < 1e-12) return this;   // no area at all
+    n.normalize();
     const nor = new Float32Array([n.x, n.y, n.z, n.x, n.y, n.z, n.x, n.y, n.z, n.x, n.y, n.z]);
     const L = ab.length();
     const H = ad.length();
@@ -144,6 +157,7 @@ export class Builder {
       if (!geos.length) continue;
       const merged = geos.length === 1 ? geos[0] : mergeGeometries(geos, false);
       if (!merged) continue;
+      cleanNormals(merged);
       merged.computeBoundingSphere();
       const mesh = new THREE.Mesh(merged, mat);
       const lit = mat.blending === THREE.AdditiveBlending;
@@ -155,6 +169,21 @@ export class Builder {
     this.parts.clear();
     return group;
   }
+}
+
+/** Any normal that is zero or not a number (a degenerate face) points up instead. */
+function cleanNormals(geo) {
+  const n = geo.attributes.normal;
+  if (!n) return;
+  const a = n.array;
+  let bad = false;
+  for (let i = 0; i < a.length; i += 3) {
+    const l = a[i] * a[i] + a[i + 1] * a[i + 1] + a[i + 2] * a[i + 2];
+    if (!(l > 1e-8)) { a[i] = 0; a[i + 1] = 1; a[i + 2] = 0; bad = true; }
+  }
+  if (bad) n.needsUpdate = true;
+  const p = geo.attributes.position.array;
+  for (let i = 0; i < p.length; i++) if (!Number.isFinite(p[i])) p[i] = 0;
 }
 
 function toIndexed(geo) {

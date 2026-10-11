@@ -661,7 +661,7 @@ export class Engine {
     const ray = this.rayFrom(ev);
     const hits = ray.intersectObjects(roots, true);
     for (const h of hits) {
-      if (!h.object.visible) continue;
+      if (!h.object.visible || h.object.userData.noPick) continue;
       let o = h.object;
       while (o && !o.userData.pick) o = o.parent;
       if (o) return { ...o.userData.pick, point: h.point, normal: h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : null, object: o, mesh: h.object, distance: h.distance };

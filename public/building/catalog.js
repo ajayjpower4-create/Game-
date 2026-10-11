@@ -72,6 +72,80 @@ export const CELL_IDS = CELLS.map((c) => c.id);
 
 /* Rooftop plant. Nothing is placed automatically unless a model ships with it
  * — the player puts every piece down, on any roof. Sizes in feet. */
+/* ----------------------------------------------------------- wall fixtures */
+
+/* Signs and cameras fixed to a building's walls. Each one hangs on a wall
+ * (face N/E/S/W), `s` feet along it from the left end as you look at it and
+ * `y` feet up to its centre, `w` by `h` feet. Rooftop letters stand on the roof
+ * at the top of the wall, so they only use `s`. */
+export const WALL_SIGNS = [
+  { id: 'letters', name: 'Channel letters', icon: '🔤', w: 30, h: 5, text: 'YOUR NAME', color: '#1f4f9c', lit: true },
+  { id: 'lightbox', name: 'Lightbox', icon: '💡', w: 16, h: 4.5, text: 'OPEN', color: '#ffffff', bg: '#1f4f9c', lit: true },
+  { id: 'fascia', name: 'Fascia panel', icon: '▭', w: 40, h: 4, text: 'SHOP NAME', color: '#ffffff', bg: '#1d2c44', lit: false },
+  { id: 'blade', name: 'Projecting sign', icon: '🚩', w: 4, h: 9, text: 'CAFE', color: '#ffffff', bg: '#c0392b', lit: true },
+  { id: 'roundel', name: 'Logo roundel', icon: '⭕', w: 8, h: 8, text: '', logo: '★', color: '#ffffff', bg: '#1f4f9c', lit: true },
+  { id: 'neon', name: 'Neon script', icon: '✨', w: 18, h: 4, text: 'Open late', color: '#ff4fd8', lit: true },
+  { id: 'screen', name: 'LED screen', icon: '📺', w: 20, h: 11, text: 'WELCOME', sub: 'HAVE A GREAT DAY', color: '#ffffff', bg: '#0b3d91', lit: true },
+  { id: 'banner', name: 'Fabric banner', icon: '🎌', w: 24, h: 5, text: 'NOW HIRING', color: '#ffffff', bg: '#c0392b', lit: false },
+  { id: 'plaque', name: 'Name plaque', icon: '🔖', w: 3, h: 2, text: 'RECEPTION', color: '#2b3036', bg: '#c3c8cd', lit: false },
+  { id: 'safety', name: 'Safety notice', icon: '⚠️', w: 3, h: 4, text: 'HARD HATS MUST BE WORN', sub: 'WARNING', color: '#1d1f22', bg: '#f2c318', lit: false },
+  { id: 'number', name: 'Building number', icon: '🔢', w: 6, h: 6, text: '1', color: '#1d2c44', lit: false },
+  { id: 'rooftop', name: 'Rooftop letters', icon: '🏙️', w: 60, h: 9, text: 'YOUR NAME', color: '#c0392b', lit: true },
+];
+export const WALL_CAMS = [
+  { id: 'cam-bullet', name: 'Bullet camera', icon: '📹', w: 2.2, h: 1.6, color: '#f2f3f4' },
+  { id: 'cam-dome', name: 'Dome camera', icon: '⚪', w: 2, h: 1.4, color: '#f2f3f4' },
+  { id: 'cam-ptz', name: 'PTZ camera', icon: '🎥', w: 2.4, h: 3.2, color: '#f2f3f4' },
+  { id: 'cam-turret', name: 'Turret camera', icon: '🔘', w: 1.8, h: 1.6, color: '#2b2f34' },
+];
+export const FIXTURES = [...WALL_SIGNS, ...WALL_CAMS];
+export const FIXTURE_BY_ID = Object.fromEntries(FIXTURES.map((f) => [f.id, f]));
+export const isCam = (type) => typeof type === 'string' && type.startsWith('cam-');
+export const CAM_COLORS = [
+  { hex: '#f2f3f4', name: 'White' }, { hex: '#2b2f34', name: 'Black' }, { hex: '#8d949b', name: 'Grey' },
+  { hex: '#d9cfb8', name: 'Beige' }, { hex: '#1f4f9c', name: 'Blue' }, { hex: '#c0392b', name: 'Red' },
+  { hex: '#1f7a54', name: 'Green' }, { hex: '#e7b416', name: 'Yellow' },
+];
+
+/** A fresh fixture of a type, at a spot on a wall. */
+export function makeFixture(type, face = 'N', s = 10, y = 10, over = {}) {
+  const spec = FIXTURE_BY_ID[type] || WALL_SIGNS[0];
+  const base = { id: newId('f'), type: spec.id, face, s, y, w: spec.w, h: spec.h, color: spec.color };
+  if (isCam(spec.id)) return { ...base, tilt: 25, pan: 0, range: 60, cover: true, ir: true, ...over };
+  return { ...base, text: spec.text || '', sub: spec.sub || '', logo: spec.logo || '', bg: spec.bg || '', lit: !!spec.lit, ...over };
+}
+
+/** The old single "name on the wall" becomes channel letters placed the way it always was. */
+function signToFixtures(sign) {
+  if (!sign || sign.on === false || (!sign.text && !sign.logo)) return [];
+  return [{
+    id: newId('f'), type: 'letters', face: sign.face || 'N', auto: true, s: 0, y: 0, w: 30, h: 5,
+    text: sign.text || '', sub: sign.sub || '', logo: sign.logo || '', color: sign.color || '#1f4f9c',
+    size: sign.size || 1, lit: true, bg: '',
+  }];
+}
+
+/** Make a building's fixtures safe to build from, whatever the save held. */
+export function cleanFixtures(b) {
+  if (!Array.isArray(b.fixtures)) b.fixtures = signToFixtures(b.sign);
+  delete b.sign;
+  b.fixtures = b.fixtures.filter((f) => f && FIXTURE_BY_ID[f.type]).map((f) => {
+    const spec = FIXTURE_BY_ID[f.type];
+    const num = (v, d) => (Number.isFinite(+v) ? +v : d);
+    const base = isCam(spec.id)
+      ? { color: spec.color, tilt: 25, pan: 0, range: 60, cover: false, ir: true }
+      : { text: spec.text || '', sub: spec.sub || '', logo: spec.logo || '', color: spec.color, bg: spec.bg || '', lit: !!spec.lit };
+    return {
+      ...base,
+      ...f,
+      id: f.id || newId('f'),
+      face: ['N', 'E', 'S', 'W'].includes(f.face) ? f.face : 'N',
+      s: num(f.s, 10), y: num(f.y, 10), w: Math.max(0.5, num(f.w, spec.w)), h: Math.max(0.5, num(f.h, spec.h)),
+    };
+  });
+  return b;
+}
+
 export const ROOF_KIT = [
   { id: 'rtu', name: 'Packaged AC unit', icon: '🔲', w: 8, d: 6, h: 3.4 },
   { id: 'rtu-xl', name: 'Large rooftop unit', icon: '⬛', w: 15, d: 9, h: 5 },
@@ -198,6 +272,16 @@ export const PROPS = [
   P('Signs', 'trafficlight', 'Traffic light', '🚦', 2, 2, 16, { light: true }),
   P('Signs', 'flag', 'Flagpole', '🏳️', 2, 2, 34, { anim: true }),
   P('Signs', 'flags3', 'Three flagpoles', '🎌', 16, 2, 34, { anim: true }),
+  P('Signs', 'aframe', 'A-board', '🪧', 2.4, 2.2, 3.8, { sign: true, text: 'COFFEE & CAKE', bg: '#1d1f22' }),
+  P('Signs', 'ledboard', 'LED message board', '📟', 12, 1.4, 10, { sign: true, text: 'WELCOME', sub: 'DRIVE SAFELY', bg: '#05070a', textColor: '#ffb020' }),
+  P('Signs', 'totem', 'Wayfinding totem', '🗿', 3.4, 1.4, 10, { sign: true, text: 'RECEPTION / GOODS IN / VISITOR PARKING', bg: '#1d2c44' }),
+  P('Signs', 'entrywall', 'Entrance wall sign', '🧱', 30, 2.4, 5.5, { sign: true, solid: true, text: 'WELCOME', textColor: '#e9e4d8' }),
+  P('Signs', 'feather', 'Feather flag', '🚩', 2.6, 2.6, 15, { sign: true, text: 'OPEN', bg: '#c0392b' }),
+  P('Signs', 'gantry', 'Overhead gantry sign', '🛣️', 44, 3, 24, { sign: true, text: 'GOODS IN ➜', sub: 'ALL OTHER TRAFFIC ⬆', bg: '#1f6b3a' }),
+  P('Signs', 'siterules', 'Site rules board', '📋', 8, 1, 8.5, { sign: true, text: 'HI-VIS VESTS • HARD HATS • 5 MPH • NO SMOKING', sub: 'SITE RULES', bg: '#1f4f9c' }),
+  P('Signs', 'mapboard', 'Site map board', '🗺️', 7, 1, 7.5, { sign: true, text: 'SITE MAP', bg: '#1d2c44' }),
+  P('Signs', 'radarsign', 'Speed display sign', '🚸', 2.8, 1, 10, { sign: true, text: '23', sub: 'YOUR SPEED', bg: '#050608', textColor: '#ffb020' }),
+  P('Signs', 'hoarding', 'Printed hoarding', '🖼️', 40, 0.8, 8, { len: true, sign: true, text: 'COMING SOON — NEW HEADQUARTERS', bg: '#1f4f9c' }),
   // lighting
   P('Lighting', 'pole', 'Light pole', '💡', 3, 3, 27, { light: true }),
   P('Lighting', 'pole2', 'Double light pole', '🔆', 3, 3, 30, { light: true }),
@@ -205,7 +289,14 @@ export const PROPS = [
   P('Lighting', 'streetlamp', 'Street lamp', '🏮', 2, 6, 24, { light: true }),
   P('Lighting', 'heritage', 'Heritage lamp', '🕯️', 2, 2, 13, { light: true }),
   P('Lighting', 'bollardlight', 'Bollard light', '🔅', 1.4, 1.4, 4, { light: true }),
-  P('Lighting', 'cctv', 'CCTV pole', '📹', 2, 2, 20),
+  // CCTV: every camera takes a housing colour, a mount height, tilt, coverage and IR.
+  P('CCTV', 'cctv', 'CCTV pole (twin)', '📹', 2, 2, 20, { cam: true, hMin: 8, hMax: 60 }),
+  P('CCTV', 'cctvbullet', 'Bullet camera post', '🎥', 1.6, 1.6, 10, { cam: true, hMin: 4, hMax: 40 }),
+  P('CCTV', 'cctvdome', 'Dome camera pole', '⚪', 2, 2.6, 16, { cam: true, hMin: 6, hMax: 50 }),
+  P('CCTV', 'cctvptz', 'PTZ camera mast', '🛰️', 2.6, 3, 30, { cam: true, hMin: 10, hMax: 80 }),
+  P('CCTV', 'cctvmulti', 'Multi-camera mast', '🗼', 3.4, 3.4, 40, { cam: true, hMin: 15, hMax: 100 }),
+  P('CCTV', 'cctvanpr', 'ANPR camera', '🔍', 8, 1.6, 14, { cam: true, hMin: 8, hMax: 25 }),
+  P('CCTV', 'cctvtower', 'Mobile CCTV tower', '🚨', 7, 12, 26, { cam: true, solid: true, hMin: 12, hMax: 40 }),
   // planting
   P('Planting', 'tree', 'Broadleaf tree', '🌳', 18, 18, 26),
   P('Planting', 'oak', 'Big oak', '🌳', 30, 30, 38),
@@ -587,6 +678,7 @@ export function makeBuilding(style, over = {}) {
     walls: {},
     ...over,
   };
+  cleanFixtures(b);
   const cols = (len) => Math.max(2, Math.round(len / p.cell));
   const cw = cols(b.w);
   const cd = cols(b.d);
@@ -707,7 +799,7 @@ export function freshState(preset = 'warehouse') {
 
   if (preset === 'warehouse') {
     const shed = makeBuilding('shed', { x: cx - 190, y: 46, w: 380, d: 150 });
-    shed.sign.on = false;
+    shed.fixtures = [];
     shed.roofItems = [['skylight', 0.35, 0.3], ['skylight', 0.55, 0.3], ['skylight', 0.75, 0.3], ['skylight', 0.35, 0.7], ['skylight', 0.55, 0.7], ['skylight', 0.75, 0.7], ['rtu', 0.9, 0.5]]
       .map(([type, fx, fy]) => ({ type, dx: fx * 380, dy: fy * 150, rot: 0 }));
     const office = makeBuilding('office', { x: cx - 190, y: 46, w: 110, d: 164, floors: 3, sign: sign('TOILET PLUS SOLUTIONS', 'SOLUTIONS THAT WORK FOR YOU') });
@@ -776,7 +868,7 @@ export function freshState(preset = 'warehouse') {
   } else if (preset === 'campus') {
     const tower = makeBuilding('tower', { x: cx - 75, y: 60, w: 150, d: 110, floors: 12, wall: '#7f8896', sign: sign('TOILET PLUS SOLUTIONS', '') });
     const podium = makeBuilding('small', { x: cx - 97, y: 144, w: 194, d: 52, floors: 1, height: 15, wall: '#8b93a0' });
-    podium.sign.on = false;
+    podium.fixtures = [];
     podium.walls.N[0] = podium.walls.N[0].map(() => 'glass');
     objects.push(tower, podium);
     objects.push(prop('flags3', cx - 8, 230));
@@ -860,7 +952,7 @@ export function normalize(state) {
       const style = BUILDING_STYLES[o.style] || {};
       o.walls = o.walls || {};
       o.roofItems = Array.isArray(o.roofItems) ? o.roofItems : [];
-      o.sign = { on: true, face: 'N', text: '', sub: '', color: '#1f4f9c', logo: '', ...(o.sign || {}) };
+      cleanFixtures(o);
       o.cladding = o.cladding === 'plain' ? 'render' : (o.cladding || style.cladding || 'precast');
       o.roofType = o.roofType || style.roofType || 'flat';
       if (o.roofGlass == null) o.roofGlass = !!style.roofGlass;

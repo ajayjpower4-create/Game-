@@ -251,6 +251,9 @@ export function siteStats(state, plan = planSite(state)) {
     props: state.objects.filter((o) => o.kind === 'prop').length,
     booths: state.objects.filter((o) => o.kind === 'booth').length,
     roofItems: blds.reduce((s, b) => s + (b.roofItems || []).length, 0),
+    wallSigns: blds.reduce((s, b) => s + (b.fixtures || []).filter((f) => !String(f.type).startsWith('cam-')).length, 0),
+    cameras: blds.reduce((s, b) => s + (b.fixtures || []).filter((f) => String(f.type).startsWith('cam-')).length, 0)
+      + state.objects.filter((o) => o.kind === 'prop' && (PROP_BY_ID[o.type] || {}).cam).length,
     groundPlant: state.objects.filter((o) => o.kind === 'plant').length,
     runs: state.objects.filter((o) => o.kind === 'run').length,
     runLength: state.objects.filter((o) => o.kind === 'run').reduce((s, o) => s + runLength(o), 0),
