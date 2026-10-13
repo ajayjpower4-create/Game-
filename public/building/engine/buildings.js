@@ -949,10 +949,19 @@ function camera(B, info, fx, r, out) {
 
 /** A fan: shroud ring with a dark well and a guard. */
 function fanTop(B, x, y, z, r) {
-  B.cyl(M.metal('#9aa2aa', 0.4), r, r, 0.6, x, y + 0.3, z, { seg: 18, open: true });
-  B.cyl(M.rubber(), r * 0.96, r * 0.96, 0.05, x, y + 0.2, z, { seg: 18 });
-  B.cyl(M.metal('#5d646b', 0.5), r * 0.18, r * 0.18, 0.3, x, y + 0.35, z, { seg: 10 });
-  for (let k = 0; k < 3; k++) B.box(M.metal('#5d646b', 0.5), r * 1.9, 0.08, 0.12, x, y + 0.58, z, [0, (k * Math.PI) / 3, 0]);
+  // Shroud, a dark well, a five-blade fan down inside it and a wire guard on top.
+  const shroud = M.hvac('#b9bfc5');
+  B.cyl(shroud, r * 1.04, r * 1.08, 0.75, x, y + 0.37, z, { seg: 28, open: true });
+  B.add(new THREE.TorusGeometry(r * 1.05, 0.07, 6, 32).rotateX(Math.PI / 2), M.metal('#9aa2aa', 0.4), { pos: [x, y + 0.75, z] });
+  B.cyl(M.rubber(), r, r, 0.04, x, y + 0.06, z, { seg: 28 });
+  B.cyl(M.metal('#3d4248', 0.45), r * 0.15, r * 0.19, 0.34, x, y + 0.26, z, { seg: 12 });
+  const blade = M.painted('#4a5057', 0.45);
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 5) * Math.PI * 2;
+    const g = boxGeo(r * 0.8, 0.04, r * 0.3).rotateX(0.38).translate(r * 0.5, 0, 0).rotateY(a);
+    B.add(g, blade, { pos: [x, y + 0.36, z] });
+  }
+  B.add(new THREE.CircleGeometry(r * 1.04, 32).rotateX(-Math.PI / 2), M.fanGuard(), { pos: [x, y + 0.76, z] });
 }
 
 /* ------------------------------------------------------------ heavy plant */
@@ -994,7 +1003,7 @@ function fanRow(B, x0, x1, y, z, n, r) {
 
 /** Access doors with handles down one side of an air handler. */
 function doors(B, w, h, z, n) {
-  const door = M.painted('#bfc4c9', 0.45);
+  const door = M.hvac('#bfc4c9');
   for (let i = 0; i < n; i++) {
     const x = -w / 2 + (w * (i + 0.5)) / n;
     B.box(door, w / n - 1.2, h - 2, 0.08, x, h / 2, z);
@@ -1004,8 +1013,8 @@ function doors(B, w, h, z, n) {
 }
 
 function bigUnit(B, type, w, d, h) {
-  const unit = M.painted('#d3d7db', 0.42);
-  const seam = M.painted('#aeb4ba', 0.5);
+  const unit = M.hvac('#d3d7db');
+  const seam = M.hvac('#aeb4ba');
   const dark = M.painted('#7d848b', 0.5);
   switch (type) {
     case 'ahu': {
@@ -1051,9 +1060,18 @@ function bigUnit(B, type, w, d, h) {
         B.cyl(M.rubber(), d * 0.33, d * 0.33, 0.06, cx, h + 0.42, 0, { seg: 26 });
         B.cyl(M.metal('#5d646b', 0.5), 0.4, 0.4, 0.5, cx, h + 0.3, 0, { seg: 10 });
       }
-      // Top deck handrail and a stair.
-      for (const sz of [-1, 1]) B.box(M.painted('#e7b416', 0.45), w, 0.12, 0.12, 0, h * 0.55 + 3.6, sz * (d / 2 - 0.1));
-      for (let i = 0; i < 10; i++) B.box(M.metal('#8a9198', 0.4), 2.6, 0.15, 0.9, w / 2 + 1.6, 0.4 + i * (h * 0.55 / 10), -d / 2 + 1 + i * 0.9);
+      // A handrail round the top deck, on posts, and a caged ladder up the end.
+      const deck = h * 0.55 + 0.4;
+      const rail = M.painted('#e7b416', 0.45);
+      for (const sz of [-1, 1]) {
+        for (const y of [deck + 1.9, deck + 3.6]) B.box(rail, w - 0.4, 0.12, 0.12, 0, y, sz * (d / 2 - 0.2));
+        for (let x = -w / 2 + 0.2; x <= w / 2 - 0.19; x += (w - 0.4) / Math.max(2, Math.round(w / 5))) B.box(rail, 0.12, 3.6, 0.12, x, deck + 1.8, sz * (d / 2 - 0.2));
+      }
+      for (const sx of [-1, 1]) {
+        for (const y of [deck + 1.9, deck + 3.6]) B.box(rail, 0.12, 0.12, d - 0.4, sx * (w / 2 - 0.2), y, 0);
+      }
+      for (const dz of [-0.7, 0.7]) B.box(M.metal('#8a9198', 0.4), 0.12, deck + 3.6, 0.12, w / 2 + 0.6, (deck + 3.6) / 2, dz);
+      for (let y = 0.6; y < deck; y += 1) B.box(M.metal('#8a9198', 0.4), 0.08, 0.08, 1.4, w / 2 + 0.6, y, 0);
       break;
     }
     case 'rtu-mega': {
@@ -1103,8 +1121,8 @@ export function roofItemModel(type, { ground = false } = {}) {
     for (const [m, geos] of P.parts) for (const g of geos) B.add(g, m, { pos: [0, 0.5, 0] });
     return B;
   }
-  const unit = M.painted('#c9cdd1', 0.45);
-  const unitDark = M.painted('#8d949b', 0.5);
+  const unit = M.hvac('#c9cdd1');
+  const unitDark = M.hvac('#8d949b');
   const steel = M.metal('#8a9198', 0.45);
   const curb = M.painted('#6d737a', 0.6);
   switch (type) {

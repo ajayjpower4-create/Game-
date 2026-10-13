@@ -164,6 +164,7 @@ export class Life {
       }
     }
     this.stepWeather(dt);
+    M.flowWater(dt);
   }
 
   /* ------------------------------------------------------------ weather */

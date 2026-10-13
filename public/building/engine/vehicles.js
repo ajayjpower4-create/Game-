@@ -390,6 +390,84 @@ export function vehicleModel(type, color, w, L, h, paintOverride = null, { lit =
       for (const sx of [-1, 1]) for (const zz of [z0 + 7, z0 + L - 3]) B.box(M.metal('#3b3f45', 0.5), 0.5, 2.8, 0.5, sx * (w / 2 + 2.5), 1.6, zz);
       break;
     }
+    case 'refuse': {
+      // Bin lorry: a low cab, the compactor body and the lifter at the back.
+      const green = M.painted('#2f7d4a', 0.45);
+      truckCab(B, M.painted('#f1f2f4', 0.4), w, z0, 9, { len: 7.5, sleeper: false });
+      chassis(B, w, z0 + 2, z0 + L - 0.5, [z0 + 3.2, z0 + L - 9, z0 + L - 5]);
+      B.box(green, w, h - 3.8, L - 12, 0, 3.8 + (h - 3.8) / 2, z0 + 8 + (L - 12) / 2);
+      B.box(green, w - 0.4, h - 4.4, 3.6, 0, 3.6 + (h - 4.4) / 2, z0 + L - 2);
+      B.box(M.metal('#3b3f45', 0.5), w - 1, 3.4, 0.4, 0, 4.2, z0 + L + 0.1);
+      for (const sx of [-1, 1]) B.box(M.signal('#ffa31a', 2), 0.4, 0.4, 0.4, sx * (w / 2 - 0.5), 9.4, z0 + 2);
+      B.box(M.painted('#e7b416', 0.45), w + 0.02, 0.6, L - 12, 0, 5, z0 + 8 + (L - 12) / 2);
+      break;
+    }
+    case 'scissorlift': {
+      const base = M.painted('#e05a20', 0.45);
+      B.box(base, w, 1.6, L, 0, 1.4, 0);
+      for (const zz of [z0 + 1.2, z0 + L - 1.2]) for (const sx of [-1, 1]) wheel(B, sx * (w / 2 - 0.25), 0.7, zz, 0.7, 0.5);
+      // Crossed scissor arms, three stages.
+      const steel = M.metal('#3b3f45', 0.5);
+      const st = (h - 4) / 3;
+      for (let i = 0; i < 3; i++) for (const sx of [-1, 1]) {
+        const y0 = 2.2 + i * st;
+        B.tube(steel, [sx * (w / 2 - 0.4), y0, z0 + 1], [sx * (w / 2 - 0.4), y0 + st, z0 + L - 1], 0.12, 6);
+        B.tube(steel, [sx * (w / 2 - 0.4), y0, z0 + L - 1], [sx * (w / 2 - 0.4), y0 + st, z0 + 1], 0.12, 6);
+      }
+      B.box(base, w, 0.3, L, 0, h - 1.8, 0);
+      const rail = M.painted('#e7b416', 0.45);
+      for (const sx of [-1, 1]) B.box(rail, 0.12, 0.12, L, sx * (w / 2 - 0.06), h + 1.6, 0);
+      for (const sz of [-1, 1]) B.box(rail, w, 0.12, 0.12, 0, h + 1.6, sz * (L / 2 - 0.06));
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) B.box(rail, 0.12, 3.4, 0.12, sx * (w / 2 - 0.06), h, sz * (L / 2 - 0.06));
+      break;
+    }
+    case 'golfcart': {
+      const body = M.painted(color || '#f1f2f4', 0.35);
+      B.box(body, w, 1.6, L, 0, 1.6, 0);
+      B.box(body, w, 1.2, 2.2, 0, 2.4, z0 + 1.1);
+      for (const zz of [z0 + 1.6, z0 + L - 1.6]) for (const sx of [-1, 1]) wheel(B, sx * (w / 2 - 0.2), 0.8, zz, 0.8, 0.5);
+      B.box(M.plastic('#2b2f34', 0.7), w - 0.6, 0.5, 2, 0, 2.9, 0.4);
+      B.box(M.plastic('#2b2f34', 0.7), w - 0.6, 1.6, 0.4, 0, 3.6, 1.3);
+      for (const [sx, zz] of [[-1, z0 + 2], [1, z0 + 2], [-1, L / 2 - 1], [1, L / 2 - 1]]) B.box(M.metal('#3b3f45', 0.4), 0.12, h - 2.4, 0.12, sx * (w / 2 - 0.3), 2.4 + (h - 2.4) / 2, zz);
+      B.box(body, w + 0.2, 0.2, L - 1.4, 0, h, 0.3);
+      B.box(M.vehicleGlass(), w - 0.8, 1.6, 0.08, 0, h - 1.2, z0 + 2.05, [0.25, 0, 0]);
+      break;
+    }
+    case 'motorbike': {
+      const body = M.carPaint(color || '#c0392b');
+      for (const zz of [z0 + 1.2, z0 + L - 1.2]) wheel(B, 0, 1.15, zz, 1.15, 0.45);
+      B.box(body, 1, 1.4, 2.6, 0, 2.6, -0.4);
+      B.box(M.plastic('#1d1f22', 0.6), 0.9, 0.35, 2.4, 0, 3.3, 1.1);
+      B.box(M.metal('#9aa1a8', 0.3), 0.8, 0.9, 1.6, 0, 1.7, 0.2);
+      B.tube(M.chrome(), [0, 1.2, z0 + 1.2], [0, 3.9, z0 + 2.2], 0.08, 6);
+      B.box(M.chrome(), 2.4, 0.12, 0.12, 0, 4, z0 + 2.3);
+      B.box(M.lamp('#ffffff', 3), 0.5, 0.4, 0.2, 0, 3.3, z0 + 1.7);
+      B.tube(M.chrome(), [0.4, 1.4, 0], [0.4, 1.6, L / 2 - 0.3], 0.13, 6);
+      break;
+    }
+    case 'skidsteer': {
+      const yel = M.painted('#e2a51b', 0.45);
+      B.box(yel, w - 1.2, 3, L - 3, 0, 2.6, 0.8);
+      for (const zz of [z0 + 2.6, z0 + L - 2.6]) for (const sx of [-1, 1]) wheel(B, sx * (w / 2 - 0.4), 1.25, zz, 1.25, 0.8);
+      const cage = M.metal('#2b2e33', 0.5);
+      for (const [sx, zz] of [[-1, -1.2], [1, -1.2], [-1, 1.6], [1, 1.6]]) B.box(cage, 0.2, 3.2, 0.2, sx * (w / 2 - 0.9), 5.6, zz);
+      B.box(yel, w - 1.4, 0.3, 3.2, 0, 7.3, 0.2);
+      B.box(M.vehicleGlass(), w - 1.9, 2.8, 0.06, 0, 5.6, -1.25);
+      for (const sx of [-1, 1]) B.tube(yel, [sx * (w / 2 - 0.5), 5.5, 2.5], [sx * (w / 2 - 0.5), 2, z0 + 0.8], 0.25, 6);
+      B.box(M.metal('#3b3f45', 0.5), w, 1.8, 1.8, 0, 1.2, z0 + 0.3);
+      break;
+    }
+    case 'campervan': {
+      const body = M.painted('#f1f2f4', 0.4);
+      truckCab(B, body, w, z0, 8.2, { len: 6, sleeper: false });
+      chassis(B, w, z0 + 2, z0 + L - 0.5, [z0 + 3.2, z0 + L - 4], { y: 2, dual: false, r: 1.3 });
+      B.box(body, w, h - 2.6, L - 5.8, 0, 2.6 + (h - 2.6) / 2, z0 + 5.8 + (L - 5.8) / 2);
+      B.box(body, w, 1.6, 4, 0, h - 0.8, z0 + 4.5);
+      B.box(M.painted('#2c4a7c', 0.4), w + 0.02, 0.5, L - 6, 0, 4.4, z0 + 5.8 + (L - 6) / 2);
+      for (const zz of [z0 + 9, z0 + 15]) for (const sx of [-1, 1]) B.box(M.vehicleGlass(), 0.06, 1.6, 3, sx * (w / 2 + 0.01), 6.2, zz);
+      B.box(M.plastic('#d9dde2', 0.5), 3, 0.8, 3, 0, h + 0.4, 2);
+      break;
+    }
     default:
       B.box(paint, w, h, L, 0, h / 2, 0);
   }

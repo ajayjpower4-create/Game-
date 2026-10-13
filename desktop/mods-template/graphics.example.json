@@ -1,0 +1,21 @@
+// Rename this file to graphics.json to use it. Lines starting with // are comments.
+// These settings go past the in-game Max preset: they need a strong graphics card.
+// Delete any line you don't want to change (and mind the commas).
+{
+  "quality": "max",
+  "ss": 2,
+  "shadow": 16384,
+  "shadowSoftness": 1.6,
+  "msaa": 8,
+  "aoSamples": 48,
+  "lights": 24,
+  "lampShadows": 10,
+  "lampShadowSize": 4096,
+  "aniso": 16,
+  "sharpen": 0.3,
+  "env": 2048,
+  "clouds": 1.2,
+  "viewDistance": 30000,
+  "autoRes": false,
+  "uncapFps": false
+}

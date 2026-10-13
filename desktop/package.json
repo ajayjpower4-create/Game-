@@ -1,0 +1,59 @@
+{
+  "name": "building-design-simulator",
+  "productName": "Building Design Simulator",
+  "version": "1.0.0",
+  "description": "Building Design Simulator for Windows: design a site in real 3D, with a mods folder for graphics and scripts",
+  "main": "main.cjs",
+  "author": "Building Design Simulator",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "prepare-game": "node scripts/prepare.mjs",
+    "start": "npm run prepare-game && electron .",
+    "dist:win": "npm run prepare-game && electron-builder --win portable zip --x64 --publish never",
+    "dist:win-from-linux": "npm run prepare-game && electron-builder --win portable zip --x64 --publish never -c.win.signAndEditExecutable=false"
+  },
+  "devDependencies": {
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.buildingdesignsimulator.desktop",
+    "productName": "Building Design Simulator",
+    "copyright": "Building Design Simulator",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "app/**/*",
+      "mods-template/**/*",
+      "build/icon.png"
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "BuildingDesignSimulator-${version}-win-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "BuildingDesignSimulator-${version}-portable.exe"
+    }
+  }
+}

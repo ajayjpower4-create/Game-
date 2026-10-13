@@ -13,11 +13,12 @@ import {
 } from './catalog.js';
 import { footprint, isClear, bounds, buildingsOf, snapToDock, evictFrom, siteStats, isSolid, runLength } from './site.js';
 import { contains, corners, overlaps, toLocal as planLocal, toWorld as planWorld, wallFrames, clamp, DEG } from './geom.js';
-import { Engine, WEATHER, QUALITY } from './engine/core.js';
+import { Engine, WEATHER, QUALITY, GRAPHICS_KEYS } from './engine/core.js';
 import { World, modelFor, place as placeModel, releaseModel, makeUnder } from './engine/world.js';
 import { Life } from './engine/life.js';
 import { roofItemModel, roofSurfaceY, fixtureRect, PARAPET } from './engine/buildings.js';
 import { buildRun, squarePath } from './engine/runs.js';
+import { lotLayout, LOT_ANGLES, STALL_WIDTHS } from './lots.js';
 import * as THREE from 'three';
 
 const SAVE_KEY = 'building-sim:v4';
@@ -229,6 +230,7 @@ function buildScreen() {
     <div class="photo-bar" id="photoBar">
       <button class="btn primary" data-act="photo-shoot">📸 Take photo</button>
       <button class="btn" data-act="photo-shoot" data-value="2">📸 ×2 resolution</button>
+      <button class="btn${prefs.dof ? ' on' : ''}" data-act="photo-dof" id="dofBtn" title="Keep what the camera is aimed at sharp and soften the rest">🎯 Depth of field</button>
       <button class="btn" data-act="photo">Exit photo mode</button>
     </div>
   </div>`;
@@ -243,7 +245,10 @@ function buildScreen() {
   const stage = document.getElementById('stage');
   const first = !engine;
   if (!engine) {
-    engine = new Engine(stage, { quality: prefs.quality });
+    const gfx = modGraphics();
+    // A graphics mod can pick the starting preset ("quality": "max").
+    if (QUALITY[gfx.quality]) prefs.quality = gfx.quality;
+    engine = new Engine(stage, { quality: prefs.quality, tweaks: gfx });
     world = new World(engine);
     life = new Life(engine, world);
     engine.keyFilter = (k) => !(engine.mode === 'orbit' && ui.selected && k.startsWith('Arrow'));
@@ -255,6 +260,7 @@ function buildScreen() {
       flashHint('Running slowly — try a lower Graphics quality in the World tab');
     };
     engine.addTicker(tick);
+    exposeApi();
   } else {
     stage.appendChild(engine.renderer.domElement);
     engine.host = stage;
@@ -273,6 +279,7 @@ function buildScreen() {
     syncWorld(true);
     if (first) engine.snapView('corner');
     document.getElementById('loading')?.classList.add('done');
+    if (first) loadMods();
     if (prefs.debug) console.log('first build', Math.round(performance.now() - t0), 'ms');
   }, 30);
   drawPanel();
@@ -301,6 +308,7 @@ function syncWorld(force = false) {
 function commit({ panel = true } = {}) {
   save();
   syncWorld();
+  for (const fn of modHooks.change) { try { fn(state); } catch (e) { console.warn('mod change', e); } }
   if (panel) drawPanel();
   drawHud();
 }
@@ -330,6 +338,7 @@ function refreshSelection() {
   // The highlight follows the chosen sign; with nothing chosen it goes away.
   if (ui.fixSel && sb) drawWallMark(sb, fixtureRect(sb, fixtureById(sb, ui.fixSel)), 0x46b4ff);
   else if (!ui.fix && !ui.doors && !ui.attach) drawDoorMark(null);
+  drawHandles();
   drawFootprint();
 }
 
@@ -514,7 +523,7 @@ function drawMinimap(force = false) {
       g.beginPath();
       (o.points || []).forEach((p, i) => (i ? g.lineTo(X(p.x), Y(p.y)) : g.moveTo(X(p.x), Y(p.y))));
       g.stroke();
-    } else if ((PROP_BY_ID[o.type] || {}).road) poly(o, '#2b2f36');
+    } else if ((PROP_BY_ID[o.type] || {}).road || (PROP_BY_ID[o.type] || {}).lot) poly(o, '#2b2f36');
     else {
       const spec = PROP_BY_ID[o.type] || {};
       if (spec.vehicle) poly(o, '#c8ccd2');
@@ -558,6 +567,8 @@ function tick(dt) {
   if (needle) needle.style.transform = `rotate(${-engine.heading}rad)`;
   mapT += dt;
   if (mapT > 0.25) { mapT = 0; drawMinimap(); }
+  if (handleGroup.visible && !drag) drawHandles();
+  for (const fn of modHooks.tick) { try { fn(dt); } catch (e) { console.warn('mod tick', e); } }
   const fps = document.getElementById('fps');
   if (fps && prefs.debug) {
     const i = engine.info;
@@ -785,7 +796,8 @@ function propPanel(o) {
     ${objActions(o)}
     ${spec.len ? `<div class="field"><label for="p-len">Length<b>${fmt(o.w != null ? o.w : spec.w)} ft</b></label>
       <input id="p-len" type="range" min="6" max="300" step="2" value="${Math.round(o.w != null ? o.w : spec.w)}" data-act="num" data-key="w"></div>` : ''}
-    ${['pond', 'flowerbed', 'plantyard', 'plantpad'].includes(o.type) ? `<div class="field"><label for="p-w2">Width<b>${fmt(o.w || spec.w)} ft</b></label>
+    ${spec.lot ? lotFields(o, spec) : ''}
+    ${spec.resize && !spec.lot ? `<div class="field"><label for="p-w2">Width<b>${fmt(o.w || spec.w)} ft</b></label>
       <input id="p-w2" type="range" min="6" max="200" step="2" value="${Math.round(o.w || spec.w)}" data-act="num" data-key="w"></div>
       <div class="field"><label for="p-d2">Depth<b>${fmt(o.d || spec.d)} ft</b></label>
       <input id="p-d2" type="range" min="4" max="160" step="2" value="${Math.round(o.d || spec.d)}" data-act="num" data-key="d"></div>` : ''}
@@ -794,6 +806,32 @@ function propPanel(o) {
     </div></div>` : ''}
     ${spec.sign ? `<div class="divider"></div><h3>Sign</h3>${signFields('s', o.sign || {}, { bg: true, sub: !!spec.sub || o.type === 'billboard' || o.type === 'monument' })}` : ''}
     ${spec.cam ? camFields(o, spec) : ''}`;
+}
+
+/** A parking lot's size and layout, all of it the player's to set. */
+function lotFields(o, spec) {
+  const L = lotLayout(o);
+  const S = L.S;
+  const chip = (key, val, label, cur) => `<button class="chip${String(cur) === String(val) ? ' on' : ''}" data-act="set" data-key="${key}" data-value="${val}">${label}</button>`;
+  const toggle = (key, label) => `<button class="toggle${o[key] !== false ? ' on' : ''}" data-act="flag-toggle" data-key="${key}"><span>${label}</span><span class="pill">${o[key] !== false ? 'On' : 'Off'}</span></button>`;
+  const slider = (key, label, min, max, step, val, unit = '') => `<div class="field"><label for="lot-${key}">${label}<b>${val}${unit}</b></label>
+      <input id="lot-${key}" type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-act="num" data-key="${key}"></div>`;
+  const ada = L.stalls.filter((s) => s.ada).length;
+  const ev = L.stalls.filter((s) => s.ev).length;
+  return `<div class="lotstat"><b>${L.stalls.length}</b> bays · ${ada} accessible · ${ev} EV · ${L.rows.length} rows</div>
+    <p class="hint">Drag the white handles on its edges to make it bigger or smaller, or use the sliders.</p>
+    ${slider('w', 'Width', 30, 900, 2, Math.round(o.w || spec.w), ' ft')}
+    ${slider('d', 'Depth', 30, 700, 2, Math.round(o.d || spec.d), ' ft')}
+    <div class="field"><label>Bay angle</label><div class="chips">${LOT_ANGLES.map((a) => chip('angle', a, a === 90 ? '90° straight in' : `${a}° angled`, S.angle)).join('')}</div></div>
+    <div class="field"><label>Bay width</label><div class="chips">${STALL_WIDTHS.map((w) => chip('sw', w, `${w} ft`, S.sw)).join('')}</div></div>
+    ${slider('ada', 'Accessible bays', 0, 20, 1, S.ada)}
+    ${slider('ev', 'EV charging bays', 0, 40, 1, S.ev)}
+    ${slider('fill', 'How full', 0, 100, 5, S.fill, '%')}
+    <div class="field"><label>Surface</label><div class="chips">${[['asphalt', 'Asphalt'], ['concrete', 'Concrete'], ['paving', 'Block paving'], ['gravel', 'Gravel']].map(([v, n]) => chip('surface', v, n, S.surface)).join('')}</div></div>
+    <div class="field"><label>Line colour</label><div class="chips">${[['#f4f2ea', 'White'], ['#f2c318', 'Yellow'], ['#5aa9e6', 'Blue']].map(([v, n]) => chip('lines', v, n, S.lines)).join('')}</div></div>
+    <div class="toggles">${toggle('kerbs', 'Kerbs round the edge')}${toggle('islands', 'Planted islands at the row ends')}${toggle('lights', 'Light poles')}</div>
+    ${state.site.parking ? `<p class="note">The site still lays out its own parking around the buildings too.
+      <button class="linkish" data-act="auto-parking-off">Turn that off and do it all yourself</button></p>` : ''}`;
 }
 
 /** Settings shared by every pole camera. */
@@ -938,8 +976,10 @@ function worldPanel() {
     <div class="field"><label>Quality</label><div class="chips">
       ${Object.entries(QUALITY).map(([id, q]) => `<button class="chip${prefs.quality === id ? ' on' : ''}" data-act="quality" data-value="${id}">${q.name}</button>`).join('')}
     </div></div>
-    <p class="note">High adds ambient occlusion and 4K shadows; Ultra adds 8K shadows and supersampling. Adaptive resolution
-      keeps things smooth on its own; drop to Medium or Low if the view still stutters.</p>
+    <p class="note">High adds ambient occlusion, 4K shadows and lamps that cast shadows at night; Ultra adds 8K shadows,
+      sharper textures and reflections; Max renders above screen resolution with every effect turned up. Adaptive
+      resolution keeps things smooth on its own; drop a level if the view still stutters.</p>
+    ${graphicsModNote()}
     <div class="toggles">
       <button class="toggle${prefs.minimap ? ' on' : ''}" data-act="pref" data-key="minimap"><span>Minimap</span><span class="pill">${prefs.minimap ? 'On' : 'Off'}</span></button>
       <button class="toggle${prefs.autoRes ? ' on' : ''}" data-act="pref" data-key="autoRes" title="Lowers the render resolution a little when frames run long, and raises it again when they don't"><span>Adaptive resolution</span><span class="pill">${prefs.autoRes ? 'On' : 'Off'}</span></button>
@@ -952,7 +992,7 @@ function worldPanel() {
       Walk (3): WASD at eye level, click to look around. 1 returns to Orbit. P for photo mode.</p>`;
 }
 
-const RATES = { 'Sheds & industry': 95, 'Offices & shops': 210, Civic: 260, Homes: 180, 'Small buildings': 160 };
+const RATES = { 'Sheds & industry': 95, 'Offices & shops': 210, Civic: 260, Homes: 180, 'Hospitality & leisure': 230, 'Transport & utilities': 150, 'Small buildings': 160 };
 
 function statsPanel() {
   const plan = world ? world.plan : null;
@@ -1391,6 +1431,142 @@ function poleToWall(o, ev) {
   return { b, fx };
 }
 
+/* --------------------------------------------------------------- mod API */
+
+/* What mods (and the desktop build's mods folder) can reach: the engine and
+ * world, the catalogue to add models to, the current site, and hooks to run
+ * code every frame or after every change. */
+const modHooks = { tick: [], change: [] };
+/* ------------------------------------------------------------------- mods */
+
+/* Graphics overrides come from a mod's graphics.json (the desktop build passes
+ * its mods folder in as window.BUILDING_SIM_MODS) or, in a browser, from
+ * BuildingSim.graphics({...}) in the console, remembered between visits. */
+const GFX_KEY = 'building-sim-graphics';
+// ?safe in the address starts without any overrides or mods, in case a
+// setting asks more of the graphics card than it has.
+const SAFE_MODE = /[?&]safe\b/.test(location.search);
+function modGraphics() {
+  if (SAFE_MODE) return {};
+  let local = {};
+  try { local = JSON.parse(localStorage.getItem(GFX_KEY) || '{}') || {}; } catch { /* corrupt */ }
+  const mods = window.BUILDING_SIM_MODS;
+  return { ...local, ...((mods && mods.graphics) || {}) };
+}
+
+function graphicsModNote() {
+  const keys = Object.keys(engine ? engine.tweaks : {});
+  if (!keys.length) return '';
+  return `<p class="note modnote">🧩 Graphics mod active: ${keys.map((k) => `${k} = ${engine.tweaks[k]}`).join(', ')}.
+    <button class="chip" data-act="gfx-reset">Reset</button></p>`;
+}
+
+/** Load the mod scripts the desktop build found, after the first build. */
+async function loadMods() {
+  const mods = window.BUILDING_SIM_MODS;
+  if (SAFE_MODE) return flashHint('Safe mode: graphics overrides and mods are off');
+  const list = (mods && Array.isArray(mods.scripts)) ? mods.scripts : [];
+  for (const err of (mods && mods.errors) || []) {
+    console.warn('Mod file could not be read:', err);
+    flashHint(`A mod file could not be read — ${String(err).split(/[\\/]/).pop()}`);
+  }
+  let ok = 0;
+  for (const url of list) {
+    try {
+      await import(url);
+      ok += 1;
+    } catch (e) {
+      console.warn('Mod failed to load:', url, e);
+      flashHint(`Mod failed to load: ${String(url).split('/').pop()}`);
+    }
+  }
+  if (ok) flashHint(`${ok} mod${ok === 1 ? '' : 's'} loaded from the mods folder`);
+  if (mods && mods.graphics && Object.keys(engine.tweaks).length) console.info('Graphics mod:', engine.tweaks);
+}
+
+function exposeApi() {
+  window.BuildingSim = {
+    version: 2,
+    THREE,
+    engine,
+    world,
+    life,
+    catalog: { BUILDING_STYLES, PROPS, PROP_BY_ID, ROOF_KIT, ROOF_BY_ID, BOOTHS, PROP_CATS },
+    get state() { return state; },
+    get selected() { return selected(); },
+    /** Re-read the state into the 3D scene and the panels after changing it. */
+    refresh() { syncWorld(); drawPanel(); drawHud(); },
+    commit,
+    select(id) { ui.selected = id; ui.tab = 'edit'; refreshSelection(); drawPanel(); },
+    onTick(fn) { modHooks.tick.push(fn); },
+    onChange(fn) { modHooks.change.push(fn); },
+    hint: flashHint,
+    toScreen: (x, y, z) => engine.toScreen(x, y, z),
+    /**
+     * Read or change the graphics settings. graphics() gives what is in force;
+     * graphics({ shadow: 16384, ss: 2 }) overrides parts of it (see
+     * graphicsKeys) and remembers them; graphics({ quality: 'max' }) picks a
+     * preset; graphics(null) clears every override.
+     */
+    graphics(tweaks) {
+      if (tweaks === undefined) return { quality: engine.quality, ...engine.q };
+      if (tweaks === null) {
+        try { localStorage.removeItem(GFX_KEY); } catch { /* private mode */ }
+        engine.setTweaks(null);
+      } else {
+        if (QUALITY[tweaks.quality]) { prefs.quality = tweaks.quality; savePrefs(); engine.setQuality(tweaks.quality); }
+        engine.setTweaks(tweaks, true);
+        try { localStorage.setItem(GFX_KEY, JSON.stringify(engine.tweaks)); } catch { /* private mode */ }
+      }
+      drawPanel();
+      return { quality: engine.quality, ...engine.q };
+    },
+    graphicsKeys: GRAPHICS_KEYS,
+    presets: QUALITY,
+    desktop: !!window.BUILDING_SIM_MODS,
+  };
+}
+
+/* ----------------------------------------------------------- resize handles */
+
+/* White handles on the edges of a selected lot (or compound, pond, bed):
+ * drag one and that edge follows the pointer while the opposite edge stays put. */
+const handleGroup = new THREE.Group();
+let handleMeshes = null;
+const EDGES = ['E', 'W', 'S', 'N'];   // the object's own +x, -x, +y, -y sides
+
+function drawHandles() {
+  if (!engine) return;
+  if (!handleMeshes) {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, transparent: true, opacity: 0.92 });
+    handleMeshes = EDGES.map(() => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+      m.renderOrder = 10;
+      handleGroup.add(m);
+      return m;
+    });
+    engine.helpers.add(handleGroup);
+  }
+  const o = selected();
+  const spec = o && o.kind === 'prop' ? PROP_BY_ID[o.type] || {} : {};
+  const on = !!(o && spec.resize && !ui.photo && engine.mode === 'orbit');
+  handleGroup.visible = on;
+  if (!on) return;
+  const f = footprint(o);
+  const cam = engine.camera.position;
+  EDGES.forEach((edge, i) => {
+    const [lx, ly] = edge === 'E' ? [f.w / 2, 0] : edge === 'W' ? [-f.w / 2, 0] : edge === 'S' ? [0, f.d / 2] : [0, -f.d / 2];
+    const [wx, wy] = planWorld(f, lx, ly);
+    const m = handleMeshes[i];
+    // Keep them a grabbable size however far away the camera is.
+    const k = clamp(Math.hypot(cam.x - wx, cam.y, cam.z - wy) * 0.016, 1.2, 9);
+    m.scale.set(k, k * 0.5, k);
+    m.position.set(wx, k * 0.25 + 0.4, wy);
+    m.rotation.y = -(f.rot || 0) * DEG;
+    m.userData.pick = { handle: edge, id: o.id };
+  });
+}
+
 /* ------------------------------------------------------------- side roads */
 
 /* A straight road or junction laid across a fence, hedge or boundary wall cuts
@@ -1451,7 +1627,8 @@ function armItem(kind, key) {
     if (kind === 'roof') return { id: 'ghost', kind: 'roof', type: key, rot: 0, x: 0, y: 0 };
     const spec = PROP_BY_ID[key];
     return {
-      id: 'ghost', kind: 'prop', type: key, rot: 0, x: 0, y: 0, ...(spec.len ? { w: spec.w, d: spec.d } : {}),
+      id: 'ghost', kind: 'prop', type: key, rot: 0, x: 0, y: 0, ...(spec.len || spec.resize ? { w: spec.w, d: spec.d } : {}),
+      ...(spec.lot ? { angle: spec.angle || 90, sw: 9, ada: 2, ev: 0, fill: 65, lights: true, islands: true, kerbs: true, surface: 'asphalt', lines: '#f4f2ea' } : {}),
       ...(spec.sign ? { sign: { text: key === 'monument' ? 'ALL VISITORS MUST CHECK IN AT SECURITY' : spec.text || 'SIGN', sub: spec.sub || '', color: spec.textColor || '#ffffff', bg: spec.bg || '', logo: '' } } : {}),
       ...(spec.cam ? { color: '#f2f3f4', tilt: 25, cover: true, range: 60, ir: true } : {}),
     };
@@ -1576,6 +1753,15 @@ function onDown(ev) {
   press = { x: ev.clientX, y: ev.clientY, button: ev.button, shift: ev.shiftKey, alt: ev.altKey };
   engine.controls.enabled = true;
   if (ev.button !== 0 || ui.pending || ui.measure || ui.draw || ui.attach) return;
+  if (handleGroup.visible) {
+    const hh = engine.pick(ev, [handleGroup]);
+    const ho = hh && hh.handle && byId(hh.id);
+    if (ho) {
+      engine.controls.enabled = false;
+      drag = { mode: 'resize', id: ho.id, edge: hh.handle, fp: footprint(ho), moved: false, t: 0 };
+      return;
+    }
+  }
   const hit = engine.pick(ev);
   const fixB = ui.fix && byId(ui.fix.id);
   if (fixB) {
@@ -1662,6 +1848,32 @@ function onMove(ev) {
       drawFootprint();
       if (footLine && drag.bad) footLine.material.color.set(0xf0524d);
       engine.shadowDirty = true;
+      drawHud();
+    } else if (drag.mode === 'resize') {
+      const o = byId(drag.id);
+      const g = engine.groundAt(ev, 0);
+      if (!o || !g) return;
+      const f = drag.fp;
+      const [lx, ly] = planLocal(f, g.x, g.y);
+      const snap = (v) => clamp(prefs.snap && !ev.altKey ? Math.round(v / 2) * 2 : v, 10, 900);
+      let { w, d } = f;
+      let cx = 0;
+      let cy = 0;
+      if (drag.edge === 'E') { w = snap(lx + f.w / 2); cx = -f.w / 2 + w / 2; }
+      if (drag.edge === 'W') { w = snap(f.w / 2 - lx); cx = f.w / 2 - w / 2; }
+      if (drag.edge === 'S') { d = snap(ly + f.d / 2); cy = -f.d / 2 + d / 2; }
+      if (drag.edge === 'N') { d = snap(f.d / 2 - ly); cy = f.d / 2 - d / 2; }
+      const [wx, wy] = planWorld(f, cx, cy);
+      o.w = w;
+      o.d = d;
+      o.x = wx - w / 2;
+      o.y = wy - d / 2;
+      drawHandles();
+      drawFootprint();
+      const now = performance.now();
+      if (now - drag.t > 80) { drag.t = now; syncWorld(); }
+      const spec = PROP_BY_ID[o.type] || {};
+      ui.hint = `${Math.round(w)} × ${Math.round(d)} ft${spec.lot ? ` · ${lotLayout(o).stalls.length} bays` : ''}`;
       drawHud();
     } else if (drag.mode === 'fix') {
       const b = byId(drag.id);
@@ -2183,6 +2395,8 @@ function importFile(file) {
 function setPhoto(on) {
   document.body.classList.toggle('photo', on);
   ui.photo = on;
+  // Depth of field costs a second pass, so it only runs in photo mode.
+  engine.setDof(on && !!prefs.dof);
   if (on) { engine.setSelection([]); if (footLine) footLine.visible = false; } else { refreshSelection(); }
 }
 
@@ -2338,6 +2552,19 @@ function applyAction(el, ev) {
       return drawPanel();
     }
     case 'cam-attach-cancel': ui.attach = null; drawDoorMark(null); drawHud(); return drawPanel();
+    case 'flag-toggle': {
+      // Switches that are on unless turned off.
+      if (!o) return;
+      snapshot();
+      o[key] = o[key] === false;
+      return commit();
+    }
+    case 'auto-parking-off': {
+      snapshot();
+      state.site.parking = false;
+      flashHint('Automatic parking is off — only your own lots have bays now.');
+      return commit();
+    }
     case 'cam-toggle': {
       if (!o) return;
       snapshot();
@@ -2550,6 +2777,19 @@ function applyAction(el, ev) {
       if (engine.mode !== 'orbit') setCam('orbit');
       return drawHud();
     case 'photo': return setPhoto(!ui.photo);
+    case 'photo-dof': {
+      prefs.dof = !prefs.dof;
+      savePrefs();
+      engine.setDof(ui.photo && prefs.dof);
+      document.getElementById('dofBtn')?.classList.toggle('on', prefs.dof);
+      return flashHint(prefs.dof ? 'Depth of field on: focus follows the point the camera orbits' : 'Depth of field off');
+    }
+    case 'gfx-reset': {
+      try { localStorage.removeItem(GFX_KEY); } catch { /* private mode */ }
+      engine.setTweaks(null);
+      flashHint('Graphics overrides cleared for this session');
+      return drawPanel();
+    }
     case 'photo-shoot': return shoot(+(value || 1));
     case 'undo': return restore(undoStack, redoStack);
     case 'redo': return restore(redoStack, undoStack);
@@ -2678,7 +2918,7 @@ document.addEventListener('input', (ev) => {
     if (key === 'floors') setFloors(o, num);
     else if (key === 'height') o.height = num;
     else o[key] = num;
-    if (label) label.textContent = key === 'floors' ? String(num) : key === 'tilt' ? `${Math.round(num)}°` : `${Math.round(num)} ft`;
+    if (label) label.textContent = key === 'floors' || key === 'ada' || key === 'ev' ? String(num) : key === 'tilt' ? `${Math.round(num)}°` : key === 'fill' ? `${Math.round(num)}%` : `${Math.round(num)} ft`;
     queueSave();
     return queueSync();
   }

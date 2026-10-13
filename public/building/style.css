@@ -287,3 +287,7 @@ body.photo .photo-bar {
 }
 .fixedit { border: 1px solid var(--accent-2); border-radius: var(--radius); padding: 10px 12px; margin-top: 10px; background: var(--panel-2); }
 .fixedit h4 { margin: 0 0 8px; font-size: 14px; }
+.lotstat { margin: 6px 0 4px; padding: 8px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13.5px; }
+.lotstat b { font-size: 18px; color: var(--accent-2); }
+.note.modnote { color: #b48a2c; }
+.note.modnote .chip { margin-left: 6px; padding: 2px 8px; }

@@ -21,7 +21,71 @@ const once = (key, make) => {
 };
 
 function std(opts) {
-  return new THREE.MeshStandardMaterial(opts);
+  return clouds(new THREE.MeshStandardMaterial(opts));
+}
+
+/* Shader hooks. A material can carry several (anti-tiling, snow, cloud
+ * shadows); each edits the shader in turn and adds to the program key, so
+ * materials with the same hooks still share one compiled program. */
+const HOOKS = new WeakMap();
+function hook(mat, key, fn) {
+  let list = HOOKS.get(mat);
+  if (!list) {
+    list = [];
+    HOOKS.set(mat, list);
+    mat.onBeforeCompile = (sh, r) => { for (const h of list) h.fn(sh, r); };
+    mat.customProgramCacheKey = () => list.map((h) => h.key).join('|');
+  }
+  if (!list.some((h) => h.key === key)) list.push({ key, fn });
+  return mat;
+}
+
+/* Cloud shadows: soft patches of shade that drift across the whole site with
+ * the wind, darkening only the sunlight (so they read as real shadow, not
+ * paint). One shared uniform: offset x, offset z, coverage, strength. */
+const CLOUD_U = { value: new THREE.Vector4(0, 0, 0, 0) };
+const CLOUD_VERT = `
+  {
+    vec4 clW = vec4( transformed, 1.0 );
+    #ifdef USE_BATCHING
+      clW = batchingMatrix * clW;
+    #endif
+    #ifdef USE_INSTANCING
+      clW = instanceMatrix * clW;
+    #endif
+    vCloudXZ = ( modelMatrix * clW ).xz;
+  }`;
+const CLOUD_FRAG = `
+  uniform vec4 cloudShadow;
+  varying vec2 vCloudXZ;
+  float clHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
+  float clNoise( vec2 p ) {
+    vec2 i = floor( p ); vec2 f = fract( p );
+    vec2 u = f * f * ( 3.0 - 2.0 * f );
+    return mix( mix( clHash( i ), clHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( clHash( i + vec2( 0.0, 1.0 ) ), clHash( i + vec2( 1.0, 1.0 ) ), u.x ), u.y );
+  }
+  float cloudShade() {
+    if ( cloudShadow.w <= 0.0 ) return 1.0;
+    vec2 p = ( vCloudXZ + cloudShadow.xy ) / 520.0;
+    float n = clNoise( p ) * 0.55 + clNoise( p * 2.13 + 7.3 ) * 0.3 + clNoise( p * 4.71 + 3.1 ) * 0.15;
+    float c = smoothstep( 1.0 - cloudShadow.z - 0.06, 1.0 - cloudShadow.z + 0.1, n );
+    return 1.0 - c * cloudShadow.w;
+  }`;
+const LIGHTS_WITH_CLOUDS = THREE.ShaderChunk.lights_fragment_begin.replace(
+  'getDirectionalLightInfo( directionalLight, directLight );',
+  'getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= cloudShade();',
+);
+function clouds(mat) {
+  if (!LIGHTS_WITH_CLOUDS.includes('cloudShade')) return mat;   // a three.js without the hook point
+  return hook(mat, 'clouds', (sh) => {
+    sh.uniforms.cloudShadow = CLOUD_U;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vCloudXZ;')
+      .replace('#include <project_vertex>', `#include <project_vertex>\n${CLOUD_VERT}`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\n${CLOUD_FRAG}`)
+      .replace('#include <lights_fragment_begin>', LIGHTS_WITH_CLOUDS);
+  });
 }
 
 function withSurface(name, extra = {}) {
@@ -51,6 +115,7 @@ function applyWet(e, f) {
   e.mat.color.copy(e.base).multiplyScalar(1 - 0.38 * f);
 }
 const shiny = (mat) => {
+  clouds(mat);
   shinyReg.push(mat);
   mat.userData.baseEnv = mat.envMapIntensity;
   if (NOW.env) { mat.envMap = NOW.env; mat.envMapIntensity = mat.userData.baseEnv * NOW.envScale; }
@@ -73,7 +138,7 @@ const NOISE_GLSL = `
 
 function antiTile(mat, spanFt = 160, strength = 0.35) {
   const tile = mat.map ? 1 / mat.map.repeat.x : 10;
-  mat.onBeforeCompile = (sh) => {
+  return hook(mat, `antiTile|${spanFt}|${strength}|${tile}`, (sh) => {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>\n${NOISE_GLSL}`)
       .replace('#include <map_fragment>', `#include <map_fragment>
@@ -87,9 +152,7 @@ function antiTile(mat, spanFt = 160, strength = 0.35) {
           float h = atNoise(ft / ${(spanFt * 0.55).toFixed(1)} + 41.0) - 0.5;
           diffuseColor.rgb *= vec3(1.0 + h * ${(0.25 * strength).toFixed(3)}, 1.0, 1.0 - h * ${(0.3 * strength).toFixed(3)});
         }`);
-  };
-  mat.customProgramCacheKey = () => `antiTile|${spanFt}|${strength}|${tile}`;
-  return mat;
+  });
 }
 
 /* Snow settles on whatever faces the sky — ground, roofs, the tops of cars
@@ -107,17 +170,12 @@ const SNOW_GLSL = `
 
 const snowy = (mat) => {
   snowReg.push({ mat });
-  const prev = mat.onBeforeCompile;
-  const prevKey = mat.customProgramCacheKey === THREE.Material.prototype.customProgramCacheKey ? null : mat.customProgramCacheKey;
-  mat.onBeforeCompile = (sh, r) => {
-    if (prev) prev.call(mat, sh, r);
+  return hook(mat, 'snow', (sh) => {
     sh.uniforms.snowAmount = SNOW_U;
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float snowAmount;')
       .replace('#include <lights_physical_fragment>', `${SNOW_GLSL}\n#include <lights_physical_fragment>`);
-  };
-  mat.customProgramCacheKey = () => `${prevKey ? prevKey.call(mat) : ''}|snow`;
-  return mat;
+  });
 };
 
 /* ------------------------------------------------------------- buildings */
@@ -196,6 +254,56 @@ export function doorPanel(hex = '#8e98a3') {
 
 export function louvre() {
   return once('louvre', () => std({ ...withSurface('louvre'), color: new THREE.Color('#8b939c'), roughness: 0.5, metalness: 0.6 }));
+}
+
+/* Moving water: jets and falling sheets share streak textures that the frame
+ * loop slides along, so the water visibly flows. */
+const flowReg = [];
+
+/** Water in motion. `along` is the texture axis the water runs down: 'u' for
+ *  jets drawn as tubes, 'v' for falling sheets and curtains. */
+export function waterFlow(along = 'v') {
+  return once(`waterFlow|${along}`, () => {
+    const a = surface('jet').map.clone();
+    a.needsUpdate = true;
+    if (along === 'u') { a.rotation = Math.PI / 2; a.center.set(0.5, 0.5); }
+    a.repeat.set(along === 'u' ? 1 : 10, along === 'u' ? 2 : 1.5);
+    const m = std({
+      color: new THREE.Color('#eef8fc'), emissive: new THREE.Color('#b8dcef'), emissiveIntensity: 0.18,
+      alphaMap: a, transparent: true, opacity: along === 'u' ? 0.9 : 0.55, depthWrite: false, side: THREE.DoubleSide, roughness: 0.1, metalness: 0,
+    });
+    flowReg.push({ tex: a, along });
+    return m;
+  });
+}
+
+/** White water where jets land. */
+export function foam() {
+  return once('foam', () => std({
+    color: new THREE.Color('#f4fafc'), alphaMap: surface('foam').map, transparent: true, opacity: 0.85,
+    depthWrite: false, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
+  }));
+}
+
+/** Slide the water textures on; called once a frame. */
+export function flowWater(dt) {
+  for (const f of flowReg) {
+    if (f.along === 'u') f.tex.offset.y -= dt * 0.9;
+    else f.tex.offset.y += dt * 0.9;
+  }
+}
+
+/** Painted sheet-metal casing for HVAC plant: panel seams, screws and weathering. */
+export function hvac(hex = '#c9cdd1') {
+  return once(`hvac|${hex}`, () => std({ ...withSurface('hvac'), color: new THREE.Color(hex), roughness: 0.55, metalness: 0.35, normalScale: new THREE.Vector2(0.7, 0.7) }));
+}
+
+/** The wire guard over a fan: see-through between the wires. */
+export function fanGuard() {
+  return once('fanGuard', () => std({
+    color: new THREE.Color('#2e3338'), alphaMap: surface('fanguard').map, alphaTest: 0.5, transparent: false,
+    metalness: 0.6, roughness: 0.45, side: THREE.DoubleSide,
+  }));
 }
 
 export function rubber() {
@@ -459,6 +567,14 @@ export function setNight(f) {
 export function setWet(f) {
   NOW.wet = f;
   for (const e of wetReg) applyWet(e, f);
+}
+
+/**
+ * Cloud shadows: where the cloud field has drifted to (feet), how much of the
+ * sky is cloud (0–1) and how dark the shade is (0 turns them off).
+ */
+export function setCloudShadows(x, z, cover, strength) {
+  CLOUD_U.value.set(x, z, cover, strength);
 }
 
 /** 0 = none, 1 = blanket. */

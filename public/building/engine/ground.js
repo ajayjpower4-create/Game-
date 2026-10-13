@@ -244,6 +244,7 @@ export function buildGround(state, plan) {
     const lineY = 0.21;
     const rows = new Map();
     for (const s of plan.stalls) {
+      if (s.manual) continue;
       if (!rows.has(s.row)) rows.set(s.row, []);
       rows.get(s.row).push(s);
       if (site.markings !== false) {

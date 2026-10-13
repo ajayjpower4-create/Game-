@@ -1,0 +1,54 @@
+# Builds the Windows desktop version of Building Design Simulator: a portable
+# .exe and a .zip. Download them from the run's "Artifacts" section; a tag
+# like v1.2.0 also attaches them to a GitHub release.
+name: Desktop build (Windows .exe)
+
+on:
+  push:
+    paths:
+      - 'desktop/**'
+      - 'public/building/**'
+      - '.github/workflows/desktop.yml'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install three.js (repository root)
+        run: npm ci
+
+      - name: Install Electron and electron-builder
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build the .exe
+        working-directory: desktop
+        run: npm run dist:win
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BuildingDesignSimulator-windows
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.zip
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            desktop/dist/*.exe
+            desktop/dist/*.zip

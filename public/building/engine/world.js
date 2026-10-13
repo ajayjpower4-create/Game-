@@ -150,12 +150,21 @@ export class World {
     // The ground follows the plan.
     const plan = planSite(state);
     const roads = state.objects.filter((o) => o.kind === 'prop' && /^(road|lane|bend|tee|cross|roundabout|culdesac)$/.test(o.type)).map((o) => [o.x, o.y, o.w, o.d, o.rot]);
-    const gsig = JSON.stringify([state.lot, state.site, plan.pave, plan.drive, plan.aprons.map((a) => a.rect), plan.rollAprons, plan.walks, plan.stalls.length, plan.stalls[0], plan.stalls[plan.stalls.length - 1], plan.islands, plan.crossings.length, roads]);
+    // Bays in the player's own lots are drawn by the lots; only the automatic
+    // ones belong to the ground, so resizing a lot does not rebuild the ground.
+    const auto = plan.stalls.filter((s) => !s.manual);
+    const gsig = JSON.stringify([state.lot, state.site, plan.pave, plan.drive, plan.aprons.map((a) => a.rect), plan.rollAprons, plan.walks, auto.length, auto[0], auto[auto.length - 1], plan.islands, plan.crossings.length, roads]);
+    const csig = JSON.stringify([state.site.cars, state.lot.width, plan.stalls.length, plan.stalls.map((s) => (s.manual ? [Math.round(s.cx), Math.round(s.cy), Math.round(s.rot), s.fill] : 0)), auto[0], auto[auto.length - 1]]);
     if (gsig !== this.groundSig) {
       this.groundSig = gsig;
       if (this.groundGroup) { E.ground.remove(this.groundGroup); disposeTree(this.groundGroup); }
       this.groundGroup = buildGround(state, plan);
       E.ground.add(this.groundGroup);
+      this.carSig = '';
+      changed = true;
+    }
+    if (csig !== this.carSig) {
+      this.carSig = csig;
       this.parkCars(state, plan);
       changed = true;
     }
@@ -240,12 +249,18 @@ export class World {
     const total = weights.reduce((a, b) => a + b, 0);
     const per = this.carKits.map(() => []);
     for (const s of plan.stalls) {
-      if (r() > 0.68) continue;
+      // A lot the player laid out fills to its own setting; the automatic one to about two thirds.
+      if (s.manual ? r() * 100 >= s.fill : r() > 0.68) continue;
       let pick = r() * total;
       let k = 0;
       while (pick > weights[k]) { pick -= weights[k]; k++; }
+      const color = VEHICLE_COLORS[Math.floor(r() * VEHICLE_COLORS.length)];
+      if (s.manual) {
+        per[k].push({ x: s.cx + (r() - 0.5) * 0.4, z: s.cy + (r() - 0.5) * 0.4, rot: -s.rot * DEG + (r() - 0.5) * 0.05, color });
+        continue;
+      }
       const flip = r() < 0.18;
-      per[k].push({ x: s.x + s.w / 2 + (r() - 0.5) * 0.6, z: s.y + s.d / 2 + (flip ? -0.4 : 0.4), rot: (flip ? Math.PI : 0) + (r() - 0.5) * 0.06, color: VEHICLE_COLORS[Math.floor(r() * VEHICLE_COLORS.length)] });
+      per[k].push({ x: s.x + s.w / 2 + (r() - 0.5) * 0.6, z: s.y + s.d / 2 + (flip ? -0.4 : 0.4), rot: (flip ? Math.PI : 0) + (r() - 0.5) * 0.06, color });
     }
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();

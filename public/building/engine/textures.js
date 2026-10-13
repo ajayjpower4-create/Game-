@@ -10,7 +10,15 @@ import * as THREE from 'three';
 
 const SIZE = 512;
 let ANISO = 4;
-export function setAnisotropy(n) { ANISO = n; }
+/** Texture filtering for surfaces made from now on; `apply` also updates the ones already made. */
+export function setAnisotropy(n, apply = false) {
+  if (n === ANISO) return;
+  ANISO = n;
+  if (!apply) return;
+  for (const set of cache.values()) {
+    for (const t of Object.values(set)) if (t && t.isTexture) { t.anisotropy = n; t.needsUpdate = true; }
+  }
+}
 
 /* ------------------------------------------------------------------ noise */
 
@@ -541,6 +549,82 @@ const builders = {
       return clamp255(200 + Math.sin(f * Math.PI) * 40 - (f < 0.1 ? 60 : 0));
     });
     return { map: tex(col, { tileX: 5.33 }), normalMap: tex(normalMap(h, s, s, 4), { srgb: false, tileX: 5.33 }), roughnessMap: null };
+  },
+
+  hvac() {
+    // Sheet-metal casing: panels with seams, a screw at each corner, faint
+    // weathering streaks and a little grime low down. Covers 8 ft.
+    const s = 256;
+    const n = fbmField(s, { base: 5, octaves: 4, seed: 311 });
+    const r = rng(313);
+    const h = new Float32Array(s * s);
+    const streak = new Float32Array(s);
+    for (let x = 0; x < s; x++) streak[x] = r() < 0.25 ? r() * 18 : 0;
+    const col = paint(canvas(s), (x, y) => {
+      const px = x % 64;
+      const py = y % 128;
+      const seam = px < 2 || py < 2;
+      const screw = (Math.hypot(px - 6, py - 6) < 2.2) || (Math.hypot(px - 58, py - 6) < 2.2);
+      h[y * s + x] = seam ? 0 : screw ? 0.9 : 0.5 + n(x, y) * 0.04;
+      const grime = Math.max(0, (y - s * 0.7) / (s * 0.3)) * 14;
+      const v = seam ? 160 : screw ? 150 : 226 + n(x, y) * 10 - streak[x] * (y / s) - grime;
+      return clamp255(v);
+    });
+    const rough = paint(canvas(s), (x, y) => clamp255(110 + n(x, y) * 50 + (x % 64 < 2 ? 50 : 0)));
+    return {
+      map: tex(col, { tileX: 8 }),
+      normalMap: tex(normalMap(h, s, s, 3), { srgb: false, tileX: 8 }),
+      roughnessMap: tex(rough, { srgb: false, tileX: 8 }),
+    };
+  },
+
+  jet() {
+    // Falling or spurting water: bright streaks with gaps, as an alpha mask.
+    const w = 64;
+    const h = 256;
+    const r = rng(331);
+    const lanes = Array.from({ length: w }, () => ({ a: 0.35 + r() * 0.65, ph: r() * h, len: 30 + r() * 90 }));
+    const c = paint(canvas(w, h), (x, y) => {
+      const L = lanes[x];
+      const t = ((y + L.ph) % h) / L.len;
+      const f = t % 1;
+      const on = f < 0.7 ? 0.6 + 0.4 * Math.sin(f / 0.7 * Math.PI) : 0.18;
+      return clamp255(255 * L.a * on);
+    });
+    return { map: tex(c, { srgb: false, tileX: 1, tileY: 1 }) };
+  },
+
+  foam() {
+    // Churned white water where jets land: a soft ring.
+    const s = 128;
+    const n = fbmField(s, { base: 6, octaves: 3, seed: 341 });
+    const c = paint(canvas(s), (x, y) => {
+      const d = Math.hypot(x - s / 2, y - s / 2) / (s / 2);
+      const ring = Math.max(0, 1 - Math.abs(d - 0.62) / 0.36);
+      return clamp255(255 * ring * (0.55 + n(x, y) * 0.9));
+    });
+    const t = tex(c, { srgb: false, tileX: 1 });
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.repeat.set(1, 1);
+    return { map: t };
+  },
+
+  fanguard() {
+    // A wire fan guard as an alpha mask: rings and spokes.
+    const s = 256;
+    const c = paint(canvas(s), (x, y) => {
+      const dx = x - s / 2;
+      const dy = y - s / 2;
+      const d = Math.hypot(dx, dy);
+      const a = Math.atan2(dy, dx);
+      const ring = d % 11 < 2.2 || d > s / 2 - 5;
+      const spoke = Math.abs(Math.sin(a * 4)) * d < 2.4;
+      return ring || spoke || d < 16 ? 255 : 0;
+    });
+    const t = tex(c, { srgb: false, tileX: 1 });
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.repeat.set(1, 1);
+    return { map: t };
   },
 
   louvre() {

@@ -4,6 +4,7 @@
 
 import { corners, bounds, overlaps, contains, wallFrames, rectOffWall, clamp, DEG } from './geom.js';
 import { STALL, PROP_BY_ID, BOOTH_BY_ID, buildingHeight, footprint, objHeight } from './catalog.js';
+import { lotStalls } from './lots.js';
 
 export { footprint, objHeight, bounds };
 
@@ -219,6 +220,10 @@ export function planSite(state) {
         }
       }
     }
+  }
+  // Lots the player laid out themselves, whatever the automatic parking is doing.
+  for (const o of state.objects) {
+    if (o.kind === 'prop' && (PROP_BY_ID[o.type] || {}).lot) plan.stalls.push(...lotStalls(o, footprint(o)));
   }
   return plan;
 }

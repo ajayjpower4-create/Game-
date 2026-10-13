@@ -179,7 +179,8 @@ everything — every wall bay, every machine on every roof, every trailer, sign,
 booth and tree — under a sun that moves with the clock, in whatever weather
 you choose.
 
-Open <http://localhost:3000/building>.
+Open <http://localhost:3000/building> — or play the **Windows desktop
+version** (a `.exe`, with a mods folder; see "Desktop version and mods" below).
 
 ## How it looks
 
@@ -191,12 +192,15 @@ offline):
   dusk), with warm low light at golden hour and blue hour after sunset. The
   same sky is baked into an environment map, so glass, car paint, water and
   wet tarmac reflect it.
-- **Shadows** from a 4K (8K on Ultra) shadow map fitted to the lot, soft-edged,
-  plus ambient occlusion in corners, under eaves and between parked cars.
+- **Shadows** from a 4K (8K on Ultra and Max) shadow map fitted to the lot,
+  soft-edged, plus ambient occlusion in corners, under eaves and between
+  parked cars. **Cloud shadows** drift across the site on fair-weather days.
 - **Night.** Windows light up from inside (not all of them), lamp heads, wall
   packs, dock lights, canopy downlights and signs glow, the nearest lamps
-  throw real light on the ground, every lamp leaves a pool of light on the
-  asphalt, and bloom softens the bright bits. Stars and a moon come out.
+  throw real light on the ground — and on High and above the closest of them
+  cast real shadows of poles, trucks and people — every lamp leaves a pool of
+  light on the asphalt, and bloom softens the bright bits. Stars and a moon
+  come out.
 - **Weather.** Clear, fair-weather cloud, overcast, rain (falling rain, wet
   reflective ground), thunderstorm (with lightning), fog, and snow (falling
   snow, white roofs and ground). **Seasons** recolour every tree.
@@ -213,9 +217,42 @@ offline):
   copings; pitched, hipped, monopitch, barrel and sawtooth roofs with eaves,
   gutters and barge boards; rainwater pipes; and wall signs with raised,
   shadowed letters that are lit at night.
+- **Water** moves: fountains throw arcing jets that fall into foaming pools,
+  splash pads, wall spouts and reflecting pools run, and ponds sit in planted
+  banks with lily pads.
 - **Around the lot**: rolling fields to a tree-lined horizon with a town in
   the haze, a street with kerbs, footways and markings and its own traffic,
   people walking about, flags that wave and wind turbines that turn.
+
+### Graphics settings
+
+Five presets in the World tab:
+
+| Preset | What it adds |
+| --- | --- |
+| Low | 2K shadows, SMAA edge smoothing, 4 night lights |
+| Medium | MSAA, bloom, cloud shadows, 6 night lights |
+| High | Ambient occlusion, 4K shadows, 2 lamps that cast shadows, light sharpening |
+| Ultra | 8K shadows, 16× texture filtering, sharper reflections, 4 shadow-casting lamps |
+| **Max** | Renders at 1.5× the screen's resolution (supersampling), 32-sample AO, 16 night lights, 6 shadow-casting lamps with 2K maps, a 1K reflection map |
+
+**Photo mode** adds **depth of field**: what the camera is aimed at stays
+sharp and the rest softens as through a real lens.
+
+Past Max, every one of those numbers — and exposure, colour, fog, view
+distance and field of view — can be set by a graphics mod (`graphics.json`
+in the desktop version's mods folder) or from the browser console:
+
+```js
+BuildingSim.graphics({ quality: 'max', shadow: 16384, ss: 2, lampShadows: 10 })
+BuildingSim.graphics()       // what is in force
+BuildingSim.graphics(null)   // back to the plain preset
+```
+
+Settings made from the console are remembered; open the game with `?safe`
+on the address (`/building?safe`) to start without them.
+
+The full list of settings is in `desktop/mods-template/README.txt`.
 
 ## Cameras
 
@@ -244,18 +281,27 @@ box truck or van up near a loading bay and it squares itself onto the bay.
 
 ## What you can add
 
-- **49 building models** in five families — sheds and industry (warehouse
+- **87 building models** in seven families — sheds and industry (warehouse
   shell, mega shed, storage row, workshop, cold store, plant room, cross-dock,
   sawtooth mill, hangar, high-bay store, data hall, factory, repair garage,
-  truck wash, recycling shed, research lab), offices and shops (office block,
-  business-park office, tower, retail strip, glass pavilion, big-box store,
-  supermarket, car showroom, hotel, shops with flats, medical centre, sports
-  hall, car park deck, terrace of units), civic (fire station, school,
-  library, chapel, police station), homes (apartment block, townhouses,
-  detached house) and small buildings (small office, gatehouse HQ, pitched
-  unit, link annex, lodge, kiosk, service-station shop, toilet block,
-  greenhouse, barn, substation). Each takes any of seven claddings, six roof
-  types, wall/trim/roof colours, a glass roof and a parapet.
+  truck wash, recycling shed, research lab, food factory, print works,
+  brewery, timber store, bottling plant, cleanroom fab, trade counter units),
+  offices and shops (office block, business-park office, tower, retail strip,
+  glass pavilion, big-box store, supermarket, car showroom, hotel, shops with
+  flats, medical centre, sports hall, car park deck, terrace of units,
+  corporate HQ, brick loft offices, bank branch, drive-thru restaurant, café
+  pavilion, shopping mall, fitness centre, tyre and auto centre), civic (fire
+  station, school, library, chapel, police station, hospital, town hall,
+  museum, courthouse, university block, ambulance station), homes (apartment
+  block, townhouses, detached house, bungalow, semi-detached pair, stone
+  cottage, high-rise flats, modern villa), hospitality and leisure (motel,
+  cinema, bowling and arcade, pub, leisure pool, conference centre),
+  transport and utilities (bus depot, railway station, pumping station,
+  multi-storey car park, control room) and small buildings (small office,
+  gatehouse HQ, pitched unit, link annex, lodge, kiosk, service-station shop,
+  toilet block, greenhouse, barn, substation, lock-up garages). Each takes
+  any of seven claddings, six roof types, wall/trim/roof colours, a glass roof
+  and a parapet.
 - **34 machines**, placed by hand on any roof — or on the ground, where they
   stand on a concrete plinth — and dragged around once they are down:
   packaged and large rooftop units, chiller, cooling tower, condenser bank,
@@ -266,12 +312,13 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   fan, boiler flue cluster and pump skid — and five **heavy units** that sit
   on steel dunnage with a grated walkway, handrails and a cat ladder: an air
   handling unit, a big air-cooled chiller, a twin-cell cooling tower, a
-  50-ton rooftop unit and a dry cooler bank.
+  50-ton rooftop unit and a dry cooler bank. Casings are galvanised panels
+  with seams, screws and weathering; fans sit in shrouds under wire guards.
 - **10 guard booths**: classic cabin, deep canopy, brick gatehouse, glass
   cube, container booth, twin-lane kiosk, pitched hut, raised lookout, round
   kiosk and a gate office — each lit inside at night, each with a fascia sign
   you write.
-- **146 props** — boundary (mesh, palisade and timber fences, walls, guard
+- **181 props** — boundary (mesh, palisade and timber fences, walls, guard
   rail, bollards, Jersey barriers, crowd barriers, cones, drums, speed bumps);
   **12 gates** (gate arm, heavy boom with skirt, sliding, cantilever, double
   swing and bi-folding speed gates, road blocker, rising bollards, tyre
@@ -290,9 +337,16 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   street lamps, heritage lanterns, bollard lights); **CCTV** (twin-camera
   pole, bullet camera post, dome camera pole, PTZ mast whose camera sweeps
   back and forth, four-camera mast, ANPR camera on an arm, and a mobile CCTV
-  tower on a trailer — see below); planting (broadleaf, oak,
+  tower on a trailer — see below); **parking** (a parking lot you size
+  yourself, a small car park, an angled lot, pay station, trolley shelter and
+  car park sign — see below); **park and leisure** (splash-pad fountain, wall
+  fountain, drinking fountain, reflecting pool, steel sculpture, gazebo,
+  pergola, playground, basketball court, raised bed, planter with tree, street
+  tree in a grate); planting (broadleaf, oak,
   maple, birch, conifer, pine, palm, shrubs, hedges, flower beds, planters,
-  boulders, ponds, fountains); yard (dumpsters, skips, compactor, recycling,
+  boulders, ponds, fountains); yard (weighbridge, storage tent, battery
+  storage, cycle shelter, cash machine, news kiosk, parcel lockers, bunded
+  fuel tank, mobile yard ramp, lighting tower, site compressor, dumpsters, skips, compactor, recycling,
   shipping containers, generator, transformer, LPG and oil tanks, IBCs, gas
   cage, silo, water tower, pallets, racking, canopies, solar carport, EV
   chargers, fuel pumps and canopy, bus and smoking shelters, bike racks,
@@ -300,7 +354,23 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   toilet, site cabin, scaffold, wind turbine, phone mast, power pole);
   vehicles (trailer, reefer, tractor unit, box truck, tanker, flatbed, dump
   truck, mixer, bus, van, pickup, SUV, car, hatchback, police car, ambulance,
-  fire engine, forklift, excavator, tower crane, mobile crane); and people.
+  fire engine, forklift, excavator, tower crane, mobile crane, refuse truck,
+  scissor lift, site buggy, motorbike, skid steer, camper van); and people.
+
+## Parking lots you lay out
+
+The site still parks itself if you want it to, but you can draw your own:
+add a **Parking lot** (or the small or angled one) from the Parking
+category, then drag the white handles on its edges to make it exactly the
+size you want — the bays, aisles and planted end islands are worked out
+again as you drag, and the hint shows how many bays fit. Its panel sets the
+width and depth by number too, the bay angle (90°, 60° or 45°), the bay
+width, how many accessible and EV-charging bays (blue and green, with signs
+and chargers), how full it is with parked cars, kerbs, lighting, end islands,
+the surface (asphalt, concrete, block paving or gravel) and the line colour.
+Turn it like anything else. Its bays count in the stats, and "Turn off the
+automatic parking" leaves only the lots you made. Ponds, flower beds and the
+plant compounds have the same edge handles.
 
 ## Ducts and pipes
 
@@ -378,7 +448,8 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
   bays, wheel stops and planted islands), parked cars, markings, the street,
   and grass or gravel. Snap to grid and docks (hold Alt to place freely).
 - **World** — time of day (or let the clock run, at four speeds), weather,
-  season, traffic and people, and graphics quality (Low, Medium, High, Ultra).
+  season, traffic and people, and graphics quality (Low, Medium, High, Ultra,
+  Max — see "Graphics settings" above).
   **Adaptive resolution** (on by default) lowers the render resolution a
   little when frames run long and raises it again when they don't; a step
   that doesn't actually help (say, a 30 fps battery-saver cap) is undone.
@@ -390,7 +461,8 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 - **Saves** — the site autosaves; keep named copies, open them again, or
   export and import a `.building.json` file.
 - **Photo mode** (P) hides the editor; take a picture at screen or double
-  resolution. **Measure** draws a line between two points and gives its length.
+  resolution, with or without depth of field. **Measure** draws a line
+  between two points and gives its length.
 
 ## Keys
 
@@ -416,6 +488,7 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 | `public/building/geom.js` | Plan geometry: footprints, overlap tests, wall frames |
 | `public/building/catalog.js` | The object model, catalogues, presets, save migration |
 | `public/building/site.js` | Site rules: collisions, eviction, dock snapping, the paving and parking plan, stats |
+| `public/building/lots.js` | Bays, aisles and islands inside a parking lot you sized, for any bay angle |
 | `public/building/engine/core.js` | Renderer, sky, sun and moon, weather, post-processing, cameras, picking |
 | `public/building/engine/textures.js` | Procedural tileable textures and sign lettering |
 | `public/building/engine/materials.js` | PBR materials and the night/wet/snow/season switches |
@@ -429,7 +502,56 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 | `public/building/engine/nature.js` | Trees and people |
 | `public/building/engine/world.js` | Keeps the 3D scene in step with the save; parked cars; light pools |
 | `public/building/engine/life.js` | Traffic, pedestrians, flags, turbines, rain and snow |
-| `public/building/game.js` | The editor: panels, placement, dragging, undo, saves, photo mode |
+| `public/building/game.js` | The editor: panels, placement, dragging, resize handles, undo, saves, photo mode, the mod API |
+| `desktop/` | The Windows desktop build (Electron): `main.cjs`, `preload.cjs`, the mods folder template |
+| `.github/workflows/desktop.yml` | Builds the `.exe` on GitHub for every change to the game |
+
+## Desktop version and mods
+
+`desktop/` packs the game into a Windows program with Electron: the same
+game, run from files inside the app (no server, no internet needed).
+
+**Getting the .exe.** Every push that changes the game runs the "Desktop
+build (Windows .exe)" workflow on GitHub; open the run under the
+repository's **Actions** tab and download **BuildingDesignSimulator-windows**
+from its Artifacts. Inside: `BuildingDesignSimulator-<version>-portable.exe`
+(one file, nothing to install — double-click it) and a `.zip` of the same
+program as a folder (unzip, run `Building Design Simulator.exe`; starts
+faster). Pushing a tag like `v1.1.0` also attaches both to a GitHub release.
+Windows SmartScreen may warn that the program is unsigned: "More info", then
+"Run anyway".
+
+**Building it yourself** (Node 20 or later):
+
+```bash
+npm install                 # in the repository root: fetches three.js
+cd desktop
+npm install                 # Electron and electron-builder
+npm start                   # run it in a window
+npm run dist:win            # on Windows: desktop/dist/*.exe and *.zip
+npm run dist:win-from-linux # the same from Linux or macOS (no icon baked into the .exe)
+```
+
+**Mods.** The first run puts a `mods` folder next to the `.exe` (a second
+one lives in `%APPDATA%\Building Design Simulator\mods`); the menu's
+**Game → Open mods folder** opens it. In it:
+
+- `graphics.json` overrides the graphics past the in-game Max preset —
+  shadow maps up to 16K, supersampling, AO samples, how many lamps cast
+  shadows, reflection size, sharpening, fog, exposure, view distance, field of
+  view, and `"uncapFps": true` to lift the frame-rate cap. Rename the
+  `graphics.example.json` that comes in the folder to start from a
+  maxed-out set.
+- every `.js` file is loaded as a mod once the game is running. Mods use
+  `window.BuildingSim` — the three.js library, the engine (scene, camera,
+  sun, renderer), the site's state and catalogue, per-frame and per-edit
+  hooks, hints and the graphics settings. `examples/` has three to copy up:
+  a cinematic orbit camera (O), a time-lapse (H) and a spinning billboard
+  that adds its own 3D model.
+
+F5 reloads the game and re-reads the folder; F12 opens the developer
+console, where a broken mod says why. `desktop/mods-template/README.txt` is
+the full guide.
 
 ## Robustness
 

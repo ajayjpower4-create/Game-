@@ -14,6 +14,7 @@ import { cameraHead, markCones } from './cameras.js';
 import { plant, person } from './nature.js';
 import { vehicleModel } from './vehicles.js';
 import { PROP_BY_ID, BOOTH_BY_ID } from '../catalog.js';
+import { lotLayout } from '../lots.js';
 
 const DEG = Math.PI / 180;
 
@@ -103,6 +104,32 @@ function featherTexture(text, color, bg) {
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
   return t;
+}
+
+/** A wheel for a towed unit, at the side of the frame. */
+function wheelPair(B, x, z) {
+  B.add(cylGeo(1, 1, 0.7, 16).rotateZ(Math.PI / 2), M.tyre(), { pos: [x, 1, z] });
+  B.add(cylGeo(0.5, 0.5, 0.75, 12).rotateZ(Math.PI / 2), M.metal('#9aa1a8', 0.4), { pos: [x, 1, z] });
+}
+
+/** A bay symbol painted on the ground (accessible, EV), shared by every lot. */
+const lotSymbols = new Map();
+function lotSymbol(glyph, bg) {
+  const key = glyph + bg;
+  if (!lotSymbols.has(key)) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ffffff';
+    g.font = '96px "Segoe UI Symbol", "Apple Color Emoji", sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(glyph, 64, 70);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    lotSymbols.set(key, new THREE.MeshStandardMaterial({ map: t, transparent: true, alphaTest: 0.3, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }));
+  }
+  return lotSymbols.get(key);
 }
 
 /** A "you are here" site map, drawn from a seed so each board is its own. */
@@ -698,36 +725,484 @@ const P = {
     const n = 28;
     const r = rng(hashId(o.id));
     const radii = Array.from({ length: n }, () => 0.86 + r() * 0.14);
+    const pts = [];
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
-      const x = Math.cos(a) * (w / 2) * radii[i];
-      const z = Math.sin(a) * (d / 2) * radii[i];
-      if (i === 0) shape.moveTo(x, z); else shape.lineTo(x, z);
+      pts.push([Math.cos(a) * (w / 2) * radii[i], Math.sin(a) * (d / 2) * radii[i]]);
     }
+    pts.forEach(([x, z], i) => (i ? shape.lineTo(x, z) : shape.moveTo(x, z)));
     shape.closePath();
-    const water = new THREE.ShapeGeometry(shape).rotateX(Math.PI / 2);
-    // ShapeGeometry faces +z; after the turn it faces down, so flip it back up.
-    water.scale(1, -1, 1);
-    B.add(water, M.water(), { pos: [0, 0.18, 0] });
+    // Turn the outline down onto the ground facing up. (It used to be turned
+    // the other way and mirrored back, which left it facing the ground — so the
+    // water could not be seen at all.)
+    const flat = (lift) => new THREE.ShapeGeometry(shape, 4).rotateX(-Math.PI / 2).translate(0, lift, 0);
+    B.add(flat(0.06), M.painted('#2a3a2e', 0.95));
+    B.add(flat(0.22), M.water());
+    // A muddy bank under the stones, then the stones and reeds.
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const x = Math.cos(a) * (w / 2) * radii[i];
-      const z = Math.sin(a) * (d / 2) * radii[i];
+      const [x, z] = pts[i];
       B.sphere(M.wall('stone', '#a29d92'), 1.1 + r() * 0.8, x, 0.2, z, { sy: 0.45, seg: 7 });
       if (r() > 0.6) for (let k = 0; k < 6; k++) B.box(M.leaves(1), 0.12, 2 + r() * 2, 0.12, x * 0.92 + (r() - 0.5) * 2, 1.2, z * 0.92 + (r() - 0.5) * 2, [(r() - 0.5) * 0.3, 0, (r() - 0.5) * 0.3]);
     }
+    for (let i = 0; i < 4; i++) {
+      const x = (r() - 0.5) * w * 0.5;
+      const z = (r() - 0.5) * d * 0.5;
+      B.add(new THREE.CircleGeometry(0.9 + r() * 0.6, 10).rotateX(-Math.PI / 2), M.leaves(0), { pos: [x, 0.26, z] });
+    }
   },
   fountain(B, o, { w, h }, ctx) {
+    // A two-tier fountain: a stone basin, a pedestal and bowl, a central jet
+    // falling back as a bell of water, an overflow curtain off the bowl and a
+    // ring of arcing jets from the basin rim. The water runs and glows at night.
     const stone = M.wall('stone', '#cfc7b6');
     const R = w / 2;
-    const ring = new THREE.LatheGeometry([[R - 1, 0], [R, 0], [R, 1.8], [R - 0.2, 2], [R - 1, 2], [R - 1, 0.4]].map(([x, y]) => new THREE.Vector2(x, y)), 36);
+    const ring = new THREE.LatheGeometry([[R - 1, 0.25], [R, 0], [R, 1.8], [R - 0.2, 2], [R - 1, 2], [R - 1, 0.4]].map(([x, y]) => new THREE.Vector2(x, y)), 40);
     B.add(ring, stone);
-    B.add(new THREE.CircleGeometry(R - 1, 36).rotateX(-Math.PI / 2), M.water(), { pos: [0, 1.5, 0] });
-    B.cyl(stone, 0.8, 1.1, 3.5, 0, 3, 0, { seg: 14 });
-    B.add(new THREE.LatheGeometry([[0.4, 0], [2.6, 0.4], [2.8, 0.9], [0.5, 0.7]].map(([x, y]) => new THREE.Vector2(x, y)), 24), stone, { pos: [0, 4.6, 0] });
-    B.add(new THREE.CircleGeometry(2.5, 24).rotateX(-Math.PI / 2), M.water(), { pos: [0, 5.35, 0] });
-    B.add(new THREE.ConeGeometry(0.6, h - 4.5, 12, 1, true), M.clearGlass('#e8f4f8'), { pos: [0, 5.4 + (h - 4.5) / 2, 0] });
-    lightAt(ctx, 0, 1.6, 0, { tx: 0, tz: 0, color: '#bfe6ff', power: 120, range: 20, angle: 80, pool: 0 });
+    B.add(new THREE.CircleGeometry(R - 1, 40).rotateX(-Math.PI / 2), M.painted('#2f6f86', 0.4), { pos: [0, 0.3, 0] });
+    B.add(new THREE.CircleGeometry(R - 1, 40).rotateX(-Math.PI / 2), M.water(), { pos: [0, 1.5, 0] });
+    // Pedestal and the upper bowl.
+    B.cyl(stone, 0.8, 1.1, 3.5, 0, 3, 0, { seg: 16 });
+    const bowlR = Math.min(2.8, R * 0.38);
+    B.add(new THREE.LatheGeometry([[0.4, 0], [bowlR - 0.2, 0.4], [bowlR, 0.9], [bowlR - 0.25, 0.95], [0.5, 0.7]].map(([x, y]) => new THREE.Vector2(x, y)), 32), stone, { pos: [0, 4.6, 0] });
+    B.add(new THREE.CircleGeometry(bowlR - 0.3, 32).rotateX(-Math.PI / 2), M.water(), { pos: [0, 5.38, 0] });
+    const top = Math.max(7, h + 2);
+    const sheet = M.waterFlow('v');
+    const jet = M.waterFlow('u');
+    // Central jet, and the bell of water it falls back as.
+    B.add(new THREE.CylinderGeometry(0.16, 0.24, top - 5.4, 10, 1, true), sheet, { pos: [0, 5.4 + (top - 5.4) / 2, 0] });
+    const bell = [];
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10;
+      bell.push(new THREE.Vector2(0.2 + t * (bowlR - 0.6), top - (top - 5.5) * t * t));
+    }
+    B.add(new THREE.LatheGeometry(bell, 24), sheet);
+    // The overflow curtain off the bowl rim into the basin.
+    B.add(new THREE.CylinderGeometry(bowlR + 0.02, bowlR + 0.25, 5.45 - 1.55, 32, 1, true), sheet, { pos: [0, 1.55 + (5.45 - 1.55) / 2, 0] });
+    // Arcing jets from the basin rim toward the pedestal.
+    const nj = 8;
+    for (let i = 0; i < nj; i++) {
+      const a = (i / nj) * Math.PI * 2;
+      const from = new THREE.Vector3(Math.cos(a) * (R - 1.3), 1.8, Math.sin(a) * (R - 1.3));
+      const to = new THREE.Vector3(Math.cos(a) * 1.6, 1.55, Math.sin(a) * 1.6);
+      const mid = from.clone().lerp(to, 0.5).setY(4.6);
+      B.add(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(from, mid, to), 16, 0.07, 6, false), jet);
+      B.add(new THREE.CircleGeometry(0.75, 16).rotateX(-Math.PI / 2), M.foam(), { pos: [to.x, 1.53, to.z] });
+      B.cyl(M.metal('#8d949b', 0.35), 0.1, 0.12, 0.3, from.x, 1.75, from.z, { seg: 8 });
+    }
+    // Foam where the curtain lands.
+    B.add(new THREE.RingGeometry(bowlR - 0.3, bowlR + 1.1, 32).rotateX(-Math.PI / 2), M.foam(), { pos: [0, 1.53, 0] });
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.4;
+      B.box(M.lamp('#bfe6ff', 3), 0.5, 0.15, 0.5, Math.cos(a) * (R - 2), 0.4, Math.sin(a) * (R - 2));
+    }
+    lightAt(ctx, 0, 1.6, 0, { tx: 0, tz: 0, color: '#bfe6ff', power: 160, range: 22, angle: 80, pool: 0 });
+  },
+
+  /* ---- park & leisure ---- */
+  jetfountain(B, o, { w, d }, ctx) {
+    // A splash pad: granite paving, wet in the middle, jets of different heights.
+    const R = Math.min(w, d) / 2;
+    B.add(new THREE.CircleGeometry(R, 40).rotateX(-Math.PI / 2), M.wall('stone', '#9d9890'), { pos: [0, 0.08, 0] });
+    B.add(new THREE.CircleGeometry(R * 0.8, 40).rotateX(-Math.PI / 2), M.water(), { pos: [0, 0.1, 0] });
+    const sheet = M.waterFlow('v');
+    let k = 0;
+    for (let ring = 0; ring < 3; ring++) {
+      const n = ring === 0 ? 1 : ring * 6;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + ring * 0.3;
+        const rr = ring * R * 0.28;
+        const x = Math.cos(a) * rr;
+        const z = Math.sin(a) * rr;
+        const jh = ring === 0 ? 9 : ring === 1 ? 6 : 3.5 + (k++ % 2) * 1.5;
+        B.add(new THREE.CylinderGeometry(0.08, 0.16, jh, 8, 1, true), sheet, { pos: [x, 0.1 + jh / 2, z] });
+        B.add(new THREE.CircleGeometry(0.6, 12).rotateX(-Math.PI / 2), M.foam(), { pos: [x, 0.13, z] });
+        B.cyl(M.metal('#8d949b', 0.35), 0.15, 0.15, 0.05, x, 0.12, z, { seg: 8 });
+        if (ring < 2) B.box(M.lamp('#bfe6ff', 3), 0.3, 0.05, 0.3, x + 0.4, 0.12, z);
+      }
+    }
+    lightAt(ctx, 0, 0.5, 0, { tx: 0, tz: 0, color: '#bfe6ff', power: 120, range: 18, angle: 80, pool: 0 });
+  },
+  wallfountain(B, o, { w, d, h }) {
+    const stone = M.wall('stone', '#c9bfab');
+    B.slab(stone, w, h, 1.6, 0, 0, -d / 2 + 0.8);
+    B.slab(M.concrete('#d9d3c6'), w + 0.4, 0.4, 2, 0, h, -d / 2 + 0.8);
+    // A long trough in front and three spouts pouring into it.
+    B.slab(stone, w, 2, 0.6, 0, 0, d / 2 - 0.3);
+    for (const sx of [-1, 1]) B.slab(stone, 0.6, 2, d - 1.6, sx * (w / 2 - 0.3), 0, 0.8);
+    B.add(new THREE.PlaneGeometry(w - 1.2, d - 2.2).rotateX(-Math.PI / 2), M.water(), { pos: [0, 1.6, 0.8] });
+    const sheet = M.waterFlow('u');
+    for (const x of [-w / 3, 0, w / 3]) {
+      B.box(M.metal('#8a6b3c', 0.35), 0.8, 0.8, 1.2, x, h * 0.62, -d / 2 + 2);
+      const from = new THREE.Vector3(x, h * 0.6, -d / 2 + 2.5);
+      const to = new THREE.Vector3(x, 1.6, -d / 2 + 4.2);
+      B.add(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(from, new THREE.Vector3(x, h * 0.62, -d / 2 + 3.8), to), 12, 0.18, 6, false), sheet);
+      B.add(new THREE.CircleGeometry(0.8, 12).rotateX(-Math.PI / 2), M.foam(), { pos: [x, 1.62, to.z] });
+    }
+  },
+  drinkfountain(B, o, { h }) {
+    B.slab(M.concrete('#b8b3a8'), 1.8, 0.3, 1.8, 0, 0, 0);
+    B.add(cylGeo(0.35, 0.45, h - 1, 12), M.metal('#5d646b', 0.4), { pos: [0, 0.3 + (h - 1) / 2, 0] });
+    B.add(new THREE.LatheGeometry([[0.2, 0], [0.9, 0.2], [1, 0.55], [0.85, 0.55], [0.2, 0.3]].map(([x, y]) => new THREE.Vector2(x, y)), 20), M.metal('#c5ccd2', 0.25), { pos: [0, h - 0.7, 0] });
+    B.add(new THREE.CircleGeometry(0.8, 16).rotateX(-Math.PI / 2), M.water(), { pos: [0, h - 0.35, 0] });
+    B.tube(M.chrome(), [0, h - 0.3, 0.4], [0, h, 0.1], 0.05, 6);
+  },
+  reflectpool(B, o, { w, d }) {
+    const edge = M.wall('stone', '#cfc7b6');
+    B.slab(M.painted('#22313b', 0.4), w, 0.2, d, 0, 0, 0);
+    for (const sz of [-1, 1]) B.slab(edge, w, 1.2, 1.2, 0, 0, sz * (d / 2 - 0.6));
+    for (const sx of [-1, 1]) B.slab(edge, 1.2, 1.2, d - 2.4, sx * (w / 2 - 0.6), 0, 0);
+    B.add(new THREE.PlaneGeometry(w - 2.4, d - 2.4).rotateX(-Math.PI / 2), M.water(), { pos: [0, 1, 0] });
+    const jet = M.waterFlow('u');
+    for (let x = -w / 2 + 5; x < w / 2 - 4; x += 5) {
+      const from = new THREE.Vector3(x, 1, -1.6);
+      const to = new THREE.Vector3(x + 2.4, 1, 1.6);
+      B.add(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(from, new THREE.Vector3(x + 1.2, 5, 0), to), 12, 0.07, 5, false), jet);
+      B.add(new THREE.CircleGeometry(0.5, 10).rotateX(-Math.PI / 2), M.foam(), { pos: [to.x, 1.02, to.z] });
+    }
+  },
+  sculpture(B, o, { w, h }) {
+    B.slab(M.wall('stone', '#bfb8a8'), w * 0.6, 2.4, w * 0.6, 0, 0, 0);
+    const g = new THREE.TorusKnotGeometry(2.2, 0.55, 120, 14, 2, 3);
+    B.add(g, M.chrome(), { pos: [0, 2.4 + (h - 2.4) / 2, 0], scale: [1, (h - 2.4) / 6.5, 1] });
+  },
+  gazebo(B, o, { w, h }) {
+    const R = w / 2;
+    const wood2 = M.wood('#f1ede4');
+    B.add(new THREE.CylinderGeometry(R, R, 0.8, 8), M.wood('#8a6b4a'), { pos: [0, 0.4, 0] });
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      const x = Math.cos(a) * (R - 0.6);
+      const z = Math.sin(a) * (R - 0.6);
+      B.post(wood2, 0.25, 7.5, x, 0.8, z, 8);
+      if (i !== 2) {
+        const b = (((i + 1) / 8) * Math.PI * 2) + Math.PI / 8;
+        B.tube(wood2, [x, 3.6, z], [Math.cos(b) * (R - 0.6), 3.6, Math.sin(b) * (R - 0.6)], 0.1, 4);
+      }
+    }
+    B.add(new THREE.ConeGeometry(R + 1, h - 8.2, 8).rotateY(Math.PI / 8), M.roof('tiles', '#3d4a5a'), { pos: [0, 8.3 + (h - 8.2) / 2, 0] });
+    B.sphere(M.metal('#c9a227', 0.3), 0.35, 0, h + 0.2, 0, { seg: 10 });
+  },
+  pergola(B, o, { w, d, h }) {
+    const wood2 = M.wood('#6e5238');
+    for (const x of [-w / 2 + 0.5, 0, w / 2 - 0.5]) for (const z of [-d / 2 + 0.5, d / 2 - 0.5]) B.box(wood2, 0.6, h, 0.6, x, h / 2, z);
+    for (const z of [-d / 2 + 0.5, d / 2 - 0.5]) B.box(wood2, w + 1, 0.8, 0.4, 0, h - 0.4, z);
+    for (let x = -w / 2; x <= w / 2; x += 1.6) B.box(wood2, 0.3, 0.5, d + 1.5, x, h + 0.15, 0);
+    const r = rng(hashId(o.id || 'p'));
+    for (let i = 0; i < 14; i++) B.sphere(M.leaves(i % 3), 0.9 + r() * 0.7, (r() - 0.5) * w, h + 0.4, (r() - 0.5) * d, { sy: 0.5, seg: 7 });
+    for (const x of [-w / 2 + 0.5, w / 2 - 0.5]) B.sphere(M.leaves(1), 1, x, h * 0.5, -d / 2 + 0.9, { sx: 0.6, sy: 2.4, seg: 7 });
+  },
+  playground(B, o, { w, d }) {
+    B.slab(M.plastic('#4f8a5b', 0.95), w, 0.25, d, 0, 0, 0);
+    // Swings.
+    const red = M.painted('#c0392b', 0.4);
+    const sx0 = -w / 2 + 6;
+    for (const z of [-3, 3]) {
+      B.tube(red, [sx0 - 3, 0.2, z], [sx0, 9, 0], 0.18, 8);
+      B.tube(red, [sx0 + 3, 0.2, z], [sx0, 9, 0], 0.18, 8);
+    }
+    B.tube(red, [sx0 - 0.1, 9, -3.4], [sx0 + 0.1, 9, 3.4], 0.18, 8);
+    for (const z of [-1.4, 1.4]) {
+      for (const dz of [-0.6, 0.6]) B.tube(M.metal('#9aa2aa', 0.4), [sx0, 9, z + dz], [sx0, 2.2, z + dz], 0.03, 4);
+      B.box(M.plastic('#1d1f22', 0.7), 0.8, 0.12, 1.6, sx0, 2.1, z);
+    }
+    // Slide tower.
+    const tx = w / 2 - 9;
+    for (const [x, z] of [[-2, -2], [2, -2], [2, 2], [-2, 2]]) B.post(M.wood('#8a6b4a'), 0.25, 8, tx + x, 0.2, z, 6);
+    B.box(M.wood('#a07a52'), 4.4, 0.3, 4.4, tx, 5, 0);
+    B.add(new THREE.ConeGeometry(3.6, 3, 4).rotateY(Math.PI / 4), M.plastic('#2c5cc5', 0.5), { pos: [tx, 9.6, 0] });
+    B.box(M.plastic('#e7b416', 0.4), 2, 0.2, 9, tx, 2.7, 6.3, [0.55, 0, 0]);
+    for (const sx of [-1, 1]) B.box(M.plastic('#e7b416', 0.4), 0.2, 0.8, 9, tx + sx, 3.1, 6.3, [0.55, 0, 0]);
+    for (let y = 1; y < 5; y += 1) B.box(M.metal('#9aa2aa', 0.4), 1.6, 0.12, 0.12, tx, y, -3);
+    // A springer and a seesaw.
+    B.post(M.metal('#3b3f45', 0.4), 0.15, 1.8, 0, 0.2, d / 2 - 4, 6);
+    B.box(M.plastic('#2e8b57', 0.5), 0.9, 1.4, 2.4, 0, 2.6, d / 2 - 4);
+    B.box(M.painted('#2c5cc5', 0.4), 0.5, 0.5, 0.5, 0, 0.45, -d / 2 + 4);
+    B.box(M.painted('#e7b416', 0.4), 0.8, 0.2, 10, 0, 1, -d / 2 + 4, [0.12, Math.PI / 2, 0]);
+  },
+  basketball(B, o, { w, d }) {
+    B.slab(M.painted('#3d6a8a', 0.8), w, 0.15, d, 0, 0, 0);
+    B.slab(M.painted('#b8562f', 0.8), w - 6, 0.17, d - 6, 0, 0, 0);
+    const line = M.paint('#f4f2ea');
+    const strip = (x0, z0, x1, z1) => B.box(line, Math.max(0.25, Math.abs(x1 - x0)), 0.02, Math.max(0.25, Math.abs(z1 - z0)), (x0 + x1) / 2, 0.19, (z0 + z1) / 2);
+    strip(-w / 2 + 3, -d / 2 + 3, w / 2 - 3, -d / 2 + 3);
+    strip(-w / 2 + 3, d / 2 - 3, w / 2 - 3, d / 2 - 3);
+    strip(-w / 2 + 3, -d / 2 + 3, -w / 2 + 3, d / 2 - 3);
+    strip(w / 2 - 3, -d / 2 + 3, w / 2 - 3, d / 2 - 3);
+    strip(0, -d / 2 + 3, 0, d / 2 - 3);
+    B.add(new THREE.RingGeometry(5.6, 5.9, 32).rotateX(-Math.PI / 2), line, { pos: [0, 0.19, 0] });
+    for (const sx of [-1, 1]) {
+      const x = sx * (w / 2 - 1.5);
+      B.post(M.metal('#3b3f45', 0.4), 0.25, 10, x, 0, 0, 8);
+      B.box(M.metal('#3b3f45', 0.4), 3, 0.25, 0.25, x - sx * 1.5, 10, 0);
+      B.box(M.clearGlass('#e8f2f6'), 0.15, 3.5, 6, x - sx * 3, 10.5, 0);
+      B.add(new THREE.TorusGeometry(0.75, 0.05, 6, 20).rotateX(Math.PI / 2), M.painted('#e05a20', 0.4), { pos: [x - sx * 3.9, 9.9, 0] });
+    }
+  },
+  raisedbed(B, o, { w, d, h }) {
+    B.slab(M.wood('#7a5a3c'), w, h, d, 0, 0, 0);
+    B.slab(M.plastic('#3d2b1f', 0.95), w - 0.5, 0.1, d - 0.5, 0, h - 0.05, 0);
+    const r = rng(hashId(o.id || 'r'));
+    for (let i = 0; i < 10; i++) B.sphere(M.leaves(i % 3), 0.5 + r() * 0.4, (r() - 0.5) * (w - 1), h + 0.3, (r() - 0.5) * (d - 1), { sy: 0.8, seg: 7 });
+  },
+  bigplanter(B, o, { w, h }) {
+    B.add(new THREE.LatheGeometry([[0, 0], [w * 0.38, 0], [w * 0.5, 2.6], [w * 0.47, 2.7], [0, 2.4]].map(([x, y]) => new THREE.Vector2(x, y)), 24), M.concrete('#cfcac0'));
+    plant(B, 'shrub', hashId(o.id || 'b'), {});
+    B.post(M.bark('#6b5340'), 0.25, h - 4, 0, 2.4, 0, 6);
+    B.sphere(M.leaves(0), 2.4, 0, h - 1.5, 0, { seg: 10 });
+  },
+  treegrate(B, o, { w, h }) {
+    B.slab(M.paving(), w, 0.12, w, 0, 0, 0);
+    B.add(new THREE.RingGeometry(0.6, w * 0.4, 24).rotateX(-Math.PI / 2), M.metal('#3b3f45', 0.5), { pos: [0, 0.14, 0] });
+    plant(B, 'tree', hashId(o.id || 't'), { h });
+  },
+
+  /* ---- more yard ---- */
+  weighbridge(B, o, { w, d }) {
+    B.slab(M.concrete('#b5b1a8'), w + 2, 0.4, d + 2, 0, 0, 0);
+    B.slab(M.metal('#8d949b', 0.55), w, 0.5, d, 0, 0.1, 0);
+    for (let x = -w / 2 + 2; x < w / 2; x += 4) B.box(M.metal('#6d737a', 0.5), 0.15, 0.04, d, x, 0.62, 0);
+    for (const sx of [-1, 1]) B.box(M.concrete('#b5b1a8'), 4, 0.5, d, sx * (w / 2 + 2), 0.2, 0, [0, 0, sx * 0.12]);
+    for (const sz of [-1, 1]) for (const x of [-w / 2, -w / 4, 0, w / 4, w / 2]) B.post(M.painted('#e7b416', 0.45), 0.3, 3.4, x, 0, sz * (d / 2 + 1.4), 8);
+    B.slab(M.painted('#2b3036', 0.4), 1.2, 6, 1.2, w / 2 + 6, 0, -d / 2 - 3);
+    B.box(M.lamp('#ff3a2a', 2), 2.4, 1, 0.3, w / 2 + 6, 5.6, -d / 2 - 2.3);
+  },
+  storagetent(B, o, { w, d, h }) {
+    const cover = M.fabric('#e9ecef');
+    const R = w / 2;
+    const arch = new THREE.CylinderGeometry(R, R, d, 24, 1, true, -Math.PI / 2, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2);
+    B.add(arch, cover, { pos: [0, 3, 0], scale: [1, (h - 3) / R, 1] });
+    for (const sz of [-1, 1]) B.slab(cover, w, 3, 0.2, 0, 0, sz * d / 2);
+    for (const sx of [-1, 1]) B.slab(cover, 0.2, 3, d, sx * w / 2, 0, 0);
+    const end = new THREE.CircleGeometry(R, 24, 0, Math.PI);
+    B.add(end.clone(), cover, { pos: [0, 3, d / 2], scale: [1, (h - 3) / R, 1] });
+    B.add(end.clone().rotateY(Math.PI), cover, { pos: [0, 3, -d / 2], scale: [1, (h - 3) / R, 1] });
+    B.box(M.painted('#2b3036', 0.5), w * 0.45, 10, 0.3, 0, 5, d / 2 + 0.2);
+    for (let z = -d / 2; z <= d / 2; z += 6) B.add(new THREE.TorusGeometry(R, 0.15, 6, 24, Math.PI), M.metal('#8d949b', 0.4), { pos: [0, 3, z], scale: [1, (h - 3) / R, 1] });
+  },
+  bess(B, o, { w, d, h }, ctx) {
+    B.slab(M.concrete('#b5b1a8'), w + 1, 0.6, d + 1, 0, 0, 0);
+    B.slab(M.hvac('#eef0f2'), w, h - 0.6, d, 0, 0.6, 0);
+    for (let x = -w / 2 + 3; x < w / 2 - 2; x += 4) B.box(M.hvac('#d5d9dd'), 3.4, h - 2, 0.08, x, h / 2, d / 2 + 0.05);
+    for (const sx of [-1, 1]) {
+      B.box(M.hvac('#c9cdd1'), 0.9, 3, d * 0.7, sx * (w / 2 + 0.45), h * 0.5, 0);
+      B.box(M.louvre(), 0.05, 2.4, d * 0.6, sx * (w / 2 + 0.92), h * 0.5, 0);
+    }
+    const tex = panelTexture({ text: 'DANGER — BATTERY ENERGY STORAGE', color: '#1d1f22', bg: '#f2c318', aspect: 3 });
+    const mat = M.printFace(tex);
+    ctx.disposables.push(tex, mat);
+    B.add(new THREE.PlaneGeometry(3, 1), mat, { pos: [-w / 2 + 3.5, h * 0.7, d / 2 + 0.1] });
+    B.box(M.lamp('#5dff9a', 2), 0.3, 0.3, 0.1, w / 2 - 1, h - 0.8, d / 2 + 0.06);
+  },
+  bikeshed(B, o, { w, d, h }) {
+    const steel2 = M.metal('#8d949b', 0.4);
+    for (const x of [-w / 2 + 0.4, w / 2 - 0.4]) {
+      B.post(steel2, 0.12, h - 0.5, x, 0, -d / 2 + 0.4, 6);
+      B.post(steel2, 0.12, h - 1.5, x, 0, d / 2 - 0.4, 6);
+    }
+    B.box(M.clearGlass('#c9dde6'), w + 0.6, 0.1, d + 0.8, 0, h - 1, 0, [-0.14, 0, 0]);
+    for (let x = -w / 2 + 1.5; x < w / 2 - 1; x += 2.2) {
+      B.add(new THREE.TorusGeometry(0.9, 0.06, 5, 14, Math.PI), steel2, { pos: [x, 0, -0.5] });
+      for (const z of [-1.4, 1.4]) B.add(new THREE.TorusGeometry(1, 0.06, 5, 16), M.tyre(), { pos: [x + 0.2, 1, -0.5 + z * 0.9], rot: [0, Math.PI / 2, 0] });
+      B.tube(M.painted(['#c0392b', '#2c5cc5', '#2e8b57', '#1d1f22'][Math.abs(Math.round(x * 3)) % 4], 0.4), [x + 0.2, 1, -1.8], [x + 0.2, 2.2, 0.4], 0.07, 5);
+    }
+  },
+  atm(B, o, { w, d, h }, ctx) {
+    B.slab(M.painted('#1f4f9c', 0.4), w, h, d, 0, 0, 0);
+    B.box(M.painted('#d9dde2', 0.35), w - 0.4, 2.4, 0.4, 0, h * 0.62, d / 2 + 0.1);
+    const tex = screenTexture({ text: 'CASH', sub: 'INSERT CARD', bg: '#0b3d91', aspect: 1.3 });
+    const scr = M.screenFace(tex);
+    ctx.disposables.push(tex, scr);
+    B.box(scr, 1.2, 0.9, 0.05, 0, h * 0.68, d / 2 + 0.32);
+    B.box(M.metal('#3b3f45', 0.4), 1.4, 0.5, 0.3, 0, h * 0.5, d / 2 + 0.35);
+    B.box(M.lamp('#ffffff', 3), w - 0.2, 0.6, 0.08, 0, h - 0.5, d / 2 + 0.05);
+  },
+  newsstand(B, o, { w, d, h }) {
+    B.slab(M.painted('#1f5f3a', 0.45), w, h - 1.5, d, 0, 0, 0);
+    B.box(M.painted('#1f5f3a', 0.45), w + 1, 0.4, d + 1, 0, h - 1.3, 0);
+    B.box(M.fabric('#c0392b'), w + 0.6, 0.12, 3, 0, h - 1.9, d / 2 + 1.3, [0.35, 0, 0]);
+    const r = rng(hashId(o.id || 'n'));
+    for (let row = 0; row < 3; row++) for (let i = 0; i < 6; i++) {
+      B.box(M.painted(['#e74c3c', '#f1c40f', '#3498db', '#ecf0f1', '#9b59b6'][Math.floor(r() * 5)], 0.6), 0.9, 1.2, 0.05, -w / 2 + 0.8 + i * ((w - 1.6) / 5), 1.6 + row * 1.5, d / 2 + 0.05);
+    }
+  },
+  mailboxes(B, o, { w, d, h }) {
+    B.slab(M.painted('#3d434b', 0.4), w, h, d, 0, 0, 0);
+    const cols = Math.max(2, Math.round(w / 1.2));
+    for (let c = 0; c < cols; c++) for (let r2 = 0; r2 < 4; r2++) {
+      B.box(M.painted('#c9a227', 0.35), w / cols - 0.12, (h - 0.6) / 4 - 0.12, 0.06, -w / 2 + (c + 0.5) * (w / cols), 0.4 + (r2 + 0.5) * ((h - 0.6) / 4), d / 2 + 0.03);
+    }
+  },
+  fueltank(B, o, { w, d, h }) {
+    B.slab(M.concrete('#b5b1a8'), w, 0.3, d, 0, 0, 0);
+    for (const sz of [-1, 1]) B.slab(M.concrete('#b5b1a8'), w, 2.2, 0.5, 0, 0.3, sz * (d / 2 - 0.25));
+    for (const sx of [-1, 1]) B.slab(M.concrete('#b5b1a8'), 0.5, 2.2, d - 1, sx * (w / 2 - 0.25), 0.3, 0);
+    B.add(cylGeo(d * 0.36, d * 0.36, w - 2, 20).rotateZ(Math.PI / 2), M.painted('#2e7d4a', 0.45), { pos: [0, d * 0.36 + 1.4, 0] });
+    for (const x of [-w / 3, w / 3]) B.box(M.concrete('#a8a59d'), 1, 1.5, d * 0.6, x, 0.9, 0);
+    B.slab(M.painted('#d9dde2', 0.4), 1.4, 4, 1, w / 2 + 1.2, 0, 0);
+    B.tube(M.metal('#3b3f45', 0.4), [w / 2 - 1, h - 1, 0], [w / 2 + 1.2, 3.5, 0], 0.08, 5);
+  },
+  loadingramp(B, o, { w, d, h }) {
+    const steel2 = M.metal('#7d858c', 0.5);
+    const len = d - 8;
+    const ang = Math.atan2(h, len);
+    B.box(steel2, w, 0.4, len / Math.cos(ang), 0, h / 2, -d / 2 + len / 2, [-ang, 0, 0]);
+    B.slab(steel2, w, h, 8, 0, 0, d / 2 - 4);
+    for (const sx of [-1, 1]) {
+      B.box(M.painted('#e7b416', 0.45), 0.15, 3, 8, sx * (w / 2 - 0.1), h + 1.5, d / 2 - 4);
+      wheelPair(B, sx * (w / 2 - 0.3), d / 2 - 6);
+    }
+  },
+  lighttower(B, o, { w, d, h }, ctx) {
+    const yel = M.painted('#e7b416', 0.45);
+    B.slab(yel, w, 3.4, d - 3, 0, 1.4, -0.5);
+    for (const sx of [-1, 1]) wheelPair(B, sx * (w / 2), -0.5);
+    B.tube(M.painted('#3a3f45', 0.5), [0, 1.6, d / 2 - 3.5], [0, 1.6, d / 2], 0.12, 5);
+    for (const [x, z] of [[-w / 2 - 1, -d / 2 + 1], [w / 2 + 1, -d / 2 + 1], [-w / 2 - 1, d / 2 - 3], [w / 2 + 1, d / 2 - 3]]) B.box(yel, 0.3, 1.2, 0.3, x, 0.6, z);
+    B.add(cylGeo(0.22, 0.32, h - 4.8, 8), M.metal('#a9b0b6', 0.35), { pos: [0, 4.8 + (h - 4.8) / 2, -0.5] });
+    B.box(M.metal('#3a3f45', 0.45), 4, 0.3, 0.3, 0, h, -0.5);
+    for (const x of [-1.6, -0.55, 0.55, 1.6]) {
+      B.box(M.painted('#2b3036', 0.4), 0.9, 0.9, 0.5, x, h + 0.6, -0.1, [-0.35, 0, 0]);
+      B.box(M.lamp('#fff6e0', 8), 0.75, 0.75, 0.05, x, h + 0.55, 0.16, [-0.35, 0, 0]);
+    }
+    lightAt(ctx, 0, h, 0, { tx: 0, tz: 26, power: 2400, range: 160, angle: 70 });
+  },
+  compressor(B, o, { w, d }) {
+    const yel = M.painted('#e7b416', 0.45);
+    B.box(yel, w, 3, d - 3, 0, 2.6, -0.8);
+    B.add(cylGeo(w / 2, w / 2, d - 3, 16, false).rotateX(Math.PI / 2), yel, { pos: [0, 3.2, -0.8], scale: [1, 0.55, 1] });
+    for (const sx of [-1, 1]) wheelPair(B, sx * (w / 2 + 0.1), -0.8);
+    B.tube(M.painted('#3a3f45', 0.5), [0, 1.4, d / 2 - 2.5], [0, 1.4, d / 2], 0.12, 5);
+    B.box(M.louvre(), 0.05, 1.8, d * 0.4, w / 2 + 0.02, 2.8, -0.8);
+  },
+
+  /* ---- parking ---- */
+  carpark(B, o, { w, d }, ctx) {
+    const L = lotLayout({ ...o, w, d });
+    const S = L.S;
+    const top = 0.18;
+    const surf = S.surface === 'concrete' ? M.concrete('#c9c6bf') : S.surface === 'gravel' ? M.gravel() : S.surface === 'paving' ? M.paving() : M.asphalt();
+    B.slab(surf, w, top, d, 0, 0, 0);
+    const paint = M.paint(S.lines);
+    const lineY = top + 0.02;
+    const seg = (x0, z0, x1, z1, wd = 0.33) => {
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      if (len < 0.05) return;
+      B.add(new THREE.PlaneGeometry(wd, len).rotateX(-Math.PI / 2).rotateY(Math.atan2(x1 - x0, z1 - z0)), paint, { pos: [(x0 + x1) / 2, lineY, (z0 + z1) / 2] });
+    };
+    // Each bay: its two side lines, a wheel stop at its head, a filled and
+    // marked bay for accessible and EV parking.
+    const half = L.depth / 2;
+    for (const st of L.stalls) {
+      const k = half / Math.abs(st.ay);
+      const ex = st.ax * k;
+      const ez = st.ay * k;
+      for (const sx of [-L.pitch / 2, L.pitch / 2]) seg(st.x + sx - ex, st.y - ez, st.x + sx + ex, st.y + ez);
+      const hx = st.x + ex * 0.86;
+      const hz = st.y + ez * 0.86;
+      B.box(M.concrete('#d9d5c8'), L.pitch * 0.62, 0.4, 0.75, hx, top + 0.2, hz);
+      if (st.ada || st.ev) {
+        const fill = st.ada ? M.paint('#2c5cc5') : M.paint('#2e8b57');
+        B.add(new THREE.PlaneGeometry(L.pitch - 0.9, L.depth * 0.8).rotateX(-Math.PI / 2).applyMatrix4(new THREE.Matrix4().makeShear(0, 0, 0, 0, st.ax / st.ay, 0)), fill, { pos: [st.x, lineY - 0.005, st.y] });
+        const sym = st.ada ? lotSymbol('♿', '#2c5cc5') : lotSymbol('⚡', '#2e8b57');
+        B.add(new THREE.PlaneGeometry(4, 4).rotateX(-Math.PI / 2).rotateY(Math.atan2(-st.ax, -st.ay)), sym, { pos: [st.x - st.ax * 2, lineY + 0.01, st.y - st.ay * 2] });
+        if (st.ev) {
+          B.slab(M.painted('#2b3036', 0.4), 1.2, 4.6, 0.9, st.x + st.ax * (half + 0.9), top, st.y + st.ay * (half + 0.9));
+          B.box(M.lamp('#5dff9a', 2), 0.7, 0.3, 0.1, st.x + st.ax * (half + 0.9), top + 3.9, st.y + st.ay * (half + 0.9) - Math.sign(st.ay) * 0.47);
+        }
+      }
+    }
+    // Head lines along each row, arrows down the aisles of angled lots.
+    for (const row of L.rows) {
+      const zHead = row.dir > 0 ? row.y0 : row.y1;
+      if (L.stalls.some((st) => st.row === L.rows.indexOf(row))) seg(L.x0 - 1, zHead, L.x1 + 1, zHead);
+    }
+    if (S.angle !== 90) {
+      const shape = arrowShape();
+      for (const a of L.aisles) {
+        const z = (a.y0 + a.y1) / 2;
+        for (let x = L.x0 + 10; x < L.x1 - 8; x += 40) {
+          B.add(new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2).rotateY(-Math.PI / 2), paint, { pos: [x, lineY, z] });
+        }
+      }
+    }
+    // Kerbs round the edge, open where the aisles meet it.
+    if (S.kerbs) {
+      const kerb = M.kerb();
+      B.box(kerb, w, 0.55, 0.6, 0, 0.27, -d / 2 + 0.3);
+      B.box(kerb, w, 0.55, 0.6, 0, 0.27, d / 2 - 0.3);
+      for (const sx of [-1, 1]) {
+        let z = -d / 2;
+        const gaps = L.aisles.map((a) => [a.y0 - 1, a.y1 + 1]).sort((p, q) => p[0] - q[0]);
+        for (const [g0, g1] of [...gaps, [d / 2, d / 2]]) {
+          if (g0 - z > 0.5) B.box(kerb, 0.6, 0.55, g0 - z, sx * (w / 2 - 0.3), 0.27, (z + g0) / 2);
+          z = Math.max(z, g1);
+        }
+      }
+    }
+    // Planted islands at the ends of each row, and light poles between modules.
+    if (S.islands) {
+      for (const row of L.rows) {
+        for (const x of [-w / 2 + 2 + 3.5, w / 2 - 2 - 3.5]) {
+          const z = (row.y0 + row.y1) / 2;
+          const dd = row.y1 - row.y0 - 1;
+          B.box(M.kerb(), 7, 0.6, dd, x, 0.3, z);
+          B.add(new THREE.PlaneGeometry(6, dd - 1).rotateX(-Math.PI / 2), M.grass('#ffffff'), { pos: [x, 0.62, z] });
+          B.sphere(M.leaves(Math.abs(Math.round(x)) % 3), 2.2, x, 2, z, { sy: 0.75, seg: 9 });
+        }
+      }
+    }
+    if (S.lights) {
+      const lines = [-d / 2 + 1];
+      for (let i = 0; i < L.rows.length; i++) {
+        const row = L.rows[i];
+        if (row.dir < 0 && i < L.rows.length - 1) lines.push(row.y1 + 0.75);
+      }
+      lines.push(d / 2 - 1);
+      const span = Math.max(40, Math.min(90, w / 3));
+      for (const z of lines) {
+        for (let x = -w / 2 + span / 2; x < w / 2; x += span) {
+          B.slab(M.concrete('#a8a59d'), 1.6, 1.4, 1.6, x, 0, z);
+          B.add(cylGeo(0.18, 0.3, 22, 10), M.metal('#7d858c', 0.4), { pos: [x, 1.4 + 11, z] });
+          B.box(M.metal('#7d858c', 0.4), 0.3, 0.3, 4, x, 23.2, z);
+          for (const sz of [-1, 1]) {
+            shoebox(B, x, 23, z + sz * 2);
+            lightAt(ctx, x, 22.5, z + sz * 2, { tx: x, tz: z + sz * 14, power: 700, range: 110, angle: 66 });
+          }
+        }
+      }
+    }
+  },
+  carparksmall(B, o, dims, ctx) { P.carpark(B, o, dims, ctx); },
+  carparkangled(B, o, dims, ctx) { P.carpark(B, { angle: 60, ...o }, dims, ctx); },
+  paystation(B, o, { w, d, h }) {
+    B.slab(M.concrete('#a8a59d'), w + 0.6, 0.3, d + 0.6, 0, 0, 0);
+    B.slab(M.painted('#1f4f9c', 0.4), w, h - 0.3, d, 0, 0.3, 0);
+    B.box(M.painted('#e9ecee', 0.4), w + 0.3, 0.3, d + 0.4, 0, h + 0.15, 0);
+    B.box(M.vehicleGlass(), w * 0.6, 0.9, 0.05, 0, h - 1.6, d / 2 + 0.01);
+    B.box(M.metal('#c5ccd2', 0.3), w * 0.5, 0.4, 0.08, 0, h - 2.8, d / 2 + 0.02);
+    B.box(M.lamp('#ffd27a', 2), 0.5, 0.15, 0.05, 0, h - 0.6, d / 2 + 0.02);
+  },
+  cartcorral(B, o, { w, d, h }) {
+    const steel2 = M.metal('#b7bec5', 0.35);
+    for (const x of [-w / 2 + 0.3, w / 2 - 0.3]) for (const z of [-d / 2 + 0.3, d / 2 - 0.3]) B.post(steel2, 0.12, h, x, 0, z, 8);
+    B.box(M.clearGlass('#c9dde6'), w, 0.1, d, 0, h, 0, [0.08, 0, 0]);
+    B.box(steel2, w, 0.1, 0.1, 0, h - 0.1, -d / 2 + 0.3);
+    for (const z of [-d / 2 + 0.3, d / 2 - 0.3]) B.box(steel2, w - 1, 0.1, 0.1, 0, 2.6, z);
+    B.box(M.painted('#c0392b', 0.4), w, 1, 0.12, 0, h - 0.6, d / 2 - 0.25);
+    // A row of nested trolleys.
+    for (let x = -w / 2 + 2; x < w / 2 - 1.5; x += 1.1) {
+      B.box(M.metal('#9aa2aa', 0.4), 1.9, 1.5, 3, x, 2.4, 0.5);
+      B.box(M.plastic('#c0392b', 0.5), 1.9, 0.12, 0.2, x, 3.3, 2);
+    }
+  },
+  parkingsign(B, o, { w, h }, ctx) {
+    const s = o.sign || {};
+    for (const x of [-w / 2 + 0.5, w / 2 - 0.5]) B.post(galv(), 0.18, h, x, 0, 0, 8);
+    B.box(M.painted(s.bg || '#1f4f9c', 0.4), w, 7, 0.3, 0, h - 3.5, 0);
+    const big = panelTexture({ text: 'P', color: '#ffffff', bg: s.bg || '#1f4f9c', aspect: 1, border: false });
+    face(B, panelMat(big, ctx), 4, 4, 0, h - 2.2, 0.17);
+    const tex = panelTexture({ text: s.text || 'CUSTOMER PARKING', sub: s.sub || '', color: s.color || '#ffffff', bg: s.bg || '#1f4f9c', aspect: w / 2.4, border: false });
+    face(B, panelMat(tex, ctx), w - 0.4, 2.4, 0, h - 5.6, 0.17);
   },
 
   /* ---- yard ---- */

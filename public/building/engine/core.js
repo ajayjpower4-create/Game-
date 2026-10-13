@@ -17,6 +17,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import * as M from './materials.js';
 import { setAnisotropy, glowTexture } from './textures.js';
@@ -29,12 +30,41 @@ const smooth = (a, b, x) => {
 };
 const lerp = (a, b, t) => a + (b - a) * t;
 
+/* Graphics presets. `ratio` caps the pixel ratio; `ss` renders above the
+ * screen's own resolution (supersampling); `lampShadows` is how many of the
+ * nearest lamps cast real shadows at night; `env` is the size of the baked
+ * sky reflection; `clouds` scales the drifting cloud shadows. */
 export const QUALITY = {
-  low: { name: 'Low', ratio: 1, shadow: 2048, msaa: 0, ao: false, bloom: false, smaa: true, lights: 4 },
-  medium: { name: 'Medium', ratio: 1.25, shadow: 2048, msaa: 4, ao: false, bloom: true, smaa: false, lights: 6 },
-  high: { name: 'High', ratio: 1.5, shadow: 4096, msaa: 4, ao: true, bloom: true, smaa: false, lights: 8 },
-  ultra: { name: 'Ultra', ratio: 2, shadow: 8192, msaa: 8, ao: true, bloom: true, smaa: false, lights: 12 },
+  low: { name: 'Low', ratio: 1, ss: 1, shadow: 2048, msaa: 0, ao: false, aoSamples: 8, bloom: false, smaa: true, lights: 4, lampShadows: 0, aniso: 4, sharpen: 0, env: 256, clouds: 0 },
+  medium: { name: 'Medium', ratio: 1.25, ss: 1, shadow: 2048, msaa: 4, ao: false, aoSamples: 8, bloom: true, smaa: false, lights: 6, lampShadows: 0, aniso: 8, sharpen: 0, env: 256, clouds: 1 },
+  high: { name: 'High', ratio: 1.5, ss: 1, shadow: 4096, msaa: 4, ao: true, aoSamples: 12, bloom: true, smaa: false, lights: 8, lampShadows: 2, aniso: 8, sharpen: 0.12, env: 256, clouds: 1 },
+  ultra: { name: 'Ultra', ratio: 2, ss: 1, shadow: 8192, msaa: 8, ao: true, aoSamples: 24, bloom: true, smaa: false, lights: 12, lampShadows: 4, aniso: 16, sharpen: 0.22, env: 512, clouds: 1 },
+  max: { name: 'Max', ratio: 3, ss: 1.5, shadow: 8192, msaa: 8, ao: true, aoSamples: 32, bloom: true, smaa: false, lights: 16, lampShadows: 6, lampShadowSize: 2048, aniso: 16, sharpen: 0.28, env: 1024, clouds: 1 },
 };
+
+/* Everything a graphics mod (or the console) may override, with the range
+ * each is held to. Numbers are clamped; 'bool' keys take true or false. */
+export const GRAPHICS_KEYS = {
+  ratio: [0.5, 4], ss: [0.5, 3], shadow: [512, 16384], shadowSoftness: [0, 8], msaa: [0, 16],
+  ao: 'bool', aoSamples: [4, 64], bloom: 'bool', bloomStrength: [0, 4], smaa: 'bool',
+  lights: [0, 32], lampShadows: [0, 16], lampShadowSize: [256, 4096], aniso: [1, 16],
+  sharpen: [0, 1], env: [64, 2048], clouds: [0, 2], exposure: [0.2, 4], saturation: [0, 2],
+  vignette: [0, 1], fog: [0, 4], viewDistance: [2000, 60000], fov: [20, 100], autoRes: 'bool',
+};
+
+/** Keep the overrides we understand, held to their ranges. */
+export function cleanTweaks(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [k, spec] of Object.entries(GRAPHICS_KEYS)) {
+    const v = raw[k];
+    if (v == null) continue;
+    if (spec === 'bool') out[k] = !!v;
+    else if (Number.isFinite(+v)) out[k] = clamp(+v, spec[0], spec[1]);
+  }
+  for (const k of ['shadow', 'msaa', 'aoSamples', 'lights', 'lampShadows', 'lampShadowSize', 'env']) if (k in out) out[k] = Math.round(out[k]);
+  return out;
+}
 
 export const WEATHER = {
   clear: { name: 'Clear', icon: '☀️', clouds: 0.12, density: 0.3, turbidity: 1.9, rayleigh: 1.7, mie: 0.004, fog: 0.00011, sun: 1, wet: 0, snow: 0, rain: 0, flakes: 0 },
@@ -65,9 +95,12 @@ const _ndc = new THREE.Vector2();
 const _plane = new THREE.Plane();
 
 export class Engine {
-  constructor(host, { quality = 'high' } = {}) {
+  constructor(host, { quality = 'high', tweaks = null } = {}) {
     this.host = host;
     this.quality = QUALITY[quality] ? quality : 'high';
+    this.tweaks = cleanTweaks(tweaks);
+    this.dof = false;
+    this.cloudAt = new THREE.Vector2(0, 0);
     this.env = { hour: 15.5, weather: 'clear', season: 'summer' };
     this.mode = 'orbit';
     this.keys = new Set();
@@ -104,12 +137,12 @@ export class Engine {
     r.domElement.className = 'gl';
     r.domElement.tabIndex = 0;
     host.appendChild(r.domElement);
-    setAnisotropy(Math.min(8, r.capabilities.getMaxAnisotropy()));
+    setAnisotropy(Math.min(this.q.aniso || 8, r.capabilities.getMaxAnisotropy()));
 
     /* ---- scene ---- */
     const s = this.scene = new THREE.Scene();
     s.fog = new THREE.FogExp2(0xb9c9db, 0.0001);
-    this.camera = new THREE.PerspectiveCamera(45, 1, 1, 16000);
+    this.camera = new THREE.PerspectiveCamera(this.q.fov || 45, 1, 1, this.q.viewDistance || 16000);
     this.camera.position.set(300, 380, 900);
 
     this.sky = new Sky();
@@ -122,7 +155,7 @@ export class Engine {
     this.sun.castShadow = true;
     this.sun.shadow.bias = -0.00025;
     this.sun.shadow.normalBias = 0.35;
-    this.sun.shadow.radius = 2.2;
+    this.sun.shadow.radius = this.q.shadowSoftness ?? 2.2;
     // Small things too far away to see are skipped by the camera (layer 1)
     // but still cast their shadows.
     this.sun.shadow.camera.layers.enable(1);
@@ -287,20 +320,43 @@ export class Engine {
     this.scene.add(this.moon, this.moonHalo);
   }
 
+  /** The quality preset in force, with any graphics overrides on top. */
+  get q() {
+    return { ...QUALITY[this.quality], ...this.tweaks };
+  }
+
   buildLightPool() {
-    for (const l of this.pool) this.scene.remove(l, l.target);
+    for (const l of this.pool) {
+      this.scene.remove(l, l.target);
+      if (l.shadow && l.shadow.map) l.shadow.map.dispose();
+    }
     this.pool = [];
-    const n = QUALITY[this.quality].lights;
+    const q = this.q;
+    const n = q.lights;
+    const shadows = Math.min(n, q.lampShadows || 0);
     for (let i = 0; i < n; i++) {
       const l = new THREE.SpotLight(0xffd9a0, 0, 140, 62 * DEG, 0.55, 1.6);
-      l.castShadow = false;
+      // The nearest few lamps cast real shadows. Their maps are drawn only
+      // when something changes after dark, never by day.
+      l.castShadow = i < shadows;
+      if (l.castShadow) {
+        const size = q.lampShadowSize || 1024;
+        l.shadow.mapSize.set(size, size);
+        l.shadow.bias = -0.0006;
+        l.shadow.normalBias = 0.25;
+        l.shadow.radius = 2;
+        l.shadow.camera.near = 1;
+        l.shadow.autoUpdate = false;
+        l.shadow.needsUpdate = true;
+      }
       this.scene.add(l, l.target);
       this.pool.push(l);
     }
+    this.lightsDirty = true;
   }
 
   buildComposer() {
-    const q = QUALITY[this.quality];
+    const q = this.q;
     const r = this.renderer;
     if (this.composer) this.composer.dispose();
     const size = r.getDrawingBufferSize(new THREE.Vector2());
@@ -310,7 +366,7 @@ export class Engine {
     this.aoPass = null;
     if (q.ao) {
       this.aoPass = new GTAOPass(this.scene, this.camera, size.x, size.y);
-      this.aoPass.updateGtaoMaterial({ radius: 6, distanceExponent: 1.4, thickness: 2, scale: 1.15, samples: this.quality === 'ultra' ? 24 : 12, distanceFallOff: 1 });
+      this.aoPass.updateGtaoMaterial({ radius: 6, distanceExponent: 1.4, thickness: 2, scale: 1.15, samples: q.aoSamples || 12, distanceFallOff: 1 });
       this.aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
       this.aoPass.blendIntensity = 0.85;
       // The AO depth pass must not see the sky box, sprites, glows or ghosts.
@@ -333,6 +389,18 @@ export class Engine {
       this.bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.3, 0.55, 0.9);
       comp.addPass(this.bloomPass);
     }
+    // Depth of field, for photos: sharp where the camera is aimed, softening
+    // in front and behind it as a real lens does.
+    this.dofPass = null;
+    if (this.dof) {
+      const p = this.dofPass = new BokehPass(this.scene, this.camera, { focus: 300, aperture: 0.012, maxblur: 0.009 });
+      p.materialBokeh.fragmentShader = p.materialBokeh.fragmentShader.replace(
+        'float factor = ( focus + viewZ );',
+        'float factor = ( focus + viewZ ) / min( viewZ, -0.01 );',
+      );
+      p.materialBokeh.needsUpdate = true;
+      comp.addPass(p);
+    }
     this.outline = new OutlinePass(new THREE.Vector2(size.x, size.y), this.scene, this.camera);
     this.outline.edgeStrength = 4;
     this.outline.edgeGlow = 0.4;
@@ -343,14 +411,19 @@ export class Engine {
     this.outline.enabled = this.selectionObjects.length > 0;
     comp.addPass(this.outline);
     this.gradePass = new ShaderPass(GRADE);
+    this.gradePass.uniforms.sharpen.value = q.sharpen || 0;
+    if (q.saturation != null) this.gradePass.uniforms.saturation.value = 0.9 * q.saturation;
+    if (q.vignette != null) this.gradePass.uniforms.vignette.value = q.vignette;
     comp.addPass(this.gradePass);
     comp.addPass(new OutputPass());
     if (q.smaa) comp.addPass(new SMAAPass());
+    // A new chain starts from the passes' defaults: set it for the hour.
+    this.tuneBloom();
     this.applyShadowSize();
   }
 
   applyShadowSize() {
-    const n = Math.min(QUALITY[this.quality].shadow, this.renderer.capabilities.maxTextureSize);
+    const n = Math.min(this.q.shadow, this.renderer.capabilities.maxTextureSize);
     const sh = this.sun.shadow;
     if (sh.mapSize.x !== n) {
       sh.mapSize.set(n, n);
@@ -363,7 +436,8 @@ export class Engine {
 
   /** The pixel ratio this quality level asks for, before any adaptive scaling. */
   get baseRatio() {
-    return Math.min(window.devicePixelRatio || 1, QUALITY[this.quality].ratio);
+    const q = this.q;
+    return Math.min(q.ratio, (window.devicePixelRatio || 1) * (q.ss || 1));
   }
 
   /** Watch the frame rate and trade resolution for smoothness. */
@@ -445,7 +519,38 @@ export class Engine {
   setQuality(name) {
     if (!QUALITY[name] || name === this.quality) return;
     this.quality = name;
+    this.applyGraphics();
+  }
+
+  /**
+   * Override any part of the graphics preset (see GRAPHICS_KEYS): a mod's
+   * graphics.json, or BuildingSim.graphics({...}) from the console. Pass
+   * null to go back to the plain preset.
+   */
+  setTweaks(tweaks, merge = false) {
+    this.tweaks = cleanTweaks(merge ? { ...this.tweaks, ...tweaks } : tweaks);
+    this.applyGraphics();
+  }
+
+  applyGraphics() {
+    const q = this.q;
+    setAnisotropy(Math.min(q.aniso || 8, this.renderer.capabilities.getMaxAnisotropy()), true);
+    this.sun.shadow.radius = q.shadowSoftness ?? 2.2;
+    this.camera.fov = q.fov || 45;
+    this.camera.far = q.viewDistance || 16000;
+    this.camera.updateProjectionMatrix();
+    if (q.autoRes != null) this.setAutoRes(q.autoRes);
     this.buildLightPool();
+    this.buildComposer();
+    this.resize();
+    this.envKey = '';
+    this.applyEnv(true);
+  }
+
+  /** Photo depth of field on or off. */
+  setDof(on) {
+    if (!!on === this.dof) return;
+    this.dof = !!on;
     this.buildComposer();
     this.resize();
   }
@@ -462,6 +567,7 @@ export class Engine {
     this.camera.updateProjectionMatrix();
     this.composer.setPixelRatio(ratio);
     this.composer.setSize(w, h);
+    if (this.gradePass) this.gradePass.uniforms.texel.value.set(1 / (w * ratio), 1 / (h * ratio));
     this.moved = true;
   }
 
@@ -544,19 +650,14 @@ export class Engine {
     if (W.snow) fogDay.set('#c9d0d8');
     fogDay.lerp(new THREE.Color('#e3b48d'), golden * 0.55 * W.sun);
     this.scene.fog.color.set('#0a101c').lerp(fogDay, day);
-    this.scene.fog.density = W.fog * (night > 0.5 && W.fog < 0.001 ? 0.8 : 1);
+    this.scene.fog.density = W.fog * (night > 0.5 && W.fog < 0.001 ? 0.8 : 1) * (this.q.fog ?? 1);
     this.envGround.material.color.set('#0c0d10').lerp(new THREE.Color(W.snow ? '#c9ced4' : '#6f6a60'), day);
 
     // Exposure and glow
     // Like a camera, open up as the light gets low.
     const lowSun = golden * W.sun * smooth(-4, 2, e);
-    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.35 : 1) * (1 + lowSun * 1.7) * (1 + 0.15 * W.snow * day);
-    if (this.bloomPass) {
-      // Bloom sees light before exposure: by day only the sun's glints bloom.
-      this.bloomPass.strength = lerp(0.06, 0.7, night);
-      this.bloomPass.threshold = lerp(4.5, 0.55, night);
-      this.bloomPass.radius = lerp(0.35, 0.6, night);
-    }
+    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.35 : 1) * (1 + lowSun * 1.7) * (1 + 0.15 * W.snow * day) * (this.q.exposure ?? 1);
+    this.tuneBloom();
     this.stars.material.opacity = night * (W.clouds > 0.8 ? 0.08 : 1 - W.clouds * 0.7);
     this.glow.material.uniforms.strength.value = night * (W.clouds > 0.8 ? 1.4 : 1);
     const du = this.deck.material.uniforms;
@@ -591,11 +692,20 @@ export class Engine {
     M.setEnvMap(this.envRT.texture, lerp(0.12, 1, day) * this.skyGain);
   }
 
+  /** Bloom sees light before exposure: by day only the sun's glints bloom. */
+  tuneBloom() {
+    if (!this.bloomPass) return;
+    const night = this.night || 0;
+    this.bloomPass.strength = lerp(0.06, 0.7, night) * (this.q.bloomStrength ?? 1);
+    this.bloomPass.threshold = lerp(4.5, 0.55, night);
+    this.bloomPass.radius = lerp(0.35, 0.6, night);
+  }
+
   bakeEnv() {
     const u = this.sky.material.uniforms;
     const disc = u.showSunDisc.value;
     u.showSunDisc.value = 0;
-    const rt = this.pmrem.fromScene(this.envScene, 0, 1, 5000);
+    const rt = this.pmrem.fromScene(this.envScene, 0, 1, 5000, { size: this.q.env || 256 });
     u.showSunDisc.value = disc;
     if (this.envRT) this.envRT.dispose();
     this.envRT = rt;
@@ -624,6 +734,11 @@ export class Engine {
       const hit = ranked[i];
       if (!hit) { l.intensity = 0; return; }
       const s = hit.s;
+      // A shadow-casting lamp that has moved to a new post needs its map redrawn.
+      if (l.castShadow && (l.position.x !== s.x || l.position.y !== s.y || l.position.z !== s.z)) {
+        l.shadow.needsUpdate = true;
+        this.shadowDirty = true;
+      }
       l.position.set(s.x, s.y, s.z);
       l.target.position.set(s.tx != null ? s.tx : s.x, 0, s.tz != null ? s.tz : s.z);
       l.target.updateMatrixWorld();
@@ -1012,7 +1127,9 @@ export class Engine {
       this.renderer.shadowMap.needsUpdate = true;
       this.shadowDirty = false;
       this.shadowAt = this.time;
+      if (this.night > 0.35) for (const l of this.pool) if (l.castShadow && l.intensity > 0) l.shadow.needsUpdate = true;
     }
+    this.driftClouds(dt);
     if (this.envStale && this.time - this.envAt >= 1) {
       this.envStale = false;
       this.envKey = `${Math.round(this.env.hour * 4)}|${this.env.weather}`;
@@ -1027,6 +1144,24 @@ export class Engine {
     this.moved = false;
     this.renderer.info.reset();
     this.composer.render(dt);
+  }
+
+  /**
+   * Move the cloud shadows on with the wind. Fair-weather skies get the most;
+   * under a full overcast there is no direct sun left to shade.
+   */
+  driftClouds(dt) {
+    const W = this.W || WEATHER.clear;
+    const q = this.q;
+    this.cloudAt.x -= dt * 16;
+    this.cloudAt.y -= dt * 7;
+    const strength = (q.clouds ?? 1) * 0.55 * (this.day || 0) * smooth(0.5, 0.8, W.sun) * smooth(0.05, 0.3, W.clouds + 0.1);
+    M.setCloudShadows(this.cloudAt.x, this.cloudAt.y, 0.25 + W.clouds * 0.5, Math.min(0.9, strength));
+    if (this.dofPass) {
+      // Focus on whatever the camera is aimed at.
+      const focus = this.mode === 'orbit' ? this.camera.position.distanceTo(this.controls.target) : 60;
+      this.dofPass.uniforms.focus.value = focus;
+    }
   }
 
   /** Render once and hand back the image (for photos). */
@@ -1072,13 +1207,24 @@ const GRADE = {
     saturation: { value: 0.9 },
     tint: { value: new THREE.Vector3(1.05, 1.0, 0.92) },
     vignette: { value: 0.22 },
+    sharpen: { value: 0 },
+    texel: { value: new THREE.Vector2(1 / 1280, 1 / 720) },
   },
   vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float saturation; uniform vec3 tint; uniform float vignette;
+    uniform float sharpen; uniform vec2 texel;
     varying vec2 vUv;
     void main() {
       vec4 c = texture2D(tDiffuse, vUv);
+      if (sharpen > 0.0) {
+        // A light unsharp mask: crisper edges and texture without halos.
+        vec3 n = texture2D(tDiffuse, vUv + vec2(texel.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(texel.x, 0.0)).rgb
+          + texture2D(tDiffuse, vUv + vec2(0.0, texel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, texel.y)).rgb;
+        vec3 edge = c.rgb - n * 0.25;
+        float l0 = dot(c.rgb, vec3(0.333));
+        c.rgb = max(c.rgb + clamp(edge, -0.15 * (l0 + 0.05), 0.15 * (l0 + 0.05)) * sharpen * 2.0, vec3(0.0));
+      }
       float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
       c.rgb = mix(vec3(l), c.rgb, saturation) * tint;
       vec2 d = vUv - 0.5;
