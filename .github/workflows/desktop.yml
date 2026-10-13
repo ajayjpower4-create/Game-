@@ -5,12 +5,15 @@ name: Desktop build (Windows .exe)
 
 on:
   push:
+    # Branches must be listed alongside tags, or branch pushes are ignored.
+    branches:
+      - '**'
+    tags:
+      - 'v*'
     paths:
       - 'desktop/**'
       - 'public/building/**'
       - '.github/workflows/desktop.yml'
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
