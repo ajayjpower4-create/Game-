@@ -485,6 +485,39 @@ const builders = {
     return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 3), { srgb: false, tileX: 4 }), roughnessMap: null };
   },
 
+  siding() {
+    // Lap siding: 8 in boards, each throwing a shadow line onto the one below.
+    const s = SIZE;
+    const boards = 6;                 // per 4 ft tile
+    const bh = s / boards;
+    const n = fbmField(s, { base: 4, octaves: 3, seed: 171 });
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const f = (y % bh) / bh;        // 0 at a board's top edge, 1 at its bottom
+      h[y * s + x] = f;
+      const shadow = f < 0.07 ? 0.62 : 1;
+      return clamp255(236 * shadow * (0.94 + n(x, y) * 0.1) * (0.9 + f * 0.1));
+    });
+    return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 4), { srgb: false, tileX: 4 }), roughnessMap: null };
+  },
+
+  batten() {
+    // Board and batten: wide boards with narrow battens over the joints.
+    const s = SIZE;
+    const per = 4;                    // boards per 4 ft tile
+    const bw = s / per;
+    const n = fbmField(s, { base: 3, octaves: 3, seed: 173 });
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const u = x % bw;
+      const batten = u < bw * 0.16;
+      const edge = Math.abs(u - bw * 0.16) < 2 || u < 2;
+      h[y * s + x] = batten ? 1 : 0.3;
+      return clamp255((edge ? 200 : 238) * (0.95 + n(x, y) * 0.08));
+    });
+    return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 5), { srgb: false, tileX: 4 }), roughnessMap: null };
+  },
+
   membrane() {
     // Single-ply roofing: pale sheets with welded seams and dirt.
     const s = SIZE;
@@ -691,12 +724,177 @@ const builders = {
     return { map: tex(c, { srgb: false, tileX: 0.6 }) };
   },
 
+  honeycomb() {
+    // Honeycomb grille mesh: hexagonal cells with raised walls. Covers 0.5 ft.
+    const s = 128;
+    const h = new Float32Array(s * s);
+    const cell = 16;
+    const rowH = cell * Math.sqrt(3) / 2;
+    const col = paint(canvas(s), (x, y) => {
+      // Nearest hexagon centre on a staggered grid.
+      let best = 1e9;
+      let second = 1e9;
+      const row = Math.floor(y / rowH);
+      for (let ry = row - 1; ry <= row + 1; ry++) {
+        const off = (((ry % 2) + 2) % 2) * cell / 2;
+        const ci = Math.floor((x - off) / cell);
+        for (let cx = ci - 1; cx <= ci + 1; cx++) {
+          const px = cx * cell + off + cell / 2;
+          const py = ry * rowH + rowH / 2;
+          const dd = Math.hypot(x - px, y - py);
+          if (dd < best) { second = best; best = dd; } else if (dd < second) second = dd;
+        }
+      }
+      const wall = second - best < 2.4;
+      h[y * s + x] = wall ? 1 : 0;
+      return wall ? 120 : 26;
+    });
+    return {
+      map: tex(col, { tileX: 0.5 }),
+      normalMap: tex(normalMap(h, s, s, 1.6), { srgb: false, tileX: 0.5 }),
+    };
+  },
+
+  tread() {
+    // Tyre tread, wrapped round a lathed tyre: u goes round (one block per
+    // copy), v across from one sidewall to the other.
+    const w = 64;
+    const hh = 128;
+    const h = new Float32Array(w * hh);
+    const col = paint(canvas(w, hh), (x, y) => {
+      const v = y / hh;
+      let ht = 0.6;
+      const tread = v > 0.3 && v < 0.7;
+      if (tread) {
+        const groove = [0.38, 0.5, 0.62].some((g) => Math.abs(v - g) < 0.018);
+        const sipe = Math.abs(((x + (v > 0.5 ? 16 : 0)) % w) - w / 2) < 2.5 && !groove;
+        ht = groove ? 0 : sipe ? 0.25 : 1;
+      } else {
+        ht = 0.5 + 0.02 * Math.sin(v * 90);
+      }
+      h[y * w + x] = ht;
+      return tread ? (ht > 0.5 ? 40 : 22) : 34;
+    });
+    const t = tex(col, { srgb: true });
+    const n = tex(normalMap(h, w, hh, 2.2), { srgb: false });
+    t.repeat.set(44, 1);
+    n.repeat.set(44, 1);
+    return { map: t, normalMap: n };
+  },
+
+  cladding() {
+    // Textured black plastic: wheel-arch flares, bumpers, rocker covers.
+    const s = 128;
+    const n = fbmField(s, { base: 32, octaves: 2, seed: 517 });
+    const h = new Float32Array(s * s);
+    for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) h[y * s + x] = n(x, y);
+    return { normalMap: tex(normalMap(h, s, s, 3), { srgb: false, tileX: 0.8 }) };
+  },
+
   water() {
     const s = 256;
     const n = fbmField(s, { base: 6, octaves: 5, seed: 221 });
     const h = new Float32Array(s * s);
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) h[y * s + x] = n(x, y);
     return { normalMap: tex(normalMap(h, s, s, 6), { srgb: false, tileX: 12 }) };
+  },
+
+  mulch() {
+    // Shredded bark mulch: a bed of overlapping chips, light and dark, in a
+    // neutral brown the material tints (hardwood, black, red). Covers 3 ft.
+    const s = 256;
+    const r = rng(611);
+    const c = paint(canvas(s), () => 62);
+    const ctx = c.getContext('2d');
+    const img = ctx.getImageData(0, 0, s, s);
+    const px = img.data;
+    const h = new Float32Array(s * s);
+    for (let i = 0; i < 2600; i++) {
+      const x = r() * s;
+      const y = r() * s;
+      const L = 2 + r() * 5;
+      const W = 0.8 + r() * 1.3;
+      const a = r() * Math.PI;
+      const v = 70 + r() * 150;
+      splat(px, s, s, x, y, L, W, a, v, v * 0.97, v * 0.93, 0.9);
+      // Height: later chips lie on top.
+      const R = Math.ceil(L);
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const u = (dx * Math.cos(a) + dy * Math.sin(a)) / L;
+        const w = (dy * Math.cos(a) - dx * Math.sin(a)) / W;
+        if (u * u + w * w <= 1) h[(((y + dy) | 0) + s) % s * s + (((x + dx) | 0) + s) % s] = 0.3 + (i / 2600) * 0.7 * (1 - u * u * 0.5);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return { map: tex(c, { tileX: 3 }), normalMap: tex(normalMap(h, s, s, 2.5), { srgb: false, tileX: 3 }) };
+  },
+
+  pinestraw() {
+    // Long-leaf pine needles, criss-crossed, golden to russet. Covers 3 ft.
+    const s = 256;
+    const r = rng(613);
+    const c = paint(canvas(s), () => [70, 48, 30]);
+    const ctx = c.getContext('2d');
+    const img = ctx.getImageData(0, 0, s, s);
+    const px = img.data;
+    const h = new Float32Array(s * s);
+    for (let i = 0; i < 1400; i++) {
+      const x = r() * s;
+      const y = r() * s;
+      const a = r() * Math.PI * 2;
+      const L = 18 + r() * 40;
+      const k = r();
+      const col = [150 + k * 70, 95 + k * 50, 45 + k * 25];
+      const x1 = x + Math.cos(a) * L;
+      const y1 = y + Math.sin(a) * L;
+      stroke(px, s, s, x, y, x1, y1, col[0], col[1], col[2], 0.95);
+      const n = Math.ceil(L);
+      for (let t = 0; t <= n; t++) {
+        const xx = ((Math.round(x + ((x1 - x) * t) / n) % s) + s) % s;
+        const yy = ((Math.round(y + ((y1 - y) * t) / n) % s) + s) % s;
+        h[yy * s + xx] = 0.3 + (i / 1400) * 0.7;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return { map: tex(c, { tileX: 3 }), normalMap: tex(normalMap(h, s, s, 2), { srgb: false, tileX: 3 }) };
+  },
+
+  pebbles() {
+    // River rock: rounded stones packed together, each its own shade. Covers 2 ft.
+    const s = 256;
+    const r = rng(617);
+    const c = paint(canvas(s), () => [58, 55, 50]);
+    const ctx = c.getContext('2d');
+    const img = ctx.getImageData(0, 0, s, s);
+    const px = img.data;
+    const h = new Float32Array(s * s);
+    for (let i = 0; i < 520; i++) {
+      const cx = r() * s;
+      const cy = r() * s;
+      const rx = 5 + r() * 9;
+      const ry = rx * (0.6 + r() * 0.35);
+      const a = r() * Math.PI;
+      const tone = r();
+      const base = tone < 0.3 ? [190, 182, 168] : tone < 0.55 ? [140, 128, 112] : tone < 0.8 ? [112, 110, 106] : [168, 140, 110];
+      const R = Math.ceil(rx);
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const u = (dx * Math.cos(a) + dy * Math.sin(a)) / rx;
+        const v = (dy * Math.cos(a) - dx * Math.sin(a)) / ry;
+        const q = u * u + v * v;
+        if (q > 1) continue;
+        const z = Math.sqrt(1 - q);
+        const xx = (((cx + dx) | 0) % s + s) % s;
+        const yy = (((cy + dy) | 0) % s + s) % s;
+        const hi = 0.25 + z * 0.75;
+        if (hi < h[yy * s + xx]) continue;
+        h[yy * s + xx] = hi;
+        const lit = 0.72 + z * 0.35 - u * 0.12;
+        const i4 = (yy * s + xx) << 2;
+        px[i4] = clamp255(base[0] * lit); px[i4 + 1] = clamp255(base[1] * lit); px[i4 + 2] = clamp255(base[2] * lit);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return { map: tex(c, { tileX: 2 }), normalMap: tex(normalMap(h, s, s, 3), { srgb: false, tileX: 2 }) };
   },
 
   wear() {

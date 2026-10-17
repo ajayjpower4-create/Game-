@@ -18,6 +18,7 @@ import * as M from './materials.js';
 import { signTexture, panelTexture, neonTexture, safetyTexture, screenTexture } from './textures.js';
 import { cameraHead, markCones } from './cameras.js';
 import { buildingHeight, ROOF_BY_ID, isCam } from '../catalog.js';
+import { buildingExtras } from './extras.js';
 
 const DEG = Math.PI / 180;
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -124,12 +125,13 @@ const CLEAN = new Set(['precast', 'composite', 'rib', 'render']);
 
 function roofKind(b) {
   if (b.roofGlass) return 'glass';
+  if (b.roofFinish && b.roofType !== 'flat') return b.roofFinish;
   if (b.roofType === 'flat') return 'membrane';
-  if ((b.roofType === 'gable' || b.roofType === 'hip') && ['brick', 'render', 'stone'].includes(b.cladding) && b.w * b.d < 30000) return 'tiles';
+  if ((b.roofType === 'gable' || b.roofType === 'hip') && ['brick', 'render', 'stone', 'siding', 'batten', 'timber'].includes(b.cladding) && b.w * b.d < 30000) return 'tiles';
   return 'seam';
 }
 
-function roofMaterial(b) {
+export function roofMaterial(b) {
   const k = roofKind(b);
   if (k === 'glass') return M.clearGlass('#cfe3ea');
   if (k === 'membrane') return M.roof('membrane', b.roofColor || '#c9cdd2');
@@ -1458,13 +1460,18 @@ export function buildBuilding(b) {
   if (flat) flatRoof(b, B, ctx, H);
   else pitchedRoof(b, B, ctx, H);
   downpipes(b, B, ctx, H);
+  const extra = buildingExtras(b, B, H);
+  ctx.lights.push(...extra.lights);
   const fx = fixtures(b, B, ctx, H, fh, top);
+  fx.disposables.push(...extra.disposables);
+  fx.moving.push(...extra.moving);
 
   // A plinth line where the walls meet the ground hides any gap with the paving.
   B.slab(M.concrete('#9c9a94'), b.w + 0.6, 0.35, b.d + 0.6, 0, -0.1, 0);
 
   B.finish(group);
   for (const h of fx.holders) group.add(h);
+  for (const m of extra.moving) group.add(m);
   markCones(group);
   group.userData.lights = ctx.lights.filter((l) => l.power > 0);
   group.userData.disposables = fx.disposables;

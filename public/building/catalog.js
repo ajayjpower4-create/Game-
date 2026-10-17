@@ -3,6 +3,7 @@
  * Everything on the site is an object in `state.objects` — buildings included —
  * so anything can be selected, moved, turned or deleted. Sizes are in feet. */
 
+import { CARS, TRUCKS } from './vehiclelist.js';
 import { overlaps } from './geom.js';
 
 export const FLOOR_HEIGHT = 13;
@@ -194,7 +195,24 @@ export const RUNS = [
   { id: 'conduit', name: 'Conduit bundle', icon: '➰', size: 1, color: '#9aa1a8' },
   { id: 'gas', name: 'Gas main', icon: '🟨', size: 0.8, color: '#e2b31b' },
 ];
-export const RUN_BY_ID = Object.fromEntries(RUNS.map((r) => [r.id, r]));
+
+/* Pavement markings and drainage channels: drawn point by point like a run,
+ * but flat on the ground. */
+export const MARKS = [
+  { id: 'firelane', name: 'Fire lane', icon: '🚒', mark: true, size: 0.5, color: '#c8241b', text: 'FIRE LANE', sizes: [0.33, 1.5] },
+  { id: 'firecurb', name: 'Red fire-lane kerb', icon: '🟥', mark: true, size: 0.5, color: '#c8241b', text: 'NO PARKING FIRE LANE' },
+  { id: 'yellowcurb', name: 'Yellow no-parking kerb', icon: '🟨', mark: true, size: 0.5, color: '#f2c318' },
+  { id: 'white', name: 'White line', icon: '⬜', mark: true, size: 0.33, color: '#f4f2ea', sizes: [0.25, 2] },
+  { id: 'yellow', name: 'Yellow line', icon: '🟡', mark: true, size: 0.33, color: '#f2c318', sizes: [0.25, 2] },
+  { id: 'double', name: 'Double yellow', icon: '〓', mark: true, size: 0.33, color: '#f2c318', sizes: [0.25, 1] },
+  { id: 'dashed', name: 'Dashed line', icon: '┅', mark: true, size: 0.33, color: '#f4f2ea', sizes: [0.25, 1] },
+  { id: 'stopbar', name: 'Stop bar', icon: '▬', mark: true, size: 2, color: '#f4f2ea', sizes: [1, 3] },
+  { id: 'crosswalk', name: 'Crosswalk', icon: '🚸', mark: true, size: 10, color: '#f4f2ea', sizes: [6, 20] },
+  { id: 'hatch', name: 'Hatched no-parking zone', icon: '▨', mark: true, size: 0.33, color: '#f2c318', sizes: [0.25, 1], closed: true },
+  { id: 'trench', name: 'Trench drain', icon: '🕳️', mark: true, size: 0.8, color: '#8f969c', sizes: [0.4, 2], drain: true },
+];
+export const MARK_COLORS = [['#f4f2ea', 'White'], ['#f2c318', 'Yellow'], ['#c8241b', 'Red'], ['#1f5fb4', 'Blue'], ['#1f8a4c', 'Green'], ['#2b2f36', 'Black']];
+export const RUN_BY_ID = Object.fromEntries([...RUNS, ...MARKS].map((r) => [r.id, r]));
 
 /* ------------------------------------------------------------ guard booths */
 
@@ -270,6 +288,30 @@ export const PROPS = [
   P('Parking', 'carpark', 'Parking lot', '🅿️', 140, 84, 0.2, { lot: true, resize: true }),
   P('Parking', 'carparksmall', 'Small car park', '🚗', 76, 46, 0.2, { lot: true, resize: true }),
   P('Parking', 'carparkangled', 'Angled parking lot', '↗️', 150, 70, 0.2, { lot: true, resize: true, angle: 60 }),
+  P('Dealership', 'dealerlot', 'Dealer display lot', '🚘', 160, 96, 0.2, { lot: true, dealer: true, resize: true }),
+  P('Dealership', 'displayramp', 'Display ramp', '📐', 9, 16, 2.2, { color: true }),
+  P('Dealership', 'turntable', 'Feature turntable', '💿', 22, 22, 1, { solid: true }),
+  P('Dealership', 'pennants', 'Pennant string', '🎏', 60, 2, 16, { len: true }),
+  P('Dealership', 'airdancer', 'Air dancer', '🕺', 3, 3, 18, { color: true }),
+  P('Dealership', 'dealersign', 'Dealer pylon sign', '🪧', 10, 3, 26, { sign: true, text: 'AUTO MALL', bg: '#1f4f9c', solid: true }),
+  P('Dealership', 'servicesign', 'Service drive sign', '🔧', 12, 1.5, 11, { sign: true, text: 'SERVICE', bg: '#1d2c44' }),
+  P('Dealership', 'keydrop', 'Key drop box', '🔑', 2, 2, 4.5),
+  P('Dealership', 'tyrerack', 'Tyre display rack', '🛞', 8, 3, 6),
+  P('Paint & drains', 'stencil', 'Pavement words', '🔤', 8, 7, 0.05, { sign: true, stencil: true, text: 'FIRE LANE', textColor: '#c8241b', resize: true }),
+  P('Paint & drains', 'arrowstraight', 'Arrow: ahead', '⬆️', 3, 9, 0.05, { color: true, paintArrow: true }),
+  P('Paint & drains', 'arrowleft', 'Arrow: turn left', '↰', 6, 9, 0.05, { color: true, paintArrow: true }),
+  P('Paint & drains', 'arrowright', 'Arrow: turn right', '↱', 6, 9, 0.05, { color: true, paintArrow: true }),
+  P('Paint & drains', 'arrowstraightleft', 'Arrow: ahead or left', '⬉', 6, 9, 0.05, { color: true, paintArrow: true }),
+  P('Paint & drains', 'arrowstraightright', 'Arrow: ahead or right', '⬈', 6, 9, 0.05, { color: true, paintArrow: true }),
+  P('Paint & drains', 'paintada', 'Accessible bay symbol', '♿', 5, 5, 0.05),
+  P('Paint & drains', 'paintev', 'EV charging symbol', '⚡', 5, 5, 0.05),
+  P('Paint & drains', 'catchbasin', 'Catch basin grate', '🔳', 3.4, 3.4, 0.3, { drain: true }),
+  P('Paint & drains', 'curbinlet', 'Kerb inlet', '🚰', 7, 4, 0.75, { drain: true }),
+  P('Paint & drains', 'manhole', 'Storm manhole', '⚫', 3.2, 3.2, 0.3, { drain: true }),
+  P('Paint & drains', 'sewer', 'Sewer manhole', '⚫', 3.2, 3.2, 0.3, { drain: true }),
+  P('Paint & drains', 'areadrain', 'Lawn area drain', '🟢', 1.4, 1.4, 0.1, { drain: true }),
+  P('Paint & drains', 'oilsep', 'Oil interceptor lids', '🛢️', 12, 4.5, 0.3, { drain: true }),
+  P('Paint & drains', 'headwall', 'Culvert headwall & riprap', '🌊', 14, 12, 4.5, { drain: true, solid: true }),
   P('Parking', 'paystation', 'Pay station', '🎫', 2.2, 1.6, 6),
   P('Parking', 'cartcorral', 'Trolley shelter', '🛒', 16, 7, 7.5, { solid: true }),
   P('Parking', 'parkingsign', 'Car park entrance sign', '🅿️', 6, 1, 12, { sign: true, text: 'CUSTOMER PARKING', bg: '#1f4f9c' }),
@@ -318,6 +360,36 @@ export const PROPS = [
   P('CCTV', 'cctvanpr', 'ANPR camera', '🔍', 8, 1.6, 14, { cam: true, hMin: 8, hMax: 25 }),
   P('CCTV', 'cctvtower', 'Mobile CCTV tower', '🚨', 7, 12, 26, { cam: true, solid: true, hMin: 12, hMax: 40 }),
   // planting
+  P('Playground', 'playstructure', 'Play structure', '🏰', 40, 30, 14, { solid: true }),
+  P('Playground', 'swingset', 'Swing set', '🎠', 24, 10, 10, { color: true }),
+  P('Playground', 'slidetower', 'Slide tower', '🛝', 8, 18, 9),
+  P('Playground', 'climbdome', 'Dome climber', '🔺', 14, 14, 7, { color: true }),
+  P('Playground', 'monkeybars', 'Monkey bars', '🐒', 14, 4, 7.5, { color: true }),
+  P('Playground', 'merrygoround', 'Merry-go-round', '🎡', 10, 10, 3.5),
+  P('Playground', 'seesaw', 'Seesaw', '⚖️', 12, 2, 3, { color: true }),
+  P('Playground', 'springrider', 'Spring rider', '🐴', 3, 4, 3.5, { color: true }),
+  P('Playground', 'sandbox', 'Sandbox', '⛱️', 10, 10, 1.2),
+  P('Playground', 'playsurface', 'Playground mulch', '🟫', 40, 30, 0.3, { resize: true, cover: true }),
+  P('Planting', 'mulchbed', 'Mulch bed', '🟫', 20, 10, 0.2, { resize: true, cover: true }),
+  P('Planting', 'steppingstones', 'Stepping stones', '🪨', 14, 2.5, 0.3, { len: true }),
+  P('Planting', 'retainingwall', 'Block retaining wall', '🧱', 24, 1.2, 2.6, { len: true, solid: true }),
+  P('Garden tools', 'wheelbarrow', 'Wheelbarrow', '🛒', 2.5, 5.5, 2.6, { color: true }),
+  P('Garden tools', 'pushmower', 'Push mower', '🌱', 2.4, 5, 3.4, { color: true }),
+  P('Garden tools', 'ridingmower', 'Riding mower', '🚜', 4.4, 6.4, 3.6, { color: true }),
+  P('Garden tools', 'toolrack', 'Rake, shovel & hoe rack', '🧹', 5, 1.5, 5.6),
+  P('Garden tools', 'hosereel', 'Hose reel', '🧵', 4.5, 5, 2.6),
+  P('Garden tools', 'compostbin', 'Compost bins', '♻️', 7, 3.4, 3),
+  P('Garden tools', 'gardenshed', 'Garden shed', '🛖', 10, 8, 10, { solid: true, color: true }),
+  P('Garden tools', 'watercan', 'Watering can', '🚿', 2.6, 1.2, 1.3),
+  P('Garden tools', 'potplants', 'Pot plants', '🪴', 7, 2.4, 2.6),
+  P('Garden tools', 'birdbath', 'Birdbath', '🐦', 2.6, 2.6, 3),
+  P('Garden tools', 'gnome', 'Garden gnome', '🧙', 1, 1, 2.1, { color: true }),
+  P('Backyard', 'firepit', 'Fire pit & chairs', '🔥', 5, 5, 2.5),
+  P('Backyard', 'bbqgrill', 'Barbecue grill', '🍖', 5.2, 2.4, 3.6),
+  P('Backyard', 'patioset', 'Patio table & umbrella', '⛱️', 8, 8, 8, { color: true }),
+  P('Backyard', 'trampoline', 'Trampoline', '🤸', 14, 14, 9, { color: true }),
+  P('Backyard', 'drivewayhoop', 'Driveway basketball hoop', '🏀', 6, 4, 13.8),
+  P('Backyard', 'hammock', 'Hammock', '🌴', 14, 4, 4.5, { color: true }),
   P('Planting', 'tree', 'Broadleaf tree', '🌳', 18, 18, 26),
   P('Planting', 'oak', 'Big oak', '🌳', 30, 30, 38),
   P('Planting', 'maple', 'Maple', '🍁', 20, 20, 28),
@@ -380,6 +452,9 @@ export const PROPS = [
   P('Yard', 'turbine', 'Wind turbine', '🌬️', 14, 14, 180, { solid: true, anim: true }),
   P('Yard', 'phonemast', 'Phone mast', '📶', 10, 10, 90, { solid: true }),
   P('Yard', 'powerpole', 'Power pole', '🔌', 3, 6, 36),
+  // cars, by make and model
+  ...CARS.map((c) => P('Cars', c.id, `${c.make} ${c.model}`, '🚗', c.W, c.L, c.H, { vehicle: true, solid: true, color: true, car: true, make: c.make, body: c.body })),
+  ...TRUCKS.map((t) => P('Trucks', t.id, `${t.make} ${t.model}`, '🚛', t.W, t.L, t.H, { vehicle: true, solid: true, color: true, truck: true, make: t.make, body: t.style === 'aero' ? 'Aero sleeper tractor' : 'Long-nose sleeper tractor' })),
   // vehicles
   P('Vehicles', 'trailer', 'Trailer', '🚛', 8.5, 48, 13.5, { vehicle: true, solid: true, color: true }),
   P('Vehicles', 'reefer', 'Reefer trailer', '❄️', 8.5, 53, 13.5, { vehicle: true, solid: true }),
@@ -429,6 +504,8 @@ export const CLADDINGS = [
   { id: 'render', name: 'Smooth render' },
   { id: 'stone', name: 'Stone blocks' },
   { id: 'timber', name: 'Timber boards' },
+  { id: 'siding', name: 'Lap siding' },
+  { id: 'batten', name: 'Board and batten' },
   { id: 'composite', name: 'Composite panels' },
 ];
 
@@ -546,6 +623,10 @@ export const BUILDING_STYLES = {
     { cladding: 'composite', wall: '#3d434b', band: '#c0392b' },
     [r('N', 'g', ALL, null, 'glass'), r('E', 'g', ALL, null, 'glass'), r('W', 'g', 0, 3, 'glass'), r('N', 'g', 'mid', null, 'door'), r('S', 'g', 1, 3, 'roll')],
     { blurb: 'Glass corner showroom with workshop doors behind.' }),
+  dealership: S('Offices & shops', 'Car dealership', '🚗', { w: 150, d: 90, floors: 1, height: 26, cell: 10 },
+    { cladding: 'composite', wall: '#e9ecef', band: '#1f4f9c' },
+    [r('N', 'g', ALL, null, 'glass'), r('W', 'g', ALL, null, 'glass'), r('N', 'g', 'mid', null, 'door'), r('E', 'g', 1, -1, 'roll'), r('S', 'g', 2, 5, 'roll'), r('S', 'g', -2, null, 'firedoor')],
+    { blurb: 'Glass showroom behind a brand portal, a covered service drive and workshop bays.', extras: 'dealership', roof: [['rtu', 0.3, 0.5], ['rtu', 0.6, 0.5], ['rtu', 0.85, 0.3]] }),
   hotel: S('Offices & shops', 'Hotel', '🏨', { w: 150, d: 60, floors: 8, height: null, cell: 10 },
     { cladding: 'render', wall: '#ece3cf', band: '#7a5a2e' },
     [r('NS', ALL, ALL, null, 'window'), r('EW', ALL, 1, -1, 'window'), r('N', 'g', ALL, null, 'shopfront'), r('N', 'g', 'mid', null, 'door')],
@@ -587,7 +668,41 @@ export const BUILDING_STYLES = {
     { cladding: 'precast', wall: '#c6ccd2', band: '#16305c' },
     [r('NSEW', ALL, 1, -1, 'window'), r('N', 'g', 'mid', null, 'door'), r('E', 'g', 0, 2, 'roll')], { blurb: 'Two-storey station with a vehicle bay.', roof: [['mast', 0.8, 0.3], ['rtu', 0.4, 0.5]] }),
 
+  elementary: S('Civic', 'Elementary school', '🎒', { w: 240, d: 80, floors: 1, height: 16, cell: 12 },
+    { cladding: 'brick', wall: '#b8774f', band: '#1f4f9c' },
+    [r('NS', 'g', ALL, null, 'window'), r('N', 'g', 'mid', null, 'door'), r('EW', 'g', 1, -1, 'window'), r('E', 'g', 0, null, 'firedoor'), r('S', 'g', 2, null, 'door')],
+    { blurb: 'One long storey of classrooms, an entrance tower with a clock, a canopy and the flag.', extras: 'school', roof: [['rtu', 0.2, 0.5], ['rtu', 0.45, 0.5], ['rtu', 0.7, 0.5], ['solar', 0.85, 0.5]] }),
+  highschool: S('Civic', 'High school', '🏫', { w: 320, d: 110, floors: 3, height: null, cell: 12 },
+    { cladding: 'brick', wall: '#a8654f', band: '#7a1a1f' },
+    [r('NS', ALL, ALL, null, 'window'), r('N', 'g', 'mid', null, 'door'), r('EW', ALL, 1, -1, 'window'), r('W', 'g', 1, 3, 'door'), r('S', 'g', -3, -1, 'dock')],
+    { blurb: 'Three floors of classrooms, the gym rising over the west wing, an entrance tower and the flag.', extras: 'highschool', roof: [['rtu-xl', 0.5, 0.5], ['rtu', 0.65, 0.3], ['rtu', 0.8, 0.7], ['solar', 0.9, 0.5]] }),
+
   /* ---- homes ---- */
+  farmhouse: S('Homes', 'Modern farmhouse', '🏡', { w: 54, d: 38, floors: 2, height: null, cell: 9 },
+    { cladding: 'batten', roofType: 'gable', wall: '#f3f2ee', band: '#2b2f36', roofColor: '#2b2f36', parapet: false, roofFinish: 'seam' },
+    [r('N', 'g', ALL, null, 'window'), r('N', 'g', 'mid', null, 'door'), r('N', 'u', ALL, null, 'window'), r('S', ALL, ALL, null, 'window'), r('EW', ALL, 1, -1, 'window')],
+    { blurb: 'White board-and-batten, a black porch across the front, dormers, shutters and a two-car garage.', extras: 'farmhouse' }),
+  colonial: S('Homes', 'Colonial house', '🏛️', { w: 50, d: 34, floors: 2, height: null, cell: 10 },
+    { cladding: 'siding', roofType: 'gable', wall: '#e6ddc9', band: '#3d434b', roofColor: '#4a4f55', parapet: false },
+    [r('N', ALL, ALL, null, 'window'), r('N', 'g', 'mid', null, 'door'), r('S', ALL, ALL, null, 'window'), r('EW', ALL, 1, -1, 'window')],
+    { blurb: 'Symmetrical, shuttered, a pedimented portico, three dormers and chimneys at both ends.', extras: 'colonial' }),
+  ranch: S('Homes', 'Ranch house', '🏠', { w: 64, d: 34, floors: 1, height: 10, cell: 9 },
+    { cladding: 'brick', roofType: 'hip', wall: '#a0644d', band: '#3d434b', roofColor: '#4d535b', parapet: false },
+    [r('N', 'g', ALL, null, 'window'), r('N', 'g', 3, null, 'door'), r('S', 'g', ALL, null, 'window'), r('EW', 'g', 1, -1, 'window')],
+    { blurb: 'Long and low under a hipped roof, a covered entry and an attached garage.', extras: 'ranch' }),
+  craftsman: S('Homes', 'Craftsman bungalow', '🛖', { w: 36, d: 50, floors: 1, height: 11, cell: 9 },
+    { cladding: 'siding', roofType: 'gable', wall: '#7d8a6e', band: '#5a3e2b', roofColor: '#4a3f38', parapet: false },
+    [r('N', 'g', ALL, null, 'window'), r('N', 'g', 'mid', null, 'door'), r('EW', 'g', 1, -1, 'window'), r('S', 'g', 1, -1, 'window')],
+    { blurb: 'Front-gabled bungalow, a deep porch on tapered columns over stone piers.', extras: 'craftsman' }),
+  gardenapts: S('Homes', 'Garden apartments', '🏘️', { w: 150, d: 60, floors: 3, height: null, cell: 12 },
+    { cladding: 'siding', roofType: 'gable', wall: '#d9cfbe', band: '#4a4f55', roofColor: '#4a4f55', parapet: false },
+    [r('NS', ALL, ALL, null, 'window'), r('N', ALL, 'mid', null, 'open'), r('S', 'u', ALL, null, ['balcony', 'window']), r('EW', ALL, 1, -1, 'window')],
+    { blurb: 'Three-storey walk-up: flats either side of an open stair breezeway, balconies out back.', extras: 'gardenapts' }),
+  podium: S('Homes', 'Podium apartments', '🏙️', { w: 220, d: 100, floors: 6, height: null, cell: 11 },
+    { cladding: 'render', wall: '#e9e4da', band: '#8a5a3a' },
+    [r('N', 'g', ALL, null, 'shopfront'), r('N', 'g', 'mid', null, 'door'), r('NS', 'u', ALL, null, ['window', 'balcony', 'window']), r('EW', 'u', 1, -1, 'window'), r('S', 'g', 1, 4, 'garage')],
+    { blurb: 'Five floors of flats over ground-floor shops, accent panels, a cornice and a roof terrace.', extras: 'podium', roof: [['lift', 0.6, 0.5], ['rtu', 0.8, 0.3], ['rtu', 0.8, 0.7]] }),
+
   apartments: S('Homes', 'Apartment block', '🏢', { w: 120, d: 55, floors: 5, height: null, cell: 10 },
     { cladding: 'render', wall: '#ece3cf', band: '#7a5a2e' },
     [r('NS', ALL, ALL, null, ['window', 'balcony']), r('EW', ALL, 1, -1, 'window'), r('N', 'g', 'mid', null, 'door')],
@@ -856,6 +971,7 @@ export function makeBuilding(style, over = {}) {
     parapet: p.parapet !== false,
     cladding: p.cladding || 'precast',
     roofType: p.roofType || 'flat',
+    ...(p.roofFinish ? { roofFinish: p.roofFinish } : {}),
     sign: { on: true, face: 'N', text: '', sub: '', color: '#1f4f9c', logo: '' },
     roofItems: [],
     walls: {},
@@ -1109,6 +1225,7 @@ export function freshState(preset = 'warehouse') {
     skin: { wall: '#d8dde3', band: '#1f3a63' },
     site: { pavement: true, parking: true, cars: true, road: true, grass: true, markings: true },
     objects: pruneInsideBuildings(objects.filter((o) => o.type !== 'x')),
+    garden: { items: [], covers: [] },
   };
 }
 
@@ -1150,6 +1267,12 @@ export function normalize(state) {
       }
     }
   }
+  // Planting painted with the garden brush: plants and beds of ground cover.
+  const g = state.garden || {};
+  out.garden = {
+    items: (Array.isArray(g.items) ? g.items : []).filter((it) => Array.isArray(it) && typeof it[0] === 'string' && Number.isFinite(+it[1]) && Number.isFinite(+it[2])),
+    covers: (Array.isArray(g.covers) ? g.covers : []).filter((c) => Array.isArray(c) && typeof c[0] === 'string' && +c[3] > 0),
+  };
   out.v = 4;
   out.objects = pruneInsideBuildings(out.objects);
   seedIds(out.objects);

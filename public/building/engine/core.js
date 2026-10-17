@@ -35,11 +35,11 @@ const lerp = (a, b, t) => a + (b - a) * t;
  * nearest lamps cast real shadows at night; `env` is the size of the baked
  * sky reflection; `clouds` scales the drifting cloud shadows. */
 export const QUALITY = {
-  low: { name: 'Low', ratio: 1, ss: 1, shadow: 2048, msaa: 0, ao: false, aoSamples: 8, bloom: false, smaa: true, lights: 4, lampShadows: 0, aniso: 4, sharpen: 0, env: 256, clouds: 0 },
-  medium: { name: 'Medium', ratio: 1.25, ss: 1, shadow: 2048, msaa: 4, ao: false, aoSamples: 8, bloom: true, smaa: false, lights: 6, lampShadows: 0, aniso: 8, sharpen: 0, env: 256, clouds: 1 },
-  high: { name: 'High', ratio: 1.5, ss: 1, shadow: 4096, msaa: 4, ao: true, aoSamples: 12, bloom: true, smaa: false, lights: 8, lampShadows: 2, aniso: 8, sharpen: 0.12, env: 256, clouds: 1 },
-  ultra: { name: 'Ultra', ratio: 2, ss: 1, shadow: 8192, msaa: 8, ao: true, aoSamples: 24, bloom: true, smaa: false, lights: 12, lampShadows: 4, aniso: 16, sharpen: 0.22, env: 512, clouds: 1 },
-  max: { name: 'Max', ratio: 3, ss: 1.5, shadow: 8192, msaa: 8, ao: true, aoSamples: 32, bloom: true, smaa: false, lights: 16, lampShadows: 6, lampShadowSize: 2048, aniso: 16, sharpen: 0.28, env: 1024, clouds: 1 },
+  low: { name: 'Low', ratio: 1, ss: 1, shadow: 2048, msaa: 0, ao: false, aoSamples: 8, bloom: false, smaa: true, lights: 4, lampShadows: 0, aniso: 4, sharpen: 0, env: 256, clouds: 0, detailCars: false },
+  medium: { name: 'Medium', ratio: 1.25, ss: 1, shadow: 2048, msaa: 4, ao: false, aoSamples: 8, bloom: true, smaa: false, lights: 6, lampShadows: 0, aniso: 8, sharpen: 0, env: 256, clouds: 1, detailCars: false },
+  high: { name: 'High', ratio: 1.5, ss: 1, shadow: 4096, msaa: 4, ao: true, aoSamples: 12, bloom: true, smaa: false, lights: 8, lampShadows: 2, aniso: 8, sharpen: 0.12, env: 256, clouds: 1, detailCars: true },
+  ultra: { name: 'Ultra', ratio: 2, ss: 1, shadow: 8192, msaa: 8, ao: true, aoSamples: 24, bloom: true, smaa: false, lights: 12, lampShadows: 4, aniso: 16, sharpen: 0.22, env: 512, clouds: 1, detailCars: true },
+  max: { name: 'Max', ratio: 3, ss: 1.5, shadow: 8192, msaa: 8, ao: true, aoSamples: 32, bloom: true, smaa: false, lights: 16, lampShadows: 6, lampShadowSize: 2048, aniso: 16, sharpen: 0.28, env: 1024, clouds: 1, detailCars: true },
 };
 
 /* Everything a graphics mod (or the console) may override, with the range
@@ -49,7 +49,7 @@ export const GRAPHICS_KEYS = {
   ao: 'bool', aoSamples: [4, 64], bloom: 'bool', bloomStrength: [0, 4], smaa: 'bool',
   lights: [0, 32], lampShadows: [0, 16], lampShadowSize: [256, 4096], aniso: [1, 16],
   sharpen: [0, 1], env: [64, 2048], clouds: [0, 2], exposure: [0.2, 4], saturation: [0, 2],
-  vignette: [0, 1], fog: [0, 4], viewDistance: [2000, 60000], fov: [20, 100], autoRes: 'bool',
+  vignette: [0, 1], fog: [0, 4], viewDistance: [2000, 60000], fov: [20, 100], autoRes: 'bool', detailCars: 'bool',
 };
 
 /** Keep the overrides we understand, held to their ranges. */

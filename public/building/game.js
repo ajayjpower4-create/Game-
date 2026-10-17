@@ -9,7 +9,7 @@ import {
   SITE_PRESETS, BUILDING_STYLES, BUILDING_GROUPS, ROOF_KIT, BOOTHS, PROPS, PROP_BY_ID, ROOF_BY_ID, BOOTH_BY_ID,
   CELLS, CLADDINGS, ROOF_TYPES, WALL_COLORS, SIGN_COLORS, LOGOS, freshState, normalize, makeBuilding,
   buildingHeight, wallCols, newId, PROP_CATS, RUNS, RUN_BY_ID,
-  WALL_SIGNS, WALL_CAMS, FIXTURE_BY_ID, makeFixture, isCam, CAM_COLORS,
+  WALL_SIGNS, WALL_CAMS, FIXTURE_BY_ID, makeFixture, isCam, CAM_COLORS, MARKS, MARK_COLORS,
 } from './catalog.js';
 import { footprint, isClear, bounds, buildingsOf, snapToDock, evictFrom, siteStats, isSolid, runLength } from './site.js';
 import { contains, corners, overlaps, toLocal as planLocal, toWorld as planWorld, wallFrames, clamp, DEG } from './geom.js';
@@ -18,7 +18,9 @@ import { World, modelFor, place as placeModel, releaseModel, makeUnder } from '.
 import { Life } from './engine/life.js';
 import { roofItemModel, roofSurfaceY, fixtureRect, PARAPET } from './engine/buildings.js';
 import { buildRun, squarePath } from './engine/runs.js';
-import { lotLayout, LOT_ANGLES, STALL_WIDTHS } from './lots.js';
+import { lotLayout, LOT_ANGLES, STALL_WIDTHS, DEALER_ORGANIZE, DEALER_FACING, dealerSettings } from './lots.js';
+import { CAR_MAKES } from './vehiclelist.js';
+import { GARDEN, GARDEN_GROUPS, COVERS, COVER_BY_ID, stamp as gardenStamp, coverStamp, erase as gardenErase } from './engine/garden.js';
 import * as THREE from 'three';
 
 const SAVE_KEY = 'building-sim:v4';
@@ -32,7 +34,8 @@ const crumb = document.getElementById('crumb');
 
 const prefs = loadPrefs();
 let state = load();
-let screen = state ? 'build' : 'start';
+// Always open on the start menu; Continue takes you straight back to the saved site.
+let screen = 'start';
 if (!state) state = freshState('warehouse');
 
 const ui = {
@@ -54,6 +57,11 @@ const ui = {
   attach: null,        // { id } a pole camera waiting to be fixed to a wall
   ortho: true,         // runs turn square corners
   speed: 1,
+  brush: null,         // the plant or ground cover the garden brush lays down
+  brushSize: 6,        // brush radius, ft
+  brushDensity: 1,     // 0.5 sparse, 1 normal, 2 dense
+  brushErase: false,   // the brush takes out instead of planting
+  menu: '',            // which panel the start menu has open
 };
 let pendingStart = { preset: 'warehouse', lot: { ...SITE_PRESETS.warehouse.lot } };
 const undoStack = [];
@@ -63,6 +71,7 @@ let engine = null;
 let world = null;
 let life = null;
 let slowWarned = false;
+let modsLoaded = false;
 
 /* ------------------------------------------------------------- persistence */
 
@@ -152,7 +161,7 @@ function place(o, x, y, opts = {}) {
   o.y = ny;
   if (snap && o.kind === 'prop') {
     const spec = PROP_BY_ID[o.type];
-    if (spec && spec.vehicle && !['car', 'hatch', 'suv', 'police', 'forklift', 'excavator'].includes(o.type)) {
+    if (spec && spec.vehicle && !spec.car && !['car', 'hatch', 'suv', 'police', 'forklift', 'excavator'].includes(o.type)) {
       const spot = snapToDock(state, o);
       if (spot) Object.assign(o, spot);
     }
@@ -163,35 +172,171 @@ function place(o, x, y, opts = {}) {
 
 function startScreen() {
   screen = 'start';
-  if (engine) engine.paused = true;
   document.body.classList.remove('in-build');
-  const cards = Object.entries(SITE_PRESETS).map(([id, p]) => `
-    <button class="card${pendingStart.preset === id ? ' on' : ''}" data-act="pick-preset" data-value="${id}">
-      <span class="icon">${p.icon}</span><strong>${esc(p.name)}</strong><p>${esc(p.blurb)}</p>
-    </button>`).join('');
-  const slots = Object.entries(loadSlots());
-  app.innerHTML = `<div class="start">
-    <h1>Start a site</h1>
-    <p class="lede">Pick a starting point. Everything on it — buildings included — can be moved, turned,
-      edited or deleted afterwards. The site is drawn in real 3D: sun, shadows, weather and night lighting.</p>
-    <div class="cards">${cards}</div>
-    <div class="divider"></div>
-    <h2>Lot size</h2>
-    <div class="field"><label for="lw">Frontage<b>${pendingStart.lot.width} ft</b></label>
-      <input id="lw" type="range" min="240" max="1200" step="20" value="${pendingStart.lot.width}" data-act="lot-w"></div>
-    <div class="field"><label for="ld">Depth<b>${pendingStart.lot.depth} ft</b></label>
-      <input id="ld" type="range" min="240" max="900" step="20" value="${pendingStart.lot.depth}" data-act="lot-d"></div>
-    <p class="hint" id="acres">${(pendingStart.lot.width * pendingStart.lot.depth / 43560).toFixed(2)} acres.</p>
-    <div class="row">
-      <button class="btn primary" data-act="break-ground">Break ground →</button>
-      ${load() ? '<button class="btn" data-act="resume">Back to my site</button>' : ''}
-    </div>
-    ${slots.length ? `<div class="divider"></div><h2>Saved sites</h2><ul class="objlist">${slots.map(([name, s]) => `
-      <li><span>💾 ${esc(name)} <small>${new Date(s.savedAt).toLocaleString()}</small></span>
-      <span><button class="btn tiny" data-act="slot-load" data-value="${esc(name)}">Open</button></span></li>`).join('')}</ul>` : ''}
-  </div>`;
+  document.body.classList.add('in-menu');
+  // The menu's skeleton is built once, so the 3D backdrop behind it survives
+  // every redraw of the buttons and panels in front.
+  if (!document.getElementById('menu')) {
+    app.innerHTML = `<div class="menu" id="menu">
+      <div class="menu-stage" id="menuStage"></div>
+      <div class="menu-shade"></div>
+      <div class="menu-main" id="menuMain"></div>
+      <aside class="menu-panel" id="menuPanel"></aside>
+    </div>`;
+    // The buttons slide in the first time only, not on every redraw.
+    const menu = document.getElementById('menu');
+    menu.classList.add('intro');
+    setTimeout(() => menu.classList.remove('intro'), 1400);
+    menuBackdrop();
+  }
   tools.innerHTML = '';
   crumb.textContent = 'Pick a lot, drop a building, sign it';
+  // First time in: open straight onto the new-site panel.
+  if (!load() && !ui.menu) ui.menu = 'new';
+  drawMenu();
+}
+
+const IS_DESKTOP = /Electron/i.test(navigator.userAgent);
+const QUALITY_BLURB = {
+  low: 'Fastest: simple cars, crisp edges, no lamp shadows.',
+  medium: 'Soft edges, glow round lamps, cloud shadows.',
+  high: 'Real makes of car everywhere, contact shadows.',
+  ultra: 'Sharper shadows and reflections, more lights.',
+  max: 'Everything, supersampled. Wants a strong graphics card.',
+};
+
+/** The buttons down the left and whichever panel is open on the right. */
+function drawMenu() {
+  const main = document.getElementById('menuMain');
+  const panel = document.getElementById('menuPanel');
+  if (!main || !panel) return;
+  const saved = load();
+  const slots = Object.keys(loadSlots()).length;
+  const preset = saved ? (SITE_PRESETS[saved.preset] || {}) : null;
+  const btn = (key, title, sub, extra = '') => `<button class="menu-btn${ui.menu === key ? ' on' : ''}${extra}" data-act="menu" data-value="${key}">
+    <b>${title}</b><small>${sub}</small></button>`;
+  main.innerHTML = `
+    <div class="menu-logo">
+      <span class="menu-mark">🏗️</span>
+      <div><h1>Building Design<br><span>Simulator</span></h1>
+        <p>Design a whole site in real 3D — buildings, cars and trucks, planting, paint and drainage.</p></div>
+    </div>
+    <nav class="menu-nav">
+      ${saved ? `<button class="menu-btn primary" data-act="resume"><b>▶ Continue</b>
+        <small>${esc(preset && preset.name ? preset.name : 'Your site')} · ${saved.objects.length} objects · ${saved.lot.width}×${saved.lot.depth} ft</small></button>` : ''}
+      ${btn('new', '＋ New site', 'Pick a starting point and a lot size', saved ? '' : ' primary')}
+      ${btn('load', '📂 Load site', slots ? `${slots} saved site${slots === 1 ? '' : 's'}` : 'Open a saved site or a .json file')}
+      ${btn('settings', '⚙️ Settings', `Graphics: ${(QUALITY[prefs.quality] || {}).name || prefs.quality}`)}
+      ${btn('news', '✨ What’s new', 'Real cars and trucks, gardens, dealerships…')}
+      ${IS_DESKTOP ? '<button class="menu-btn ghost" data-act="quit"><b>⏻ Quit</b><small>Close the game</small></button>' : ''}
+    </nav>
+    <footer class="menu-foot">${IS_DESKTOP ? 'Desktop edition · mods folder: Game › Open mods folder' : 'Tip: everything you place can be moved, turned and edited afterwards.'}</footer>`;
+  panel.classList.toggle('open', !!ui.menu);
+  panel.innerHTML = ui.menu ? `<button class="menu-close" data-act="menu" data-value="" title="Close">✕</button>${menuPanel(ui.menu)}` : '';
+}
+
+function menuPanel(kind) {
+  if (kind === 'new') {
+    const cards = Object.entries(SITE_PRESETS).map(([id, p]) => `
+      <button class="mcard${pendingStart.preset === id ? ' on' : ''}" data-act="pick-preset" data-value="${id}">
+        <span class="icon">${p.icon}</span><span><strong>${esc(p.name)}</strong><em>${esc(p.blurb)}</em></span>
+      </button>`).join('');
+    return `<h2>New site</h2>
+      <p class="lede">Pick a starting point. Everything on it — buildings included — can be moved, turned, edited or deleted afterwards.</p>
+      <div class="mcards">${cards}</div>
+      <h3>Lot size</h3>
+      <div class="field"><label for="lw">Frontage<b>${pendingStart.lot.width} ft</b></label>
+        <input id="lw" type="range" min="240" max="1200" step="20" value="${pendingStart.lot.width}" data-act="lot-w"></div>
+      <div class="field"><label for="ld">Depth<b>${pendingStart.lot.depth} ft</b></label>
+        <input id="ld" type="range" min="240" max="900" step="20" value="${pendingStart.lot.depth}" data-act="lot-d"></div>
+      <p class="hint" id="acres">${(pendingStart.lot.width * pendingStart.lot.depth / 43560).toFixed(2)} acres.</p>
+      <div class="menu-go"><button class="btn primary big" data-act="break-ground">Break ground →</button></div>`;
+  }
+  if (kind === 'load') {
+    const slots = Object.entries(loadSlots()).sort((a, b) => (b[1].savedAt || 0) - (a[1].savedAt || 0));
+    return `<h2>Load a site</h2>
+      ${slots.length ? `<ul class="mlist">${slots.map(([name, s]) => `
+        <li><span><b>💾 ${esc(name)}</b><small>${new Date(s.savedAt).toLocaleString()} · ${(s.state.objects || []).length} objects</small></span>
+        <button class="btn tiny" data-act="slot-load" data-value="${esc(name)}">Open</button></li>`).join('')}</ul>`
+    : '<p class="lede">No saved sites yet. Save one from the 💾 Save button while you build.</p>'}
+      <label class="btn">📥 Import a site file (.json)<input type="file" id="importFile" accept=".json,application/json" hidden></label>`;
+  }
+  if (kind === 'settings') {
+    return `<h2>Settings</h2>
+      <h3>Graphics quality</h3>
+      <div class="qgrid">${Object.entries(QUALITY).map(([id, q]) => `<button class="qbtn${prefs.quality === id ? ' on' : ''}" data-act="menu-quality" data-value="${id}">
+        <b>${esc(q.name || id)}</b><small>${esc(QUALITY_BLURB[id] || '')}</small></button>`).join('')}</div>
+      <p class="hint">High and above draw every parked and passing car as a real make and model. Max adds supersampling, sharper shadows and depth of field in photo mode.</p>
+      <div class="toggles">
+        <button class="toggle${prefs.autoRes !== false ? ' on' : ''}" data-act="menu-pref" data-key="autoRes"><span>Lower the resolution when frames run slow</span><span class="pill">${prefs.autoRes !== false ? 'On' : 'Off'}</span></button>
+        <button class="toggle${prefs.snap ? ' on' : ''}" data-act="menu-pref" data-key="snap"><span>Snap things to a 2 ft grid</span><span class="pill">${prefs.snap ? 'On' : 'Off'}</span></button>
+        <button class="toggle${prefs.minimap ? ' on' : ''}" data-act="menu-pref" data-key="minimap"><span>Show the minimap</span><span class="pill">${prefs.minimap ? 'On' : 'Off'}</span></button>
+      </div>`;
+  }
+  if (kind === 'news') {
+    const items = [
+      ['🚗', 'Real cars', '16 detailed models from 8 makes — Toyota, Ford, Chevrolet, Honda, Tesla, BMW, Mercedes-Benz and Jeep — with cabins you can see into.'],
+      ['🚛', 'Semi trucks', 'Freightliner, Peterbilt, Kenworth, Volvo, Mack and International tractors with dual wheels, tanks, stacks and air lines.'],
+      ['🌺', 'Garden brush', 'Paint shrubs, flowers, grasses, rocks and mulch, pine straw or stone straight onto the ground.'],
+      ['🚒', 'Paint & drains', 'Draw fire lanes, red kerbs, crosswalks, hatched zones and trench drains; drop stencils, catch basins and manholes.'],
+      ['🚘', 'Dealerships', 'A showroom with a brand portal and service drive, and a display lot you size and stock by brand, body or colour.'],
+      ['🏫', 'Schools & homes', 'Elementary and high schools, a modern farmhouse, a colonial, a ranch, a craftsman bungalow, garden and podium apartments.'],
+      ['🛝', 'Playgrounds & yards', 'Play structures, swings, slides, mulch beds, garden tools, sheds, trampolines, fire pits and more.'],
+    ];
+    return `<h2>What’s new</h2><ul class="news">${items.map(([i, t, d]) => `<li><span class="ni">${i}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ul>
+      <button class="btn primary big" data-act="menu" data-value="new">Start a new site →</button>`;
+  }
+  return '';
+}
+
+let menuSpin = null;
+/** The live backdrop: the current site at golden hour, turning slowly. */
+function menuBackdrop() {
+  const host = document.getElementById('menuStage');
+  if (!host) return;
+  const first = ensureEngine(host);
+  if (engine.mode !== 'orbit') engine.setMode('orbit');
+  engine.controls.autoRotate = true;
+  engine.controls.autoRotateSpeed = 0.35;
+  setTimeout(() => {
+    if (screen !== 'start') return;
+    engine.setLot(state.lot);
+    engine.setEnv({ ...state.env, hour: 17.4, weather: 'clear', cycle: false });
+    life.traffic = true;
+    life.people = true;
+    syncWorld(true);
+    engine.snapView('corner');
+    host.classList.add('ready');
+  }, first ? 80 : 0);
+}
+
+/** Make the renderer if there is none yet, and hang its canvas in `host`. True when it was made. */
+function ensureEngine(host) {
+  if (!engine) {
+    const gfx = modGraphics();
+    // A graphics mod can pick the starting preset ("quality": "max").
+    if (QUALITY[gfx.quality]) prefs.quality = gfx.quality;
+    engine = new Engine(host, { quality: prefs.quality, tweaks: gfx });
+    world = new World(engine);
+    life = new Life(engine, world);
+    engine.keyFilter = (k) => !(engine.mode === 'orbit' && ui.selected && k.startsWith('Arrow'));
+    engine.blocked = walkBlocked;
+    engine.autoRes = prefs.autoRes !== false;
+    engine.onSlow = () => {
+      if (prefs.quality === 'low' || slowWarned) return;
+      slowWarned = true;
+      flashHint('Running slowly — try a lower Graphics quality in the World tab');
+    };
+    engine.addTicker(tick);
+    exposeApi();
+    return true;
+  }
+  host.appendChild(engine.renderer.domElement);
+  engine.host = host;
+  engine.resizeObserver.disconnect();
+  engine.resizeObserver.observe(host);
+  engine.paused = false;
+  return false;
 }
 
 /* ------------------------------------------------------------ build screen */
@@ -243,31 +388,11 @@ function buildScreen() {
     <button class="btn ghost" data-act="restart">New site</button>`;
 
   const stage = document.getElementById('stage');
-  const first = !engine;
-  if (!engine) {
-    const gfx = modGraphics();
-    // A graphics mod can pick the starting preset ("quality": "max").
-    if (QUALITY[gfx.quality]) prefs.quality = gfx.quality;
-    engine = new Engine(stage, { quality: prefs.quality, tweaks: gfx });
-    world = new World(engine);
-    life = new Life(engine, world);
-    engine.keyFilter = (k) => !(engine.mode === 'orbit' && ui.selected && k.startsWith('Arrow'));
-    engine.blocked = walkBlocked;
-    engine.autoRes = prefs.autoRes !== false;
-    engine.onSlow = () => {
-      if (prefs.quality === 'low' || slowWarned) return;
-      slowWarned = true;
-      flashHint('Running slowly — try a lower Graphics quality in the World tab');
-    };
-    engine.addTicker(tick);
-    exposeApi();
-  } else {
-    stage.appendChild(engine.renderer.domElement);
-    engine.host = stage;
-    engine.resizeObserver.disconnect();
-    engine.resizeObserver.observe(stage);
-    engine.paused = false;
-  }
+  const fromMenu = document.body.classList.contains('in-menu');
+  document.body.classList.remove('in-menu');
+  ui.menu = '';
+  const first = ensureEngine(stage);
+  engine.controls.autoRotate = false;
   bindStage(stage);
   // Let the loading card paint before the first (heavy) build.
   setTimeout(() => {
@@ -277,9 +402,9 @@ function buildScreen() {
     life.people = state.env.people !== false;
     const t0 = performance.now();
     syncWorld(true);
-    if (first) engine.snapView('corner');
+    if (first || fromMenu) engine.snapView('corner');
     document.getElementById('loading')?.classList.add('done');
-    if (first) loadMods();
+    if (!modsLoaded) { modsLoaded = true; loadMods(); }
     if (prefs.debug) console.log('first build', Math.round(performance.now() - t0), 'ms');
   }, 30);
   drawPanel();
@@ -426,7 +551,7 @@ function drawHud() {
         const n = ui.draw.points.length;
         const L = runLength({ points: ui.draw.points });
         text = n ? `${(RUN_BY_ID[ui.draw.style] || {}).name}: ${n} points, ${Math.round(L)} ft · click to continue · double-click or Enter to finish · Backspace undoes a point · Esc stops`
-          : `${(RUN_BY_ID[ui.draw.style] || {}).name}: click a machine, roof, wall or the ground to start`;
+          : `${(RUN_BY_ID[ui.draw.style] || {}).name}: ${(RUN_BY_ID[ui.draw.style] || {}).mark ? 'click the ground to start' : 'click a machine, roof, wall or the ground to start'}`;
       } else if (ui.fix) {
         const b = byId(ui.fix.id);
         const name = (FIXTURE_BY_ID[ui.fixType] || {}).name || 'sign';
@@ -438,11 +563,14 @@ function drawHud() {
         const name = cellSpec(ui.doorType).name.toLowerCase();
         text = `Doors on ${b ? b.name : 'this building'}: click a wall to add ${/^[aeiou]/.test(name) ? 'an' : 'a'} ${name} · drag a door to move it · click a door to change or remove it · Esc when done`;
       } else if (ui.measure) text = ui.measure.b ? 'Measured. Click again to start a new line · Esc to stop measuring' : 'Click two points on the ground to measure between them · Esc to stop';
-      else if (ui.pending) text = blocked ? (ui.pending.kind === 'roof' ? 'Point at a roof to put this on it' : 'Blocked — something solid is already there') : `Placing ${ui.pending.name} · click to drop · Shift-click to keep placing · R turns it · Esc cancels`;
+      else if (ui.brush) {
+        const name = (GARDEN.find((k) => k.id === ui.brush) || COVER_BY_ID[ui.brush] || {}).name || 'Planting';
+        text = `Garden brush: ${name} · ${ui.brushSize} ft · drag on the ground to ${ui.brushErase ? 'erase' : 'paint'} · Shift-drag erases · right-drag moves the view · Esc puts the brush down`;
+      } else if (ui.pending) text = blocked ? (ui.pending.kind === 'roof' ? 'Point at a roof to put this on it' : 'Blocked — something solid is already there') : `Placing ${ui.pending.name} · click to drop · Shift-click to keep placing · R turns it · Esc cancels`;
       else text = 'Drag to orbit · right-drag to pan · wheel zooms · click to select · drag a selected thing to move it · double-click to fly to it';
     }
     hb.textContent = text;
-    hb.classList.toggle('warn', !!ui.pending || !!ui.doors || !!ui.fix || !!ui.attach);
+    hb.classList.toggle('warn', !!ui.pending || !!ui.doors || !!ui.fix || !!ui.attach || !!ui.brush);
     hb.classList.toggle('bad', !!blocked);
   }
 }
@@ -518,7 +646,8 @@ function drawMinimap(force = false) {
     else if (o.kind === 'booth') poly(o, '#6f7cff');
     else if (o.kind === 'plant') poly(o, '#9fb3c8');
     else if (o.kind === 'run') {
-      g.strokeStyle = '#ffb547';
+      const ms = RUN_BY_ID[o.style] || {};
+      g.strokeStyle = ms.mark ? (ms.drain ? '#8f969c' : o.color || ms.color) : '#ffb547';
       g.lineWidth = 1.5;
       g.beginPath();
       (o.points || []).forEach((p, i) => (i ? g.lineTo(X(p.x), Y(p.y)) : g.moveTo(X(p.x), Y(p.y))));
@@ -579,7 +708,7 @@ function tick(dt) {
 
 /* --------------------------------------------------------------- panels */
 
-const CATS = ['Buildings', 'Roads', 'Machinery', 'Ducts & pipes', 'Plant yard', 'Gates', 'Booths', ...PROP_CATS.filter((c) => !['Roads', 'Plant yard', 'Gates'].includes(c))];
+const CATS = ['Buildings', 'Garden', 'Roads', 'Machinery', 'Ducts & pipes', 'Plant yard', 'Gates', 'Booths', ...PROP_CATS.filter((c) => !['Roads', 'Plant yard', 'Gates'].includes(c))];
 
 function itemButton(kind, key, icon, name, armed) {
   return `<button class="item${armed ? ' on' : ''}" data-act="arm" data-kind="${kind}" data-key="${key}" title="${esc(name)}">
@@ -615,6 +744,22 @@ function addPanel() {
         <button class="toggle${ui.ortho ? ' on' : ''}" data-act="ortho"><span>Square corners<br><small>Rise, run level, then drop — like real ductwork</small></span><span class="pill">${ui.ortho ? 'On' : 'Off'}</span></button>
         <button class="toggle${ui.runHigh ? ' on' : ''}" data-act="runhigh"><span>Over the ground: on a pipe bridge<br><small>Off: on sleepers at ground level</small></span><span class="pill">${ui.runHigh ? 'On' : 'Off'}</span></button>
       </div>`;
+  } else if (ui.cat === 'Garden') {
+    items = gardenShelf();
+  } else if (ui.cat === 'Paint & drains') {
+    const props = PROPS.filter((p) => p.cat === 'Paint & drains');
+    items = `<p class="hint">Lines: pick one, then click point by point on the ground. Double-click or Enter to finish, Backspace takes
+      back a point, Esc stops. Square corners keeps lines at 45° steps. A hatched zone closes back to its first point.</p>
+      <h3 class="famhead">Lines, kerbs & channels <small>drawn</small></h3>
+      <div class="grid-items">${MARKS.map((r) => `<button class="item${ui.draw && ui.draw.style === r.id ? ' on' : ''}" data-act="draw" data-key="${r.id}" title="${esc(r.name)}">
+        <span class="ic">${r.icon}</span><span class="nm">${esc(r.name)}</span></button>`).join('')}</div>
+      <div class="toggles" style="margin-top:10px">
+        <button class="toggle${ui.ortho ? ' on' : ''}" data-act="ortho"><span>Square corners<br><small>Lines snap to 45° steps</small></span><span class="pill">${ui.ortho ? 'On' : 'Off'}</span></button>
+      </div>
+      <h3 class="famhead">Stencils & symbols <small>placed</small></h3>
+      <div class="grid-items">${props.filter((p) => !p.drain).map((p) => itemButton('prop', p.id, p.icon, p.name, isArmed('prop', p.id))).join('')}</div>
+      <h3 class="famhead">Drainage <small>placed</small></h3>
+      <div class="grid-items">${props.filter((p) => p.drain).map((p) => itemButton('prop', p.id, p.icon, p.name, isArmed('prop', p.id))).join('')}</div>`;
   } else if (ui.cat === 'Booths') {
     items = `<div class="grid-items">${BOOTHS.map((b) => itemButton('booth', b.id, b.icon, b.name, isArmed('booth', b.id))).join('')}</div>`;
   } else {
@@ -627,6 +772,81 @@ function addPanel() {
     <div class="chips catrow">${CATS.map((c) => `<button class="chip${ui.cat === c ? ' on' : ''}" data-act="cat" data-value="${c}">${c}</button>`).join('')}</div>
     ${items}
     ${ui.pending ? `<p class="note">Placing <b>${esc(ui.pending.name)}</b> — click the view. <button class="btn tiny" data-act="cancel">Cancel</button></p>` : ''}`;
+}
+
+/* ------------------------------------------------------------ garden brush */
+
+function gardenShelf() {
+  const g = state.garden;
+  const btn = (id, icon, name) => `<button class="item${ui.brush === id ? ' on' : ''}" data-act="brush" data-key="${id}" title="${esc(name)}">
+    <span class="ic">${icon}</span><span class="nm">${esc(name)}</span></button>`;
+  const groups = GARDEN_GROUPS.map((grp) => `<h3 class="famhead">${esc(grp)}</h3>
+    <div class="grid-items">${GARDEN.filter((k) => k.group === grp).map((k) => btn(k.id, k.icon, k.name)).join('')}</div>`).join('');
+  const covers = `<h3 class="famhead">Ground cover <small>mulch, straw and stone</small></h3>
+    <div class="grid-items">${COVERS.map((c) => btn(c.id, c.id.startsWith('mulch') ? '🟫' : c.id === 'pinestraw' ? '🍂' : '🪨', c.name)).join('')}</div>`;
+  const dens = [[0.5, 'Sparse'], [1, 'Normal'], [2, 'Dense']];
+  return `<p class="hint">Pick a plant or a ground cover, then paint it on: press and drag on the ground. Hold <b>Shift</b> (or switch on
+      the eraser) to take plants out. Plants keep clear of buildings and of each other; put mulch down first, then plant into it.
+      Right-drag moves the view; Esc puts the brush down.</p>
+    ${groups}${covers}
+    <div class="field"><label for="brush-size">Brush size <b>${ui.brushSize} ft</b></label>
+      <input id="brush-size" type="range" min="1" max="40" step="1" value="${ui.brushSize}" data-act="brush-size"></div>
+    <div class="field"><label>Density</label><div class="chips">${dens.map(([v, n]) => `<button class="chip${ui.brushDensity === v ? ' on' : ''}" data-act="brush-density" data-value="${v}">${n}</button>`).join('')}</div></div>
+    <div class="toggles">
+      <button class="toggle${ui.brushErase ? ' on' : ''}" data-act="brush-erase"><span>Eraser<br><small>Takes out plants and beds under the brush</small></span><span class="pill">${ui.brushErase ? 'On' : 'Off'}</span></button>
+    </div>
+    <p class="note">${g.items.length.toLocaleString()} plants and ${g.covers.length} patches of ground cover on the site.
+      ${g.items.length || g.covers.length ? '<button class="btn tiny" data-act="garden-clear">Clear all planting</button>' : ''}
+      ${ui.brush ? '<button class="btn tiny" data-act="brush-off">Put the brush down</button>' : ''}</p>`;
+}
+
+let brushRing = null;
+function drawBrush(at) {
+  if (!engine) return;
+  if (!at || !ui.brush) {
+    if (brushRing) brushRing.visible = false;
+    return;
+  }
+  if (!brushRing) {
+    brushRing = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 64).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x5fd08a, transparent: true, opacity: 0.85, depthTest: false }));
+    brushRing.renderOrder = 12;
+    brushRing.userData.noPick = true;
+    engine.helpers.add(brushRing);
+  }
+  brushRing.visible = true;
+  brushRing.scale.setScalar(Math.max(0.6, ui.brushSize));
+  brushRing.position.set(at.x, 0.4, at.y);
+  brushRing.material.color.set(ui.brushErase || at.erase ? 0xff6b5e : 0x5fd08a);
+}
+
+function setBrush(id) {
+  ui.brush = id;
+  if (id) {
+    if (engine && engine.mode !== 'orbit') setCam('orbit');
+    ui.pending = null;
+    ui.ghost = null;
+    updateGhost();
+    ui.selected = null;
+    refreshSelection();
+  } else drawBrush(null);
+  drawPanel();
+  drawHud();
+}
+
+/** Where a plant may not go: inside a building, a booth or anything solid. */
+function gardenBlocked() {
+  const solids = state.objects.filter((o) => isSolid(o) && !(o.kind === 'prop' && PROP_BY_ID[o.type] && PROP_BY_ID[o.type].vehicle)).map(footprint);
+  const m = 40;
+  return (x, y) => x < -m || y < -m || x > state.lot.width + m || y > state.lot.depth + m || solids.some((fp) => contains(fp, x, y));
+}
+
+/** One dab of the brush at a plan point. */
+function brushDab(at, erase) {
+  const g = state.garden;
+  const r = Math.max(0.5, ui.brushSize);
+  if (erase) return gardenErase(g, at.x, at.y, r, { covers: true });
+  if (COVER_BY_ID[ui.brush]) return coverStamp(g, ui.brush, at.x, at.y, r);
+  return gardenStamp(g, ui.brush, at.x, at.y, r, ui.brushDensity, drag.blocked, Math.round(at.x * 977 + at.y * 131 + g.items.length * 7));
 }
 
 function signFields(prefix, sign, opts = {}) {
@@ -792,7 +1012,7 @@ function boothPanel(o) {
 function propPanel(o) {
   const spec = PROP_BY_ID[o.type] || {};
   return `<h2>${spec.icon || ''} ${esc(spec.name || o.type)}</h2>
-    <p class="hint">${esc(spec.cat || '')}${spec.solid ? ' · solid — nothing else can stand here' : ''}${spec.vehicle ? ' · backs onto loading bays by itself' : ''}</p>
+    <p class="hint">${esc(spec.cat || '')}${spec.solid ? ' · solid — nothing else can stand here' : ''}${spec.vehicle && !spec.car ? ' · backs onto loading bays by itself' : ''}</p>
     ${objActions(o)}
     ${spec.len ? `<div class="field"><label for="p-len">Length<b>${fmt(o.w != null ? o.w : spec.w)} ft</b></label>
       <input id="p-len" type="range" min="6" max="300" step="2" value="${Math.round(o.w != null ? o.w : spec.w)}" data-act="num" data-key="w"></div>` : ''}
@@ -801,12 +1021,67 @@ function propPanel(o) {
       <input id="p-w2" type="range" min="6" max="200" step="2" value="${Math.round(o.w || spec.w)}" data-act="num" data-key="w"></div>
       <div class="field"><label for="p-d2">Depth<b>${fmt(o.d || spec.d)} ft</b></label>
       <input id="p-d2" type="range" min="4" max="160" step="2" value="${Math.round(o.d || spec.d)}" data-act="num" data-key="d"></div>` : ''}
-    ${spec.color || ['dumpster', 'skip', 'flag'].includes(o.type) ? `<div class="field"><label>Colour</label><div class="chips">
-      ${['#d9dde2', '#1d2735', '#7d2f2f', '#1e2229', '#f1f2f4', '#35543f', '#8d5a24', '#2c4a7c', '#c0392b', '#c9a227', '#b5482f', '#1f5b8a'].map((c) => `<button class="chip swatch${o.color === c ? ' on' : ''}" style="background:${c}" data-act="set" data-key="color" data-value="${c}"></button>`).join('')}
+    ${spec.color || ['dumpster', 'skip', 'flag'].includes(o.type) ? `<div class="field"><label>${spec.car || spec.truck ? 'Paint' : 'Colour'}</label><div class="chips">
+      ${(spec.car || spec.truck ? CAR_PAINTS : spec.paintArrow ? MARK_COLORS : ['#d9dde2', '#1d2735', '#7d2f2f', '#1e2229', '#f1f2f4', '#35543f', '#8d5a24', '#2c4a7c', '#c0392b', '#c9a227', '#b5482f', '#1f5b8a'].map((c) => [c, ''])).map(([c, n]) => `<button class="chip swatch${o.color === c ? ' on' : ''}" style="background:${c}" title="${n}" data-act="set" data-key="color" data-value="${c}"></button>`).join('')}
     </div></div>` : ''}
-    ${spec.sign ? `<div class="divider"></div><h3>Sign</h3>${signFields('s', o.sign || {}, { bg: true, sub: !!spec.sub || o.type === 'billboard' || o.type === 'monument' })}` : ''}
+    ${spec.car ? `<p class="note">${esc(spec.body || '')} · ${fmt(spec.d)} ft long, ${fmt(spec.w)} ft wide. Look through the glass: the seats, dashboard and steering wheel are all modelled.</p>` : ''}
+    ${spec.truck ? `<p class="note">${esc(spec.body || '')} · ${fmt(spec.d)} ft long, ${fmt(spec.h)} ft tall. Air lines, fuel tanks, fifth wheel and dual drive wheels are all modelled.</p>` : ''}
+    ${spec.cover ? `<div class="field"><label>Ground cover</label><div class="chips">${COVERS.map((c) => `<button class="chip${(o.cover || 'mulch-brown') === c.id ? ' on' : ''}" data-act="set" data-key="cover" data-value="${c.id}">${esc(c.name)}</button>`).join('')}</div></div>` : ''}
+    ${spec.stencil ? stencilFields(o) : spec.sign ? `<div class="divider"></div><h3>Sign</h3>${signFields('s', o.sign || {}, { bg: true, sub: !!spec.sub || o.type === 'billboard' || o.type === 'monument' })}` : ''}
     ${spec.cam ? camFields(o, spec) : ''}`;
 }
+
+/* Words painted on the pavement: the usual ones a click away. */
+const STENCIL_WORDS = ['FIRE LANE', 'NO PARKING', 'STOP', 'SLOW', 'LOADING ZONE', 'VISITOR', 'RESERVED', 'EV ONLY', 'DROP OFF', 'BUS', 'ONLY', 'SCHOOL', 'NO PARKING | FIRE LANE', 'STOP | AHEAD'];
+
+function stencilFields(o) {
+  const s = o.sign || {};
+  return `<div class="divider"></div><h3>Lettering</h3>
+    <div class="field"><label for="st-text">Words <small>(| starts a new line)</small></label>
+      <input id="st-text" type="text" maxlength="40" value="${esc(s.text || '')}" data-act="sign" data-key="text"></div>
+    <div class="chips">${STENCIL_WORDS.map((w) => `<button class="chip${s.text === w ? ' on' : ''}" data-act="sign" data-key="text" data-value="${esc(w)}">${esc(w.replace(' | ', ' / '))}</button>`).join('')}</div>
+    <div class="field"><label>Paint</label><div class="chips">
+      ${MARK_COLORS.map(([c, n]) => `<button class="chip swatch${(s.color || '') === c ? ' on' : ''}" style="background:${c}" title="${n}" data-act="sign" data-key="color" data-value="${c}"></button>`).join('')}
+    </div></div>
+    <p class="note">Drag the corner handles (or set the size above) to stretch the letters; R turns it to face the traffic.</p>`;
+}
+
+/** A painted line, kerb, crosswalk, hatched zone or trench drain. */
+function markPanel(o) {
+  const spec = RUN_BY_ID[o.style] || MARKS[0];
+  const pts = o.points || [];
+  const L = runLength(o);
+  const [lo, hi] = spec.sizes || [spec.size, spec.size];
+  const kerb = o.style === 'firecurb' || o.style === 'yellowcurb';
+  return `<h2>${spec.icon} ${esc(spec.name)}</h2>
+    <p class="hint">${pts.length} points · ${fmt(L)} ft${spec.closed ? ' round' : ' long'}.</p>
+    <div class="row tight">
+      <button class="btn" data-act="run-extend">➕ Extend</button>
+      <button class="btn" data-act="run-pop">↶ Last point</button>
+      <button class="btn" data-act="dup">Duplicate</button>
+      <button class="btn danger" data-act="delete">Delete</button>
+    </div>
+    <div class="field"><label>Kind</label><div class="chips">
+      ${MARKS.map((r) => `<button class="chip${o.style === r.id ? ' on' : ''}" data-act="set" data-key="style" data-value="${r.id}">${r.icon} ${r.name}</button>`).join('')}
+    </div></div>
+    ${hi > lo ? `<div class="field"><label for="m-size">${o.style === 'crosswalk' ? 'Crossing width' : o.style === 'trench' ? 'Grate width' : 'Line width'}<b>${(o.size || spec.size) >= 2 ? fmt(o.size || spec.size) + ' ft' : Math.round((o.size || spec.size) * 12) + ' in'}</b></label>
+      <input id="m-size" type="range" min="${lo}" max="${hi}" step="${hi > 4 ? 1 : 0.05}" value="${o.size || spec.size}" data-act="num" data-key="size"></div>` : ''}
+    ${spec.drain ? '' : `<div class="field"><label>Paint</label><div class="chips">
+      ${MARK_COLORS.map(([c, n]) => `<button class="chip swatch${(o.color || spec.color) === c ? ' on' : ''}" style="background:${c}" title="${n}" data-act="set" data-key="color" data-value="${c}"></button>`).join('')}
+    </div></div>`}
+    ${o.style === 'firelane' || o.style === 'firecurb' ? `<div class="field"><label for="m-text">Stencil words</label>
+      <input id="m-text" type="text" maxlength="30" value="${esc(o.text || spec.text)}" data-act="mark-text"></div>` : ''}
+    ${o.style === 'firelane' ? `<div class="toggles"><button class="toggle${o.flip ? ' on' : ''}" data-act="mark-flip"><span>Words on the other side of the stripe</span><span class="pill">${o.flip ? 'On' : 'Off'}</span></button></div>` : ''}
+    <p class="note">${kerb ? 'A six-inch kerb, painted, with the words on both faces every 30 ft.' : spec.drain ? 'A slot-grated channel drain set flush in a concrete haunch, with end caps.' : 'Paint lies just over the pavement.'}
+      Drag it to move it; Extend adds more points.</p>`;
+}
+
+/* Factory-style paint colours for cars and trucks. */
+const CAR_PAINTS = [
+  ['#f4f4f2', 'White'], ['#c4c8cc', 'Silver'], ['#6b7076', 'Grey'], ['#16181b', 'Black'], ['#c8241b', 'Red'], ['#7a1a1f', 'Maroon'],
+  ['#2f5fa8', 'Blue'], ['#1b2f55', 'Navy'], ['#2e6b3a', 'Green'], ['#7c8a6e', 'Sage'], ['#e8b917', 'Yellow'], ['#e06a1b', 'Orange'],
+  ['#8a6a4a', 'Bronze'], ['#5b4a3e', 'Brown'],
+];
 
 /** A parking lot's size and layout, all of it the player's to set. */
 function lotFields(o, spec) {
@@ -818,7 +1093,16 @@ function lotFields(o, spec) {
       <input id="lot-${key}" type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-act="num" data-key="${key}"></div>`;
   const ada = L.stalls.filter((s) => s.ada).length;
   const ev = L.stalls.filter((s) => s.ev).length;
-  return `<div class="lotstat"><b>${L.stalls.length}</b> bays · ${ada} accessible · ${ev} EV · ${L.rows.length} rows</div>
+  const D = spec.dealer ? dealerSettings(o) : null;
+  const dealer = D ? `<div class="divider"></div><h3>Stock on display</h3>
+    <div class="field"><label>Arrange the cars</label><div class="chips">${DEALER_ORGANIZE.map(([v, n]) => chip('organize', v, n, D.organize)).join('')}</div></div>
+    <div class="field"><label>Which makes</label><div class="chips">${['All', ...CAR_MAKES].map((m) => chip('make', m, m === 'All' ? 'Every make' : m, D.make)).join('')}</div></div>
+    <div class="field"><label>Cars face</label><div class="chips">${DEALER_FACING.map(([v, n]) => chip('facing', v, n, D.facing)).join('')}</div></div>
+    <div class="toggles">${toggle('ramps', 'Front row up on display ramps')}${toggle('stickers', 'Price stickers in the windows')}${toggle('pennants', 'Pennant strings round the lot')}</div>
+    <p class="note">By brand puts one make to a row; by body style keeps cars, SUVs and trucks together; by colour runs the stock through the
+      paint chart. Every car is a full make-and-model.</p>` : '';
+  return `<div class="lotstat"><b>${L.stalls.length}</b> ${D ? 'display spaces' : 'bays'} · ${ada} accessible · ${ev} EV · ${L.rows.length} rows</div>
+    ${dealer}
     <p class="hint">Drag the white handles on its edges to make it bigger or smaller, or use the sliders.</p>
     ${slider('w', 'Width', 30, 900, 2, Math.round(o.w || spec.w), ' ft')}
     ${slider('d', 'Depth', 30, 700, 2, Math.round(o.d || spec.d), ' ft')}
@@ -1079,7 +1363,7 @@ function drawPanel() {
     else if (o.kind === 'building') html = buildingPanel(o);
     else if (o.kind === 'booth') html = boothPanel(o);
     else if (o.kind === 'plant') html = plantPanel(o);
-    else if (o.kind === 'run') html = runPanel(o);
+    else if (o.kind === 'run') html = (RUN_BY_ID[o.style] || {}).mark ? markPanel(o) : runPanel(o);
     else html = propPanel(o);
   }
   // Keep the scroll position while editing one thing; start at the top for a new one.
@@ -1518,6 +1802,7 @@ function exposeApi() {
         engine.setTweaks(tweaks, true);
         try { localStorage.setItem(GFX_KEY, JSON.stringify(engine.tweaks)); } catch { /* private mode */ }
       }
+      syncWorld();
       drawPanel();
       return { quality: engine.quality, ...engine.q };
     },
@@ -1628,13 +1913,16 @@ function armItem(kind, key) {
     const spec = PROP_BY_ID[key];
     return {
       id: 'ghost', kind: 'prop', type: key, rot: 0, x: 0, y: 0, ...(spec.len || spec.resize ? { w: spec.w, d: spec.d } : {}),
-      ...(spec.lot ? { angle: spec.angle || 90, sw: 9, ada: 2, ev: 0, fill: 65, lights: true, islands: true, kerbs: true, surface: 'asphalt', lines: '#f4f2ea' } : {}),
+      ...(spec.lot ? { angle: spec.angle || 90, sw: 9, ada: spec.dealer ? 0 : 2, ev: 0, fill: spec.dealer ? 92 : 65, lights: true, islands: true, kerbs: true, surface: 'asphalt', lines: '#f4f2ea' } : {}),
+      ...(spec.dealer ? { organize: 'brand', make: 'All', facing: 'in', ramps: true, stickers: true, pennants: true } : {}),
       ...(spec.sign ? { sign: { text: key === 'monument' ? 'ALL VISITORS MUST CHECK IN AT SECURITY' : spec.text || 'SIGN', sub: spec.sub || '', color: spec.textColor || '#ffffff', bg: spec.bg || '', logo: '' } } : {}),
       ...(spec.cam ? { color: '#f2f3f4', tilt: 25, cover: true, range: 60, ir: true } : {}),
     };
   };
   const names = { building: (BUILDING_STYLES[key] || {}).name, booth: (BOOTH_BY_ID[key] || {}).name, roof: (ROOF_BY_ID[key] || {}).name, prop: (PROP_BY_ID[key] || {}).name };
   if (engine && engine.mode !== 'orbit') setCam('orbit');
+  ui.brush = null;
+  drawBrush(null);
   ui.pending = { kind, key, name: names[kind] || key, obj: make() };
   ui.selected = null;
   ui.ghost = null;
@@ -1752,6 +2040,17 @@ function onDown(ev) {
   if (!engine || engine.mode !== 'orbit') return;
   press = { x: ev.clientX, y: ev.clientY, button: ev.button, shift: ev.shiftKey, alt: ev.altKey };
   engine.controls.enabled = true;
+  if (ui.brush && ev.button === 0) {
+    const at = engine.groundAt(ev);
+    if (!at) return;
+    engine.controls.enabled = false;
+    snapshot();
+    const erase = ui.brushErase || ev.shiftKey;
+    drag = { mode: 'brush', erase, last: at, blocked: gardenBlocked(), moved: true };
+    if (brushDab(at, erase)) world.syncGarden(state);
+    drawBrush({ ...at, erase });
+    return;
+  }
   if (ev.button !== 0 || ui.pending || ui.measure || ui.draw || ui.attach) return;
   if (handleGroup.visible) {
     const hh = engine.pick(ev, [handleGroup]);
@@ -1830,6 +2129,20 @@ function onDown(ev) {
 let hoverT = 0;
 function onMove(ev) {
   if (!engine || engine.mode !== 'orbit') return;
+  if (ui.brush) {
+    const at = engine.groundAt(ev);
+    drawBrush(at && { ...at, erase: drag && drag.mode === 'brush' ? drag.erase : ev.shiftKey });
+    if (drag && drag.mode === 'brush' && at) {
+      // A dab every so often along the stroke, closer for a small brush.
+      const step = Math.max(0.8, ui.brushSize * (COVER_BY_ID[ui.brush] ? 0.45 : 0.6));
+      if (Math.hypot(at.x - drag.last.x, at.y - drag.last.y) >= step) {
+        drag.last = at;
+        if (brushDab(at, drag.erase)) world.syncGarden(state);
+      }
+    }
+    engine.renderer.domElement.style.cursor = 'crosshair';
+    if (drag && drag.mode === 'brush') return;
+  }
   if (drag && press) {
     if (drag.mode === 'door' && !drag.door) return;    // orbiting
     if (drag.mode === 'fixadd') return;
@@ -2007,6 +2320,14 @@ function onUp(ev) {
   if (!engine) return;
   const wasClick = press && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) < 5 && press.button === 0;
   engine.controls.enabled = true;
+  if (drag && drag.mode === 'brush') {
+    drag = null;
+    press = null;
+    save();
+    for (const fn of modHooks.change) { try { fn(state); } catch (e) { console.warn('mod change', e); } }
+    if (ui.tab === 'add' && ui.cat === 'Garden') drawPanel();
+    return;
+  }
   if (drag && (drag.mode === 'fix' || drag.mode === 'fixadd')) {
     const b = byId(drag.id);
     const d = drag;
@@ -2220,6 +2541,10 @@ function armDraw(style, { points = [], extend = null, size = null, color = null 
  *  it by half the duct and a little clearance; or out on the ground. */
 function runPointAt(ev) {
   const d = ui.draw;
+  if ((RUN_BY_ID[d.style] || {}).mark) {
+    const g = engine.groundAt(ev, 0.2);
+    return g ? { x: half(g.x), y: half(g.y), z: 0 } : null;
+  }
   const hit = engine.pick(ev);
   if (hit && hit.normal) {
     const n = hit.normal;
@@ -2233,6 +2558,17 @@ function runPointAt(ev) {
 function extendPath(points, p) {
   if (!points.length) return [p];
   const last = points[points.length - 1];
+  if (ui.draw && (RUN_BY_ID[ui.draw.style] || {}).mark) {
+    // Paint goes straight from point to point; square corners keeps to 45° steps.
+    let { x, y } = p;
+    if (ui.ortho) {
+      const a = Math.round(Math.atan2(y - last.y, x - last.x) / (Math.PI / 4)) * (Math.PI / 4);
+      const L = Math.hypot(x - last.x, y - last.y);
+      x = half(last.x + Math.cos(a) * L);
+      y = half(last.y + Math.sin(a) * L);
+    }
+    return Math.hypot(x - last.x, y - last.y) > 0.4 ? [{ x, y, z: 0 }] : [];
+  }
   if (ui.ortho) return squarePath(last, p);
   return Math.hypot(p.x - last.x, p.y - last.y, p.z - last.z) > 0.05 ? [p] : [];
 }
@@ -2268,8 +2604,14 @@ function finishDraw() {
   if (!d) return;
   ui.draw = null;
   drawDraw(null);
+  const mspec = RUN_BY_ID[d.style] || {};
+  if (mspec.closed && d.points.length < 3 && !d.extend) {
+    flashHint('A hatched zone needs at least three corners.');
+    drawPanel();
+    return;
+  }
   if (d.points.length < 2) {
-    flashHint('A run needs at least two points.');
+    flashHint(mspec.mark ? 'A line needs at least two points.' : 'A run needs at least two points.');
     drawPanel();
     return;
   }
@@ -2279,7 +2621,7 @@ function finishDraw() {
     ext.points = d.points;
     ui.selected = ext.id;
   } else {
-    const run = { id: newId('r'), kind: 'run', style: d.style, size: d.size, color: d.color, points: d.points };
+    const run = { id: newId('r'), kind: 'run', style: d.style, size: d.size, color: d.color, points: d.points, ...(mspec.text ? { text: mspec.text } : {}) };
     state.objects.push(run);
     ui.selected = run.id;
   }
@@ -2381,6 +2723,7 @@ function importFile(file) {
       snapshot();
       state = next;
       ui.selected = null;
+      if (screen !== 'build') { save(); return buildScreen(); }
       engine.setEnv(state.env);
       commit();
       engine.snapView('corner');
@@ -2429,6 +2772,22 @@ function applyAction(el, ev) {
     case 'tab': ui.tab = value; document.getElementById('panel')?.classList.remove('collapsed'); return drawPanel();
     case 'panel-toggle': document.getElementById('panel')?.classList.toggle('collapsed'); return;
     case 'cat': ui.cat = value; return drawPanel();
+    case 'brush': return setBrush(ui.brush === key ? null : key);
+    case 'mark-flip': {
+      if (!o || o.kind !== 'run') return;
+      snapshot();
+      o.flip = !o.flip;
+      return commit();
+    }
+    case 'brush-off': return setBrush(null);
+    case 'brush-density': ui.brushDensity = Number(value); return drawPanel();
+    case 'brush-erase': ui.brushErase = !ui.brushErase; return drawPanel();
+    case 'garden-clear': {
+      if (!confirm('Take out every plant and bed of ground cover on the site?')) return;
+      snapshot();
+      state.garden = { items: [], covers: [] };
+      return commit();
+    }
     case 'arm': return armItem(el.dataset.kind, el.dataset.key);
     case 'cancel': ui.pending = null; ui.ghost = null; updateGhost(); drawPanel(); return drawHud();
     case 'select': ui.selected = value; refreshSelection(); return drawPanel();
@@ -2674,6 +3033,13 @@ function applyAction(el, ev) {
       if (!o) return;
       snapshot();
       o[key] = value;
+      const ms = o.kind === 'run' && key === 'style' && RUN_BY_ID[value];
+      if (ms && ms.mark) {
+        // A different marking starts from its own width, colour and words.
+        o.size = ms.size;
+        o.color = ms.color;
+        if (ms.text) o.text = ms.text; else delete o.text;
+      }
       return commit();
     }
     case 'toggle': {
@@ -2727,7 +3093,7 @@ function applyAction(el, ev) {
     case 'run-extend': {
       if (!o || o.kind !== 'run') return;
       ui.tab = 'add';
-      ui.cat = 'Ducts & pipes';
+      ui.cat = (RUN_BY_ID[o.style] || {}).mark ? 'Paint & drains' : 'Ducts & pipes';
       return armDraw(o.style, { points: o.points, extend: o.id, size: o.size, color: o.color });
     }
     case 'run-pop': {
@@ -2767,6 +3133,8 @@ function applyAction(el, ev) {
       prefs.quality = value;
       savePrefs();
       engine.setQuality(value);
+      // Parked cars and traffic switch between the simple and detailed models.
+      syncWorld();
       return drawPanel();
     }
     case 'measure':
@@ -2826,8 +3194,9 @@ function applyAction(el, ev) {
     }
     case 'export': return exportFile();
     case 'restart':
-      if (!confirm('Start a new site? Your current one stays in the autosave until you break ground.')) return;
       pendingStart = { preset: state.preset || 'warehouse', lot: { ...state.lot } };
+      ui.menu = 'new';
+      ui.selected = null;
       return startScreen();
     case 'resume': {
       const s = load();
@@ -2837,7 +3206,25 @@ function applyAction(el, ev) {
     case 'pick-preset':
       pendingStart.preset = value;
       pendingStart.lot = { ...SITE_PRESETS[value].lot };
-      return startScreen();
+      return drawMenu();
+    case 'menu':
+      ui.menu = ui.menu === value ? '' : value || '';
+      return drawMenu();
+    case 'menu-quality': {
+      prefs.quality = value;
+      savePrefs();
+      if (engine) { engine.setQuality(value); syncWorld(); }
+      return drawMenu();
+    }
+    case 'menu-pref': {
+      prefs[key] = key === 'autoRes' ? prefs.autoRes === false : !prefs[key];
+      savePrefs();
+      if (engine && key === 'autoRes') engine.autoRes = prefs.autoRes !== false;
+      return drawMenu();
+    }
+    case 'quit':
+      window.close();
+      return;
     case 'break-ground': {
       state = freshState(pendingStart.preset);
       state.lot = { ...pendingStart.lot };
@@ -2886,6 +3273,20 @@ document.addEventListener('input', (ev) => {
   // One undo step per gesture, not one per pixel of slider travel.
   const once = () => { const now = performance.now(); if (now - editSnapT > 900) snapshot(); editSnapT = now; };
 
+  if (act === 'mark-text') {
+    const o = selected();
+    if (!o) return;
+    once();
+    o.text = el.value.toUpperCase();
+    queueSave();
+    return queueSync();
+  }
+  if (act === 'brush-size') {
+    ui.brushSize = num;
+    if (label) label.textContent = `${num} ft`;
+    if (brushRing && brushRing.visible) brushRing.scale.setScalar(Math.max(0.6, num));
+    return;
+  }
   if (act === 'lot-w' || act === 'lot-d') {
     pendingStart.lot[act === 'lot-w' ? 'width' : 'depth'] = num;
     if (label) label.textContent = `${num} ft`;
@@ -2955,6 +3356,7 @@ document.addEventListener('input', (ev) => {
 });
 
 document.addEventListener('keydown', (ev) => {
+  if (screen === 'start' && ev.key === 'Escape' && ui.menu) { ui.menu = ''; return drawMenu(); }
   if (screen !== 'build' || ev.target.matches('input, textarea, select')) return;
   const step = ev.shiftKey ? 10 : 2;
   const key = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
@@ -2975,6 +3377,7 @@ document.addEventListener('keydown', (ev) => {
     if (ui.doors) return setDoorMode(null);
     if (ui.fix) return setFixMode(null);
     if (ui.attach) { ui.attach = null; drawDoorMark(null); drawHud(); return drawPanel(); }
+    if (ui.brush) return setBrush(null);
     if (ui.pending) { ui.pending = null; ui.ghost = null; updateGhost(); drawPanel(); return drawHud(); }
     ui.selected = null;
     refreshSelection();

@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { Builder } from './builder.js';
 import * as M from './materials.js';
 import { RUN_BY_ID } from '../catalog.js';
+import { buildMark } from './marks.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const X = new THREE.Vector3(1, 0, 0);
@@ -45,6 +46,7 @@ const vec = (p) => new THREE.Vector3(p.x, p.z, p.y);
  * { roof: height or null, wall: true when a building wall is close by }.
  */
 export function buildRun(o, under = () => ({ roof: null, wall: false })) {
+  if ((RUN_BY_ID[o.style] || {}).mark) return buildMark(o);
   const B = new Builder();
   const spec = RUN_BY_ID[o.style] || RUN_BY_ID.duct;
   const size = o.size || spec.size;

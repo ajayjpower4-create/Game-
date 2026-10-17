@@ -182,6 +182,14 @@ you choose.
 Open <http://localhost:3000/building> — or play the **Windows desktop
 version** (a `.exe`, with a mods folder; see "Desktop version and mods" below).
 
+The game opens on a **start menu** over a live 3D view of your site turning
+slowly at golden hour: **Continue** goes straight back to the saved site;
+**New site** opens the starting points and the lot size; **Load site** lists
+your saved sites and imports a `.json` file; **Settings** sets the graphics
+quality, adaptive resolution, grid snapping and the minimap; **What's new**
+lists the latest additions (and on the desktop version there is a Quit
+button). Esc closes a panel. The editor's **New site** button comes back here.
+
 ## How it looks
 
 The game renders with WebGL (three.js, served from `node_modules`, so it works
@@ -281,7 +289,7 @@ box truck or van up near a loading bay and it squares itself onto the bay.
 
 ## What you can add
 
-- **87 building models** in seven families — sheds and industry (warehouse
+- **96 building models** in seven families — sheds and industry (warehouse
   shell, mega shed, storage row, workshop, cold store, plant room, cross-dock,
   sawtooth mill, hangar, high-bay store, data hall, factory, repair garage,
   truck wash, recycling shed, research lab, food factory, print works,
@@ -290,17 +298,19 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   glass pavilion, big-box store, supermarket, car showroom, hotel, shops with
   flats, medical centre, sports hall, car park deck, terrace of units,
   corporate HQ, brick loft offices, bank branch, drive-thru restaurant, café
-  pavilion, shopping mall, fitness centre, tyre and auto centre), civic (fire
-  station, school, library, chapel, police station, hospital, town hall,
-  museum, courthouse, university block, ambulance station), homes (apartment
-  block, townhouses, detached house, bungalow, semi-detached pair, stone
-  cottage, high-rise flats, modern villa), hospitality and leisure (motel,
+  pavilion, shopping mall, fitness centre, tyre and auto centre, car
+  dealership), civic (fire station, school, elementary school, high school,
+  library, chapel, police station, hospital, town hall, museum, courthouse,
+  university block, ambulance station), homes (apartment block, townhouses,
+  detached house, bungalow, semi-detached pair, stone cottage, high-rise
+  flats, modern villa, modern farmhouse, colonial house, ranch house,
+  craftsman bungalow, garden apartments, podium apartments), hospitality and leisure (motel,
   cinema, bowling and arcade, pub, leisure pool, conference centre),
   transport and utilities (bus depot, railway station, pumping station,
   multi-storey car park, control room) and small buildings (small office,
   gatehouse HQ, pitched unit, link annex, lodge, kiosk, service-station shop,
   toilet block, greenhouse, barn, substation, lock-up garages). Each takes
-  any of seven claddings, six roof types, wall/trim/roof colours, a glass roof
+  any of nine claddings (now with lap siding and board and batten), six roof types, wall/trim/roof colours, a glass roof
   and a parapet.
 - **34 machines**, placed by hand on any roof — or on the ground, where they
   stand on a concrete plinth — and dragged around once they are down:
@@ -318,7 +328,9 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   cube, container booth, twin-lane kiosk, pitched hut, raised lookout, round
   kiosk and a gate office — each lit inside at night, each with a fascia sign
   you write.
-- **181 props** — boundary (mesh, palisade and timber fences, walls, guard
+- **257 props** — the new **cars**, **trucks**, **dealership**, **paint &
+  drains**, **playground**, **garden tools** and **backyard** shelves (see the
+  sections below), plus boundary (mesh, palisade and timber fences, walls, guard
   rail, bollards, Jersey barriers, crowd barriers, cones, drums, speed bumps);
   **12 gates** (gate arm, heavy boom with skirt, sliding, cantilever, double
   swing and bi-folding speed gates, road blocker, rising bollards, tyre
@@ -356,6 +368,99 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   truck, mixer, bus, van, pickup, SUV, car, hatchback, police car, ambulance,
   fire engine, forklift, excavator, tower crane, mobile crane, refuse truck,
   scissor lift, site buggy, motorbike, skid steer, camper van); and people.
+
+## Cars and trucks
+
+The **Cars** shelf has sixteen detailed models from eight makes — Toyota Camry
+and RAV4, Ford F-150 and Mustang, Chevrolet Tahoe and Corvette, Honda Civic
+and Odyssey, Tesla Model 3 and Cybertruck, BMW 3 Series and X5,
+Mercedes-Benz G-Class and Sprinter, Jeep Wrangler and Grand Cherokee — built
+at their real lengths, widths, heights and wheelbases. Bodies are lofted from
+cross-sections with real wheel arches; each has its own grille, lamps, badges,
+mirrors, door shut lines, handles, wipers, plates, wheels of its own design
+with tyres, brake discs and calipers, and a cabin you can see through the
+glass (seats, dashboard, steering wheel). Fourteen factory paints are a click
+away. On High quality and up the parked cars and the traffic are these real
+models too.
+
+The **Trucks** shelf has six semi tractors: Freightliner Cascadia, Volvo VNL
+860, Mack Anthem and International LT (aero sleepers with roof fairings and
+chassis skirts) and the long-nose Peterbilt 389 and Kenworth W900 (chrome
+grilles, air cleaners, twin stacks, sun visors). Each has its ladder frame,
+leaf-sprung steer axle, air-ride drive tandem on dual wheels, polished
+aluminium wheels with hub and nut covers, fuel tanks on straps, steps and
+grab handles, the fifth wheel and deck plate with coiled red, blue and green
+air lines, quarter fenders, mud flaps, west-coast mirrors, marker lights and a
+cab interior. Makes and models are named only to say what each one is meant to
+look like; no manufacturer logos are reproduced.
+
+## The garden brush
+
+**Add → Garden** paints planting straight onto the ground. Pick a plant —
+boxwood, azalea, hydrangea, rose, spreading juniper, arborvitae, holly,
+ornamental grass, hosta, lavender, daylilies, bedding flowers, tulips,
+boulders or landscape stones — or a ground cover — brown, black or red mulch,
+pine straw, river rock or pea gravel — then press and drag. Set the brush size
+(1–40 ft) and density; hold **Shift** (or switch on the eraser) to take things
+out. Plants keep clear of buildings and of each other, every one a little
+different in size, turn and shade, flowering kinds in their own colours.
+Thousands of plants cost a few dozen draw calls. Lay mulch first and plant
+into it; the planting saves with the site and undoes like anything else.
+
+## Paint and drainage
+
+**Add → Paint & drains** draws on the pavement point by point (double-click
+or Enter to finish): a **fire lane** (red stripe with FIRE LANE stencils), a
+**red fire-lane kerb** lettered NO PARKING FIRE LANE on both faces, a
+**yellow kerb**, white, yellow, double-yellow and dashed lines, a **stop
+bar**, a **crosswalk**, a **hatched no-parking zone** (it closes back to its
+first point) and a **trench drain** — a slot grate in a concrete haunch.
+Square corners keeps lines to 45° steps. Each has its width, paint colour and
+(for fire lanes) its own words. Then place **stencils** (any words, | for a
+new line, with the usual ones a click away), arrows (ahead, left, right,
+ahead-or-left, ahead-or-right), the accessible-bay and EV symbols, and
+**drainage**: catch basin grates, kerb inlets with a no-dumping plaque, storm
+and sewer manholes with lettered covers, lawn area drains, oil interceptor
+lids and a culvert headwall with riprap.
+
+## Dealerships
+
+The **Car dealership** building has a glass showroom behind a tall brand
+portal carrying its name, a covered service drive with its sign, and workshop
+bays. Its **Dealer display lot** (Add → Dealership) is a lot you size with the
+edge handles like any parking lot, plus the stock: arrange the cars **by
+brand** (a make to a row), **by body style** (cars, SUVs, trucks and vans),
+**by colour** (the whole lot runs through the paint chart) or mixed; stock
+every make or just one; cars nose in or nose out; the front row up on display
+ramps facing the road; price stickers in the windows; pennant strings round
+the lot. Every car on it is a full make and model. The shelf also has a
+display ramp, a feature turntable that turns with a car on it, pennant
+strings, an air dancer that never stops waving, a pylon sign, a service drive
+sign, a key drop box and a tyre rack.
+
+## Schools, homes, playgrounds and yards
+
+The **elementary school** and **high school** have an entrance tower with
+the school's name and a clock, a canopy over the doors and a flag that waves;
+the high school's gym rises over its west wing. The **modern farmhouse**
+(board and batten, a black metal porch, dormers, shutters, a two-car garage),
+**colonial** (pedimented portico, shutters, three dormers, end chimneys),
+**ranch** (hipped roof, covered entry, attached garage), **craftsman
+bungalow** (deep porch on tapered columns over stone piers), **garden
+apartments** (stair breezeway, back balconies, condensers) and **podium
+apartments** (shops under five floors of flats, accent panels, a roof
+terrace) join the homes.
+
+**Playground**: a play structure (two towers, bridge, tube and wave slides,
+climbing wall, fireman's pole), swing set, slide tower, dome climber, monkey
+bars, a merry-go-round that turns, seesaw, spring rider, sandbox and a
+playground mulch bed — each on its own wood-fibre safety surface.
+**Planting** adds mulch beds (any ground cover, in steel edging), stepping
+stones and a block retaining wall. **Garden tools**: wheelbarrow, push and
+riding mowers, a rack of rakes, shovels, hoe, fork and broom, hose reel,
+compost bins, garden shed, watering can, pot plants, birdbath and a gnome.
+**Backyard**: fire pit and chairs, barbecue, patio set with umbrella,
+trampoline, driveway hoop and a hammock.
 
 ## Parking lots you lay out
 
@@ -488,7 +593,8 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 | `public/building/geom.js` | Plan geometry: footprints, overlap tests, wall frames |
 | `public/building/catalog.js` | The object model, catalogues, presets, save migration |
 | `public/building/site.js` | Site rules: collisions, eviction, dock snapping, the paving and parking plan, stats |
-| `public/building/lots.js` | Bays, aisles and islands inside a parking lot you sized, for any bay angle |
+| `public/building/lots.js` | Bays, aisles and islands inside a parking lot you sized, for any bay angle; dealer stock settings |
+| `public/building/vehiclelist.js` | The real makes and models: car and truck dimensions |
 | `public/building/engine/core.js` | Renderer, sky, sun and moon, weather, post-processing, cameras, picking |
 | `public/building/engine/textures.js` | Procedural tileable textures and sign lettering |
 | `public/building/engine/materials.js` | PBR materials and the night/wet/snow/season switches |
@@ -499,6 +605,12 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 | `public/building/engine/runs.js` | Duct and pipe runs, their supports, square-cornered routing |
 | `public/building/engine/cameras.js` | CCTV heads, brackets and coverage cones, shared by poles and walls |
 | `public/building/engine/vehicles.js` | Vehicles |
+| `public/building/engine/cars.js` | The detailed car generator: lofted bodies, wheels, lamps, cabins, the sixteen models |
+| `public/building/engine/trucks.js` | The six semi tractors on a shared chassis |
+| `public/building/engine/garden.js` | The garden brush: plant models, instancing, ground covers, stamping and erasing |
+| `public/building/engine/marks.js` | Pavement markings, painted kerbs, crosswalks, hatching, trench drains, stencil lettering |
+| `public/building/engine/props2.js` | Stencils, drainage, dealership, playground, garden-tool and backyard props |
+| `public/building/engine/extras.js` | What some building styles add: portals, porches, dormers, garages, breezeways, school towers |
 | `public/building/engine/nature.js` | Trees and people |
 | `public/building/engine/world.js` | Keeps the 3D scene in step with the save; parked cars; light pools |
 | `public/building/engine/life.js` | Traffic, pedestrians, flags, turbines, rain and snow |

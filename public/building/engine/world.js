@@ -10,6 +10,9 @@ import { buildBuilding, roofItemModel, roofSurfaceY } from './buildings.js';
 import { buildRun } from './runs.js';
 import { buildProp } from './props.js';
 import { buildGround } from './ground.js';
+import { CAR_BY_ID, CARS } from '../vehiclelist.js';
+import { crowdParts } from './cars.js';
+import { buildGarden, releaseGarden, gardenSig } from './garden.js';
 import { vehicleModel } from './vehicles.js';
 import { disposeTree } from './builder.js';
 import * as M from './materials.js';
@@ -89,10 +92,16 @@ export function releaseModel(g) {
   disposeTree(g);
 }
 
-/* Parked-car kinds, with their sizes. */
+/* Parked-car kinds, with their sizes and how common they are. */
 const PARKED = [
   ['car', 6, 15, 4.8, 5], ['hatch', 5.8, 13, 4.9, 3], ['suv', 6.4, 16, 6, 4], ['pickup', 6.6, 18, 6.2, 2], ['van', 6.6, 18, 8, 1],
 ];
+/* On High quality and up, real makes and models instead. */
+const PARKED_DETAIL = [
+  ['toyota-camry', 5], ['toyota-rav4', 5], ['honda-civic', 4], ['ford-f150', 4], ['tesla-model3', 3], ['chevrolet-tahoe', 3],
+  ['honda-odyssey', 2], ['bmw-3series', 2], ['bmw-x5', 2], ['jeep-grandcherokee', 3], ['jeep-wrangler', 2], ['ford-mustang', 1],
+  ['mercedes-gclass', 1], ['chevrolet-corvette', 0.5], ['mercedes-sprinter', 1], ['tesla-cybertruck', 0.5],
+].map(([id, wt]) => [id, CAR_BY_ID[id].W, CAR_BY_ID[id].L, CAR_BY_ID[id].H, wt]);
 
 export class World {
   constructor(engine) {
@@ -154,7 +163,7 @@ export class World {
     // ones belong to the ground, so resizing a lot does not rebuild the ground.
     const auto = plan.stalls.filter((s) => !s.manual);
     const gsig = JSON.stringify([state.lot, state.site, plan.pave, plan.drive, plan.aprons.map((a) => a.rect), plan.rollAprons, plan.walks, auto.length, auto[0], auto[auto.length - 1], plan.islands, plan.crossings.length, roads]);
-    const csig = JSON.stringify([state.site.cars, state.lot.width, plan.stalls.length, plan.stalls.map((s) => (s.manual ? [Math.round(s.cx), Math.round(s.cy), Math.round(s.rot), s.fill] : 0)), auto[0], auto[auto.length - 1]]);
+    const csig = JSON.stringify([!!E.q.detailCars, state.site.cars, state.lot.width, plan.stalls.length, plan.stalls.map((s) => (s.manual ? [Math.round(s.cx), Math.round(s.cy), Math.round(s.rot), s.fill, s.dealer ? JSON.stringify(s.dealer) : 0] : 0)), auto[0], auto[auto.length - 1]]);
     if (gsig !== this.groundSig) {
       this.groundSig = gsig;
       if (this.groundGroup) { E.ground.remove(this.groundGroup); disposeTree(this.groundGroup); }
@@ -168,6 +177,7 @@ export class World {
       this.parkCars(state, plan);
       changed = true;
     }
+    if (this.syncGarden(state, false)) changed = true;
     if (changed) {
       E.cullItems = [...this.items.values()].filter((it) => it.cull).map((it) => it.cull);
       this.collectLights();
@@ -176,6 +186,19 @@ export class World {
     }
     this.plan = plan;
     return plan;
+  }
+
+  /** Rebuild the planting if it changed (called on its own while painting). */
+  syncGarden(state, flag = true) {
+    const sig = gardenSig(state.garden);
+    if (sig === this.gardenSig) return false;
+    this.gardenSig = sig;
+    const E = this.engine;
+    if (this.garden) { E.ground.remove(this.garden); releaseGarden(this.garden); }
+    this.garden = buildGarden(state.garden);
+    E.ground.add(this.garden);
+    if (flag) { E.shadowDirty = true; E.moved = true; }
+    return true;
   }
 
   get(id) {
@@ -227,15 +250,19 @@ export class World {
     this.pools = mesh;
   }
 
-  /** Fill some of the parking bays with cars. */
+  /** Fill some of the parking bays with cars, and dealer lots with their stock. */
   parkCars(state, plan) {
     for (const c of [...this.parked.children]) { this.parked.remove(c); c.dispose?.(); }
-    if (!state.site.cars || !plan.stalls.length) return;
-    if (!this.carKits) {
-      const paint = M.carPaint('#ffffff');
-      this.carPaint = paint;
-      this.carKits = PARKED.map(([kind, w, L, h]) => {
-        const B = vehicleModel(kind, null, w, L, h, paint);
+    if (!plan.stalls.length) return;
+    const detail = !!this.engine.q.detailCars;
+    const list = detail ? PARKED_DETAIL : PARKED;
+    const paint = M.carPaint('#ffffff');
+    this.carPaint = paint;
+    if (!this.carKits || this.carKitsDetail !== detail) {
+      this.carKitsDetail = detail;
+      this.carKits = list.map(([kind, w, L, h]) => {
+        const B = vehicleModel(kind, null, w, L, h, paint, { lod: 'low' });
+        if (detail) return { kind, parts: crowdParts(B, paint) };
         const parts = [];
         for (const [mat, geos] of B.parts) {
           const merged = geos.length === 1 ? geos[0] : mergeAll(geos);
@@ -245,10 +272,13 @@ export class World {
       });
     }
     const r = rng(Math.round(state.lot.width * 3 + plan.stalls.length * 7));
-    const weights = PARKED.map((p) => p[4]);
+    const weights = list.map((p) => p[4]);
     const total = weights.reduce((a, b) => a + b, 0);
     const per = this.carKits.map(() => []);
+    const dealerStalls = [];
     for (const s of plan.stalls) {
+      if (s.dealer) { dealerStalls.push(s); continue; }
+      if (!state.site.cars) continue;
       // A lot the player laid out fills to its own setting; the automatic one to about two thirds.
       if (s.manual ? r() * 100 >= s.fill : r() > 0.68) continue;
       let pick = r() * total;
@@ -262,18 +292,28 @@ export class World {
       const flip = r() < 0.18;
       per[k].push({ x: s.x + s.w / 2 + (r() - 0.5) * 0.6, z: s.y + s.d / 2 + (flip ? -0.4 : 0.4), rot: (flip ? Math.PI : 0) + (r() - 0.5) * 0.06, color });
     }
+    this.instanceKits(this.carKits, per);
+    if (dealerStalls.length) this.stockDealers(dealerStalls);
+  }
+
+  /** One instanced mesh per part of each kit, for the cars given per kit. */
+  instanceKits(kits, per, extra = null) {
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
+    const qp = new THREE.Quaternion();
     const one = new THREE.Vector3(1, 1, 1);
     const col = new THREE.Color();
-    this.carKits.forEach((kit, k) => {
+    const Y = new THREE.Vector3(0, 1, 0);
+    const X = new THREE.Vector3(1, 0, 0);
+    kits.forEach((kit, k) => {
       const list = per[k];
       if (!list.length) return;
       for (const part of kit.parts) {
         const mesh = new THREE.InstancedMesh(part.geo, part.mat, list.length);
         list.forEach((c, i) => {
-          q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), c.rot);
-          m.compose(new THREE.Vector3(c.x, 0.16, c.z), q, one);
+          q.setFromAxisAngle(Y, c.rot);
+          if (c.pitch) q.multiply(qp.setFromAxisAngle(X, c.pitch));
+          m.compose(new THREE.Vector3(c.x, c.y ?? 0.16, c.z), q, one);
           mesh.setMatrixAt(i, m);
           if (part.mat === this.carPaint) mesh.setColorAt(i, col.set(c.color));
         });
@@ -284,6 +324,80 @@ export class World {
         this.parked.add(mesh);
       }
     });
+  }
+
+  /**
+   * Dealer lots: every model of the chosen make (or all of them), arranged the
+   * way the lot says — by brand a row each, by body style, or by colour — the
+   * front row up on display ramps, a price sticker in every side window.
+   */
+  stockDealers(stalls) {
+    if (!this.dealerKits) {
+      this.dealerKits = CARS.map((c) => ({ id: c.id, car: c, parts: crowdParts(vehicleModel(c.id, null, c.W, c.L, c.H, this.carPaint, { lod: 'low' }), this.carPaint) }));
+    }
+    const kits = this.dealerKits;
+    const per = kits.map(() => []);
+    const stickers = [];
+    const BODY = (b) => (/pickup|van|minivan/i.test(b) ? 2 : /suv|off-roader/i.test(b) ? 1 : 0);
+    const RAINBOW = ['#f4f4f2', '#c4c8cc', '#6b7076', '#16181b', '#c8241b', '#e06a1b', '#e8b917', '#2e6b3a', '#2f5fa8', '#1b2f55', '#7a1a1f'];
+    // Stalls of each lot in order: row by row, along each row.
+    const lots = new Map();
+    for (const s of stalls) {
+      if (!lots.has(s.lot)) lots.set(s.lot, []);
+      lots.get(s.lot).push(s);
+    }
+    for (const [lotId, list] of lots) {
+      const D = list[0].dealer;
+      const r = rng([...lotId].reduce((a, ch) => a * 31 + ch.charCodeAt(0), 7) >>> 0);
+      const pool = kits.map((k, i) => i).filter((i) => D.make === 'All' || kits[i].car.make === D.make);
+      if (!pool.length) continue;
+      const makes = [...new Set(pool.map((i) => kits[i].car.make))];
+      const bodies = [0, 1, 2].filter((b) => pool.some((i) => BODY(kits[i].car.body) === b));
+      const rows = [...new Set(list.map((s) => s.rowN))].sort((a, b) => b - a);
+      let n = 0;
+      for (const s of list) {
+        if (r() * 100 >= s.fill) continue;
+        let choices = pool;
+        const ri = rows.indexOf(s.rowN);
+        if (D.organize === 'brand') choices = pool.filter((i) => kits[i].car.make === makes[ri % makes.length]);
+        else if (D.organize === 'body' && bodies.length) choices = pool.filter((i) => BODY(kits[i].car.body) === bodies[ri % bodies.length]);
+        if (!choices.length) choices = pool;
+        const k = choices[Math.floor(r() * choices.length)];
+        const car = kits[k].car;
+        const color = D.organize === 'color' ? RAINBOW[Math.floor(n / Math.max(1, Math.round(list.length / RAINBOW.length / 1.2))) % RAINBOW.length]
+          : D.organize === 'brand' && r() < 0.35 ? car.color : RAINBOW[Math.floor(r() * RAINBOW.length)];
+        n++;
+        // The front row faces the road whatever the rest do; on ramps, nose up.
+        const rot = -s.rot * DEG + (s.front ? s.toStreet * DEG : D.facing === 'out' ? Math.PI : 0);
+        const ramp = D.ramps && s.front;
+        const c = { x: s.cx, z: s.cy, rot, color, y: ramp ? 0.16 + 0.95 : 0.16, pitch: ramp ? 0.12 : 0 };
+        per[k].push(c);
+        if (D.stickers) stickers.push({ ...c, car });
+      }
+    }
+    this.instanceKits(kits, per);
+    if (!stickers.length) return;
+    // Price stickers: a white card in the rear side window, both sides.
+    const geo = new THREE.PlaneGeometry(0.9, 1.1);
+    const mesh = new THREE.InstancedMesh(geo, M.plastic('#f6f6f2', 0.6), stickers.length * 2);
+    const m = new THREE.Matrix4();
+    const local = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const qp = new THREE.Quaternion();
+    let i = 0;
+    for (const c of stickers) {
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), c.rot);
+      if (c.pitch) q.multiply(qp.setFromAxisAngle(new THREE.Vector3(1, 0, 0), c.pitch));
+      m.compose(new THREE.Vector3(c.x, c.y, c.z), q, new THREE.Vector3(1, 1, 1));
+      for (const side of [1, -1]) {
+        local.makeRotationY(side * Math.PI / 2);
+        local.setPosition(side * (c.car.W / 2 - 0.12), c.car.H * 0.72, c.car.L * 0.12);
+        mesh.setMatrixAt(i++, m.clone().multiply(local));
+      }
+    }
+    mesh.computeBoundingSphere();
+    mesh.userData.noPick = true;
+    this.parked.add(mesh);
   }
 }
 

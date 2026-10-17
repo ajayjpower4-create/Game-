@@ -11,6 +11,8 @@
 import * as THREE from 'three';
 import { Builder } from './builder.js';
 import * as M from './materials.js';
+import { carModel, isCar } from './cars.js';
+import { truckModel, isTruck } from './trucks.js';
 
 /** Extrude a side profile [[z, y], ...] across the width, centred on x = 0. */
 function profile(B, mat, pts, width, { bevel = 0.35, x = 0, taper = 0, smooth = false } = {}) {
@@ -239,7 +241,9 @@ function quadGeo(a, b, c, d, doubleSided = false) {
  * Model one vehicle. o: { type, color }. Pass `paint` to override the body
  * material (white instance paint for crowds of parked cars).
  */
-export function vehicleModel(type, color, w, L, h, paintOverride = null, { lit = false } = {}) {
+export function vehicleModel(type, color, w, L, h, paintOverride = null, { lit = false, lod = null } = {}) {
+  if (isCar(type)) return carModel(type, color, paintOverride, { lit, lod });
+  if (isTruck(type)) return truckModel(type, color, paintOverride, { lit, lod });
   LIT = lit;
   const B = new Builder();
   const paint = paintOverride || M.carPaint(color || '#d9dde2');

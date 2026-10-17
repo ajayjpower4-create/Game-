@@ -15,6 +15,7 @@ import { plant, person } from './nature.js';
 import { vehicleModel } from './vehicles.js';
 import { PROP_BY_ID, BOOTH_BY_ID } from '../catalog.js';
 import { lotLayout } from '../lots.js';
+import { MORE, dealerDress } from './props2.js';
 
 const DEG = Math.PI / 180;
 
@@ -1173,6 +1174,10 @@ const P = {
     }
   },
   carparksmall(B, o, dims, ctx) { P.carpark(B, o, dims, ctx); },
+  dealerlot(B, o, dims, ctx) {
+    P.carpark(B, { ada: 0, ...o }, dims, ctx);
+    dealerDress(B, { ada: 0, ...o }, dims, ctx);
+  },
   carparkangled(B, o, dims, ctx) { P.carpark(B, { angle: 60, ...o }, dims, ctx); },
   paystation(B, o, { w, d, h }) {
     B.slab(M.concrete('#a8a59d'), w + 0.6, 0.3, d + 0.6, 0, 0, 0);
@@ -2140,6 +2145,8 @@ function hashId(id) {
 }
 
 const PEOPLE = new Set(['worker', 'visitor', 'guard', 'group']);
+Object.assign(P, MORE);
+
 const PLANTS = new Set(['tree', 'oak', 'maple', 'birch', 'conifer', 'pine', 'palm', 'shrub', 'hedge']);
 
 /**

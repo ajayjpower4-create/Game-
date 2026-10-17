@@ -91,6 +91,20 @@ export function lotLayout(o) {
   return { S, w, d, depth, pitch, aisle, rows, aisles, stalls, len: STALL_LEN, x0, x1 };
 }
 
+/* How a dealer lot shows its stock. */
+export const DEALER_ORGANIZE = [['mixed', 'Mixed'], ['brand', 'By brand'], ['body', 'By body style'], ['color', 'By colour']];
+export const DEALER_FACING = [['in', 'Nose in'], ['out', 'Nose out']];
+
+export function dealerSettings(o) {
+  return {
+    organize: DEALER_ORGANIZE.some(([k]) => k === o.organize) ? o.organize : 'brand',
+    make: o.make || 'All',
+    facing: o.facing === 'out' ? 'out' : 'in',
+    ramps: o.ramps !== false,
+    stickers: o.stickers !== false,
+  };
+}
+
 /**
  * The bays of a placed lot in site coordinates, shaped like the automatic
  * plan's stalls so the parked cars and the stats can use them as they are.
@@ -104,6 +118,8 @@ export function lotStalls(o, fp) {
     return {
       x: cx - L.S.sw / 2, y: cy - L.len / 2, w: L.S.sw, d: L.len, cx, cy, rot,
       ada: !!s.ada, ev: !!s.ev, row: `${o.id}:${s.row}`, manual: true, fill: L.S.fill, n: i,
+      // The front row (nearest the street) shows its cars nose to the road.
+      ...(o.type === 'dealerlot' ? { dealer: dealerSettings(o), rowN: s.row, front: s.row === L.rows.length - 1, toStreet: s.ay < 0 ? 180 : 0, lot: o.id } : {}),
     };
   });
 }

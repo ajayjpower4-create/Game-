@@ -187,6 +187,8 @@ const CLAD = {
   render: { surf: 'render', rough: 0.85, metal: 0 },
   stone: { surf: 'stone', rough: 0.9, metal: 0 },
   timber: { surf: 'timber', rough: 0.8, metal: 0 },
+  siding: { surf: 'siding', rough: 0.6, metal: 0 },
+  batten: { surf: 'batten', rough: 0.65, metal: 0 },
   composite: { surf: 'composite', rough: 0.32, metal: 0.4 },
 };
 
@@ -406,6 +408,72 @@ export function vehicleGlass() {
   })));
 }
 
+/* ------------------------------------------------------- detailed cars */
+
+/** Tinted car glass you can see the cabin through. */
+export function carGlass(tint = '#0a1016', opacity = 0.74) {
+  return once(`carglass|${tint}|${opacity}`, () => shiny(new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(tint), roughness: 0.04, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.02,
+    transparent: true, opacity, depthWrite: false, envMapIntensity: 1.1,
+  })));
+}
+
+/** A clear headlamp lens over its reflector. */
+export function lens() {
+  return once('lens', () => shiny(new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#e9eef2'), roughness: 0.03, metalness: 0, clearcoat: 1, transparent: true, opacity: 0.28,
+    depthWrite: false, envMapIntensity: 1.4,
+  })));
+}
+
+/** A coloured lamp lens (tail, indicator): glossy and deep. */
+export function tailLens(hex = '#a3121c') {
+  return once(`tlens|${hex}`, () => shiny(new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(hex), roughness: 0.08, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.03,
+    emissive: new THREE.Color(hex), emissiveIntensity: 0.06, envMapIntensity: 1,
+  })));
+}
+
+/** The mirror-finish bowl behind a lens. */
+export function reflector() {
+  return once('reflector', () => shiny(std({ color: new THREE.Color('#9aa3ab'), roughness: 0.12, metalness: 1, envMapIntensity: 1.2 })));
+}
+
+/** Gloss black trim: pillars, grille frames, mirror caps. */
+export function pianoBlack() {
+  return once('pianoBlack', () => shiny(new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#08090b'), roughness: 0.1, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 0.9,
+  })));
+}
+
+/** Textured black plastic for flares, bumpers and rocker covers. */
+export function cladding(hex = '#1b1d20') {
+  return once(`cladding|${hex}`, () => std({ ...withSurface('cladding'), color: new THREE.Color(hex), roughness: 0.82, normalScale: new THREE.Vector2(0.6, 0.6) }));
+}
+
+export function grilleMesh(hex = '#ffffff') {
+  return once(`grillemesh|${hex}`, () => std({ ...withSurface('honeycomb'), color: new THREE.Color(hex), roughness: 0.62, metalness: 0.1 }));
+}
+
+/** An LED strip: white even by day, faintly glowing. */
+export function led(hex = '#f2f7fb') {
+  return once(`led|${hex}`, () => std({ color: new THREE.Color(hex), emissive: new THREE.Color(hex), emissiveIntensity: 0.35, roughness: 0.25 }));
+}
+
+export function tread() {
+  return once('tread', () => std({ ...withSurface('tread'), color: new THREE.Color('#ffffff'), roughness: 0.92, normalScale: new THREE.Vector2(1.2, 1.2) }));
+}
+
+/** Polished alloy for wheels; brushed when rough. */
+export function alloy(hex = '#c9ced3', rough = 0.22) {
+  return once(`alloy|${hex}|${rough}`, () => shiny(std({ color: new THREE.Color(hex), roughness: rough, metalness: 0.95, envMapIntensity: 1.1 })));
+}
+
+/** Seat fabric and leather, carpet, the dashboard. */
+export function upholstery(hex = '#2a2c30', rough = 0.85) {
+  return once(`uph|${hex}|${rough}`, () => std({ color: new THREE.Color(hex), roughness: rough, metalness: 0 }));
+}
+
 export function wood(hex = '#9a6b47') {
   return once(`wood|${hex}`, () => std({ ...withSurface('timber'), color: new THREE.Color(hex), roughness: 0.85 }));
 }
@@ -427,9 +495,11 @@ export function meshFence() {
 
 /** Something that glows after dark: lamp heads, lit signs, indicator lights. */
 export function lamp(hex = '#fff1cc', max = 6) {
-  return once(`lamp|${hex}|${max}`, () => night(std({
-    color: new THREE.Color('#f4f4f2'), emissive: new THREE.Color(hex), emissiveIntensity: 0, roughness: 0.3,
-  }), 'emissiveIntensity', max));
+  return once(`lamp|${hex}|${max}`, () => {
+    const m = night(std({ color: new THREE.Color('#f4f4f2'), emissive: new THREE.Color(hex), emissiveIntensity: 0, roughness: 0.3 }), 'emissiveIntensity', max);
+    m.userData.lamp = true;
+    return m;
+  });
 }
 
 /** Always lit — traffic signals, EV charger rings, exit signs. */
@@ -534,6 +604,47 @@ export function needles() {
 
 export function bark(hex = '#6b5340') {
   return once(`bark|${hex}`, () => std({ ...withSurface('bark'), color: new THREE.Color(hex), roughness: 0.95 }));
+}
+
+/* Ground covers for planting beds: shredded bark in three colours, pine
+ * straw, river rock and pea gravel. */
+export const GROUND_COVERS = {
+  'mulch-brown': { name: 'Brown mulch', surface: 'mulch', hex: '#9a6a44', rough: 0.95 },
+  'mulch-black': { name: 'Black mulch', surface: 'mulch', hex: '#3b3530', rough: 0.95 },
+  'mulch-red': { name: 'Red mulch', surface: 'mulch', hex: '#a2482e', rough: 0.95 },
+  pinestraw: { name: 'Pine straw', surface: 'pinestraw', hex: '#ffffff', rough: 0.9 },
+  riverrock: { name: 'River rock', surface: 'pebbles', hex: '#ffffff', rough: 0.6 },
+  peagravel: { name: 'Pea gravel', surface: 'pebbles', hex: '#e8dccb', rough: 0.75, scale: 0.4 },
+};
+
+export function groundCover(kind) {
+  const g = GROUND_COVERS[kind] || GROUND_COVERS['mulch-brown'];
+  return once(`cover|${kind}`, () => {
+    const s = withSurface(g.surface);
+    if (g.scale) {
+      for (const k of ['map', 'normalMap']) {
+        if (!s[k]) continue;
+        s[k] = s[k].clone();
+        s[k].repeat.multiplyScalar(1 / g.scale);
+        s[k].needsUpdate = true;
+      }
+    }
+    return snowy(wet(std({ ...s, color: new THREE.Color(g.hex), roughness: g.rough, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })));
+  });
+}
+
+/** Flower petals: white, so each flower takes its own colour per instance. */
+export function petals() {
+  return once('petals', () => std({ color: new THREE.Color('#ffffff'), roughness: 0.7, side: THREE.DoubleSide }));
+}
+
+/** Foliage tinted per instance (a white-based leaf texture). */
+export function foliage(variant = 0) {
+  return once(`foliage|${variant}`, () => snowy(std({ ...withSurface('leaves'), color: new THREE.Color('#ffffff'), roughness: 0.85, side: variant === 9 ? THREE.DoubleSide : THREE.FrontSide })));
+}
+
+export function rock(hex = '#8d8a84') {
+  return once(`rock|${hex}`, () => snowy(std({ ...withSurface('bark'), color: new THREE.Color(hex), roughness: 0.92 })));
 }
 
 /* ----------------------------------------------------- world-wide controls */

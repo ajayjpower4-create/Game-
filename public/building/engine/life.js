@@ -8,11 +8,18 @@ import { Builder } from './builder.js';
 import * as M from './materials.js';
 import { rng } from './textures.js';
 import { VEHICLE_COLORS } from '../catalog.js';
+import { CAR_BY_ID } from '../vehiclelist.js';
+import { crowdParts } from './cars.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const TMP = { m: new THREE.Matrix4(), q: new THREE.Quaternion(), one: new THREE.Vector3(1, 1, 1), up: new THREE.Vector3(0, 1, 0), at: new THREE.Vector3() };
 
 const KINDS = [['car', 6, 15, 4.8, 5], ['hatch', 5.8, 13, 4.9, 3], ['suv', 6.4, 16, 6, 4], ['van', 6.6, 18, 8, 2], ['pickup', 6.6, 18, 6.2, 2], ['boxtruck', 8, 26, 12.5, 1], ['bus', 8.4, 40, 10.5, 0.4]];
+/* On High quality and up the traffic is real makes and models. */
+const DETAIL_KINDS = [
+  ['toyota-camry', 4], ['toyota-rav4', 4], ['honda-civic', 3], ['ford-f150', 3], ['tesla-model3', 2], ['chevrolet-tahoe', 2],
+  ['honda-odyssey', 1], ['bmw-x5', 1], ['jeep-grandcherokee', 2], ['mercedes-sprinter', 1],
+].map(([id, wt]) => [id, CAR_BY_ID[id].W, CAR_BY_ID[id].L, CAR_BY_ID[id].H, wt]).concat([['boxtruck', 8, 26, 12.5, 1], ['bus', 8.4, 40, 10.5, 0.4]]);
 
 export class Life {
   constructor(engine, world) {
@@ -36,8 +43,11 @@ export class Life {
   makeKits() {
     const paint = M.carPaint('#ffffff');
     this.paint = paint;
-    this.kits = KINDS.map(([kind, w, L, h]) => {
-      const B = vehicleModel(kind, null, w, L, h, kind === 'bus' || kind === 'boxtruck' ? null : paint, { lit: true });
+    this.kitDetail = !!this.E.q.detailCars;
+    this.kinds = this.kitDetail ? DETAIL_KINDS : KINDS;
+    this.kits = this.kinds.map(([kind, w, L, h]) => {
+      const B = vehicleModel(kind, null, w, L, h, kind === 'bus' || kind === 'boxtruck' ? null : paint, { lit: true, lod: 'low' });
+      if (this.kitDetail && CAR_BY_ID[kind]) return { kind, L, parts: crowdParts(B, paint) };
       const parts = [];
       for (const [mat, geos] of B.parts) parts.push({ mat, geo: geos.length === 1 ? geos[0] : mergeGeometries(geos, false) });
       return { kind, L, parts };
@@ -51,7 +61,7 @@ export class Life {
     this.cars = [];
     this.walkers = [];
     this.meshes = [];
-    if (!this.kits) this.makeKits();
+    if (!this.kits || this.kitDetail !== !!this.E.q.detailCars) this.makeKits();
     const r = this.r;
     const W = state.lot.width;
     const road = plan.road;
@@ -59,7 +69,7 @@ export class Life {
     // Traffic: a pool per kind, cars spaced out along both lanes.
     if (state.site.road !== false) {
       const total = 18;
-      const weights = KINDS.map((k) => k[4]);
+      const weights = this.kinds.map((k) => k[4]);
       const sum = weights.reduce((a, b) => a + b, 0);
       const per = this.kits.map(() => []);
       for (let i = 0; i < total; i++) {
@@ -114,6 +124,8 @@ export class Life {
   }
 
   tick(dt, t) {
+    // A change of graphics quality swaps the traffic for the other set of models.
+    if (this.kits && this.state && this.kitDetail !== !!this.E.q.detailCars) this.setup(this.state, this.plan);
     // Traffic
     if (this.meshes) {
       const { m, q, one, up, at } = TMP;
@@ -155,6 +167,13 @@ export class Life {
       if (!mv || !mv.length) continue;
       for (const part of mv) {
         if (part.userData.spin) part.rotation.z += part.userData.spin.speed * dt;
+        if (part.userData.turn) part.rotation.y += part.userData.turn * dt;
+        if (part.userData.sway) {
+          // Air dancers: a lazy lean one way and the other, with a fast flutter on top.
+          const sw = part.userData.sway;
+          part.rotation.z = Math.sin(t * 1.7 + sw.phase) * 0.35 + Math.sin(t * 7.3 + sw.phase * 2) * 0.08;
+          part.rotation.x = Math.sin(t * 1.1 + sw.phase * 3) * 0.2;
+        }
         if (part.userData.pan) {
           // PTZ cameras patrol back and forth.
           const pz = part.userData.pan;
