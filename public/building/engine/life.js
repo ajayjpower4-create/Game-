@@ -19,6 +19,7 @@ const KINDS = [['car', 6, 15, 4.8, 5], ['hatch', 5.8, 13, 4.9, 3], ['suv', 6.4, 
 const DETAIL_KINDS = [
   ['toyota-camry', 4], ['toyota-rav4', 4], ['honda-civic', 3], ['ford-f150', 3], ['tesla-model3', 2], ['chevrolet-tahoe', 2],
   ['honda-odyssey', 1], ['bmw-x5', 1], ['jeep-grandcherokee', 2], ['mercedes-sprinter', 1],
+  ['chevrolet-silverado', 2], ['honda-crv', 2], ['tesla-modely', 2], ['toyota-tacoma', 1],
 ].map(([id, wt]) => [id, CAR_BY_ID[id].W, CAR_BY_ID[id].L, CAR_BY_ID[id].H, wt]).concat([['boxtruck', 8, 26, 12.5, 1], ['bus', 8.4, 40, 10.5, 0.4]]);
 
 export class Life {

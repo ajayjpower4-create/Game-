@@ -15,7 +15,8 @@
 import * as THREE from 'three';
 import { Builder, boxGeo, cylGeo } from './builder.js';
 import * as M from './materials.js';
-import { TRUCK_BY_ID } from '../vehiclelist.js';
+import { TRUCK_BY_ID, TRAILER_BY_ID } from '../vehiclelist.js';
+import { trailerModel, shiftBuilder } from './trailers.js';
 import { Shell, Skin, loft, decal, ribbon, stud, mirrored, plate, badge, lettering, roundRect, ellipse, gapMat, BLACK, spline, carWheel } from './cars.js';
 
 const PI = Math.PI;
@@ -706,7 +707,19 @@ TMODELS['kenworth-w900'] = (B, T, paint, o) => {
 
 export function isTruck(id) { return !!TMODELS[id] && !!TRUCK_BY_ID[id]; }
 
-/** Build one tractor. Returns a Builder, like vehicleModel. */
+/** Where a trailer's front edge sits behind the bumper: its kingpin, 3 ft
+ *  back, over the fifth wheel. */
+function trailerFront(T) { return T.fo + T.wb - 0.7 - 3; }
+
+/** Bumper to back of the rig, with a trailer on or not. */
+export function rigLength(truckId, trailerId) {
+  const T = TRUCK_BY_ID[truckId];
+  const Tr = TRAILER_BY_ID[trailerId];
+  if (!T) return 0;
+  return Tr ? Math.max(T.L, trailerFront(T) + Tr.L) : T.L;
+}
+
+/** Build one tractor (with its trailer, if it has one). Returns a Builder, like vehicleModel. */
 export function truckModel(id, color, paintOverride = null, opts = {}) {
   const T = TRUCK_BY_ID[id];
   const B = new Builder();
@@ -716,5 +729,15 @@ export function truckModel(id, color, paintOverride = null, opts = {}) {
   }
   const paint = paintOverride || M.carPaint(color || T.color);
   TMODELS[id](B, T, paint, opts);
+  const Tr = TRAILER_BY_ID[opts.trailer];
+  if (!Tr) return B;
+  // A rig: the tractor up front, the trailer coupled on behind, the pair centred.
+  const Lc = rigLength(id, opts.trailer);
+  shiftBuilder(B, -Lc / 2 + T.L / 2);
+  const TB = shiftBuilder(trailerModel(opts.trailer, opts.trailerColor, null, opts), -Lc / 2 + trailerFront(T) + Tr.L / 2);
+  for (const [mat, geos] of TB.parts) {
+    if (!B.parts.has(mat)) B.parts.set(mat, []);
+    B.parts.get(mat).push(...geos);
+  }
   return B;
 }

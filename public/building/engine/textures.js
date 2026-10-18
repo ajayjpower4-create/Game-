@@ -378,6 +378,36 @@ const builders = {
     return { map: tex(col, { tileX: 3 }), normalMap: tex(normalMap(h, s, s, 4), { srgb: false, tileX: 3 }), roughnessMap: tex(rough, { srgb: false, tileX: 3 }) };
   },
 
+  splitface() {
+    // Split-face block: 16 x 8 in units in running bond (3 across, 6 courses
+    // per 4 ft tile), each face rough and speckled with aggregate.
+    const s = SIZE;
+    const courses = 6;
+    const per = 3;
+    const ch = s / courses;
+    const bw = s / per;
+    const r = rng(181);
+    const n = fbmField(s, { base: 32, octaves: 3, seed: 182 });
+    const m = fbmField(s, { base: 6, octaves: 3, seed: 183 });
+    const shade = [];
+    for (let i = 0; i < courses * per * 2; i++) shade.push(0.94 + r() * 0.09);
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const row = Math.floor(y / ch);
+      const off = row % 2 ? bw / 2 : 0;
+      const bx = (x + off) % s;
+      const k = Math.floor(bx / bw);
+      const inMortar = y % ch < 2 || bx % bw < 2;
+      const rough = n(x, y);
+      h[y * s + x] = inMortar ? 0 : 0.45 + rough * 0.5;
+      if (inMortar) return 196;
+      const speck = r() < 0.05 ? 0.8 : 1;
+      return clamp255(226 * shade[row * per + k] * (0.86 + rough * 0.2 + (m(x, y) - 0.5) * 0.06) * speck);
+    });
+    const rough = paint(canvas(s), () => 245);
+    return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 7), { srgb: false, tileX: 4 }), roughnessMap: tex(rough, { srgb: false, tileX: 4 }) };
+  },
+
   stone() {
     const s = SIZE;
     const rows = 4;
@@ -1055,6 +1085,148 @@ export function panelTexture({ text = '', sub = '', logo = '', color = '#ffffff'
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
   return t;
+}
+
+/** A retail brand panel: bold italic lettering over a row of short dashes,
+ *  the way big car stores letter their towers and pylons. */
+export function brandTexture({ text = 'Auto Superstore', color = '#ffd23f', accent = '#ffd23f', bg = '#1d4f9c', aspect = 4, frame = '' }) {
+  const W = 1024;
+  const H = Math.max(96, Math.round(W / aspect));
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  if (frame) {
+    g.strokeStyle = frame;
+    g.lineWidth = H * 0.04;
+    g.strokeRect(H * 0.02, H * 0.02, W - H * 0.04, H - H * 0.04);
+  }
+  const fam = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+  // On a tall panel a two-word name stacks onto two lines.
+  const words = String(text).split(/\s+/).filter(Boolean);
+  let lines = [String(text)];
+  if (aspect < 2.2 && words.length > 1) {
+    let best = 1;
+    let diff = Infinity;
+    for (let k = 1; k < words.length; k++) {
+      const d = Math.abs(words.slice(0, k).join(' ').length - words.slice(k).join(' ').length);
+      if (d < diff) { diff = d; best = k; }
+    }
+    lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
+  }
+  let size = (H * 0.52) / lines.length;
+  g.font = `italic 800 ${size}px ${fam}`;
+  const widest = () => Math.max(...lines.map((l) => g.measureText(l).width));
+  while (widest() > W * 0.86 && size > 10) { size *= 0.94; g.font = `italic 800 ${size}px ${fam}`; }
+  g.fillStyle = color;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const lead = size * 1.05;
+  const ty = H * 0.44 - (lead * (lines.length - 1)) / 2;
+  lines.forEach((l, i) => g.fillText(l, W / 2, ty + i * lead));
+  // The dashes: a row of short slanted bars under the name.
+  const tw = Math.min(W * 0.86, widest());
+  const dy = ty + (lines.length - 1) * lead + size * 0.62;
+  const dh = Math.max(4, size * 0.13);
+  const n = 7;
+  const gap = tw / n;
+  g.fillStyle = accent;
+  for (let i = 0; i < n; i++) {
+    const x = W / 2 - tw / 2 + i * gap + gap * 0.12;
+    const w = gap * 0.7;
+    g.beginPath();
+    g.moveTo(x + dh * 0.4, dy);
+    g.lineTo(x + w + dh * 0.4, dy);
+    g.lineTo(x + w, dy + dh);
+    g.lineTo(x, dy + dh);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+/** A lot direction sign: one line per destination, each led by a solid
+ *  triangle pointing the way. Lines are split on "/" or "|"; a line that
+ *  starts with < > ^ or v points left, right, ahead or back. */
+export function wayTexture({ text = '< carriers / > service / ^ sales', color = '#ffd23f', arrow = '#ffffff', bg = '#1d4f9c', aspect = 1.2 }) {
+  const W = 768;
+  const H = Math.max(96, Math.round(W / aspect));
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  g.fillStyle = bg;
+  g.fillRect(0, 0, W, H);
+  const lines = String(text).split(/[/|\n]/).map((l) => l.trim()).filter(Boolean).slice(0, 6);
+  const n = Math.max(1, lines.length);
+  const row = H / n;
+  const fam = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+  let size = row * 0.56;
+  const words = lines.map((l) => l.replace(/^[<>^vV←→↑↓]\s*/, ''));
+  g.font = `700 ${size}px ${fam}`;
+  const widest = Math.max(...words.map((w) => g.measureText(w).width), 1);
+  const room = W - row * 1.15 - W * 0.06;
+  if (widest > room) size *= room / widest;
+  g.font = `700 ${size}px ${fam}`;
+  g.textBaseline = 'middle';
+  g.textAlign = 'left';
+  lines.forEach((l, i) => {
+    const y = row * (i + 0.5);
+    const ch = l[0];
+    const dir = { '<': 'l', '←': 'l', '>': 'r', '→': 'r', '^': 'u', '↑': 'u', v: 'd', V: 'd', '↓': 'd' }[ch];
+    const ax = W * 0.05 + row * 0.33;
+    const s = row * 0.3;
+    if (dir) {
+      g.fillStyle = arrow;
+      g.beginPath();
+      if (dir === 'l') { g.moveTo(ax - s, y); g.lineTo(ax + s * 0.8, y - s); g.lineTo(ax + s * 0.8, y + s); }
+      if (dir === 'r') { g.moveTo(ax + s, y); g.lineTo(ax - s * 0.8, y - s); g.lineTo(ax - s * 0.8, y + s); }
+      if (dir === 'u') { g.moveTo(ax, y - s); g.lineTo(ax + s, y + s * 0.8); g.lineTo(ax - s, y + s * 0.8); }
+      if (dir === 'd') { g.moveTo(ax, y + s); g.lineTo(ax + s, y - s * 0.8); g.lineTo(ax - s, y - s * 0.8); }
+      g.fill();
+    }
+    g.fillStyle = color;
+    g.fillText(words[i], W * 0.05 + row * 0.9, y + size * 0.04);
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+/** The DO NOT ENTER sign: a red disc with a white bar on a white square. */
+let NO_ENTRY = null;
+export function noEntryTexture() {
+  if (NO_ENTRY) return NO_ENTRY;
+  const S = 512;
+  const c = document.createElement('canvas');
+  c.width = S;
+  c.height = S;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f6f6f2';
+  g.fillRect(0, 0, S, S);
+  g.strokeStyle = '#c8102e';
+  g.lineWidth = 6;
+  g.strokeRect(12, 12, S - 24, S - 24);
+  g.fillStyle = '#c8102e';
+  g.beginPath();
+  g.arc(S / 2, S / 2, S * 0.44, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#ffffff';
+  g.fillRect(S * 0.14, S * 0.44, S * 0.72, S * 0.12);
+  g.font = `800 ${S * 0.13}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('DO NOT', S / 2, S * 0.3);
+  g.fillText('ENTER', S / 2, S * 0.7);
+  NO_ENTRY = new THREE.CanvasTexture(c);
+  NO_ENTRY.colorSpace = THREE.SRGBColorSpace;
+  NO_ENTRY.anisotropy = 8;
+  return NO_ENTRY;
 }
 
 /** Neon script: glowing tubes on a clear backing, in a handwritten face. */

@@ -1128,8 +1128,8 @@ function badge(B, cx, view, a, b, r, mat = null) {
   const ring = new THREE.TorusGeometry(r * 0.9, r * 0.1, 6, 28);
   stud(B, ring, M.alloy('#dfe3e7', 0.15), cx.skin, view, a, b, { off: 0.03, mirror: false });
 }
-function lettering(B, cx, view, text, a, b, w) {
-  decal(B, nameMat(text), cx.skin, view, roundRect(a, b, w, w * 0.19, 0.01), { off: 0.012, mirror: false, uv: 'fit', sub: 1 });
+function lettering(B, cx, view, text, a, b, w, off = 0.012) {
+  decal(B, nameMat(text), cx.skin, view, roundRect(a, b, w, w * 0.19, 0.01), { off, mirror: false, uv: 'fit', sub: 1 });
 }
 
 /* ================================================================ public */
@@ -2190,6 +2190,378 @@ MODELS['jeep-grandcherokee'] = {
       hood: 0.03, hoodOpts: { curve: 0.25 }, hatch: { w: 2.5, y0: 2.5, y1: 5.6 }, rearWiper: 4.6, brake: 5.65, rails: [0.43, 0.9],
       plates: { front: 2.05, rear: 2.85 },
     });
+  },
+};
+
+/* ================================================================ third models */
+
+/* Toyota Tacoma: a mid-size double-cab pickup — a big honeycomb grille between
+ * slim lamps, a black off-road bumper with red tow hooks, a 5 ft bed. */
+MODELS['toyota-tacoma'] = {
+  spec: {
+    tireW: 0.87, archGap: 0.28, bed: [0.69, 1],
+    wheel: { style: 'six', rimColor: '#3a3e43', rimR: 0.708, nuts: 6, rough: 0.4 },
+    lines: {
+      top: [[0, 3.85], [0.005, 4.02], [0.015, 4.1], [0.06, 4.15], [0.2, 4.28], [0.27, 4.42], [0.285, 4.48], [0.68, 4.55], [0.69, 4.58], [0.995, 4.58], [1, 4.5]],
+      shoulder: [[0, 3.7], [0.005, 3.92], [0.015, 4.0], [0.27, 4.32], [0.285, 4.4], [0.68, 4.48], [0.69, 4.55], [0.99, 4.55], [1, 4.4]],
+      bottom: [[0, 1.6], [0.01, 1.45], [0.04, 1.5], [0.1, 1.62], [0.9, 1.65], [0.995, 1.7], [1, 1.9]],
+      plan: [[0, 0.9], [0.005, 0.95], [0.015, 0.985], [0.04, 1], [0.97, 1], [0.995, 0.99], [1, 0.97]],
+      tuck: 0.03, shR: 0.14, botR: 0.16, topIn: 0.01,
+    },
+    glass: {
+      a0: 0.285, a1: 0.4, c0: 0.655, r1: 0.675,
+      roof: [[0.285, 4.5], [0.4, 5.85], [0.5, 6.02], [0.635, 6.0], [0.655, 5.92], [0.675, 4.62]],
+      edge: [[0.285, 4.48], [0.4, 5.65], [0.5, 5.8], [0.655, 5.72], [0.675, 4.6]],
+      belt: [[0.285, 4.48], [0.675, 4.56]],
+      inset: 0.28, tumble: 0.34,
+    },
+  },
+  details(B, cx) {
+    const { skin } = cx;
+    headlamp(B, cx, [[1.8, 4.0], [2.72, 3.98], [2.88, 3.78], [2.8, 3.58], [1.9, 3.62]], { projectors: [[2.22, 3.8, 0.12], [2.55, 3.8, 0.11]], drl: [[1.9, 3.95], [2.72, 3.93], [2.84, 3.75]] });
+    grille(B, cx, [[-1.7, 4.0], [1.7, 4.0], [1.85, 3.5], [1.7, 2.55], [-1.7, 2.55], [-1.85, 3.5]], { mesh: M.grilleMesh('#1f2124'), frame: BLACK(), frameW: 0.1 });
+    lettering(B, cx, 'front', 'TOYOTA', 0, 3.3, 1.7, 0.035);
+    decal(B, M.cladding(), skin, 'front', [[-2.8, 2.45], [2.8, 2.45], [2.75, 1.6], [-2.75, 1.6]], { off: 0.03, mirror: false });
+    for (const s of [1, -1]) {
+      decal(B, cx.drl, skin, 'front', roundRect(s * 2.35, 2.05, 0.45, 0.18, 0.06), { off: 0.05, mirror: false, sub: 1 });
+      B.box(M.painted('#c32020', 0.4), 0.22, 0.3, 0.4, s * 1.45, 1.9, -cx.L / 2 - 0.05);
+    }
+    B.box(M.metal('#1f2124', 0.6), 2.6, 0.1, 1.8, 0, 1.5, -cx.L / 2 + 0.9);
+    taillamp(B, cx, [[2.62, 4.5], [3.0, 4.5], [3.0, 3.3], [2.62, 3.3]], { leds: [[[2.81, 4.38], [2.81, 3.42]]], reverse: [[2.66, 3.85], [2.96, 3.85], [2.96, 3.6], [2.66, 3.6]] });
+    hatchLines(B, cx, { w: 2.55, y0: 2.7, y1: 4.56 });
+    lettering(B, cx, 'rear', 'TACOMA', 0, 3.85, 2.2);
+    bumper(B, cx, 1, { y0: 1.75, y1: 2.55, mat: M.metal('#202225', 0.55), step: true });
+    pickupBed(B, cx, 0.69);
+    finish(B, cx, {
+      b: [0.47, 0.5], rear: { tb: 0.645, tt: 0.64, mat: 'paint' }, dlo: { mat: 'black', tTop: 0.64, down: 0.645 },
+      doors: [0.29, 0.475, 0.65], handles: [0.43, 0.61], handleMat: 'black', mirror: { t: 0.3, cap: 'black', size: 0.32, out: 0.5 },
+      hood: 0.02, hoodOpts: { inset: 0.1, curve: 0.08 }, flares: { w: 0.22, raise: 0.05 }, steps: [0.29, 0.64],
+      plates: { front: null, rear: null }, cabin: { rows: 1 },
+    });
+    decal(B, plate(), skin, 'rear', roundRect(0, 2.15, 1.0, 0.5, 0.04), { off: 0.38, mirror: false, uv: 'fit', sub: 1 });
+  },
+};
+
+/* Ford Bronco: a boxy four-door off-roader — round lamps set into a full-width
+ * black grille with the name across it, bolt-on square flares, a hard top and
+ * the spare on the swing gate. */
+MODELS['ford-bronco'] = {
+  spec: {
+    tireW: 0.9, archGap: 0.32, wellDepth: 1.6,
+    wheel: { style: 'six', rimColor: '#2a2c30', rimR: 0.708, rough: 0.4, nuts: 6 },
+    lines: {
+      top: [[0, 3.6], [0.004, 3.85], [0.012, 3.95], [0.15, 4.05], [0.255, 4.15], [0.27, 4.2], [0.995, 4.22], [1, 4.1]],
+      shoulder: [[0, 3.5], [0.004, 3.78], [0.012, 3.88], [0.255, 4.07], [0.27, 4.14], [0.995, 4.16], [1, 4.0]],
+      bottom: [[0, 2.05], [0.006, 1.85], [0.03, 1.85], [0.1, 1.98], [0.9, 1.98], [0.995, 2.0], [1, 2.2]],
+      plan: [[0, 0.88], [0.004, 0.92], [0.012, 0.93], [0.2, 0.935], [0.27, 0.95], [0.995, 0.95], [1, 0.94]],
+      tuck: 0, shR: 0.12, botR: 0.12, topIn: 0.005,
+    },
+    glass: {
+      a0: 0.27, a1: 0.32, c0: 0.975, r1: 0.99,
+      roof: [[0.27, 4.23], [0.32, 5.85], [0.35, 6.05], [0.97, 6.05], [0.975, 5.98], [0.99, 4.25]],
+      edge: [[0.27, 4.2], [0.32, 5.65], [0.35, 5.8], [0.975, 5.78], [0.99, 4.23]],
+      belt: [[0.27, 4.2], [0.99, 4.22]],
+      inset: 0.18, tumble: 0.22, bow: 0, roofMat: 'black', pillarMat: 'black',
+    },
+  },
+  details(B, cx) {
+    const { skin, Z } = cx;
+    // Full-width grille band, the name across it, round lamps at its ends.
+    decal(B, BLACK(), skin, 'front', [[-2.7, 3.82], [2.7, 3.82], [2.7, 2.8], [-2.7, 2.8]], { off: 0.012, mirror: false });
+    decal(B, M.grilleMesh('#1d1f22'), skin, 'front', [[-1.55, 3.62], [1.55, 3.62], [1.55, 3.0], [-1.55, 3.0]], { off: 0.018, mirror: false, sub: 3 });
+    lettering(B, cx, 'front', 'BRONCO', 0, 3.3, 2.0, 0.04);
+    for (const s of [1, -1]) {
+      headlamp(B, cx, ellipse(s * 2.15, 3.3, 0.38, 0.38, 28), { projectors: [[s * 2.15, 3.3, 0.15]] });
+      // The C of daytime light round each lamp.
+      const c = [];
+      for (let k = 0; k <= 20; k++) { const a = PI * 0.25 + (k / 20) * PI * 1.5; c.push([s * 2.15 + Math.cos(a) * 0.46 * -s, 3.3 + Math.sin(a) * 0.46]); }
+      ribbon(B, cx.drl, skin, 'front', c, 0.06, { off: 0.04, mirror: false });
+    }
+    B.box(M.metal('#1f2124', 0.6), 6.2, 0.75, 0.75, 0, 2.4, -cx.L / 2 - 0.15);
+    for (const s of [1, -1]) B.box(M.painted('#c32020', 0.4), 0.22, 0.32, 0.4, s * 1.5, 2.4, -cx.L / 2 - 0.62);
+    B.box(M.metal('#1f2124', 0.6), 2.8, 0.12, 1.8, 0, 1.6, -cx.L / 2 + 0.95);
+    archFlares(B, cx, { w: 0.45, raise: 0.22, square: true });
+    ribbon(B, BLACK(), skin, 'top', [[-2.6, Z(0.272)], [2.6, Z(0.272)]], 0.16, { off: 0.0, raise: 0.1, mirror: false });
+    // Back: tall lamps, the spare on the swing gate, a black bumper.
+    taillamp(B, cx, [[2.55, 3.95], [2.95, 3.95], [2.95, 2.85], [2.55, 2.85]], { leds: [[[2.62, 3.85], [2.88, 3.85], [2.88, 2.95]]] });
+    spareWheel(B, cx, 3.55, cx.L / 2 + 0.55, { style: 'six', rimColor: '#2a2c30' });
+    B.box(M.metal('#1f2124', 0.6), 6.0, 0.6, 0.6, 0, 2.4, cx.L / 2 + 0.1);
+    brakeLight(B, cx, 5.95, 0.6);
+    lettering(B, cx, 'side', 'BRONCO', Z(0.14), 3.35, 1.0);
+    finish(B, cx, {
+      b: [0.49, 0.52], mid: [[0.74, 0.765]], rear: { tb: 0.94, tt: 0.94, mat: 'black' },
+      doors: [0.275, 0.495, 0.75], handles: [0.455, 0.71], handleMat: 'black', mirror: { t: 0.285, cap: 'black', size: 0.3, out: 0.45 },
+      hood: 0.012, hoodOpts: { inset: 0.12, curve: 0.02 }, steps: [0.27, 0.72], plates: { front: null, rear: 2.95 }, cabin: { rows: 1 },
+    });
+  },
+};
+
+/* Chevrolet Silverado: a full-size crew-cab pickup — a tall chrome-framed
+ * grille split by a heavy bar with the emblem, slim lamps over C-shaped
+ * running lights, chrome bumpers and a 5 ft 8 in bed. */
+MODELS['chevrolet-silverado'] = {
+  spec: {
+    tireW: 0.9, archGap: 0.3, bed: [0.672, 1],
+    wheel: { style: 'split', rimColor: '#c9ced3', rimR: 0.833, nuts: 6 },
+    lines: {
+      top: [[0, 4.3], [0.004, 4.42], [0.012, 4.48], [0.05, 4.52], [0.2, 4.62], [0.27, 4.74], [0.285, 4.79], [0.665, 4.88], [0.672, 4.9], [0.995, 4.9], [1, 4.82]],
+      shoulder: [[0, 4.12], [0.004, 4.3], [0.012, 4.38], [0.27, 4.64], [0.285, 4.72], [0.665, 4.8], [0.672, 4.87], [0.99, 4.87], [1, 4.72]],
+      bottom: [[0, 1.55], [0.01, 1.45], [0.04, 1.5], [0.1, 1.65], [0.9, 1.7], [0.995, 1.75], [1, 1.95]],
+      plan: [[0, 0.94], [0.004, 0.98], [0.012, 0.997], [0.03, 1], [0.97, 1], [0.995, 0.99], [1, 0.97]],
+      tuck: 0.03, shR: 0.12, botR: 0.15, topIn: 0.01,
+    },
+    glass: {
+      a0: 0.285, a1: 0.385, c0: 0.64, r1: 0.66,
+      roof: [[0.285, 4.82], [0.385, 6.12], [0.5, 6.29], [0.62, 6.26], [0.64, 6.2], [0.66, 4.97]],
+      edge: [[0.285, 4.79], [0.385, 5.9], [0.5, 6.05], [0.64, 5.98], [0.66, 4.95]],
+      belt: [[0.285, 4.79], [0.66, 4.87]],
+      inset: 0.28, tumble: 0.32,
+    },
+  },
+  details(B, cx) {
+    const { skin } = cx;
+    grille(B, cx, [[-2.0, 4.3], [2.0, 4.3], [2.15, 2.95], [-2.15, 2.95]], {
+      mesh: M.grilleMesh('#24272b'), frame: M.alloy('#d9dde1', 0.18), frameW: 0.14,
+      bars: [[[-2.02, 3.85], [2.02, 3.85]]], barMat: M.alloy('#d9dde1', 0.18), barW: 0.24,
+    });
+    badge(B, cx, 'front', 0, 3.85, 0.3, M.painted('#d4a72c', 0.3));
+    headlamp(B, cx, [[2.2, 4.3], [3.12, 4.25], [3.25, 4.02], [2.2, 3.95]], { projectors: [[2.58, 4.12, 0.1], [2.92, 4.1, 0.1]], drl: [[2.25, 4.25], [3.12, 4.2]] });
+    ribbon(B, cx.drl, skin, 'front', [[3.22, 3.95], [3.28, 3.15], [3.0, 3.05]], 0.08, { off: 0.03, raise: 0.01 });
+    bumper(B, cx, -1, { y0: 1.7, y1: 2.9, mat: M.alloy('#c7ccd1', 0.28), lower: M.cladding(), fog: true });
+    taillamp(B, cx, [[2.9, 4.78], [3.32, 4.78], [3.32, 3.2], [2.9, 3.2]], { leds: [[[3.0, 4.65], [3.22, 4.65], [3.22, 3.32]]], reverse: [[2.95, 3.9], [3.28, 3.9], [3.28, 3.6], [2.95, 3.6]] });
+    hatchLines(B, cx, { w: 2.8, y0: 2.75, y1: 4.88 });
+    lettering(B, cx, 'rear', 'SILVERADO', 0, 3.9, 2.4);
+    bumper(B, cx, 1, { y0: 1.8, y1: 2.6, mat: M.alloy('#c7ccd1', 0.28), step: true });
+    pickupBed(B, cx, 0.672);
+    finish(B, cx, {
+      b: [0.47, 0.5], rear: { tb: 0.632, tt: 0.628, mat: 'paint' }, dlo: { mat: 'chrome', tTop: 0.63, down: 0.632 },
+      doors: [0.29, 0.475, 0.636], handles: [0.43, 0.6], handleMat: 'chrome', mirror: { t: 0.3, cap: 'chrome', size: 0.36, out: 0.55 },
+      hood: 0.03, hoodOpts: { inset: 0.1, curve: 0.05 }, steps: [0.29, 0.63], flares: { w: 0.16, raise: 0.04, mat: cx.paint },
+      plates: { front: null, rear: null }, cabin: { rows: 1 },
+    });
+    decal(B, plate(), skin, 'rear', roundRect(0, 2.2, 1.0, 0.5, 0.04), { off: 0.38, mirror: false, uv: 'fit', sub: 1 });
+  },
+};
+
+/* Honda CR-V: a smooth compact SUV — a broad black grille, slim lamps, black
+ * arch cladding, tail lamps running up the back pillars. */
+MODELS['honda-crv'] = {
+  spec: {
+    tireW: 0.77, archGap: 0.2, clad: true,
+    wheel: { style: 'multi', rimColor: '#3e4247', rimR: 0.75, rough: 0.3 },
+    lines: {
+      top: [[0, 2.6], [0.01, 2.95], [0.03, 3.22], [0.06, 3.38], [0.15, 3.5], [0.25, 3.68], [0.27, 3.76], [0.93, 3.92], [0.95, 3.9], [0.975, 3.82], [0.99, 3.6], [1, 3.25]],
+      shoulder: [[0, 2.5], [0.01, 2.85], [0.03, 3.12], [0.15, 3.38], [0.26, 3.65], [0.27, 3.7], [0.93, 3.86], [0.975, 3.7], [0.99, 3.45], [1, 3.1]],
+      bottom: [[0, 1.35], [0.012, 1.05], [0.04, 0.9], [0.1, 0.82], [0.85, 0.85], [0.94, 0.98], [0.985, 1.25], [1, 1.55]],
+      plan: [[0, 0.7], [0.012, 0.84], [0.04, 0.92], [0.09, 0.975], [0.16, 1], [0.86, 1], [0.94, 0.975], [0.98, 0.92], [1, 0.84]],
+      tuck: 0.05, shR: 0.2, botR: 0.22,
+    },
+    glass: {
+      a0: 0.27, a1: 0.41, c0: 0.915, r1: 0.96,
+      roof: [[0.27, 3.79], [0.41, 5.35], [0.55, 5.52], [0.85, 5.45], [0.915, 5.32], [0.96, 3.98]],
+      edge: [[0.27, 3.76], [0.41, 5.12], [0.55, 5.27], [0.88, 5.2], [0.915, 5.08], [0.96, 3.95]],
+      belt: [[0.27, 3.76], [0.7, 3.88], [0.96, 3.95]],
+      inset: 0.32, tumble: 0.42,
+    },
+  },
+  details(B, cx) {
+    const { skin } = cx;
+    headlamp(B, cx, [[1.55, 3.22], [2.6, 3.3], [2.85, 3.12], [2.75, 2.95], [1.65, 3.02]], { projectors: [[2.05, 3.13, 0.1], [2.4, 3.15, 0.1]], drl: [[1.65, 3.18], [2.6, 3.25], [2.78, 3.12]] });
+    grille(B, cx, [[-1.55, 3.12], [1.55, 3.12], [1.75, 2.55], [1.55, 2.05], [-1.55, 2.05], [-1.75, 2.55]], { mesh: M.grilleMesh('#1d1f22'), frame: BLACK() });
+    badge(B, cx, 'front', 0, 2.62, 0.22);
+    decal(B, M.cladding(), skin, 'front', [[-2.6, 1.85], [2.6, 1.85], [2.5, 1.2], [-2.5, 1.2]], { off: 0.012, mirror: false });
+    for (const s of [1, -1]) decal(B, cx.drl, skin, 'front', roundRect(s * 2.2, 1.55, 0.5, 0.14, 0.05), { off: 0.03, mirror: false, sub: 1 });
+    taillamp(B, cx, [[2.05, 3.8], [2.8, 3.85], [2.95, 3.6], [2.85, 3.4], [2.05, 3.45]], { leds: [[[2.15, 3.72], [2.8, 3.76], [2.9, 3.58]]] });
+    taillamp(B, cx, [[2.6, 4.75], [2.85, 4.6], [2.85, 3.9], [2.6, 3.9]], { leds: [[[2.72, 4.6], [2.72, 3.98]]] });
+    decal(B, M.cladding(), skin, 'rear', [[-2.7, 1.8], [2.7, 1.8], [2.75, 1.25], [-2.75, 1.25]], { off: 0.008, mirror: false });
+    lettering(B, cx, 'rear', 'CR-V', 0, 3.2, 0.8);
+    finish(B, cx, {
+      b: [0.52, 0.55], mid: [[0.75, 0.775]], rear: { tb: 0.875, tt: 0.85, mat: 'paint' }, dlo: { mat: 'chrome', tTop: 0.9, down: 0.875 },
+      doors: [0.28, 0.535, 0.76], handles: [0.475, 0.715], mirror: { t: 0.295, cap: 'paint', size: 0.3 },
+      hood: 0.045, hatch: { w: 2.35, y0: 2.4, y1: 5.15 }, rearWiper: 4.4, brake: 5.2, rails: [0.45, 0.88], flares: { w: 0.18, raise: 0.03 },
+      plates: { front: 1.5, rear: 2.7 },
+    });
+  },
+};
+
+/* Tesla Model Y: the Model 3 raised into a crossover — no grille, a glass
+ * roof sweeping down to a fastback hatch, flush handles, aero wheels. */
+MODELS['tesla-modely'] = {
+  spec: {
+    tireW: 0.8, archGap: 0.15,
+    wheel: { style: 'aero', rimColor: '#34373b', rimR: 0.79, rough: 0.35 },
+    lines: {
+      top: [[0, 2.1], [0.008, 2.4], [0.03, 2.65], [0.08, 2.8], [0.18, 2.98], [0.27, 3.25], [0.285, 3.32], [0.9, 3.72], [0.95, 3.75], [0.975, 3.7], [0.99, 3.55], [1, 3.15]],
+      shoulder: [[0, 2.05], [0.03, 2.58], [0.12, 2.8], [0.27, 3.18], [0.285, 3.27], [0.9, 3.66], [0.97, 3.65], [0.99, 3.4], [1, 3.05]],
+      bottom: [[0, 1.1], [0.01, 0.8], [0.04, 0.7], [0.88, 0.72], [0.96, 0.9], [0.99, 1.15], [1, 1.45]],
+      plan: [[0, 0.56], [0.015, 0.74], [0.045, 0.86], [0.1, 0.94], [0.2, 0.99], [0.85, 1], [0.94, 0.975], [0.98, 0.91], [1, 0.82]],
+      tuck: 0.06, shR: 0.3, botR: 0.25,
+    },
+    glass: {
+      a0: 0.285, a1: 0.45, c0: 0.66, r1: 0.9,
+      roof: [[0.285, 3.35], [0.45, 5.15], [0.54, 5.3], [0.63, 5.25], [0.66, 5.18], [0.9, 3.75]],
+      edge: [[0.285, 3.32], [0.45, 4.95], [0.54, 5.08], [0.66, 4.98], [0.9, 3.72]],
+      belt: [[0.285, 3.32], [0.9, 3.7]],
+      inset: 0.32, tumble: 0.5, roofMat: 'glass',
+    },
+  },
+  details(B, cx) {
+    const { skin } = cx;
+    headlamp(B, cx, [[1.65, 2.52], [2.65, 2.62], [2.9, 2.5], [2.8, 2.36], [1.8, 2.4]], { projectors: [[2.3, 2.48, 0.09]], drl: [[1.75, 2.47], [2.65, 2.56], [2.82, 2.48]], drlW: 0.04 });
+    decal(B, BLACK(), skin, 'front', [[-1.45, 1.55], [1.45, 1.55], [1.35, 1.22], [-1.35, 1.22]], { off: 0.01, mirror: false });
+    for (const s of [1, -1]) decal(B, BLACK(), skin, 'front', [[s * 2.05, 1.45], [s * 2.65, 1.55], [s * 2.65, 1.22], [s * 2.05, 1.18]], { off: 0.01, mirror: false });
+    badge(B, cx, 'front', 0, 2.25, 0.12);
+    taillamp(B, cx, [[1.75, 3.65], [2.75, 3.62], [3.0, 3.45], [2.9, 3.25], [2.55, 3.35], [1.85, 3.45]], { leds: [[[1.85, 3.56], [2.75, 3.54], [2.92, 3.4], [2.86, 3.3]]], ledW: 0.04 });
+    decal(B, M.plastic('#141517', 0.75), skin, 'rear', [[-2.55, 1.55], [2.55, 1.55], [2.45, 1.05], [-2.45, 1.05]], { off: 0.008, mirror: false });
+    lettering(B, cx, 'rear', 'TESLA', 0, 3.3, 0.9);
+    finish(B, cx, {
+      b: [0.53, 0.56], rear: { tb: 0.8, tt: 0.66, mat: 'black' }, dlo: { mat: 'black', tTop: 0.66, down: 0.8 },
+      doors: [0.29, 0.535, 0.8], handles: [0.5, 0.755], handleMat: 'black', mirror: { t: 0.31, cap: 'paint' },
+      hood: 0.05, hoodOpts: { curve: 0.4 }, hatch: { w: 2.2, y0: 2.5, y1: 4.6 }, plates: { front: null, rear: 2.7 },
+    });
+  },
+};
+
+/* BMW M4: a wide two-door coupe — tall kidney grilles with horizontal slats
+ * reaching down into the bumper, big intakes, fender vents, a carbon roof
+ * and four tailpipes. */
+MODELS['bmw-m4'] = {
+  spec: {
+    tireW: 0.86, archGap: 0.13,
+    wheel: { style: 'multi', rimColor: '#2a2c30', rimR: 0.79, caliper: '#2a5bd0', rough: 0.3 },
+    lines: {
+      top: [[0, 1.95], [0.008, 2.25], [0.03, 2.45], [0.08, 2.55], [0.17, 2.7], [0.3, 3.02], [0.315, 3.08], [0.84, 3.33], [0.89, 3.36], [0.955, 3.35], [0.985, 3.26], [1, 2.85]],
+      shoulder: [[0, 1.88], [0.03, 2.38], [0.1, 2.5], [0.3, 2.95], [0.315, 3.02], [0.84, 3.27], [0.96, 3.28], [0.99, 3.1], [1, 2.75]],
+      bottom: [[0, 0.85], [0.01, 0.55], [0.04, 0.45], [0.88, 0.48], [0.96, 0.68], [0.99, 0.95], [1, 1.2]],
+      plan: [[0, 0.6], [0.012, 0.77], [0.035, 0.88], [0.08, 0.95], [0.15, 0.99], [0.27, 0.985], [0.45, 0.97], [0.65, 1], [0.86, 1], [0.94, 0.975], [0.98, 0.9], [1, 0.8]],
+      tuck: 0.07, shR: 0.22, botR: 0.2,
+    },
+    glass: {
+      a0: 0.315, a1: 0.47, c0: 0.62, r1: 0.85,
+      roof: [[0.315, 3.11], [0.47, 4.38], [0.54, 4.52], [0.6, 4.45], [0.62, 4.38], [0.85, 3.36]],
+      edge: [[0.315, 3.08], [0.47, 4.22], [0.54, 4.34], [0.62, 4.2], [0.85, 3.33]],
+      belt: [[0.315, 3.08], [0.85, 3.33]],
+      inset: 0.38, tumble: 0.5, roofMat: 'black',
+    },
+  },
+  details(B, cx) {
+    const { skin, Z } = cx;
+    for (const s of [1, -1]) {
+      const k = roundRect(s * 0.45, 1.85, 0.78, 1.15, 0.22, 4);
+      decal(B, BLACK(), skin, 'front', k, { off: 0.012, mirror: false });
+      for (let y = 1.42; y <= 2.3; y += 0.11) ribbon(B, M.pianoBlack(), skin, 'front', [[s * 0.45 - 0.33, y], [s * 0.45 + 0.33, y]], 0.04, { off: 0.03, raise: 0.02, mirror: false });
+      ribbon(B, M.chrome(), skin, 'front', k, 0.05, { off: 0.02, raise: 0.04, closed: true, mirror: false });
+      decal(B, BLACK(), skin, 'front', [[s * 1.45, 1.55], [s * 2.6, 1.72], [s * 2.7, 0.95], [s * 1.55, 0.88]], { off: 0.012, mirror: false });
+    }
+    headlamp(B, cx, [[1.05, 2.42], [2.2, 2.5], [2.75, 2.35], [2.7, 2.15], [1.15, 2.2]], { projectors: [[1.6, 2.32, 0.1], [1.95, 2.34, 0.1]], drl: [[1.3, 2.4], [2.15, 2.45], [2.28, 2.25]] });
+    badge(B, cx, 'front', 0, 2.62, 0.15);
+    decal(B, BLACK(), skin, 'side', [[Z(0.17), 2.45], [Z(0.22), 2.5], [Z(0.22), 2.38], [Z(0.17), 2.35]], { off: 0.01 });
+    taillamp(B, cx, [[1.3, 3.2], [2.5, 3.25], [2.95, 3.15], [2.95, 2.9], [2.5, 2.9], [2.5, 3.05], [1.35, 3.05]], { leds: [[[1.45, 3.15], [2.45, 3.18], [2.85, 3.1], [2.85, 2.98]]] });
+    decal(B, M.plastic('#121314', 0.6), skin, 'rear', [[-2.6, 1.25], [2.6, 1.25], [2.45, 0.7], [-2.45, 0.7]], { off: 0.008, mirror: false });
+    exhaust(B, cx, [[-2.15, 0.9], [-1.78, 0.9], [1.78, 0.9], [2.15, 0.9]], { r: 0.15 });
+    lettering(B, cx, 'rear', 'M4', 2.0, 2.75, 0.4);
+    badge(B, cx, 'rear', 0, 2.95, 0.15);
+    ribbon(B, cx.paint, skin, 'rear', [[-1.8, 3.35], [1.8, 3.35]], 0.1, { off: 0, raise: 0.07, mirror: false });
+    finish(B, cx, {
+      rear: { tb: 0.7, tt: 0.62, mat: 'paint' }, dlo: { mat: 'black', tTop: 0.62, down: 0.7 },
+      doors: [0.32, 0.62], handles: [0.57], handleMat: 'black', mirror: { t: 0.34, cap: 'black' },
+      hood: 0.04, hoodOpts: { curve: 0.35 }, trunk: 0.86, fin: 0.6, plates: { front: null, rear: 2.4 },
+      cabin: { rows: 1, rowGap: 2.5 },
+    });
+  },
+};
+
+/* Mercedes-Benz C-Class: a compact luxury saloon — a wide grille with the big
+ * star in its centre bar, slim lamps, chrome window line, two-piece tail lamps. */
+MODELS['mercedes-cclass'] = {
+  spec: {
+    tireW: 0.74, archGap: 0.13,
+    wheel: { style: 'five', rimColor: '#b9bfc5', rimR: 0.75 },
+    lines: {
+      top: [[0, 2.02], [0.008, 2.32], [0.03, 2.52], [0.08, 2.62], [0.17, 2.77], [0.285, 3.06], [0.3, 3.13], [0.82, 3.44], [0.88, 3.48], [0.95, 3.47], [0.985, 3.37], [1, 2.96]],
+      shoulder: [[0, 1.94], [0.03, 2.44], [0.1, 2.57], [0.285, 2.99], [0.3, 3.07], [0.82, 3.38], [0.96, 3.39], [0.99, 3.21], [1, 2.86]],
+      bottom: [[0, 0.95], [0.01, 0.62], [0.04, 0.52], [0.88, 0.55], [0.96, 0.75], [0.99, 1.0], [1, 1.25]],
+      plan: [[0, 0.62], [0.012, 0.78], [0.035, 0.88], [0.08, 0.95], [0.15, 0.99], [0.86, 1], [0.94, 0.975], [0.98, 0.9], [1, 0.8]],
+      tuck: 0.06, shR: 0.22, botR: 0.22,
+    },
+    glass: {
+      a0: 0.3, a1: 0.455, c0: 0.69, r1: 0.825,
+      roof: [[0.3, 3.16], [0.455, 4.6], [0.55, 4.72], [0.66, 4.65], [0.69, 4.57], [0.825, 3.48]],
+      edge: [[0.3, 3.13], [0.455, 4.44], [0.55, 4.54], [0.69, 4.4], [0.825, 3.45]],
+      belt: [[0.3, 3.13], [0.825, 3.44]],
+      inset: 0.3, tumble: 0.5,
+    },
+  },
+  details(B, cx) {
+    const { skin } = cx;
+    grille(B, cx, [[-1.15, 2.42], [1.15, 2.42], [1.3, 1.72], [-1.3, 1.72]], { mesh: M.grilleMesh('#1d1f22'), frame: M.chrome(), frameW: 0.07, bars: [[[-1.2, 2.08], [1.2, 2.08]]], barW: 0.12 });
+    badge(B, cx, 'front', 0, 2.08, 0.25, M.pianoBlack());
+    headlamp(B, cx, [[1.25, 2.45], [2.3, 2.52], [2.75, 2.36], [2.7, 2.18], [1.35, 2.25]], { projectors: [[1.85, 2.36, 0.1], [2.2, 2.37, 0.1]], drl: [[1.4, 2.42], [2.28, 2.47], [2.62, 2.34]] });
+    for (const s of [1, -1]) decal(B, BLACK(), skin, 'front', [[s * 1.6, 1.62], [s * 2.6, 1.72], [s * 2.65, 1.05], [s * 1.7, 1.0]], { off: 0.012, mirror: false });
+    taillamp(B, cx, [[1.1, 3.27], [2.45, 3.3], [2.95, 3.17], [2.95, 2.98], [1.2, 3.03]], { leds: [[[1.25, 3.2], [2.45, 3.22], [2.85, 3.12]], [[1.3, 3.08], [2.85, 3.04]]] });
+    ribbon(B, M.chrome(), skin, 'rear', [[-1.05, 3.02], [1.05, 3.02]], 0.05, { off: 0.012, raise: 0.02, mirror: false });
+    decal(B, M.plastic('#141517', 0.75), skin, 'rear', [[-2.5, 1.3], [2.5, 1.3], [2.4, 0.8], [-2.4, 0.8]], { off: 0.008, mirror: false });
+    for (const s of [1, -1]) decal(B, M.chrome(), skin, 'rear', roundRect(s * 1.95, 1.0, 0.65, 0.2, 0.05), { off: 0.02, mirror: false, sub: 1 });
+    lettering(B, cx, 'rear', 'C 300', 1.9, 2.9, 0.6);
+    badge(B, cx, 'rear', 0, 3.1, 0.2, M.chrome());
+    finish(B, cx, {
+      b: [0.535, 0.565], rear: { tb: 0.775, tt: 0.69, mat: 'paint' }, dlo: { mat: 'chrome', tTop: 0.69, down: 0.77 },
+      doors: [0.305, 0.54, 0.775], handles: [0.5, 0.735], handleMat: 'chrome', mirror: { t: 0.325, cap: 'paint' },
+      hood: 0.04, hoodOpts: { curve: 0.35 }, trunk: 0.835, fin: 0.68, plates: { front: 1.35, rear: 2.45 },
+    });
+  },
+};
+
+/* Jeep Gladiator: the Wrangler's front and cab with a 5 ft pickup bed behind —
+ * seven slots, round lamps, wide flares, a steel bumper and rock rails. */
+MODELS['jeep-gladiator'] = {
+  spec: {
+    tireW: 0.9, archGap: 0.34, wellDepth: 1.7, bed: [0.69, 1],
+    wheel: { style: 'five', rimColor: '#2a2c30', rimR: 0.708, rough: 0.4 },
+    lines: {
+      top: [[0, 3.3], [0.0035, 3.7], [0.0085, 3.95], [0.013, 4.05], [0.215, 4.18], [0.232, 4.25], [0.242, 4.3], [0.995, 4.32], [1, 4.2]],
+      shoulder: [[0, 3.2], [0.0035, 3.62], [0.013, 3.98], [0.215, 4.12], [0.242, 4.25], [0.995, 4.26], [1, 4.15]],
+      bottom: [[0, 2.15], [0.005, 1.9], [0.017, 1.9], [0.07, 2.05], [0.92, 2.05], [0.99, 2.05], [1, 2.2]],
+      plan: [[0, 0.8], [0.0035, 0.84], [0.013, 0.85], [0.17, 0.86], [0.242, 0.88], [0.995, 0.88], [1, 0.87]],
+      tuck: 0, shR: 0.1, botR: 0.1, topIn: 0.005,
+    },
+    glass: {
+      a0: 0.242, a1: 0.272, c0: 0.67, r1: 0.68,
+      roof: [[0.242, 4.33], [0.272, 5.95], [0.295, 6.13], [0.665, 6.1], [0.67, 6.05], [0.68, 4.35]],
+      edge: [[0.242, 4.3], [0.272, 5.8], [0.295, 5.92], [0.67, 5.88], [0.68, 4.33]],
+      belt: [[0.242, 4.3], [0.68, 4.32]],
+      inset: 0.15, tumble: 0.18, bow: 0, roofMat: 'black', pillarMat: 'black',
+    },
+  },
+  details(B, cx) {
+    const { skin, Z } = cx;
+    for (const x of [-1.65, -1.1, -0.55, 0, 0.55, 1.1, 1.65]) decal(B, BLACK(), skin, 'front', roundRect(x, 3.35, 0.3, 1.0, 0.13), { off: 0.012, mirror: false, sub: 1 });
+    for (const s of [1, -1]) {
+      headlamp(B, cx, ellipse(s * 2.05, 3.45, 0.42, 0.42, 28), { projectors: [[s * 2.05, 3.45, 0.16]] });
+      ribbon(B, cx.drl, skin, 'front', ellipse(s * 2.05, 3.45, 0.36, 0.36, 28), 0.04, { off: 0.045, closed: true, mirror: false });
+      ribbon(B, BLACK(), skin, 'front', ellipse(s * 2.05, 3.45, 0.47, 0.47, 28), 0.08, { off: 0.03, raise: 0.03, closed: true, mirror: false });
+    }
+    B.box(M.metal('#1f2124', 0.6), 6.4, 0.7, 0.75, 0, 2.35, -cx.L / 2 - 0.15);
+    for (const s of [1, -1]) B.box(M.painted('#c32020', 0.4), 0.22, 0.32, 0.4, s * 1.55, 2.35, -cx.L / 2 - 0.62);
+    B.box(M.metal('#1f2124', 0.6), 3.0, 0.12, 2.0, 0, 1.55, -cx.L / 2 + 1.0);
+    archFlares(B, cx, { w: 0.62, raise: 0.32, square: true });
+    for (const s of [1, -1]) B.box(BLACK(), 0.18, 0.2, 0.35, s * 2.45, 4.15, Z(0.205));
+    ribbon(B, cx.paint, skin, 'top', [[-2.45, Z(0.244)], [2.45, Z(0.244)]], 0.18, { off: 0.0, raise: 0.12, mirror: false });
+    const hx = cx.W / 2 * 0.88 + 0.04;
+    for (const [t, y] of [[0.25, 3.9], [0.25, 2.75], [0.44, 3.9], [0.44, 2.75]]) for (const s of [1, -1]) B.box(BLACK(), 0.12, 0.28, 0.32, s * hx, y, Z(t));
+    for (const s of [1, -1]) B.box(M.metal('#1f2124', 0.6), 0.35, 0.3, Z(0.65) - Z(0.24), s * (hx + 0.06), 1.95, (Z(0.24) + Z(0.65)) / 2);
+    taillamp(B, cx, [[2.15, 4.2], [2.62, 4.2], [2.62, 3.35], [2.15, 3.35]], { leds: [[[2.38, 4.1], [2.38, 3.45]]] });
+    hatchLines(B, cx, { w: 2.1, y0: 2.8, y1: 4.3 });
+    lettering(B, cx, 'rear', 'JEEP', 0, 3.85, 1.0);
+    B.box(M.metal('#1f2124', 0.6), 6.0, 0.6, 0.6, 0, 2.35, cx.L / 2 + 0.1);
+    lettering(B, cx, 'side', 'GLADIATOR', Z(0.1), 3.75, 1.3);
+    pickupBed(B, cx, 0.69);
+    finish(B, cx, {
+      b: [0.435, 0.46], rear: { tb: 0.655, tt: 0.655, mat: 'black' },
+      doors: [0.245, 0.44, 0.66], handles: [0.405, 0.62], handleMat: 'black', mirror: { t: 0.255, cap: 'black', size: 0.3, out: 0.4 },
+      hood: 0.01, hoodOpts: { inset: 0.15, curve: 0.02 }, plates: { front: null, rear: null }, cabin: { rows: 1 },
+    });
+    decal(B, plate(), skin, 'rear', roundRect(0, 2.35, 1.0, 0.5, 0.04), { off: 0.42, mirror: false, uv: 'fit', sub: 1 });
   },
 };
 

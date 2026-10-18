@@ -3,7 +3,7 @@
  * Everything on the site is an object in `state.objects` — buildings included —
  * so anything can be selected, moved, turned or deleted. Sizes are in feet. */
 
-import { CARS, TRUCKS } from './vehiclelist.js';
+import { CARS, TRUCKS, TRAILERS } from './vehiclelist.js';
 import { overlaps } from './geom.js';
 
 export const FLOOR_HEIGHT = 13;
@@ -62,6 +62,7 @@ export const CELLS = [
   { id: 'dock', name: 'Loading bay', icon: '🚛', ground: true, upper: false },
   { id: 'roll', name: 'Roll-up door', icon: '🔒', ground: true, upper: false },
   { id: 'garage', name: 'Garage door', icon: '🏠', ground: true, upper: false },
+  { id: 'fullview', name: 'Glass service door', icon: '🔳', ground: true, upper: false },
   { id: 'louvre', name: 'Louvre', icon: '≡', ground: true, upper: true },
   { id: 'vent', name: 'Vent', icon: '◍', ground: true, upper: true },
   { id: 'open', name: 'Open deck', icon: '▤', ground: true, upper: true },
@@ -297,6 +298,15 @@ export const PROPS = [
   P('Dealership', 'servicesign', 'Service drive sign', '🔧', 12, 1.5, 11, { sign: true, text: 'SERVICE', bg: '#1d2c44' }),
   P('Dealership', 'keydrop', 'Key drop box', '🔑', 2, 2, 4.5),
   P('Dealership', 'tyrerack', 'Tyre display rack', '🛞', 8, 3, 6),
+  P('Dealership', 'storepylon', 'Store pylon sign', '🪧', 12, 3, 30, { sign: true, text: 'Auto Superstore', bg: '#1d4f9c', textColor: '#ffd23f', solid: true }),
+  P('Dealership', 'wayfinder', 'Lot direction sign', '🧭', 6, 0.6, 8, { sign: true, text: '< carriers / > service / ^ sales', bg: '#1d4f9c', textColor: '#ffd23f', hint: 'One line per place, split with a slash. Start a line with < > ^ or v for its arrow.' }),
+  P('Parking', 'rowmarker', 'Row marker sign', '🔤', 3, 0.6, 14, { sign: true, text: 'J K', bg: '#1d4f9c' }),
+  P('Parking', 'wheelstop', 'Wheel stop', '▬', 6, 0.8, 0.5, { palette: [['#b8b5ad', 'Concrete'], ['#e7b416', 'Yellow'], ['#1d4f9c', 'Blue'], ['#f4f4f2', 'White']] }),
+  P('Signs', 'noentry', 'Do Not Enter sign', '⛔', 2.5, 0.6, 7.5),
+  P('Gates', 'accesskiosk', 'Card and ticket kiosk', '🎫', 2.4, 7, 6, { palette: [['#1d4f9c', 'Blue'], ['#c8241b', 'Red'], ['#2b3036', 'Black'], ['#1f7a54', 'Green']] }),
+  P('Boundary', 'ironfence', 'Ornamental steel fence', '⚜️', 40, 0.6, 5, { len: true }),
+  P('Boundary', 'pipebollard', 'Sleeved pipe bollard', '🔵', 1.4, 1.4, 4, { palette: [['#1d4f9c', 'Blue'], ['#e7b416', 'Yellow'], ['#c8241b', 'Red'], ['#1d1f22', 'Black'], ['#f4f4f2', 'White'], ['#1f7a54', 'Green']] }),
+  P('Lighting', 'lotlight', 'Car lot light (4 heads)', '🔆', 6, 6, 34, { light: true }),
   P('Paint & drains', 'stencil', 'Pavement words', '🔤', 8, 7, 0.05, { sign: true, stencil: true, text: 'FIRE LANE', textColor: '#c8241b', resize: true }),
   P('Paint & drains', 'arrowstraight', 'Arrow: ahead', '⬆️', 3, 9, 0.05, { color: true, paintArrow: true }),
   P('Paint & drains', 'arrowleft', 'Arrow: turn left', '↰', 6, 9, 0.05, { color: true, paintArrow: true }),
@@ -443,7 +453,7 @@ export const PROPS = [
   P('Yard', 'bench', 'Bench', '🪑', 6, 2, 3),
   P('Yard', 'picnic', 'Picnic table', '🧺', 7, 6, 3),
   P('Yard', 'trashcan', 'Litter bin', '🗑️', 2, 2, 3.4),
-  P('Yard', 'hydrant', 'Fire hydrant', '🧯', 1.4, 1.4, 2.8),
+  P('Yard', 'hydrant', 'Fire hydrant', '🧯', 1.4, 1.4, 2.8, { palette: [['#c8231b', 'Red'], ['#b08a52', 'Bronze'], ['#e2b23a', 'Yellow'], ['#c9ced3', 'Silver'], ['#2b6cb0', 'Blue'], ['#2f6b3a', 'Green']] }),
   P('Yard', 'mailbox', 'Post box', '📮', 2, 2, 4.6),
   P('Yard', 'vending', 'Vending machine', '🥤', 3.2, 3, 6.2, { solid: true }),
   P('Yard', 'portaloo', 'Portable toilet', '🚽', 4, 4, 7.6, { solid: true }),
@@ -454,6 +464,7 @@ export const PROPS = [
   P('Yard', 'powerpole', 'Power pole', '🔌', 3, 6, 36),
   // cars, by make and model
   ...CARS.map((c) => P('Cars', c.id, `${c.make} ${c.model}`, '🚗', c.W, c.L, c.H, { vehicle: true, solid: true, color: true, car: true, make: c.make, body: c.body })),
+  ...TRAILERS.map((t) => P('Trailers', t.id, t.name, t.icon, t.W, t.L, t.H, { vehicle: true, solid: true, color: true, trailerKind: true })),
   ...TRUCKS.map((t) => P('Trucks', t.id, `${t.make} ${t.model}`, '🚛', t.W, t.L, t.H, { vehicle: true, solid: true, color: true, truck: true, make: t.make, body: t.style === 'aero' ? 'Aero sleeper tractor' : 'Long-nose sleeper tractor' })),
   // vehicles
   P('Vehicles', 'trailer', 'Trailer', '🚛', 8.5, 48, 13.5, { vehicle: true, solid: true, color: true }),
@@ -507,6 +518,7 @@ export const CLADDINGS = [
   { id: 'siding', name: 'Lap siding' },
   { id: 'batten', name: 'Board and batten' },
   { id: 'composite', name: 'Composite panels' },
+  { id: 'splitface', name: 'Split-face block' },
 ];
 
 export const ROOF_TYPES = [
@@ -627,6 +639,12 @@ export const BUILDING_STYLES = {
     { cladding: 'composite', wall: '#e9ecef', band: '#1f4f9c' },
     [r('N', 'g', ALL, null, 'glass'), r('W', 'g', ALL, null, 'glass'), r('N', 'g', 'mid', null, 'door'), r('E', 'g', 1, -1, 'roll'), r('S', 'g', 2, 5, 'roll'), r('S', 'g', -2, null, 'firedoor')],
     { blurb: 'Glass showroom behind a brand portal, a covered service drive and workshop bays.', extras: 'dealership', roof: [['rtu', 0.3, 0.5], ['rtu', 0.6, 0.5], ['rtu', 0.85, 0.3]] }),
+  carstore: S('Offices & shops', 'Used-car superstore', '🚙', { w: 200, d: 100, floors: 1, height: 22, cell: 10 },
+    { cladding: 'splitface', wall: '#d6c3a0', band: '#1d4f9c' },
+    [r('N', 'g', 2, 9, 'shopfront'), r('N', 'g', 10, null, 'door'), r('N', 'g', 12, null, 'shopfront'), r('N', 'g', 14, 19, 'fullview'),
+      r('W', 'g', -4, null, 'shopfront'), r('W', 'g', 2, null, 'firedoor'), r('E', 'g', 2, 6, 'fullview'), r('E', 'g', -2, null, 'firedoor'),
+      r('S', 'g', 2, 4, 'roll'), r('S', 'g', 6, null, 'firedoor'), r('S', 'g', -3, null, 'firedoor')],
+    { blurb: 'Split-face block store: entrance tower with an open truss gable, two-tier showroom glass and a service wing of glass doors. The brand panel shows the sign text.', extras: 'carstore', roof: [['rtu', 0.2, 0.45], ['rtu', 0.4, 0.45], ['rtu-xl', 0.62, 0.5], ['rtu', 0.85, 0.4], ['fan', 0.8, 0.7], ['skylight', 0.3, 0.75], ['skylight', 0.45, 0.75]] }),
   hotel: S('Offices & shops', 'Hotel', '🏨', { w: 150, d: 60, floors: 8, height: null, cell: 10 },
     { cladding: 'render', wall: '#ece3cf', band: '#7a5a2e' },
     [r('NS', ALL, ALL, null, 'window'), r('EW', ALL, 1, -1, 'window'), r('N', 'g', ALL, null, 'shopfront'), r('N', 'g', 'mid', null, 'door')],

@@ -22,6 +22,14 @@ export const CARS = [
   { id: 'mercedes-sprinter', make: 'Mercedes-Benz', model: 'Sprinter', body: 'Van', L: 19.46, W: 6.64, H: 8.96, wb: 12.0, fo: 3.0, tire: 2.54, color: '#f2f3f4' },
   { id: 'jeep-wrangler', make: 'Jeep', model: 'Wrangler', body: 'Off-roader', L: 15.7, W: 6.15, H: 6.13, wb: 9.87, fo: 2.4, tire: 2.67, color: '#2e6b3a' },
   { id: 'jeep-grandcherokee', make: 'Jeep', model: 'Grand Cherokee', body: 'SUV', L: 16.1, W: 6.46, H: 5.9, wb: 9.73, fo: 3.0, tire: 2.53, color: '#6d1f22' },
+  { id: 'toyota-tacoma', make: 'Toyota', model: 'Tacoma', body: 'Mid-size pickup', L: 17.7, W: 6.27, H: 6.1, wb: 10.99, fo: 3.0, tire: 2.63, color: '#8c8f8a' },
+  { id: 'ford-bronco', make: 'Ford', model: 'Bronco', body: 'Off-roader', L: 15.78, W: 6.33, H: 6.08, wb: 9.68, fo: 2.6, tire: 2.67, color: '#6e8796' },
+  { id: 'chevrolet-silverado', make: 'Chevrolet', model: 'Silverado', body: 'Pickup', L: 19.31, W: 6.77, H: 6.29, wb: 12.28, fo: 3.15, tire: 2.75, color: '#f2f3f4' },
+  { id: 'honda-crv', make: 'Honda', model: 'CR-V', body: 'Compact SUV', L: 15.4, W: 6.13, H: 5.54, wb: 8.86, fo: 3.0, tire: 2.42, color: '#3d5a7a' },
+  { id: 'tesla-modely', make: 'Tesla', model: 'Model Y', body: 'Electric crossover', L: 15.58, W: 6.3, H: 5.33, wb: 9.48, fo: 2.92, tire: 2.33, color: '#5b5f63' },
+  { id: 'bmw-m4', make: 'BMW', model: 'M4', body: 'Sports coupe', L: 15.71, W: 6.13, H: 4.57, wb: 9.38, fo: 2.67, tire: 2.22, color: '#1f5e4c' },
+  { id: 'mercedes-cclass', make: 'Mercedes-Benz', model: 'C-Class', body: 'Luxury sedan', L: 15.58, W: 5.97, H: 4.72, wb: 9.4, fo: 2.67, tire: 2.17, color: '#b9bdc1' },
+  { id: 'jeep-gladiator', make: 'Jeep', model: 'Gladiator', body: 'Off-road pickup', L: 18.17, W: 6.15, H: 6.25, wb: 11.44, fo: 2.45, tire: 2.67, color: '#b5332a' },
 ];
 
 export const CAR_BY_ID = Object.fromEntries(CARS.map((c) => [c.id, c]));
@@ -41,3 +49,19 @@ export const TRUCKS = [
 ].map((t) => ({ ...t, W: 8.5, L: +(t.fo + t.wb + 2.17 + 1.9).toFixed(2) }));
 
 export const TRUCK_BY_ID = Object.fromEntries(TRUCKS.map((t) => [t.id, t]));
+
+/* Semi trailers: length, height, default colour. All are 8.5 ft (102 in)
+ * wide and couple 3 ft behind their front edge, on a 4 ft 3 in fifth wheel. */
+export const TRAILERS = [
+  { id: 'van53', name: '53 ft dry van', icon: '🚚', L: 53, H: 13.5, color: '#f2f3f4' },
+  { id: 'reefer53', name: '53 ft reefer', icon: '❄️', L: 53, H: 13.5, color: '#f2f3f4' },
+  { id: 'flatbed48', name: '48 ft flatbed with lumber', icon: '🪵', L: 48, H: 10, color: '#2b2f36' },
+  { id: 'stepdeck53', name: '53 ft step deck with steel', icon: '🏗️', L: 53, H: 9, color: '#2b2f36' },
+  { id: 'tanker42', name: 'Stainless tanker', icon: '🛢️', L: 42, H: 11.5, color: '#d9dde0' },
+  { id: 'carhauler', name: 'Car hauler with cars', icon: '🚗', L: 53, H: 13.5, color: '#2b2f36' },
+  { id: 'container40', name: '40 ft container on chassis', icon: '📦', L: 41, H: 13.5, color: '#2a5b9b' },
+  { id: 'enddump', name: 'End-dump trailer', icon: '⛏️', L: 39, H: 11.5, color: '#c9ced3' },
+].map((t) => ({ ...t, W: 8.5 }));
+
+export const TRAILER_BY_ID = Object.fromEntries(TRAILERS.map((t) => [t.id, t]));
+

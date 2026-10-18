@@ -165,7 +165,7 @@ export function planSite(state) {
         // Trucks need room to swing, so the court stays clear well past the concrete.
         plan.keepClear.push(rectOffWall(f, a * cw, z * cw, 125, 14));
       }
-      for (const [a, z] of groundRuns(b, face, ['roll'])) {
+      for (const [a, z] of groundRuns(b, face, ['roll', 'fullview'])) {
         const r = rectOffWall(f, a * cw, z * cw, 26, 4);
         plan.rollAprons.push({ rect: r });
         plan.keepClear.push(r);

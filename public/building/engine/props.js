@@ -1465,8 +1465,8 @@ const P = {
     B.cyl(M.painted('#2f4a3a', 0.5), 0.9, 0.85, 3, 0, 1.5, 0, { seg: 14 });
     B.cyl(M.painted('#2a2f34', 0.5), 0.95, 0.95, 0.3, 0, 3.2, 0, { seg: 14 });
   },
-  hydrant(B) {
-    const red = M.painted('#c8231b', 0.4);
+  hydrant(B, o) {
+    const red = M.painted(o.color || '#c8231b', 0.4);
     B.cyl(red, 0.45, 0.5, 2, 0, 1, 0, { seg: 12 });
     B.sphere(red, 0.45, 0, 2.05, 0, { sy: 0.7, seg: 12 });
     for (const a of [0, Math.PI]) B.cyl(red, 0.2, 0.2, 0.5, Math.cos(a) * 0.55, 1.5, Math.sin(a) * 0.55, { rot: [0, 0, Math.PI / 2], seg: 8 });
@@ -2168,7 +2168,7 @@ export function buildProp(o) {
   if (isBooth) {
     (BOOTH[o.design] || BOOTH.classic)(B, o, dims, ctx);
   } else if (spec && spec.vehicle) {
-    const VB = vehicleModel(o.type, o.color, dims.w, dims.d, dims.h);
+    const VB = vehicleModel(o.type, o.color, dims.w, dims.d, dims.h, null, { trailer: o.trailer, trailerColor: o.trailerColor, seed: hashId(o.id) });
     VB.finish(group);
     group.userData = { lights: [], moving: [], disposables: [] };
     return group;

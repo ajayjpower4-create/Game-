@@ -27,6 +27,7 @@ const PETAL = () => M.petals();
 const ROCK = () => M.rock('#ffffff');
 const STEM = () => M.bark('#5d4a36');
 const GREEN_STEM = () => M.plastic('#4c6b34', 0.8);
+const CREAM = () => M.foliageTone('#d9d4a0');
 
 /* ------------------------------------------------------------- shapes */
 
@@ -199,6 +200,29 @@ export const GARDEN = [
     },
   },
   {
+    id: 'jmaple', name: 'Japanese maple', icon: '🍁', group: 'Shrubs', spacing: 9, scale: [0.8, 1.2], tint: ['#7a1f2b', '#8c2a32', '#6b1a26', '#9a3a2a'],
+    build(B, r) {
+      // A short, many-stemmed trunk forking into branches under a rounded,
+      // layered dome of fine red leaves that comes down low at the edges.
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * PI * 2 + r() * 0.6;
+        const fork = [Math.cos(a) * 0.7, 2.0 + r() * 0.5, Math.sin(a) * 0.7];
+        B.tube(STEM(), [Math.cos(a) * 0.1, 0, Math.sin(a) * 0.1], fork, 0.17, 6);
+        for (const da of [-0.5, 0.5]) {
+          const b2 = a + da + (r() - 0.5) * 0.3;
+          B.tube(STEM(), fork, [Math.cos(b2) * 2.0, 4.0 + r() * 0.8, Math.sin(b2) * 2.0], 0.09, 5);
+        }
+      }
+      for (let i = 0; i < 16; i++) {
+        const a = r() * PI * 2;
+        const d = 0.6 + r() * 2.4;
+        const y = 3.4 + (1 - (d / 3.2) ** 2) * 2.4 + r() * 0.4;
+        B.add(lump(Math.floor(r() * 6), 1), LEAF(), { pos: [Math.cos(a) * d, y, Math.sin(a) * d], scale: [1.3, 0.85, 1.2], rot: [0, r() * 3, 0] });
+      }
+      B.add(lump(5, 2), LEAF(), { pos: [0, 5.4, 0], scale: [2.4, 1.3, 2.2] });
+    },
+  },
+  {
     id: 'juniper', name: 'Spreading juniper', icon: '🌿', group: 'Evergreens', spacing: 5.5, scale: [0.85, 1.2], tint: ['#4f7466', '#5a7f6c', '#46695c'],
     build(B, r) {
       for (let i = 0; i < 10; i++) {
@@ -309,6 +333,35 @@ export const GARDEN = [
         const top = [Math.cos(a) * Math.sin(lean) * h, Math.cos(lean) * h, Math.sin(a) * Math.sin(lean) * h];
         B.tube(GREEN_STEM(), [0, 0, 0], top, 0.025, 4);
         B.add(trumpet.clone(), PETAL(), { pos: [top[0], top[1] + 0.1, top[2]], rot: [0.5 * Math.sin(a), 0, -0.5 * Math.cos(a)] });
+      }
+    },
+  },
+  {
+    id: 'liriope', name: 'Liriope (variegated)', icon: '🪻', group: 'Perennials', spacing: 1.6, scale: [0.85, 1.15], tint: ['#3f6b35', '#4a7a3c', '#365f2f'],
+    flowers: ['#7b5bb5', '#8d6bc8', '#6e4fa6'],
+    build(B, r) {
+      // Arching strap leaves, every other one edged cream, and purple spikes.
+      const green = [];
+      const cream = [];
+      for (let i = 0; i < 64; i++) {
+        const a = r() * PI * 2;
+        const g = blade(1.0 + r() * 0.6, 0.09, a, 0.25 + r() * 0.6, 0.8 + r() * 0.9, 4, (r() - 0.5) * 0.8);
+        (i % 3 === 0 ? cream : green).push(g);
+      }
+      B.add(mergeGeometries(green, false), BLADE());
+      B.add(mergeGeometries(cream, false), CREAM());
+      const bead = new THREE.IcosahedronGeometry(0.045, 0);
+      for (let i = 0; i < 7; i++) {
+        const a = r() * PI * 2;
+        const lean = r() * 0.3;
+        const h = 1.2 + r() * 0.35;
+        const dx = Math.cos(a) * Math.sin(lean);
+        const dz = Math.sin(a) * Math.sin(lean);
+        B.tube(GREEN_STEM(), [0, 0, 0], [dx * h, Math.cos(lean) * h, dz * h], 0.012, 3);
+        for (let k = 0; k < 7; k++) {
+          const t = h * (0.62 + k * 0.055);
+          B.add(bead.clone(), PETAL(), { pos: [dx * t, Math.cos(lean) * t, dz * t] });
+        }
       }
     },
   },

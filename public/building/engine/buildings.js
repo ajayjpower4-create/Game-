@@ -39,7 +39,7 @@ export function localFrames(w, d) {
 
 /** Draws on one wall: s runs along it from the viewer's left, h is height, and
  *  depth is measured outward from the wall plane (negative = recessed). */
-class Face {
+export class Face {
   constructor(b, f) {
     this.b = b;
     this.f = f;
@@ -328,6 +328,21 @@ function bay(F, type, c, ctx) {
       if (fh > 12) light(sc, Math.min(o.h1 + 3.4, c.h1 - 1), 14, 500, 70);
       return;
     }
+    case 'fullview': {
+      // Full-view sectional door: clear-anodised aluminium sections, every one glazed.
+      const w = Math.min(cw * 0.84, 12);
+      const hgt = Math.min(fh * 0.7, 14);
+      const o = { s0: sc - w / 2, s1: sc + w / 2, h0: c.h0, h1: c.h0 + hgt };
+      F.punch(wallMat, c, o, 0.45, M.painted(ctx.dark, 0.5));
+      F.glazing(lit(), o.s0, o.s1, o.h0, o.h1, -0.4, { cols: 4, rows: Math.max(4, Math.round(hgt / 2.3)), frame: 0.3, frameMat: M.frame(false), proud: 0.16 });
+      F.box(M.frame(false), o.s0, o.s1, o.h0, o.h0 + 0.7, -0.4, -0.2);
+      // Track guides up the jambs and a hood over the opening.
+      F.box(M.metal('#8a9299', 0.45), o.s0 - 0.25, o.s0 + 0.05, o.h0, o.h1, -0.4, 0.15);
+      F.box(M.metal('#8a9299', 0.45), o.s1 - 0.05, o.s1 + 0.25, o.h0, o.h1, -0.4, 0.15);
+      if (hgt + 2 < fh) F.box(M.frame(false), o.s0 - 0.4, o.s1 + 0.4, o.h1, o.h1 + 0.6, 0, 0.5);
+      if (fh > 12) light(sc, Math.min(o.h1 + 3, c.h1 - 1), 14, 500, 70);
+      return;
+    }
     case 'garage': {
       const w = Math.min(cw * 0.82, 9);
       const o = { s0: sc - w / 2, s1: sc + w / 2, h0: c.h0, h1: c.h0 + 7.4 };
@@ -377,7 +392,7 @@ function bay(F, type, c, ctx) {
 
 /* ------------------------------------------------------------------ walls */
 
-const GROUND_ONLY = new Set(['door', 'firedoor', 'dock', 'roll', 'garage', 'shopfront']);
+const GROUND_ONLY = new Set(['door', 'firedoor', 'dock', 'roll', 'fullview', 'garage', 'shopfront']);
 
 function walls(b, B, ctx, H, fh, top) {
   const frames = localFrames(b.w, b.d);
@@ -626,7 +641,7 @@ const measureCtx = document.createElement('canvas').getContext('2d');
 const floors = (b) => Math.max(1, b.floors || 1);
 
 /** Roughly where each kind of opening starts within its floor. */
-function openingBottom(type, fh) {
+export function openingBottom(type, fh) {
   const tall = fh > 18;
   switch (type) {
     case 'window': return tall ? 4 : fh * 0.3;
@@ -639,7 +654,7 @@ function openingBottom(type, fh) {
 }
 
 /** Roughly how high an opening of each kind reaches within its floor. */
-function openingTop(type, fh) {
+export function openingTop(type, fh) {
   const tall = fh > 18;
   switch (type) {
     case 'blank': return -1;
@@ -647,6 +662,7 @@ function openingTop(type, fh) {
     case 'ribbon': return tall ? 6 + Math.min(7, fh - 10) : fh * 0.75;
     case 'dock': return 16;
     case 'roll': return Math.min(fh * 0.72, 16) + 2;
+    case 'fullview': return Math.min(fh * 0.7, 14) + 1;
     case 'door': return Math.min(9, fh * 0.72) + 2.2;
     case 'firedoor': return 10;
     case 'garage': return 9;

@@ -190,6 +190,7 @@ const CLAD = {
   siding: { surf: 'siding', rough: 0.6, metal: 0 },
   batten: { surf: 'batten', rough: 0.65, metal: 0 },
   composite: { surf: 'composite', rough: 0.32, metal: 0.4 },
+  splitface: { surf: 'splitface', rough: 0.95, metal: 0 },
 };
 
 export function wall(cladding, hex) {
@@ -641,6 +642,11 @@ export function petals() {
 /** Foliage tinted per instance (a white-based leaf texture). */
 export function foliage(variant = 0) {
   return once(`foliage|${variant}`, () => snowy(std({ ...withSurface('leaves'), color: new THREE.Color('#ffffff'), roughness: 0.85, side: variant === 9 ? THREE.DoubleSide : THREE.FrontSide })));
+}
+
+/** Leaves in a fixed shade, not tinted per plant (a variegated stripe). */
+export function foliageTone(hex) {
+  return once(`foliageTone|${hex}`, () => snowy(std({ ...withSurface('leaves'), color: new THREE.Color(hex), roughness: 0.85, side: THREE.DoubleSide })));
 }
 
 export function rock(hex = '#8d8a84') {

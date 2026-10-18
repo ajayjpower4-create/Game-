@@ -8,9 +8,9 @@
 import * as THREE from 'three';
 import { cylGeo } from './builder.js';
 import * as M from './materials.js';
-import { panelTexture } from './textures.js';
+import { panelTexture, brandTexture } from './textures.js';
 import { BUILDING_STYLES } from '../catalog.js';
-import { roofMaterial, roofRise } from './buildings.js';
+import { roofMaterial, roofRise, localFrames, Face, openingBottom, openingTop, PARAPET } from './buildings.js';
 
 const PI = Math.PI;
 
@@ -280,7 +280,243 @@ function schoolFront(B, b, H, out, { tower = 26, canopy = 44, name = 'ELEMENTARY
   flagpole(B, out, tower / 2 + 22, hz + 30, 30);
 }
 
+/* ------------------------------------------------------------ car store */
+
+/** Runs of one cell type along a face's ground row, as [first, end) columns. */
+function runsOf(row, type) {
+  const out = [];
+  let a = -1;
+  for (let i = 0; i <= row.length; i++) {
+    const hit = i < row.length && row[i] === type;
+    if (hit && a < 0) a = i;
+    if (!hit && a >= 0) { out.push([a, i]); a = -1; }
+  }
+  return out;
+}
+
+/** A blue pipe bollard: steel post in a plastic sleeve with a domed top. */
+function bollard(B, x, z, hex = '#1d4f9c') {
+  B.add(cylGeo(0.36, 0.36, 3.6, 14), M.plastic(hex, 0.35), { pos: [x, 1.8, z] });
+  B.add(new THREE.SphereGeometry(0.36, 14, 8, 0, PI * 2, 0, PI / 2), M.plastic(hex, 0.35), { pos: [x, 3.6, z] });
+  for (const y of [2.6, 2.9]) B.add(cylGeo(0.37, 0.37, 0.12, 14), M.plastic('#f4f4f2', 0.4), { pos: [x, y, z] });
+}
+
+/** Wall pack: a dark box light under a hood, lighting the wall below it. */
+function wallPack(B, F, s, y, out, lit) {
+  F.box(M.painted('#3a3f45', 0.5), s - 0.7, s + 0.7, y - 0.5, y + 0.5, 0, 0.75);
+  F.box(M.lamp('#fff1d6', 4), s - 0.55, s + 0.55, y - 0.56, y - 0.5, 0.1, 0.65);
+  if (!lit) return;
+  const p = F.p(s, y - 0.7, 1);
+  const t = F.p(s, 0, 16);
+  out.lights.push({ x: p[0], y: p[1], z: p[2], tx: t[0], tz: t[2], color: '#ffe2b8', power: 520, range: 70, angle: 70 });
+}
+
+/** A bullet camera on a short arm, looking along the wall and out. */
+function wallCamera(B, F, s, y, look) {
+  F.box(M.painted('#e9ebed', 0.45), s - 0.3, s + 0.3, y - 0.3, y + 0.3, 0, 0.15);
+  F.box(M.painted('#e9ebed', 0.45), s - 0.08, s + 0.08, y - 0.08, y + 0.08, 0.15, 0.8);
+  F.box(M.plastic('#f2f3f4', 0.4), s - 0.25 + look * 0.3, s + 0.25 + look * 0.3, y - 0.45, y - 0.05, 0.6, 1.5);
+  F.box(M.pianoBlack(), s - 0.17 + look * 0.3, s + 0.17 + look * 0.3, y - 0.38, y - 0.12, 1.5, 1.52);
+}
+
 const EXTRAS = {
+  /* A used-car superstore in split-face block: a raised, stepped parapet over
+   * the showroom, a two-tier storefront, the entrance tower with its open
+   * steel truss under a blue standing-seam gable, the brand panel and the
+   * street number, and a service wing of glass overhead doors under a blue
+   * band. The brand text is the building's sign text. */
+  carstore(b, B, H, out) {
+    const hx = b.w / 2;
+    const hz = b.d / 2;
+    const floors = Math.max(1, b.floors || 1);
+    const fh = H / floors;
+    const top = b.parapet === false ? H : H + PARAPET;
+    const wallMat = M.wall(b.cladding || 'splitface', b.wall || '#d6c3a0');
+    const smoothHex = '#' + new THREE.Color(b.wall || '#d6c3a0').lerp(new THREE.Color('#ffffff'), 0.28).getHexString();
+    const smooth = M.wall('render', smoothHex);
+    const blue = b.band || '#1d4f9c';
+    const blueMat = M.painted(blue, 0.4);
+    const coping = M.metal('#c9c3b5', 0.4);
+    const frames = localFrames(b.w, b.d);
+    const faces = {};
+    for (const face of ['N', 'E', 'S', 'W']) {
+      const f = frames[face];
+      const row = ((b.walls[face] || [])[0]) || ['blank'];
+      faces[face] = { F: new Face(B, f), f, row, cw: f.len / Math.max(1, row.length) };
+    }
+
+    // Smooth-face bands, broken wherever an opening or its canopy crosses them.
+    const band = (face, y0, y1) => {
+      const { F, row, cw } = faces[face];
+      let s0 = null;
+      for (let c = 0; c <= row.length; c++) {
+        const t = c < row.length ? row[c] : 'blank';
+        const clear = c < row.length && (t === 'blank' || openingTop(t, fh) < y0 - 0.2 || openingBottom(t, fh) > y1 + 0.2);
+        if (clear && s0 === null) s0 = c * cw;
+        if (!clear && s0 !== null) { F.box(smooth, s0, c * cw, y0, y1, 0, 0.12); s0 = null; }
+      }
+    };
+    for (const face of ['N', 'E', 'S', 'W']) {
+      band(face, 2.2, 2.9);
+      if (floors === 1 && H > 16) band(face, Math.min(12.9, H - 6), Math.min(13.5, H - 5.4));
+      const { F, f } = faces[face];
+      F.box(smooth, 0, f.len, H + 0.5, H + 1.2, 0, 0.12);
+    }
+
+    // The upper tier of glass over every run of shopfront.
+    if (floors === 1 && H >= 21) {
+      for (const face of ['N', 'E', 'S', 'W']) {
+        const { F, row, cw } = faces[face];
+        for (const [a, z] of runsOf(row, 'shopfront')) {
+          const s0 = a * cw + 0.5;
+          const s1 = z * cw - 0.5;
+          F.glazing(M.glassLit(2), s0, s1, 14.6, Math.min(18.8, H - 2.6), 0.04, { cols: Math.max(2, Math.round((s1 - s0) / 5)), rows: 1, frameMat: M.frame(false), proud: 0.22 });
+          F.box(smooth, s0 - 0.3, s1 + 0.3, 14.2, 14.6, 0, 0.35);
+        }
+      }
+    }
+
+    // Raised, stepped parapet over the showroom, up to the service wing.
+    const N = faces.N;
+    const firstService = N.row.indexOf('fullview');
+    const sEnd = firstService > 0 ? firstService * N.cw - N.cw / 2 : N.f.len;
+    const step = Math.max(20, sEnd * 0.32);
+    const raise = (F, s0, s1, r) => {
+      F.box(wallMat, s0, s1, top, top + r, -1.2, 0);
+      F.box(smooth, s0, s1, top + r - 1.7, top + r - 1, 0, 0.12);
+      F.box(coping, s0 - 0.1, s1 + 0.1, top + r, top + r + 0.35, -1.35, 0.15);
+    };
+    raise(N.F, 0, step, 3);
+    raise(N.F, step, sEnd, 6.5);
+    // Returns, so the raised front reads as a mass and not a cut-out.
+    const W = faces.W;
+    raise(W.F, W.f.len - 16, W.f.len, 3);
+    B.box(wallMat, 1.2, 6.5, 16, -hx + sEnd - 0.6, top + 3.25, hz - 8);
+    B.box(coping, 1.5, 0.35, 16.2, -hx + sEnd - 0.6, top + 6.67, hz - 8);
+    B.box(wallMat, 1.2, 3.5, 16, -hx + step + 0.6, top + 1.75 + 3, hz - 8);
+
+    // The entrance tower over the front door.
+    const doorCol = N.row.indexOf('door');
+    const tx = -hx + (doorCol >= 0 ? (doorCol + 0.5) * N.cw : N.f.len / 2);
+    const TW = Math.min(30, b.w * 0.3);
+    const pw = 6;
+    const Ht = Math.max(top + 9, H + 12);
+    const fz = hz + 6;
+    for (const sx of [-1, 1]) {
+      const px = tx + sx * (TW / 2 - pw / 2);
+      B.box(wallMat, pw, Ht, 8, px, Ht / 2, hz + 2);
+      for (const [y0, y1] of [[2.2, 2.9], [11.2, 11.9], [Ht - 1.4, Ht]]) B.box(smooth, pw + 0.24, y1 - y0, 8.24, px, (y0 + y1) / 2, hz + 2);
+    }
+    // Tower front between the piers, its mass behind, and the porch soffit.
+    B.box(wallMat, TW - pw * 2, Ht - 12, 1.5, tx, 12 + (Ht - 12) / 2, fz - 0.75);
+    B.box(smooth, TW - pw * 2, 0.8, 1.7, tx, 12.4, fz - 0.75);
+    B.box(wallMat, TW, Ht - top + 0.5, 14, tx, top - 0.5 + (Ht - top + 0.5) / 2, hz - 9);
+    B.box(M.painted('#eceae4', 0.6), TW - pw * 2, 0.5, 6, tx, 11.75, hz + 3);
+    for (const x of [-4, 4]) B.add(new THREE.CircleGeometry(0.35, 12).rotateX(PI / 2), M.lamp('#fff3dc', 3), { pos: [tx + x, 11.48, hz + 3.5] });
+    out.lights.push({ x: tx, y: 11, z: hz + 4, tx, tz: hz + 10, color: '#ffeccc', power: 420, range: 40, angle: 75 });
+    // Brand panel and street number on the tower face.
+    const inner = TW - pw * 2;
+    const name = (b.sign && b.sign.text) || 'Auto Superstore';
+    const bt = brandTexture({ text: name, bg: blue, aspect: (inner - 1) / 6.5 });
+    const bm = M.signFace(bt);
+    out.disposables.push(bt, bm);
+    B.box(M.painted('#2b3a52', 0.4), inner - 0.6, 7.1, 0.3, tx, Ht - 6.8, fz + 0.15);
+    panel(B, bm, inner - 1, 6.5, tx, Ht - 6.8, fz + 0.31);
+    const num = String(1000 + Math.floor((parseInt(String(b.id).replace(/\D/g, '').slice(-6) || '7', 10) * 7919) % 8999));
+    panel(B, signMat(out, { text: num, color: '#2f3237', bg: smoothHex, aspect: 7 / 2, border: false }), 7, 2, tx, 14.6, fz + 0.03);
+
+    // Blue standing-seam gable over the tower, open at the front on a steel truss.
+    const E = TW / 2 + 2;
+    const rise = TW * 0.32;
+    const z0 = hz - 16;
+    const z1 = hz + 9;
+    const roof = M.roof('seam', blue);
+    const slope = Math.hypot(E, rise);
+    const R = Ht + rise;
+    B.quad(roof, [tx, R, z1], [tx + E, Ht, z1], [tx + E, Ht, z0], [tx, R, z0], [z1, slope, z1, 0, z0, 0, z0, slope]);
+    B.quad(roof, [tx, R, z0], [tx - E, Ht, z0], [tx - E, Ht, z1], [tx, R, z1], [z0, slope, z0, 0, z1, 0, z1, slope]);
+    const under = M.painted('#24324a', 0.6);
+    B.quad(under, [tx + E, Ht - 0.4, z1], [tx, R - 0.4, z1], [tx, R - 0.4, z0], [tx + E, Ht - 0.4, z0]);
+    B.quad(under, [tx - E, Ht - 0.4, z0], [tx, R - 0.4, z0], [tx, R - 0.4, z1], [tx - E, Ht - 0.4, z1]);
+    const ang = Math.atan2(rise, E);
+    for (const z of [z0, z1]) {
+      B.box(blueMat, slope + 0.6, 1.1, 0.45, tx + E / 2, Ht + rise / 2 - 0.2, z, [0, 0, -ang]);
+      B.box(blueMat, slope + 0.6, 1.1, 0.45, tx - E / 2, Ht + rise / 2 - 0.2, z, [0, 0, ang]);
+    }
+    for (const sx of [-1, 1]) B.box(blueMat, 0.45, 1.1, z1 - z0, tx + sx * E, Ht - 0.2, (z0 + z1) / 2);
+    B.tube(roof, [tx, R + 0.15, z0], [tx, R + 0.15, z1], 0.35, 6);
+    B.quad(blueMat, [tx + E - 0.5, Ht, z0], [tx - E + 0.5, Ht, z0], [tx, R - 0.5, z0], [tx, R - 0.5, z0]);
+    // Back of the gable, closed; the front shows the truss against it.
+    const back = hz - 2;
+    B.quad(under, [tx - E + 0.5, Ht, back], [tx + E - 0.5, Ht, back], [tx, R - 0.5, back], [tx, R - 0.5, back]);
+    B.box(blueMat, E * 2, 0.8, z1 - back, tx, Ht + 0.2, (z1 + back) / 2);
+    const steel = M.painted('#f1f2f0', 0.35);
+    const yb = Ht + 1;
+    const topY = (x) => R - 0.9 - (Math.abs(x - tx) / E) * rise;
+    for (const tz of [z1 - 1.2, hz + 2]) {
+      const t = (a, c) => B.tube(steel, [a[0], a[1], tz], [c[0], c[1], tz], 0.22, 8);
+      t([tx - E + 1.2, yb], [tx + E - 1.2, yb]);
+      t([tx - E + 1.2, yb], [tx, topY(tx)]);
+      t([tx + E - 1.2, yb], [tx, topY(tx)]);
+      t([tx, yb], [tx, topY(tx)]);
+      for (const sx of [-1, 1]) {
+        const xm = tx + sx * E * 0.5;
+        t([xm, yb], [xm, topY(xm)]);
+        t([tx, yb], [xm, topY(xm)]);
+        t([xm, yb], [tx + sx * E * 0.75, topY(tx + sx * E * 0.75)]);
+      }
+      for (const x of [tx - E + 1.2, tx + E - 1.2]) B.box(steel, 0.8, 0.8, 0.8, x, yb, tz);
+    }
+    // Uplights washing the truss at night.
+    out.lights.push({ x: tx, y: Ht + 1.5, z: hz + 4, tx, tz: hz + 4, color: '#f4f7ff', power: 260, range: 30, angle: 80 });
+    // Blue bollards across the front of the porch.
+    for (const x of [-7.5, -2.5, 2.5, 7.5]) if (Math.abs(x) < inner / 2) bollard(B, tx + x, fz + 2.5, blue);
+
+    // Service wing: blue band and lettering over every run of glass doors,
+    // and a pair of bollards guarding each opening.
+    for (const face of ['N', 'E', 'S', 'W']) {
+      const { F, row, cw } = faces[face];
+      for (const [a, z] of runsOf(row, 'fullview')) {
+        const s0 = a * cw;
+        const s1 = z * cw;
+        const dh = Math.min(fh * 0.7, 14);
+        const y0 = Math.min(dh + 1.6, H - 3.6);
+        const y1 = Math.min(y0 + 3.6, top - 0.5);
+        F.box(blueMat, s0, s1, y0, y1, 0, 0.3);
+        F.box(coping, s0, s1, y1, y1 + 0.25, 0, 0.45);
+        if (top > y1 + 4 || face === 'N') {
+          const sw = Math.min((s1 - s0) * 0.5, 34);
+          const sh = Math.min(5, top + (face === 'N' ? 3.5 : 0) - y1 - 0.6);
+          if (sh > 2) {
+            const sm = signMat(out, { text: 'service', color: blue, bg: smoothHex, aspect: sw / sh, border: false });
+            const sc = (s0 + s1) / 2;
+            F.rect(sm, sc - sw / 2, sc + sw / 2, y1 + 0.4, y1 + 0.4 + sh, 0.16, true);
+          }
+        }
+        for (let c = a; c < z; c++) {
+          const sc = (c + 0.5) * cw;
+          const w = Math.min(cw * 0.84, 12);
+          for (const sx of [-1, 1]) {
+            const p = F.p(sc + sx * (w / 2 + 0.9), 0, 1.4);
+            bollard(B, p[0], p[2], blue);
+          }
+        }
+      }
+    }
+
+    // Wall packs on the plain walls, and cameras on the corners.
+    let lit = 0;
+    for (const face of ['N', 'E', 'S', 'W']) {
+      const { F, f, row, cw } = faces[face];
+      row.forEach((t, c) => {
+        if (t !== 'blank' || c % 3 !== 1) return;
+        wallPack(B, F, (c + 0.5) * cw, Math.min(15, H - 4), out, lit++ < 6);
+      });
+      wallCamera(B, F, 2.5, Math.min(18, H - 2), 1);
+      wallCamera(B, F, f.len - 2.5, Math.min(18, H - 2), -1);
+    }
+  },
+
   /* A dealership: the tall brand portal framing the showroom doors, a flat
    * canopy over the service drive at the right-hand end, and a fascia band. */
   dealership(b, B, H, out) {

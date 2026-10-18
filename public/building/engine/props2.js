@@ -10,7 +10,7 @@ import { rng } from './textures.js';
 import { stencilMat, flat } from './marks.js';
 import { Builder } from './builder.js';
 import { lotLayout } from '../lots.js';
-import { panelTexture } from './textures.js';
+import { panelTexture, brandTexture, wayTexture, noEntryTexture } from './textures.js';
 import { vehicleModel } from './vehicles.js';
 
 const PI = Math.PI;
@@ -951,5 +951,158 @@ Object.assign(MORE, {
       B.box(M.wood('#8a6a4a'), 0.15, 0.15, 3.2, s * (w / 2 - 2.3), 3.0, 0);
       B.tube(M.plastic('#d9c9a3', 0.8), [s * (w / 2 - 2.3), 3.0, 0], [s * (w / 2 - 1.8), 4.1, 0], 0.04, 4);
     }
+  },
+});
+
+/* ------------------------------------------------------------ car store lot */
+
+/** A sign face on both sides of a panel `t` thick, centred at (0, y). */
+function twoFaced(B, mat, w, h, y, t) {
+  const hw = w / 2;
+  const z = t / 2 + 0.02;
+  B.quad(mat, [-hw, y - h / 2, z], [hw, y - h / 2, z], [hw, y + h / 2, z], [-hw, y + h / 2, z], [0, 0, 1, 0, 1, 1, 0, 1]);
+  B.quad(mat, [hw, y - h / 2, -z], [-hw, y - h / 2, -z], [-hw, y + h / 2, -z], [hw, y + h / 2, -z], [0, 0, 1, 0, 1, 1, 0, 1]);
+}
+
+let NO_ENTRY_MAT = null;
+
+Object.assign(MORE, {
+  /* The store's pylon: a stacked stucco base under a lit blue cabinet with
+   * the brand lettering and its dashes on both faces. */
+  storepylon(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    const stucco = M.wall('render', '#dccbaa');
+    const deep = M.wall('render', '#c9b691');
+    B.slab(M.concrete('#b3afa6'), w + 2.4, 0.5, d + 2.4, 0, 0, 0);
+    B.slab(stucco, w + 1.2, 2.2, d + 1.2, 0, 0.5, 0);
+    B.slab(deep, w * 0.84, h * 0.2, d, 0, 2.7, 0);
+    B.slab(stucco, w * 0.9, 0.6, d + 0.3, 0, 2.7 + h * 0.2, 0);
+    B.slab(deep, w * 0.7, h * 0.24, d * 0.86, 0, 3.3 + h * 0.2, 0);
+    const y0 = 3.3 + h * 0.44;
+    const ch = h - y0 - 1;
+    B.slab(stucco, w * 0.8, 0.5, d * 0.95, 0, y0 - 0.5, 0);
+    B.slab(M.painted(s.bg || '#1d4f9c', 0.35), w, ch, d * 0.8, 0, y0, 0);
+    B.slab(M.metal('#c9ced3', 0.3), w + 0.4, 1, d * 0.8 + 0.4, 0, h - 1, 0);
+    const tex = brandTexture({ text: s.text || 'Auto Superstore', color: s.color || '#ffd23f', bg: s.bg || '#1d4f9c', aspect: (w - 0.6) / (ch - 0.6) });
+    const mat = M.signFace(tex);
+    ctx.disposables.push(tex, mat);
+    twoFaced(B, mat, w - 0.6, ch - 0.6, y0 + ch / 2, d * 0.8);
+    // Ground lights washing the base.
+    for (const sz of [1, -1]) B.box(M.painted('#2b3036', 0.5), 0.6, 0.4, 0.6, 0, 0.7, sz * (d / 2 + 2));
+  },
+
+  /* A lot direction sign: blue panel in a silver frame, yellow lines led by white arrows. */
+  wayfinder(B, o, { w, d, h }, ctx) {
+    const s = o.sign || {};
+    const frame = M.metal('#c9ced3', 0.3);
+    const ph = h * 0.66;
+    const y0 = h - ph - 0.3;
+    for (const x of [-w / 2 + 0.2, w / 2 - 0.2]) B.box(frame, 0.4, h, 0.4, x, h / 2, 0);
+    B.box(frame, w, 0.35, 0.45, 0, h - 0.17, 0);
+    B.box(frame, w, 0.25, 0.45, 0, y0 - 0.12, 0);
+    B.box(M.painted(s.bg || '#1d4f9c', 0.4), w - 0.8, ph, 0.22, 0, y0 + ph / 2, 0);
+    const tex = wayTexture({ text: s.text || '< carriers / > service / ^ sales', color: s.color || '#ffd23f', bg: s.bg || '#1d4f9c', aspect: (w - 0.9) / (ph - 0.1) });
+    const mat = M.printFace(tex, { rough: 0.45 });
+    ctx.disposables.push(tex, mat);
+    twoFaced(B, mat, w - 0.9, ph - 0.1, y0 + ph / 2, 0.22);
+  },
+
+  /* A row marker: letters for the rows either side, on a tall pole. */
+  rowmarker(B, o, { w, h }, ctx) {
+    const s = o.sign || {};
+    B.slab(M.concrete('#a8a59d'), 1.6, 0.4, 1.6, 0, 0, 0);
+    B.add(cylGeo(0.16, 0.2, h - 0.4, 10), M.metal('#a9b0b6', 0.35), { pos: [0, 0.4 + (h - 0.4) / 2, 0] });
+    const pw = w;
+    const ph = Math.min(2.6, w * 0.7);
+    B.box(M.painted(s.bg || '#1d4f9c', 0.4), pw, ph, 0.2, 0, h - ph / 2 - 0.2, 0.25);
+    const tex = panelTexture({ text: s.text || 'J K', color: s.color || '#ffffff', bg: s.bg || '#1d4f9c', aspect: (pw - 0.2) / (ph - 0.2), border: true });
+    const mat = M.printFace(tex, { rough: 0.45 });
+    ctx.disposables.push(tex, mat);
+    B.quad(mat, [-(pw - 0.2) / 2, h - ph - 0.1, 0.37], [(pw - 0.2) / 2, h - ph - 0.1, 0.37], [(pw - 0.2) / 2, h - 0.3, 0.37], [-(pw - 0.2) / 2, h - 0.3, 0.37], [0, 0, 1, 0, 1, 1, 0, 1]);
+    B.quad(mat, [(pw - 0.2) / 2, h - ph - 0.1, 0.13], [-(pw - 0.2) / 2, h - ph - 0.1, 0.13], [-(pw - 0.2) / 2, h - 0.3, 0.13], [(pw - 0.2) / 2, h - 0.3, 0.13], [0, 0, 1, 0, 1, 1, 0, 1]);
+    for (const y of [h - 0.6, h - ph + 0.2]) B.box(M.metal('#8d949b', 0.4), 0.5, 0.12, 0.3, 0, y, 0.1);
+  },
+
+  /* DO NOT ENTER on a channel post. */
+  noentry(B, o, { w, h }) {
+    if (!NO_ENTRY_MAT) NO_ENTRY_MAT = M.printFace(noEntryTexture(), { rough: 0.35 });
+    B.box(M.metal('#a9b0b6', 0.35), 0.18, h, 0.12, 0, h / 2, 0);
+    const sw = Math.min(w, 2.5);
+    B.box(M.metal('#c9ced3', 0.3), sw, sw, 0.05, 0, h - sw / 2, 0.1);
+    B.quad(NO_ENTRY_MAT, [-sw / 2, h - sw, 0.13], [sw / 2, h - sw, 0.13], [sw / 2, h, 0.13], [-sw / 2, h, 0.13], [0, 0, 1, 0, 1, 1, 0, 1]);
+  },
+
+  /* Card and ticket pedestal for a lot gate: a white and blue housing on a
+   * post, on its own kerbed island with a guard bollard in front. */
+  accesskiosk(B, o, { w, d }) {
+    const blue = M.painted(o.color || '#1d4f9c', 0.35);
+    const white = M.painted('#f1f2f0', 0.35);
+    B.slab(M.concrete('#b9b6ae'), w, 0.5, d, 0, 0, 0);
+    B.slab(M.painted('#e7b416', 0.5), w + 0.05, 0.5, 0.6, 0, 0, -d / 2 + 0.3);
+    B.box(M.painted('#3a3f45', 0.45), 0.5, 3.0, 0.5, 0, 0.5 + 1.5, 0);
+    B.box(blue, 1.4, 1.1, 1.1, 0, 3.6, 0);
+    B.box(white, 1.4, 1.5, 1.1, 0, 4.9, 0);
+    B.box(blue, 1.6, 0.25, 1.3, 0, 5.75, 0);
+    const x = 0.71;
+    // Screen, card reader, ticket slot, button and intercom on the driver's side (+x).
+    B.box(M.pianoBlack(), 0.04, 0.5, 0.65, x, 5.15, 0);
+    B.box(M.lamp('#9fd0ff', 1.4), 0.02, 0.42, 0.57, x + 0.03, 5.15, 0);
+    B.box(M.painted('#2b3036', 0.4), 0.08, 0.22, 0.4, x + 0.02, 4.55, 0.2);
+    B.box(M.lamp('#40e070', 2), 0.02, 0.05, 0.1, x + 0.07, 4.62, 0.32);
+    B.box(M.painted('#2b3036', 0.4), 0.06, 0.08, 0.5, x + 0.02, 4.3, -0.1);
+    B.add(cylGeo(0.12, 0.12, 0.06, 12).rotateZ(PI / 2), M.painted('#c8241b', 0.4), { pos: [x + 0.03, 4.25, 0.3] });
+    for (let i = 0; i < 4; i++) B.box(M.painted('#2b3036', 0.4), 0.02, 0.03, 0.3, x + 0.02, 3.85 + i * 0.07, -0.15);
+    B.box(M.painted('#2b3036', 0.4), 0.02, 0.18, 0.18, x + 0.02, 3.55, 0.25);
+    B.post(M.painted('#e7b416', 0.45), 0.3, 3.6, 0, 0.5, -d / 2 + 1.1, 12);
+  },
+
+  /* Black ornamental steel fence: square pickets through two rails. */
+  ironfence(B, o, { w, h }) {
+    const mat = M.painted('#17191c', 0.45);
+    const posts = Math.max(1, Math.round(w / 8));
+    for (let i = 0; i <= posts; i++) {
+      const x = -w / 2 + (w * i) / posts;
+      B.box(mat, 0.25, h + 0.2, 0.25, x, (h + 0.2) / 2, 0);
+      B.add(new THREE.ConeGeometry(0.2, 0.3, 4).rotateY(PI / 4), mat, { pos: [x, h + 0.35, 0] });
+    }
+    for (const y of [0.45, h - 0.75, h - 0.35]) B.box(mat, w, 0.12, 0.14, 0, y, 0);
+    for (let x = -w / 2 + 0.25; x < w / 2 - 0.1; x += 0.42) B.box(mat, 0.06, h - 0.1, 0.06, x, (h - 0.1) / 2 + 0.2, 0);
+  },
+
+  /* A car-lot light: a tall square pole on a round concrete pier, four flat LED heads. */
+  lotlight(B, o, { h }, ctx) {
+    const steel = M.metal('#b9bfc4', 0.35);
+    B.add(cylGeo(1.2, 1.3, 3, 16), M.concrete('#b3afa6'), { pos: [0, 1.5, 0] });
+    B.add(cylGeo(0.22, 0.32, h - 3, 4).rotateY(PI / 4), steel, { pos: [0, 3 + (h - 3) / 2, 0] });
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * PI * 2;
+      const cx = Math.sin(a);
+      const cz = Math.cos(a);
+      B.box(steel, 0.25, 0.25, 1.6, cx * 0.8, h - 0.4, cz * 0.8, [0, a, 0]);
+      B.box(M.painted('#5b6168', 0.4), 1.8, 0.28, 2.4, cx * 2.6, h - 0.45, cz * 2.6, [0, a, 0]);
+      B.box(M.lamp('#fff6e8', 9), 1.5, 0.04, 2.0, cx * 2.6, h - 0.6, cz * 2.6, [0, a, 0]);
+    }
+    for (const k of [0, 2]) {
+      const a = (k / 4) * PI * 2;
+      ctx.lights.push({ x: Math.sin(a) * 2.6, y: h - 0.8, z: Math.cos(a) * 2.6, tx: Math.sin(a) * 18, tz: Math.cos(a) * 18, color: '#f4f6ff', power: 1100, range: 150, angle: 72, pool: 1 });
+    }
+  },
+
+  /* Precast concrete wheel stop pinned to the paving. */
+  wheelstop(B, o, { w }) {
+    const sh = new THREE.Shape();
+    sh.moveTo(-0.38, 0); sh.lineTo(0.38, 0); sh.lineTo(0.3, 0.32); sh.lineTo(0.18, 0.45); sh.lineTo(-0.18, 0.45); sh.lineTo(-0.3, 0.32); sh.closePath();
+    const mat = o.color && o.color !== '#b8b5ad' ? M.painted(o.color, 0.7) : M.concrete('#b8b5ad');
+    B.extrude(mat, sh, w, { pos: [-w / 2, 0, 0], rot: [0, PI / 2, 0] });
+    for (const x of [-w / 3, w / 3]) B.add(new THREE.CircleGeometry(0.06, 8).rotateX(-PI / 2), M.painted('#3a3f45', 0.6), { pos: [x, 0.455, 0] });
+  },
+
+  /* A steel pipe bollard in a coloured plastic sleeve. */
+  pipebollard(B, o) {
+    const hex = o.color || '#1d4f9c';
+    B.add(cylGeo(0.62, 0.62, 0.12, 16), M.concrete('#b3afa6'), { pos: [0, 0.06, 0] });
+    B.add(cylGeo(0.38, 0.38, 3.9, 16), M.plastic(hex, 0.3), { pos: [0, 2.0, 0] });
+    B.add(new THREE.SphereGeometry(0.38, 16, 8, 0, PI * 2, 0, PI / 2), M.plastic(hex, 0.3), { pos: [0, 3.95, 0] });
+    for (const y of [3.0, 3.35]) B.add(cylGeo(0.385, 0.385, 0.14, 16, true), M.plastic('#f4f4f2', 0.25), { pos: [0, y, 0] });
   },
 });

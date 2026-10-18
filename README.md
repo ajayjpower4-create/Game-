@@ -289,7 +289,7 @@ box truck or van up near a loading bay and it squares itself onto the bay.
 
 ## What you can add
 
-- **96 building models** in seven families — sheds and industry (warehouse
+- **97 building models** in seven families — sheds and industry (warehouse
   shell, mega shed, storage row, workshop, cold store, plant room, cross-dock,
   sawtooth mill, hangar, high-bay store, data hall, factory, repair garage,
   truck wash, recycling shed, research lab, food factory, print works,
@@ -299,7 +299,7 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   flats, medical centre, sports hall, car park deck, terrace of units,
   corporate HQ, brick loft offices, bank branch, drive-thru restaurant, café
   pavilion, shopping mall, fitness centre, tyre and auto centre, car
-  dealership), civic (fire station, school, elementary school, high school,
+  dealership, used-car superstore), civic (fire station, school, elementary school, high school,
   library, chapel, police station, hospital, town hall, museum, courthouse,
   university block, ambulance station), homes (apartment block, townhouses,
   detached house, bungalow, semi-detached pair, stone cottage, high-rise
@@ -310,7 +310,8 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   multi-storey car park, control room) and small buildings (small office,
   gatehouse HQ, pitched unit, link annex, lodge, kiosk, service-station shop,
   toilet block, greenhouse, barn, substation, lock-up garages). Each takes
-  any of nine claddings (now with lap siding and board and batten), six roof types, wall/trim/roof colours, a glass roof
+  any of ten claddings (lap siding, board and batten and split-face block among
+  them), six roof types, wall/trim/roof colours, a glass roof
   and a parapet.
 - **34 machines**, placed by hand on any roof — or on the ground, where they
   stand on a concrete plinth — and dragged around once they are down:
@@ -328,30 +329,32 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   cube, container booth, twin-lane kiosk, pitched hut, raised lookout, round
   kiosk and a gate office — each lit inside at night, each with a fascia sign
   you write.
-- **257 props** — the new **cars**, **trucks**, **dealership**, **paint &
-  drains**, **playground**, **garden tools** and **backyard** shelves (see the
-  sections below), plus boundary (mesh, palisade and timber fences, walls, guard
-  rail, bollards, Jersey barriers, crowd barriers, cones, drums, speed bumps);
-  **12 gates** (gate arm, heavy boom with skirt, sliding, cantilever, double
+- **282 props** — the new **cars**, **trucks**, **trailers**, **dealership**,
+  **paint & drains**, **playground**, **garden tools** and **backyard** shelves
+  (see the sections below), plus boundary (mesh, palisade, timber and black
+  ornamental steel fences, walls, guard rail, bollards, sleeved pipe bollards in
+  six colours, Jersey barriers, crowd barriers, cones, drums, speed bumps);
+  **13 gates** (gate arm, heavy boom with skirt, sliding, cantilever, double
   swing and bi-folding speed gates, road blocker, rising bollards, tyre
-  killer, pedestrian gate, turnstile and an entrance portal that carries your
-  sign); **side roads** (two-lane road, service lane, bend, T-junction,
+  killer, pedestrian gate, turnstile, a card and ticket kiosk on its island and
+  an entrance portal that carries your sign); **side roads** (two-lane road, service lane, bend, T-junction,
   crossroads, roundabout, turning head and zebra crossing — a straight road
   or junction laid across a fence, hedge or boundary wall cuts an opening in
   it, and a road that reaches the street gets a dropped kerb); the **plant
   yard** (louvred plant compound, low wall, screen wall, concrete plinth and a
   pipe bridge, for machinery beside the building); signs (monument, pylon, billboard,
-  post and direction signs, stop/speed/parking/accessible signs, traffic
-  light, flagpoles, A-board, LED message board, wayfinding totem, entrance
+  post and direction signs, stop/speed/parking/accessible and Do Not Enter
+  signs, traffic light, flagpoles, A-board, LED message board, wayfinding totem, entrance
   wall with lettering, feather flag, overhead gantry sign, site rules board,
   site map board, speed display sign and printed hoarding — each with its
-  own words and colours); lighting (area lights, double heads, flood masts,
-  street lamps, heritage lanterns, bollard lights); **CCTV** (twin-camera
+  own words and colours); lighting (area lights, double heads, four-head car lot
+  lights on round piers, flood masts, street lamps, heritage lanterns, bollard
+  lights); **CCTV** (twin-camera
   pole, bullet camera post, dome camera pole, PTZ mast whose camera sweeps
   back and forth, four-camera mast, ANPR camera on an arm, and a mobile CCTV
   tower on a trailer — see below); **parking** (a parking lot you size
-  yourself, a small car park, an angled lot, pay station, trolley shelter and
-  car park sign — see below); **park and leisure** (splash-pad fountain, wall
+  yourself, a small car park, an angled lot, pay station, trolley shelter, car
+  park sign, row marker signs and precast wheel stops — see below); **park and leisure** (splash-pad fountain, wall
   fountain, drinking fountain, reflecting pool, steel sculpture, gazebo,
   pergola, playground, basketball court, raised bed, planter with tree, street
   tree in a grate); planting (broadleaf, oak,
@@ -362,7 +365,8 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   shipping containers, generator, transformer, LPG and oil tanks, IBCs, gas
   cage, silo, water tower, pallets, racking, canopies, solar carport, EV
   chargers, fuel pumps and canopy, bus and smoking shelters, bike racks,
-  benches, picnic tables, bins, hydrant, post box, vending machine, portable
+  benches, picnic tables, bins, hydrant (red, bronze, yellow, silver, blue or
+  green), post box, vending machine, portable
   toilet, site cabin, scaffold, wind turbine, phone mast, power pole);
   vehicles (trailer, reefer, tractor unit, box truck, tanker, flatbed, dump
   truck, mixer, bus, van, pickup, SUV, car, hatchback, police car, ambulance,
@@ -371,10 +375,11 @@ box truck or van up near a loading bay and it squares itself onto the bay.
 
 ## Cars and trucks
 
-The **Cars** shelf has sixteen detailed models from eight makes — Toyota Camry
-and RAV4, Ford F-150 and Mustang, Chevrolet Tahoe and Corvette, Honda Civic
-and Odyssey, Tesla Model 3 and Cybertruck, BMW 3 Series and X5,
-Mercedes-Benz G-Class and Sprinter, Jeep Wrangler and Grand Cherokee — built
+The **Cars** shelf has twenty-four detailed models, three from each of eight
+makes — Toyota Camry, RAV4 and Tacoma, Ford F-150, Mustang and Bronco,
+Chevrolet Tahoe, Corvette and Silverado, Honda Civic, Odyssey and CR-V, Tesla
+Model 3, Cybertruck and Model Y, BMW 3 Series, X5 and M4, Mercedes-Benz
+G-Class, Sprinter and C-Class, Jeep Wrangler, Grand Cherokee and Gladiator — built
 at their real lengths, widths, heights and wheelbases. Bodies are lofted from
 cross-sections with real wheel arches; each has its own grille, lamps, badges,
 mirrors, door shut lines, handles, wipers, plates, wheels of its own design
@@ -391,14 +396,27 @@ leaf-sprung steer axle, air-ride drive tandem on dual wheels, polished
 aluminium wheels with hub and nut covers, fuel tanks on straps, steps and
 grab handles, the fifth wheel and deck plate with coiled red, blue and green
 air lines, quarter fenders, mud flaps, west-coast mirrors, marker lights and a
-cab interior. Makes and models are named only to say what each one is meant to
-look like; no manufacturer logos are reproduced.
+cab interior.
+
+The **Trailers** shelf has eight 8½ ft wide semi trailers: a 53 ft dry van
+(posts, rails, swing doors with lock rods, side skirts), a 53 ft reefer with its
+front refrigeration unit and fuel tank, a 48 ft flatbed carrying strapped
+lumber behind a headache rack, a 53 ft step deck with steel, a stainless
+tanker with dome lids and a catwalk, a two-deck car hauler loaded with six real
+cars, a 40 ft container on a gooseneck chassis and an end-dump tub. Each has
+landing gear, a sliding tandem on dual wheels, mud flaps, lamps, a rear underride
+guard and reflective tape. Park one on its own, or pick a truck and choose a trailer
+in its panel to hitch it: the kingpin sits over the fifth wheel and the rig
+becomes one object you move and turn together, in any of eight trailer colours.
+Makes and models are named only to say what each one is meant to look like;
+no manufacturer logos are reproduced.
 
 ## The garden brush
 
 **Add → Garden** paints planting straight onto the ground. Pick a plant —
-boxwood, azalea, hydrangea, rose, spreading juniper, arborvitae, holly,
-ornamental grass, hosta, lavender, daylilies, bedding flowers, tulips,
+boxwood, azalea, hydrangea, rose, Japanese maple, spreading juniper,
+arborvitae, holly, ornamental grass, hosta, lavender, daylilies, variegated
+liriope with its purple spikes, bedding flowers, tulips,
 boulders or landscape stones — or a ground cover — brown, black or red mulch,
 pine straw, river rock or pea gravel — then press and drag. Set the brush size
 (1–40 ft) and density; hold **Shift** (or switch on the eraser) to take things
@@ -437,6 +455,20 @@ the lot. Every car on it is a full make and model. The shelf also has a
 display ramp, a feature turntable that turns with a car on it, pennant
 strings, an air dancer that never stops waving, a pylon sign, a service drive
 sign, a key drop box and a tyre rack.
+
+The **Used-car superstore** is built in beige split-face block with smooth
+bands: a raised, stepped parapet over a two-tier showroom front, an entrance
+tower of block piers under a blue standing-seam gable left open on a white
+steel truss, the store's name on a blue brand panel over the street number and
+the double doors, blue bollards, and a service wing of full-view glass
+overhead doors under a blue band with its sign. Type the store's own name in
+**Name on the building** (the dealership and the schools take one too). The
+shelf has its lot kit: a **store pylon** (stacked stucco base, lit blue
+cabinet with the name and its dashes), **lot direction signs** (one line per
+place, each led by an arrow — `< carriers / > service / ^ sales`), **row
+marker signs**, a **card and ticket kiosk**, wheel stops, sleeved bollards,
+the ornamental fence and four-head lot lights. The model follows the look of a
+real store's photos but carries no one's brand: the name is whatever you write.
 
 ## Schools, homes, playgrounds and yards
 
@@ -605,8 +637,9 @@ doors get an apron, and every entrance gets a path and a zebra crossing.
 | `public/building/engine/runs.js` | Duct and pipe runs, their supports, square-cornered routing |
 | `public/building/engine/cameras.js` | CCTV heads, brackets and coverage cones, shared by poles and walls |
 | `public/building/engine/vehicles.js` | Vehicles |
-| `public/building/engine/cars.js` | The detailed car generator: lofted bodies, wheels, lamps, cabins, the sixteen models |
-| `public/building/engine/trucks.js` | The six semi tractors on a shared chassis |
+| `public/building/engine/cars.js` | The detailed car generator: lofted bodies, wheels, lamps, cabins, the twenty-four models |
+| `public/building/engine/trucks.js` | The six semi tractors on a shared chassis, and hitching a trailer to one |
+| `public/building/engine/trailers.js` | The eight semi trailers: tandems, landing gear, bodies and loads |
 | `public/building/engine/garden.js` | The garden brush: plant models, instancing, ground covers, stamping and erasing |
 | `public/building/engine/marks.js` | Pavement markings, painted kerbs, crosswalks, hatching, trench drains, stencil lettering |
 | `public/building/engine/props2.js` | Stencils, drainage, dealership, playground, garden-tool and backyard props |

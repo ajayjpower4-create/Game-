@@ -19,7 +19,8 @@ import { Life } from './engine/life.js';
 import { roofItemModel, roofSurfaceY, fixtureRect, PARAPET } from './engine/buildings.js';
 import { buildRun, squarePath } from './engine/runs.js';
 import { lotLayout, LOT_ANGLES, STALL_WIDTHS, DEALER_ORGANIZE, DEALER_FACING, dealerSettings } from './lots.js';
-import { CAR_MAKES } from './vehiclelist.js';
+import { CAR_MAKES, TRAILERS, TRAILER_BY_ID, TRUCK_BY_ID } from './vehiclelist.js';
+import { rigLength } from './engine/trucks.js';
 import { GARDEN, GARDEN_GROUPS, COVERS, COVER_BY_ID, stamp as gardenStamp, coverStamp, erase as gardenErase } from './engine/garden.js';
 import * as THREE from 'three';
 
@@ -275,8 +276,9 @@ function menuPanel(kind) {
   }
   if (kind === 'news') {
     const items = [
-      ['🚗', 'Real cars', '16 detailed models from 8 makes — Toyota, Ford, Chevrolet, Honda, Tesla, BMW, Mercedes-Benz and Jeep — with cabins you can see into.'],
-      ['🚛', 'Semi trucks', 'Freightliner, Peterbilt, Kenworth, Volvo, Mack and International tractors with dual wheels, tanks, stacks and air lines.'],
+      ['🚗', 'Real cars', '24 detailed models, three from each of 8 makes — Toyota, Ford, Chevrolet, Honda, Tesla, BMW, Mercedes-Benz and Jeep — with cabins you can see into.'],
+      ['🚛', 'Semi trucks & trailers', 'Six tractors, and eight trailers to hitch to them: dry van, reefer, flatbed with lumber, step deck, tanker, car hauler, container and end dump.'],
+      ['🏬', 'Car superstore', 'A split-face block store with an open-truss entrance tower, glass service doors, and the lot kit: pylon, direction signs, row markers, kiosk, fence and lights.'],
       ['🌺', 'Garden brush', 'Paint shrubs, flowers, grasses, rocks and mulch, pine straw or stone straight onto the ground.'],
       ['🚒', 'Paint & drains', 'Draw fire lanes, red kerbs, crosswalks, hatched zones and trench drains; drop stencils, catch basins and manholes.'],
       ['🚘', 'Dealerships', 'A showroom with a brand portal and service drive, and a display lot you size and stock by brand, body or colour.'],
@@ -948,6 +950,9 @@ function roofEditor(b) {
     ${list ? `<ul class="objlist">${list}</ul>` : '<p class="note">Nothing on this roof yet.</p>'}`;
 }
 
+/* Styles whose model letters a name on itself (a brand panel, a school tower). */
+const NAMED_EXTRAS = new Set(['dealership', 'carstore', 'school', 'highschool']);
+
 function buildingPanel(b) {
   const H = buildingHeight(b);
   const single = b.floors === 1;
@@ -957,6 +962,8 @@ function buildingPanel(b) {
     ${objActions(b)}
     <div class="field"><label for="p-name">Name</label>
       <input id="p-name" type="text" maxlength="40" value="${esc(b.name)}" data-act="rename"></div>
+    ${NAMED_EXTRAS.has(style.extras) ? `<div class="field"><label for="p-brand">Name on the building</label>
+      <input id="p-brand" type="text" maxlength="28" placeholder="${style.extras === 'carstore' ? 'Auto Superstore' : esc(b.name)}" value="${esc((b.sign && b.sign.text) || '')}" data-act="sign" data-key="text"></div>` : ''}
     <div class="divider"></div>
     ${fixtureEditor(b)}
     <div class="divider"></div>
@@ -1021,14 +1028,30 @@ function propPanel(o) {
       <input id="p-w2" type="range" min="6" max="200" step="2" value="${Math.round(o.w || spec.w)}" data-act="num" data-key="w"></div>
       <div class="field"><label for="p-d2">Depth<b>${fmt(o.d || spec.d)} ft</b></label>
       <input id="p-d2" type="range" min="4" max="160" step="2" value="${Math.round(o.d || spec.d)}" data-act="num" data-key="d"></div>` : ''}
+    ${spec.palette ? `<div class="field"><label>Colour</label><div class="chips">
+      ${spec.palette.map(([c, n]) => `<button class="chip swatch${(o.color || spec.palette[0][0]) === c ? ' on' : ''}" style="background:${c}" title="${n}" data-act="set" data-key="color" data-value="${c}"></button>`).join('')}
+    </div></div>` : ''}
     ${spec.color || ['dumpster', 'skip', 'flag'].includes(o.type) ? `<div class="field"><label>${spec.car || spec.truck ? 'Paint' : 'Colour'}</label><div class="chips">
       ${(spec.car || spec.truck ? CAR_PAINTS : spec.paintArrow ? MARK_COLORS : ['#d9dde2', '#1d2735', '#7d2f2f', '#1e2229', '#f1f2f4', '#35543f', '#8d5a24', '#2c4a7c', '#c0392b', '#c9a227', '#b5482f', '#1f5b8a'].map((c) => [c, ''])).map(([c, n]) => `<button class="chip swatch${o.color === c ? ' on' : ''}" style="background:${c}" title="${n}" data-act="set" data-key="color" data-value="${c}"></button>`).join('')}
     </div></div>` : ''}
     ${spec.car ? `<p class="note">${esc(spec.body || '')} · ${fmt(spec.d)} ft long, ${fmt(spec.w)} ft wide. Look through the glass: the seats, dashboard and steering wheel are all modelled.</p>` : ''}
-    ${spec.truck ? `<p class="note">${esc(spec.body || '')} · ${fmt(spec.d)} ft long, ${fmt(spec.h)} ft tall. Air lines, fuel tanks, fifth wheel and dual drive wheels are all modelled.</p>` : ''}
+    ${spec.truck ? `<p class="note">${esc(spec.body || '')} · ${fmt(spec.d)} ft long, ${fmt(spec.h)} ft tall. Air lines, fuel tanks, fifth wheel and dual drive wheels are all modelled.</p>${truckTrailerFields(o)}` : ''}
+    ${spec.trailerKind ? `<p class="note">${fmt(spec.d)} ft long, 8.5 ft wide. Landing gear, sliding tandem on dual wheels, lamps and reflective tape. Back it up to a loading bay and it squares itself on. Or hitch one to any truck from the truck's own panel.</p>` : ''}
     ${spec.cover ? `<div class="field"><label>Ground cover</label><div class="chips">${COVERS.map((c) => `<button class="chip${(o.cover || 'mulch-brown') === c.id ? ' on' : ''}" data-act="set" data-key="cover" data-value="${c.id}">${esc(c.name)}</button>`).join('')}</div></div>` : ''}
-    ${spec.stencil ? stencilFields(o) : spec.sign ? `<div class="divider"></div><h3>Sign</h3>${signFields('s', o.sign || {}, { bg: true, sub: !!spec.sub || o.type === 'billboard' || o.type === 'monument' })}` : ''}
+    ${spec.stencil ? stencilFields(o) : spec.sign ? `<div class="divider"></div><h3>Sign</h3>${signFields('s', o.sign || {}, { bg: true, sub: !!spec.sub || o.type === 'billboard' || o.type === 'monument' })}${spec.hint ? `<p class="note">${esc(spec.hint)}</p>` : ''}` : ''}
     ${spec.cam ? camFields(o, spec) : ''}`;
+}
+
+const TRAILER_PAINTS = [['#f2f3f4', 'White'], ['#c4c8cc', 'Silver'], ['#2a5b9b', 'Blue'], ['#8a3324', 'Rust red'], ['#2e6b3a', 'Green'], ['#16181b', 'Black'], ['#e2b31b', 'Yellow'], ['#d9dde0', 'Stainless']];
+
+/** A truck's trailer: none, or any of the trailers, coupled on behind. */
+function truckTrailerFields(o) {
+  const cur = o.trailer || '';
+  const T = TRAILER_BY_ID[cur];
+  return `<div class="divider"></div><h3>Trailer</h3>
+    <div class="chips">${[['', '🚛', 'None (bobtail)'], ...TRAILERS.map((t) => [t.id, t.icon, t.name])].map(([id, i, n]) => `<button class="chip${cur === id ? ' on' : ''}" data-act="truck-trailer" data-value="${id}">${i} ${esc(n)}</button>`).join('')}</div>
+    ${T ? `<div class="field" style="margin-top:10px"><label>Trailer colour</label><div class="chips">${TRAILER_PAINTS.map(([c, n]) => `<button class="chip swatch${(o.trailerColor || T.color) === c ? ' on' : ''}" style="background:${c}" title="${n}" data-act="set" data-key="trailerColor" data-value="${c}"></button>`).join('')}</div></div>
+    <p class="note">The rig is ${fmt(rigLength(o.type, cur))} ft bumper to back doors.</p>` : ''}`;
 }
 
 /* Words painted on the pavement: the usual ones a click away. */
@@ -1409,7 +1432,7 @@ function setBays(b, face, n) {
 /* Doors live in the ground row of each wall grid like any other bay, so the
  * model, the paths to them, the truck aprons and the stats all follow a door
  * wherever it is moved. */
-const DOOR_TYPES = ['door', 'firedoor', 'shopfront', 'roll', 'garage', 'dock'];
+const DOOR_TYPES = ['door', 'firedoor', 'shopfront', 'roll', 'fullview', 'garage', 'dock'];
 const FACES = ['N', 'E', 'S', 'W'];   // clockwise, so "right" along a wall leads to the next one
 const FACE_NAME = { N: 'Front', E: 'Right', S: 'Back', W: 'Left' };
 const isDoor = (t) => DOOR_TYPES.includes(t);
@@ -2773,6 +2796,25 @@ function applyAction(el, ev) {
     case 'panel-toggle': document.getElementById('panel')?.classList.toggle('collapsed'); return;
     case 'cat': ui.cat = value; return drawPanel();
     case 'brush': return setBrush(ui.brush === key ? null : key);
+    case 'truck-trailer': {
+      if (!o || !TRUCK_BY_ID[o.type]) return;
+      snapshot();
+      const before = footprint(o);
+      if (value) {
+        o.trailer = value;
+        o.d = rigLength(o.type, value);
+        o.h = Math.max(TRUCK_BY_ID[o.type].H, TRAILER_BY_ID[value].H);
+      } else {
+        delete o.trailer;
+        delete o.d;
+        delete o.h;
+      }
+      // Keep the rig centred where the truck was.
+      const after = footprint(o);
+      o.y += (before.d - after.d) / 2;
+      o.x += (before.w - after.w) / 2;
+      return commit();
+    }
     case 'mark-flip': {
       if (!o || o.kind !== 'run') return;
       snapshot();

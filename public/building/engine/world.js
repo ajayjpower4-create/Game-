@@ -101,6 +101,8 @@ const PARKED_DETAIL = [
   ['toyota-camry', 5], ['toyota-rav4', 5], ['honda-civic', 4], ['ford-f150', 4], ['tesla-model3', 3], ['chevrolet-tahoe', 3],
   ['honda-odyssey', 2], ['bmw-3series', 2], ['bmw-x5', 2], ['jeep-grandcherokee', 3], ['jeep-wrangler', 2], ['ford-mustang', 1],
   ['mercedes-gclass', 1], ['chevrolet-corvette', 0.5], ['mercedes-sprinter', 1], ['tesla-cybertruck', 0.5],
+  ['toyota-tacoma', 3], ['ford-bronco', 1.5], ['chevrolet-silverado', 3], ['honda-crv', 4], ['tesla-modely', 3],
+  ['bmw-m4', 0.7], ['mercedes-cclass', 2], ['jeep-gladiator', 1],
 ].map(([id, wt]) => [id, CAR_BY_ID[id].W, CAR_BY_ID[id].L, CAR_BY_ID[id].H, wt]);
 
 export class World {
