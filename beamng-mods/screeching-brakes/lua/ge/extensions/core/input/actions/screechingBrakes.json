@@ -1,0 +1,26 @@
+{
+    "screechingBrakes_toggle": {
+        "cat": "gameplay",
+        "order": 900,
+        "ctx": "tlua",
+        "onDown": "if screechingBrakes then screechingBrakes.toggleEnabled() end",
+        "title": "Screeching Brakes: On / Off",
+        "desc": "Turn the screeching brakes on or off"
+    },
+    "screechingBrakes_cycle": {
+        "cat": "gameplay",
+        "order": 901,
+        "ctx": "tlua",
+        "onDown": "if screechingBrakes then screechingBrakes.cycleVehicleSound() end",
+        "title": "Screeching Brakes: Car / Truck / Off",
+        "desc": "Switch the screech sound used by the vehicle you are driving"
+    },
+    "screechingBrakes_test": {
+        "cat": "gameplay",
+        "order": 902,
+        "ctx": "tlua",
+        "onDown": "if screechingBrakes then screechingBrakes.testSound() end",
+        "title": "Screeching Brakes: Test sound",
+        "desc": "Play the screech once on the vehicle you are driving"
+    }
+}

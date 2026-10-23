@@ -1,0 +1,71 @@
+<div class="sbk-app">
+  <style>
+    .sbk-app { box-sizing: border-box; width: 100%; height: 100%; overflow: auto; padding: 10px 12px; color: #f2f2f2;
+      background: rgba(18, 19, 24, 0.88); border-radius: 6px; font-family: inherit; font-size: 13px; }
+    .sbk-app * { box-sizing: border-box; }
+    .sbk-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .sbk-title { font-size: 15px; font-weight: 700; letter-spacing: 0.3px; }
+    .sbk-power { min-width: 54px; padding: 4px 10px; border: 0; border-radius: 4px; font-weight: 700; cursor: pointer;
+      background: #4a4d55; color: #ddd; }
+    .sbk-power.on { background: #ff6a00; color: #fff; }
+    .sbk-section { margin: 8px 0; }
+    .sbk-label { color: #b9bcc6; font-size: 12px; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 6px; }
+    .sbk-model { color: #ffb37a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sbk-seg { display: flex; gap: 3px; }
+    .sbk-seg button { flex: 1; padding: 5px 0; border: 1px solid #3c3f48; border-radius: 4px; background: #2a2c33; color: #e6e6e6;
+      cursor: pointer; font-size: 12px; }
+    .sbk-seg button.sel { background: #ff6a00; border-color: #ff6a00; color: #fff; font-weight: 700; }
+    .sbk-hint { color: #8d909a; font-size: 11px; margin-top: 3px; }
+    .sbk-row { display: grid; grid-template-columns: 62px 1fr 74px; align-items: center; gap: 6px; margin: 6px 0; }
+    .sbk-row span:last-child { text-align: right; color: #ffb37a; font-size: 12px; }
+    .sbk-row input[type=range] { width: 100%; accent-color: #ff6a00; }
+    .sbk-check { display: flex; align-items: center; gap: 6px; margin: 8px 0; cursor: pointer; }
+    .sbk-test { display: flex; gap: 6px; margin-top: 8px; }
+    .sbk-test button { flex: 1; padding: 6px 0; border: 1px solid #ff6a00; border-radius: 4px; background: transparent;
+      color: #ffb37a; cursor: pointer; font-weight: 600; }
+    .sbk-off { opacity: 0.5; }
+  </style>
+
+  <div class="sbk-head">
+    <span class="sbk-title">Screeching Brakes</span>
+    <button class="sbk-power" ng-class="{on: state.enabled}" ng-click="toggle()">{{ state.enabled ? 'ON' : 'OFF' }}</button>
+  </div>
+
+  <div ng-class="{'sbk-off': state && !state.enabled}">
+    <div class="sbk-section">
+      <div class="sbk-label"><span>This vehicle</span><span class="sbk-model">{{ state.vehicleModel || 'no vehicle' }}</span></div>
+      <div class="sbk-seg">
+        <button ng-repeat="c in vehicleChoices" ng-class="{sel: state.vehicleSound === c.id}" ng-click="setVehicleSound(c.id)">{{ c.label }}</button>
+      </div>
+      <div class="sbk-hint">Using: {{ label(state.effectiveSound) }}</div>
+    </div>
+
+    <div class="sbk-section">
+      <div class="sbk-label"><span>Default for every other vehicle</span></div>
+      <div class="sbk-seg">
+        <button ng-repeat="c in defaultChoices" ng-class="{sel: state.defaultSound === c.id}" ng-click="setDefaultSound(c.id)">{{ c.label }}</button>
+      </div>
+    </div>
+
+    <div class="sbk-row">
+      <span>Volume</span>
+      <input type="range" min="0" max="100" step="1" ng-model="ui.volume" ng-change="volumeChanged()">
+      <span>{{ ui.volume }}%</span>
+    </div>
+    <div class="sbk-row">
+      <span>Starts at</span>
+      <input type="range" min="5" max="90" step="1" ng-model="ui.sensitivity" ng-change="sensitivityChanged()">
+      <span>{{ ui.sensitivity }}% brake</span>
+    </div>
+
+    <label class="sbk-check">
+      <input type="checkbox" ng-model="ui.allVehicles" ng-change="allChanged()">
+      <span>AI and traffic vehicles screech too</span>
+    </label>
+
+    <div class="sbk-test">
+      <button ng-click="test('car')">Test car</button>
+      <button ng-click="test('truck')">Test truck</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Livery Designer</title>
+<style>
+/*STYLES*/
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand"><b>BeamNG</b> <span>Livery Designer</span></div>
+  <button class="btn" id="btnNew">New</button>
+  <button class="btn" id="btnOpen">Open project</button>
+  <button class="btn" id="btnSave" title="Ctrl+S">Save project</button>
+  <div class="sep"></div>
+  <button class="btn" id="btnUndo" title="Undo (Ctrl+Z)">Undo</button>
+  <button class="btn" id="btnRedo" title="Redo (Ctrl+Y)">Redo</button>
+  <div class="spacer"></div>
+  <button class="btn" id="btnGuide">Guide: how to make and install</button>
+  <button class="btn primary" id="btnExportTop">Export livery</button>
+</header>
+
+<div id="app">
+  <nav id="tools">
+    <button data-tool="select" title="Select and move (V)"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-3 6z"/></svg></button>
+    <button data-tool="hand" title="Move the view (H, or hold Space)"><svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 013 0V11m0-6.5a1.5 1.5 0 013 0V11m0-4.5a1.5 1.5 0 013 0V14a7 7 0 01-7 7h-1a6 6 0 01-5-3l-2.5-4.3a1.5 1.5 0 012.6-1.5L8 15"/></svg></button>
+    <div class="gap"></div>
+    <button data-tool="text" title="Text (T)"><svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg></button>
+    <button data-tool="shape" title="Shapes (R)"><svg viewBox="0 0 24 24"><rect x="3" y="10" width="10" height="10" rx="1"/><circle cx="16" cy="8" r="5"/></svg></button>
+    <button data-tool="stripe" title="Stripe (L)"><svg viewBox="0 0 24 24"><path d="M3 17L17 3h4L7 17zM7 21L21 7v4L11 21z"/></svg></button>
+    <button data-tool="brush" title="Brush (B)"><svg viewBox="0 0 24 24"><path d="M14 4l6 6-8.5 8.5-6-6zM5.5 12.5L3 21l8.5-2.5"/></svg></button>
+    <button data-tool="eraser" title="Eraser (E)"><svg viewBox="0 0 24 24"><path d="M8 20h12M4.5 15.5l9-9a2 2 0 012.8 0l3.2 3.2a2 2 0 010 2.8L13 19H8z"/></svg></button>
+    <button data-tool="image" title="Image or logo (I)"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/></svg></button>
+    <button data-tool="picker" title="Color picker (K)"><svg viewBox="0 0 24 24"><path d="M14.5 5.5l4 4M3 21l2-5 9-9 3 3-9 9zM16 3a2.1 2.1 0 013 3l-1.5 1.5-3-3z"/></svg></button>
+  </nav>
+
+  <section id="stage">
+    <div id="viewbar">
+      <div class="seg" id="viewseg">
+        <button data-view="full" title="1">Whole sheet</button>
+        <button data-view="left" class="left" title="2">Left side</button>
+        <button data-view="right" class="right" title="3">Right side</button>
+        <button data-view="both" title="4">Both sides</button>
+      </div>
+      <button class="btn" id="btnZones">Set side areas</button>
+      <div class="seg">
+        <button id="zoomOut" title="Zoom out (-)">&minus;</button>
+        <button id="zoomFit" title="Fit (0)">Fit</button>
+        <button id="zoomIn" title="Zoom in (+)">+</button>
+      </div>
+      <span id="zoomlbl">100%</span>
+      <div id="sheettabs"></div>
+    </div>
+    <div id="toolopts"></div>
+    <div id="canvaswrap">
+      <canvas id="view"></canvas>
+      <div id="emptyhint" class="hidden">
+        <b>Start here:</b> open the <b>Sheet</b> tab and load your vehicle's UV template, or just start designing.
+        <div class="btnrow" style="justify-content:center;margin-top:8px">
+          <button class="btn primary" id="hintTpl">Load template…</button>
+          <button class="btn" id="hintGuide">Read the guide</button>
+        </div>
+      </div>
+    </div>
+    <div id="statusbar"><span id="stPos"></span><span id="stSize"></span><span id="stHint"></span></div>
+  </section>
+
+  <aside id="panel">
+    <div id="paneltabs">
+      <button data-pane="layers" class="on">Layers</button>
+      <button data-pane="sheet">Sheet</button>
+      <button data-pane="export">Export</button>
+    </div>
+
+    <div class="pane" id="pane-layers">
+      <div class="btnrow">
+        <button class="btn small" id="lyUp" title="Bring forward (])">Up</button>
+        <button class="btn small" id="lyDown" title="Send backward ([)">Down</button>
+        <button class="btn small" id="lyDup" title="Ctrl+D">Duplicate</button>
+        <button class="btn small danger" id="lyDel" title="Delete">Delete</button>
+      </div>
+      <div class="btnrow"><button class="btn" id="lyMirror" style="flex:1" title="Copy the selected item to the other side of the vehicle (M)">Mirror to the other side &#8644;</button></div>
+      <div id="layerlist"></div>
+      <div id="props"></div>
+    </div>
+
+    <div class="pane hidden" id="pane-sheet">
+      <h3>Template (UV map)</h3>
+      <p class="note">The picture from the vehicle's files that shows where each body panel sits on the texture.</p>
+      <div class="btnrow">
+        <button class="btn" id="btnLoadTpl">Load template…</button>
+        <button class="btn small danger" id="btnClearTpl">Remove</button>
+      </div>
+      <div class="note" id="tplInfo"></div>
+      <div class="row"><label>Show as</label>
+        <select class="grow" id="tplMode">
+          <option value="overlay">Guide on top (not in livery)</option>
+          <option value="background">Background (part of livery)</option>
+          <option value="hidden">Hidden</option>
+        </select></div>
+      <div class="row"><label>Opacity</label><input type="range" class="grow" id="tplOpacity" min="0" max="1" step="0.01"></div>
+      <div class="row"><label>Lines</label>
+        <select class="grow" id="tplBlend">
+          <option value="source-over">Normal</option>
+          <option value="multiply">Multiply (dark lines)</option>
+          <option value="screen">Screen (light lines)</option>
+          <option value="difference">Difference (on any color)</option>
+        </select></div>
+
+      <h3>Base color</h3>
+      <div class="row"><label>Color</label><input type="color" id="bgColor"><span class="note" id="bgNote"></span></div>
+      <label class="check"><input type="checkbox" id="bgPaint"> Use the in-game paint color for empty areas</label>
+      <p class="note">When ticked, empty areas are see-through in the game and show the paint you pick in the Paint menu. The color above is then only a preview.</p>
+
+      <h3>Left &amp; right sides</h3>
+      <div class="btnrow"><button class="btn" id="btnZones2">Set side areas on the canvas</button></div>
+      <div class="grid4">
+        <div class="row"><label style="color:var(--left)">L x</label><input type="number" data-zone="left.x"></div>
+        <div class="row"><label style="color:var(--left)">y</label><input type="number" data-zone="left.y"></div>
+        <div class="row"><label style="color:var(--left)">w</label><input type="number" data-zone="left.w"></div>
+        <div class="row"><label style="color:var(--left)">h</label><input type="number" data-zone="left.h"></div>
+        <div class="row"><label style="color:var(--right)">R x</label><input type="number" data-zone="right.x"></div>
+        <div class="row"><label style="color:var(--right)">y</label><input type="number" data-zone="right.y"></div>
+        <div class="row"><label style="color:var(--right)">w</label><input type="number" data-zone="right.w"></div>
+        <div class="row"><label style="color:var(--right)">h</label><input type="number" data-zone="right.h"></div>
+      </div>
+      <div class="row"><label>Right side layout</label>
+        <select class="grow" id="zMirror">
+          <option value="1">Mirrored (usual)</option>
+          <option value="0">Same direction as left</option>
+        </select></div>
+      <label class="check"><input type="checkbox" id="zFlip"> Flip graphics on the other side</label>
+      <p class="note">Only tick this if mirrored text shows up backwards in the game.</p>
+
+      <h3>Vehicle material</h3>
+      <p class="note">Which of the vehicle's materials this sheet paints. Load the vehicle's <b>.materials.json</b> so the livery keeps the vehicle's real shine and details.</p>
+      <div class="btnrow"><button class="btn" id="btnLoadMat">Load vehicle materials file…</button></div>
+      <div id="matInfo" class="note"></div>
+      <div id="matList" class="matlist hidden"></div>
+      <div class="row"><label>Material names</label><input type="text" class="grow" id="matNames" placeholder="e.g. pickup_main"></div>
+      <p class="note">Separate several names with commas.</p>
+
+      <h3>Sheet size</h3>
+      <div class="row"><label>Size (px)</label><input type="number" id="shW" min="64" max="8192"> &times; <input type="number" id="shH" min="64" max="8192"></div>
+      <div class="btnrow">
+        <button class="btn small" data-size="1024">1024</button>
+        <button class="btn small" data-size="2048">2048</button>
+        <button class="btn small" data-size="4096">4096</button>
+        <button class="btn small" id="btnMatchTpl">Match template</button>
+      </div>
+      <p class="note">Changing the size scales your design to fit. Use the same size as the template.</p>
+
+      <h3>Sheets</h3>
+      <p class="note">Most vehicles need one sheet. Trucks and some mods use separate textures for other parts (cab, box, trailer). Add a sheet for each one.</p>
+      <div class="btnrow">
+        <button class="btn small" id="btnAddSheet">Add sheet</button>
+        <button class="btn small" id="btnRenameSheet">Rename</button>
+        <button class="btn small danger" id="btnDelSheet">Delete sheet</button>
+      </div>
+    </div>
+
+    <div class="pane hidden" id="pane-export">
+      <h3>Vehicle</h3>
+      <div class="row"><label>Vehicle folder</label><input type="text" class="grow" id="exFolder" placeholder="e.g. pickup"></div>
+      <p class="note">Exactly like the folder inside the vehicle zip: <code>vehicles\<b>this name</b>\</code>. See the guide, step 1.</p>
+      <h3>Livery</h3>
+      <div class="row"><label>Livery name</label><input type="text" class="grow" id="exName" placeholder="Shown in the game"></div>
+      <div class="row"><label>Skin ID</label><input type="text" class="grow" id="exId" placeholder="made from the name"></div>
+      <div class="row"><label>Author</label><input type="text" class="grow" id="exAuthor"></div>
+      <div class="row"><label>Slot type</label><input type="text" class="grow" id="exSlot"></div>
+      <div class="btnrow"><button class="btn small" id="btnReadJbeam">Read slot type from a skin .jbeam…</button></div>
+      <div id="exIssues"></div>
+      <div class="btnrow">
+        <button class="btn primary" id="btnZip">Download livery ZIP</button>
+        <button class="btn" id="btnPng">PNG texture only</button>
+      </div>
+      <h3>Files in the ZIP</h3>
+      <div class="filelist" id="exFiles"></div>
+      <h3>How to install</h3>
+      <ol class="note" style="padding-left:18px">
+        <li><b>Modded vehicle:</b> open the vehicle's zip with 7-Zip, go into <code>vehicles\VEHICLE\</code> and drag the livery's <b>SKINID</b> folder in.</li>
+        <li><b>Stock vehicle</b> (or to leave the mod untouched): put the livery ZIP into your <code>mods</code> folder. Don't unzip it.</li>
+        <li>In the game: Vehicle Config &gt; Parts &gt; <b>Paint Design</b> &gt; pick your livery.</li>
+      </ol>
+      <div class="btnrow"><button class="btn" id="btnGuide2">Open the full guide</button></div>
+      <h3>Text to paste yourself</h3>
+      <p class="note">The same text that goes into the ZIP, if you'd rather make the files by hand.</p>
+      <div class="row"><b class="grow" id="exJbeamName">.jbeam</b><button class="btn small" data-copy="exJbeam">Copy</button></div>
+      <textarea class="code" id="exJbeam" readonly></textarea>
+      <div class="row"><b class="grow">skin.materials.json</b><button class="btn small" data-copy="exMat">Copy</button></div>
+      <textarea class="code" id="exMat" readonly></textarea>
+    </div>
+  </aside>
+</div>
+
+<div class="modal hidden" id="guideModal">
+  <div class="box">
+    <div class="head"><h2>Guide: make a livery and install it</h2><button class="btn" data-close>Close</button></div>
+    <div class="body guide">
+<!--GUIDE-->
+    </div>
+  </div>
+</div>
+<div id="restorebar" class="hidden">Restore the livery you were working on last time?
+  <button class="btn small primary" id="btnRestore">Restore</button><button class="btn small" id="btnNoRestore">No thanks</button></div>
+<div id="toast" class="hidden"></div>
+<input type="file" id="fileInput" class="hidden">
+
+<script>
+/*SCRIPTS*/
+</script>
+</body>
+</html>

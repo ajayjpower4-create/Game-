@@ -1,0 +1,136 @@
+<h2>What you need</h2>
+<ul>
+  <li><b>BeamNG.drive</b></li>
+  <li><b>This app</b> (<code>LiveryDesigner.html</code>). Double-click it and it opens in Chrome, Edge or Firefox. It runs on your computer and does not need the internet.</li>
+  <li><b>7-Zip</b> (free from 7-zip.org) to open and add files to vehicle zip files. Windows File Explorer also works.</li>
+</ul>
+
+<h2>Step 1: Find the vehicle's files</h2>
+<p>Every vehicle is a <code>.zip</code> file. Inside it is a folder called <code>vehicles\<b>NAME</b>\</code>. That <b>NAME</b> is the <b>vehicle folder name</b>. Write it down because you will type it in the Export tab.</p>
+<h3>Modded vehicles</h3>
+<p>They are in your BeamNG <code>mods</code> folder. To open it, start the BeamNG.drive launcher, click <b>Manage User Folder</b>, then <b>Open in Explorer</b>, then open <code>mods</code>.
+(It is usually <code>C:\Users\YOU\AppData\Local\BeamNG.drive\VERSION\mods</code> or, on older versions, <code>Documents\BeamNG.drive\mods</code>.)</p>
+<h3>Stock vehicles</h3>
+<p>They are in <code>Steam\steamapps\common\BeamNG.drive\content\vehicles\</code>. Each zip is named after its folder, so <code>pickup.zip</code> has the folder <code>pickup</code>. <b>Only copy files out of these. Never change them.</b></p>
+<div class="tip"><b>Tip:</b> In the game, open the console with the <kbd>~</kbd> key and type <code>print(be:getPlayerVehicle(0):getJBeamFilename())</code>. It prints the folder name of the vehicle you are driving.</div>
+
+<h3>Copy these files out to your desktop</h3>
+<p>Right-click the vehicle's zip, choose <b>7-Zip &gt; Open archive</b>, and go into <code>vehicles\NAME\</code>.</p>
+<ol>
+  <li><b>The UV template.</b> This picture shows where every body panel sits on the texture. Look for a file with <code>skin_UVs</code>, <code>uv</code>, <code>template</code> or <code>skin</code> in its name. If there is none, use the vehicle's main body texture. It usually ends in <code>_b.color.png</code>, <code>_d.dds</code>, <code>_c.dds</code> or has <code>main</code> in the name. A texture from one of the vehicle's existing skin folders works too.</li>
+  <li><b>The materials file</b>, <code>main.materials.json</code> (or any file ending in <code>.materials.json</code>). It tells the app the vehicle's real body material, so your livery keeps the shine, panel lines and details.</li>
+  <li><i>(Optional)</i> <b>An existing skin's <code>.jbeam</code> file.</b> If the vehicle already has skins, open one of the skin subfolders and copy its <code>.jbeam</code>. The app reads the correct slot type from it.</li>
+</ol>
+
+<h2>Step 2: Set up the app</h2>
+<ol>
+  <li>Open <code>LiveryDesigner.html</code>.</li>
+  <li>Go to the <b>Sheet</b> tab and click <b>Load template…</b>. Pick the UV template (PNG, JPG or DDS). The sheet is set to the template's size.</li>
+  <li>Still in the <b>Sheet</b> tab, click <b>Load vehicle materials file…</b> and pick the <code>.materials.json</code>. The app ticks the paintable body material for you (marked <span class="tag">paint</span>).</li>
+  <li>Choose how the template is shown:
+    <ul>
+      <li><b>Guide on top</b>: see-through lines while you work. They are <b>not</b> saved into your livery.</li>
+      <li><b>Background</b>: the template picture becomes part of the livery. Use this when you loaded the real body texture and want to paint on top of it.</li>
+    </ul>
+  </li>
+</ol>
+<div class="tip"><b>Trucks and big mods:</b> Some vehicles use more than one texture (for example a cab, a box and a trailer). Click <b>Add sheet</b> in the Sheet tab and give each texture its own sheet, its own template and its own material.</div>
+
+<h2>Step 3: Mark the two sides</h2>
+<ol>
+  <li>Click <b>Set side areas</b> above the canvas.</li>
+  <li>Drag the blue <b>LEFT</b> box over the vehicle's left side on the template and the orange <b>RIGHT</b> box over the right side. Drag the corners to resize them.</li>
+  <li>Now use the <b>Left side</b>, <b>Right side</b> or <b>Both sides</b> view to work on each side.</li>
+</ol>
+<ul>
+  <li><b>Mirror to the other side</b> (<kbd>M</kbd>) copies the selected item to the same spot on the other side. The two copies stay <b>linked</b>: change the text, font, colors or size on one, and the other side updates too. Untick <b>Linked</b> in the item's properties to edit the sides separately.</li>
+  <li>If the right side on your template points the same way as the left (the front of the vehicle is on the same end of the picture), set <b>Right side layout</b> to <b>Same direction</b> in the Sheet tab.</li>
+  <li>If mirrored text shows up backwards on one side in the game, tick <b>Flip graphics on the other side</b> in the Sheet tab.</li>
+</ul>
+
+<h2>Step 4: Design</h2>
+<table>
+  <tr><th>Tool</th><th>Key</th><th>What it does</th></tr>
+  <tr><td>Select</td><td><kbd>V</kbd></td><td>Click to select. Drag to move. Drag the white squares to resize (corners keep the shape, sides stretch it). Drag the round handle to rotate; hold <kbd>Shift</kbd> to snap to 15°.</td></tr>
+  <tr><td>Move view</td><td><kbd>H</kbd></td><td>Drag to move around the sheet. You can also hold <kbd>Space</kbd> or the middle mouse button. The mouse wheel zooms.</td></tr>
+  <tr><td>Text</td><td><kbd>T</kbd></td><td>Click anywhere to add text. Type it in the <b>Text</b> box on the right.</td></tr>
+  <tr><td>Shape</td><td><kbd>R</kbd></td><td>Drag to draw a rectangle, circle, triangle, star, hexagon, slanted bar, chevron or arrow. <kbd>Shift</kbd> makes it even.</td></tr>
+  <tr><td>Stripe</td><td><kbd>L</kbd></td><td>Drag to draw a racing stripe at any angle.</td></tr>
+  <tr><td>Brush</td><td><kbd>B</kbd></td><td>Paint freehand. It paints on the selected paint layer, or starts a new one.</td></tr>
+  <tr><td>Eraser</td><td><kbd>E</kbd></td><td>Erases on the selected paint (brush) layer.</td></tr>
+  <tr><td>Image</td><td><kbd>I</kbd></td><td>Add a logo or picture (PNG with a see-through background works best). You can also drag a picture onto the sheet or paste it with <kbd>Ctrl</kbd>+<kbd>V</kbd>.</td></tr>
+  <tr><td>Color picker</td><td><kbd>K</kbd></td><td>Click on the sheet to pick up a color.</td></tr>
+</table>
+<h3>Editing text</h3>
+<p>Select the text and type in the <b>Text</b> box. Double-clicking text on the canvas jumps straight to that box. You can change the font, size, bold, italic, letter spacing, line spacing, slant, alignment, fill (solid, gradient, checkered or stripes), outline, a second outer outline and a drop shadow. Press <b>Enter</b> in the Text box for more lines.</p>
+<p><b>Fonts:</b> Pick a font from the list, choose <b>Other font…</b> to type the name of any font installed on your computer, or click <b>Load font file…</b> to use a <code>.ttf</code>/<code>.otf</code> file. Loaded fonts are saved inside your project.</p>
+<h3>Layers</h3>
+<p>The top of the list is drawn on top. Drag rows to change the order, or use <b>Up</b>/<b>Down</b>. The eye hides a layer. The lock stops it from being clicked on the canvas. <span class="tag">L</span>/<span class="tag">R</span> show which side a mirrored item is on, and the chain means it is linked.</p>
+<h3>Base color</h3>
+<p>In the Sheet tab, pick the base color of the whole vehicle. Or tick <b>Use the in-game paint color for empty areas</b>: the empty parts of your livery then show whatever paint you choose in the game.</p>
+<h3>Keyboard shortcuts</h3>
+<table>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>Undo / redo</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save the project</td></tr>
+  <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd> / <kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>Copy / paste / duplicate</td></tr>
+  <tr><td><kbd>Delete</kbd></td><td>Delete the selected item</td></tr>
+  <tr><td>Arrow keys</td><td>Nudge 1 pixel (hold <kbd>Shift</kbd> for 10)</td></tr>
+  <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Move down / up in the layer list</td></tr>
+  <tr><td><kbd>M</kbd></td><td>Mirror to the other side</td></tr>
+  <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></td><td>Whole sheet / left side / right side / both sides</td></tr>
+  <tr><td><kbd>0</kbd>, <kbd>+</kbd>, <kbd>-</kbd></td><td>Fit to screen, zoom in, zoom out</td></tr>
+</table>
+
+<h2>Step 5: Export</h2>
+<p>Open the <b>Export</b> tab and fill in:</p>
+<ul>
+  <li><b>Vehicle folder</b>: exactly like the folder inside the zip, for example <code>pickup</code>.</li>
+  <li><b>Livery name</b>: the name you will see in the game's parts menu.</li>
+  <li><b>Skin ID</b>: made for you from the name (lowercase, no spaces). Every livery for the same vehicle needs a different Skin ID.</li>
+  <li><b>Slot type</b>: leave it as <code>paint_design</code> unless the vehicle uses something else. Click <b>Read slot type from a skin .jbeam…</b> to check.</li>
+</ul>
+<p>Click <b>Download livery ZIP</b>. You get a zip like this:</p>
+<pre>vehicles/VEHICLE/SKINID/
+    VEHICLE_skin_SKINID.jbeam        adds the livery to the Paint Design menu
+    skin.materials.json              tells the game to use your picture
+    VEHICLE_skin_SKINID.color.png    your livery picture</pre>
+<p>Also click <b>Save project</b> at the top so you can come back and edit it later. The project file keeps every layer, text and picture.</p>
+
+<h2>Step 6: Install it (paste it inside the vehicle file)</h2>
+<h3>A. Modded vehicle: paste it inside the vehicle's mod file</h3>
+<ol>
+  <li>Close BeamNG.drive.</li>
+  <li>In your <code>mods</code> folder, copy the vehicle's zip somewhere safe as a backup.</li>
+  <li>Right-click the vehicle's zip and choose <b>7-Zip &gt; Open archive</b>. Double-click into <code>vehicles</code>, then into the vehicle folder.</li>
+  <li>Open your livery zip in a second 7-Zip window and go into <code>vehicles</code>, then the vehicle folder.</li>
+  <li>Drag the <b>SKINID</b> folder from the livery zip into the vehicle zip window. Click <b>Yes</b>/<b>OK</b> when 7-Zip asks to copy.</li>
+  <li>Close 7-Zip and start the game.</li>
+</ol>
+<p>Windows File Explorer can do the same: double-click a zip to open it like a folder, then drag the SKINID folder in.<br>
+If the vehicle mod is unpacked (a normal folder in <code>mods\unpacked\</code>), paste the SKINID folder into <code>mods\unpacked\MOD\vehicles\VEHICLE\</code>.</p>
+<h3>B. Stock vehicle (or if you would rather not touch the mod file)</h3>
+<p>Put the livery zip itself into your <code>mods</code> folder. <b>Do not unzip it.</b> BeamNG adds it to the vehicle by itself. This works for stock and modded vehicles.</p>
+<div class="warnbox"><b>Do not paste into the game's own <code>content\vehicles\*.zip</code> files.</b> Steam puts the original files back on every update or file check, so your livery would disappear, and a broken game file can stop the vehicle from loading.</div>
+
+<h2>Step 7: Use it in the game</h2>
+<ol>
+  <li>Spawn the vehicle.</li>
+  <li>Open <b>Vehicle Config</b> (<kbd>Ctrl</kbd>+<kbd>W</kbd>, or from the menu) and go to <b>Parts</b>.</li>
+  <li>Find <b>Paint Design</b> (some mods call it Skin or Livery) and pick your livery's name.</li>
+  <li>By default the livery looks exactly like it does in the app. If you ticked <b>Use the in-game paint color</b>, pick a paint in the <b>Paint</b> menu and it shows in the empty areas.</li>
+</ol>
+
+<h2>Changing a livery later</h2>
+<p>Open your saved project, make your changes and export again with the <b>same Skin ID</b>. Replace the old SKINID folder inside the vehicle zip (method A), or overwrite the old livery zip in <code>mods</code> (method B). If the game still shows the old version, clear the cache: launcher &gt; <b>Manage User Folder</b> &gt; <b>Clear Cache</b>.</p>
+
+<h2>Troubleshooting</h2>
+<ul>
+  <li><b>The livery isn't in the Paint Design list.</b> Check that the vehicle folder name is spelled exactly right, that the SKINID folder sits inside <code>vehicles\VEHICLE\</code>, and that you restarted the game. Some mods use a different slot type: load one of their skin <code>.jbeam</code> files in the Export tab.</li>
+  <li><b>The vehicle has no Paint Design slot at all.</b> That mod was not made for skins. Advanced fix: open the vehicle's main <code>.jbeam</code> (the part with <code>"slotType": "main"</code>) and add <code>["paint_design", "", "Paint Design"]</code> to its <code>"slots"</code> list. If the part uses <code>"slots2"</code> instead, copy how another slot in that list is written.</li>
+  <li><b>The livery is on the wrong parts, or looks scrambled.</b> The template was not the UV layout of that material. Use a texture from the same material, or tick a different material in the Sheet tab.</li>
+  <li><b>The vehicle turns white, black or orange-checkered.</b> The game can't find the picture. Don't rename the exported files or the SKINID folder, and keep them together.</li>
+  <li><b>Text is backwards on one side.</b> Tick <b>Flip graphics on the other side</b> in the Sheet tab, or select that copy and click <b>Flip H</b>.</li>
+  <li><b>The paint looks too dull or too shiny.</b> Load the vehicle's materials file (Sheet tab) so the app copies the vehicle's real body material instead of a generic one.</li>
+  <li><b>A DDS file won't open (BC7).</b> Open it in paint.net or GIMP, save it as PNG, and load the PNG.</li>
+  <li><b>Lost your work?</b> The app saves your design in the browser as you go and offers to bring it back the next time you open it. To be safe, use <b>Save project</b> too.</li>
+</ul>

@@ -1,0 +1,23 @@
+{
+  "domElement": "<screeching-brakes></screeching-brakes>",
+  "name": "Screeching Brakes",
+  "types": [
+    "ui.apps.categories.vehicle"
+  ],
+  "css": {
+    "right": "20px",
+    "top": "140px",
+    "width": "310px",
+    "height": "330px",
+    "min-width": "280px",
+    "min-height": "300px"
+  },
+  "description": "Pick a car or truck screech for any vehicle you drive, stock or modded.",
+  "author": "Screeching Brakes",
+  "version": "1.0",
+  "directive": "screechingBrakes",
+  "category": "Vehicle",
+  "isAuxiliary": false,
+  "interactive": "required",
+  "preserveAspectRatio": false
+}
