@@ -68,9 +68,33 @@ button { cursor: pointer; }
 
 #canvaswrap { flex: 1; position: relative; overflow: hidden; background: #0d0e11; }
 #view { position: absolute; inset: 0; touch-action: none; }
-#emptyhint { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); background: rgba(20,22,26,.92);
-  border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; max-width: 560px; text-align: center; pointer-events: auto; }
-#emptyhint b { color: var(--accent2); }
+#welcome { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; pointer-events: none; }
+#welcome .card { pointer-events: auto; max-width: 580px; text-align: center; background: rgba(23,25,29,.97);
+  border: 2px dashed #555a66; border-radius: 16px; padding: 26px 28px 14px; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+#welcome h2 { margin: 8px 0 10px; font-size: 22px; }
+#welcome p { margin: 8px 0; }
+#welcome svg { width: 54px; height: 54px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#welcome a { color: var(--accent2); }
+#dropOverlay { position: fixed; inset: 0; z-index: 80; background: rgba(255,106,0,.10); border: 4px dashed var(--accent);
+  display: grid; place-items: center; pointer-events: none; }
+#dropOverlay > div { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 28px;
+  font-size: 20px; font-weight: 800; text-align: center; }
+#dropOverlay span { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+.vchip { color: var(--muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vchip b { color: var(--ok); }
+.vehbox { background: #15161a; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 2px 0 8px; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+  margin: 6px 0; cursor: pointer; background: #17191d; }
+.choice.on { border-color: var(--accent); background: #2a1f16; }
+.choice.disabled { opacity: .55; cursor: default; }
+.choice input { margin-top: 3px; accent-color: var(--accent); }
+.choice .note { display: block; margin: 3px 0 0; }
+.btn.big { width: 100%; padding: 11px; font-size: 15px; margin: 8px 0 4px; }
+details summary { cursor: pointer; color: var(--muted); margin: 16px 0 8px; font-weight: 600; }
+.modal .box.ask { width: min(560px, 100%); }
+.modal .box.ask .body { padding: 14px 20px 18px; line-height: 1.5; }
+.modal .box.ask ol { padding-left: 20px; }
+.modal .box.ask li { margin: 5px 0; }
 #statusbar { height: 26px; display: flex; align-items: center; gap: 16px; padding: 0 10px; background: var(--panel);
   border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; }
 

@@ -18,8 +18,11 @@
   <button class="btn" id="btnUndo" title="Undo (Ctrl+Z)">Undo</button>
   <button class="btn" id="btnRedo" title="Redo (Ctrl+Y)">Redo</button>
   <div class="spacer"></div>
-  <button class="btn" id="btnGuide">Guide: how to make and install</button>
-  <button class="btn primary" id="btnExportTop">Export livery</button>
+  <span class="vchip" id="vehChip">No vehicle loaded</span>
+  <button class="btn" id="btnVehicle">Load vehicle file…</button>
+  <div class="sep"></div>
+  <button class="btn" id="btnGuide">Guide</button>
+  <button class="btn primary" id="btnExportTop">Make mod file</button>
 </header>
 
 <div id="app">
@@ -56,11 +59,19 @@
     <div id="toolopts"></div>
     <div id="canvaswrap">
       <canvas id="view"></canvas>
-      <div id="emptyhint" class="hidden">
-        <b>Start here:</b> open the <b>Sheet</b> tab and load your vehicle's UV template, or just start designing.
-        <div class="btnrow" style="justify-content:center;margin-top:8px">
-          <button class="btn primary" id="hintTpl">Load template…</button>
-          <button class="btn" id="hintGuide">Read the guide</button>
+      <div id="welcome" class="hidden">
+        <div class="card">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+          <h2>Drag your vehicle's .zip file here</h2>
+          <p>Any vehicle works: a modded vehicle from your <b>mods</b> folder, or one of the game's own from
+            <code>BeamNG.drive\content\vehicles</code>.</p>
+          <p class="note">The app finds the vehicle's template, paint and Paint Design slot by itself. When you're done,
+            it makes the mod file for you to drop into your mods folder.</p>
+          <div class="btnrow" style="justify-content:center">
+            <button class="btn primary" id="welcomePick">Choose vehicle file…</button>
+            <button class="btn" id="welcomeSkip">Start without a vehicle</button>
+          </div>
+          <p class="note"><a href="#" id="welcomeGuide">Where do I find the vehicle file?</a></p>
         </div>
       </div>
     </div>
@@ -94,6 +105,7 @@
         <button class="btn small danger" id="btnClearTpl">Remove</button>
       </div>
       <div class="note" id="tplInfo"></div>
+      <div class="row hidden" id="tplPickRow"><label>From vehicle</label><select class="grow" id="tplPick"></select></div>
       <div class="row"><label>Show as</label>
         <select class="grow" id="tplMode">
           <option value="overlay">Guide on top (not in livery)</option>
@@ -162,35 +174,38 @@
     </div>
 
     <div class="pane hidden" id="pane-export">
-      <h3>Vehicle</h3>
-      <div class="row"><label>Vehicle folder</label><input type="text" class="grow" id="exFolder" placeholder="e.g. pickup"></div>
-      <p class="note">Exactly like the folder inside the vehicle zip: <code>vehicles\<b>this name</b>\</code>. See the guide, step 1.</p>
+      <h3>Make your mod file</h3>
+      <div class="vehbox" id="mkVehicle"></div>
+      <label class="choice" id="mkInsideRow"><input type="radio" name="mkMode" value="inside" id="mkInside">
+        <span><b>Put the livery inside the vehicle's file</b><span class="note" id="mkInsideNote"></span></span></label>
+      <label class="choice"><input type="radio" name="mkMode" value="separate">
+        <span><b>Separate livery file</b><span class="note" id="mkSeparateNote"></span></span></label>
+      <div id="mkNote"></div>
+      <div id="exIssues"></div>
+      <button class="btn primary big" id="btnMake">Make mod file</button>
+      <p class="note">The file goes to your Downloads folder. Then drag it into your BeamNG <b>mods</b> folder
+        (launcher &gt; Manage User Folder &gt; Open in Explorer &gt; mods).</p>
+
       <h3>Livery</h3>
       <div class="row"><label>Livery name</label><input type="text" class="grow" id="exName" placeholder="Shown in the game"></div>
       <div class="row"><label>Skin ID</label><input type="text" class="grow" id="exId" placeholder="made from the name"></div>
       <div class="row"><label>Author</label><input type="text" class="grow" id="exAuthor"></div>
+
+      <h3>Vehicle details</h3>
+      <p class="note">Filled in for you when you drag in the vehicle's .zip.</p>
+      <div class="row"><label>Vehicle folder</label><input type="text" class="grow" id="exFolder" placeholder="e.g. pickup"></div>
       <div class="row"><label>Slot type</label><input type="text" class="grow" id="exSlot"></div>
       <div class="btnrow"><button class="btn small" id="btnReadJbeam">Read slot type from a skin .jbeam…</button></div>
-      <div id="exIssues"></div>
-      <div class="btnrow">
-        <button class="btn primary" id="btnZip">Download livery ZIP</button>
-        <button class="btn" id="btnPng">PNG texture only</button>
-      </div>
-      <h3>Files in the ZIP</h3>
-      <div class="filelist" id="exFiles"></div>
-      <h3>How to install</h3>
-      <ol class="note" style="padding-left:18px">
-        <li><b>Modded vehicle:</b> open the vehicle's zip with 7-Zip, go into <code>vehicles\VEHICLE\</code> and drag the livery's <b>SKINID</b> folder in.</li>
-        <li><b>Stock vehicle</b> (or to leave the mod untouched): put the livery ZIP into your <code>mods</code> folder. Don't unzip it.</li>
-        <li>In the game: Vehicle Config &gt; Parts &gt; <b>Paint Design</b> &gt; pick your livery.</li>
-      </ol>
-      <div class="btnrow"><button class="btn" id="btnGuide2">Open the full guide</button></div>
-      <h3>Text to paste yourself</h3>
-      <p class="note">The same text that goes into the ZIP, if you'd rather make the files by hand.</p>
-      <div class="row"><b class="grow" id="exJbeamName">.jbeam</b><button class="btn small" data-copy="exJbeam">Copy</button></div>
-      <textarea class="code" id="exJbeam" readonly></textarea>
-      <div class="row"><b class="grow">skin.materials.json</b><button class="btn small" data-copy="exMat">Copy</button></div>
-      <textarea class="code" id="exMat" readonly></textarea>
+
+      <details>
+        <summary>More: files, PNG only, text to paste yourself</summary>
+        <div class="filelist" id="exFiles"></div>
+        <div class="btnrow"><button class="btn small" id="btnPng">Download the PNG texture only</button><button class="btn small" id="btnGuide2">Open the guide</button></div>
+        <div class="row"><b class="grow" id="exJbeamName">.jbeam</b><button class="btn small" data-copy="exJbeam">Copy</button></div>
+        <textarea class="code" id="exJbeam" readonly></textarea>
+        <div class="row"><b class="grow">skin.materials.json</b><button class="btn small" data-copy="exMat">Copy</button></div>
+        <textarea class="code" id="exMat" readonly></textarea>
+      </details>
     </div>
   </aside>
 </div>
@@ -203,6 +218,13 @@
     </div>
   </div>
 </div>
+<div class="modal hidden" id="askModal">
+  <div class="box ask">
+    <div class="head"><h2 id="askTitle"></h2></div>
+    <div class="body"><div id="askText"></div><div class="btnrow" id="askBtns"></div></div>
+  </div>
+</div>
+<div id="dropOverlay" class="hidden"><div>Drop it here<span>Vehicle .zip, your livery file, a template, or a logo</span></div></div>
 <div id="restorebar" class="hidden">Restore the livery you were working on last time?
   <button class="btn small primary" id="btnRestore">Restore</button><button class="btn small" id="btnNoRestore">No thanks</button></div>
 <div id="toast" class="hidden"></div>

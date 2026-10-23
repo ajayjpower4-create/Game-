@@ -75,9 +75,33 @@ button { cursor: pointer; }
 
 #canvaswrap { flex: 1; position: relative; overflow: hidden; background: #0d0e11; }
 #view { position: absolute; inset: 0; touch-action: none; }
-#emptyhint { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); background: rgba(20,22,26,.92);
-  border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; max-width: 560px; text-align: center; pointer-events: auto; }
-#emptyhint b { color: var(--accent2); }
+#welcome { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; pointer-events: none; }
+#welcome .card { pointer-events: auto; max-width: 580px; text-align: center; background: rgba(23,25,29,.97);
+  border: 2px dashed #555a66; border-radius: 16px; padding: 26px 28px 14px; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+#welcome h2 { margin: 8px 0 10px; font-size: 22px; }
+#welcome p { margin: 8px 0; }
+#welcome svg { width: 54px; height: 54px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#welcome a { color: var(--accent2); }
+#dropOverlay { position: fixed; inset: 0; z-index: 80; background: rgba(255,106,0,.10); border: 4px dashed var(--accent);
+  display: grid; place-items: center; pointer-events: none; }
+#dropOverlay > div { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 28px;
+  font-size: 20px; font-weight: 800; text-align: center; }
+#dropOverlay span { display: block; font-size: 13px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+.vchip { color: var(--muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vchip b { color: var(--ok); }
+.vehbox { background: #15161a; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 2px 0 8px; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+  margin: 6px 0; cursor: pointer; background: #17191d; }
+.choice.on { border-color: var(--accent); background: #2a1f16; }
+.choice.disabled { opacity: .55; cursor: default; }
+.choice input { margin-top: 3px; accent-color: var(--accent); }
+.choice .note { display: block; margin: 3px 0 0; }
+.btn.big { width: 100%; padding: 11px; font-size: 15px; margin: 8px 0 4px; }
+details summary { cursor: pointer; color: var(--muted); margin: 16px 0 8px; font-weight: 600; }
+.modal .box.ask { width: min(560px, 100%); }
+.modal .box.ask .body { padding: 14px 20px 18px; line-height: 1.5; }
+.modal .box.ask ol { padding-left: 20px; }
+.modal .box.ask li { margin: 5px 0; }
 #statusbar { height: 26px; display: flex; align-items: center; gap: 16px; padding: 0 10px; background: var(--panel);
   border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; }
 
@@ -174,43 +198,41 @@ main > h1 { font-size: 24px; margin: 6px 0 4px; }
 <main class="guide">
 <h1>BeamNG Livery Designer: how to make and install a livery</h1>
 <p>Open <code>LiveryDesigner.html</code> to start. This guide is also inside the app (the <b>Guide</b> button).</p>
+<h2>The quick way (3 steps)</h2>
+<ol>
+  <li><b>Drag the vehicle's .zip file into the app.</b> The app finds the vehicle's template, its paint and its Paint Design slot by itself.</li>
+  <li><b>Design your livery.</b> Mark the two sides, then add text, stripes, shapes and logos. Everything stays editable.</li>
+  <li><b>Click "Make mod file"</b> and drag the new file from your Downloads folder into your BeamNG <b>mods</b> folder.</li>
+</ol>
+<p>Then in the game: <b>Vehicle Config</b> (<kbd>Ctrl</kbd>+<kbd>W</kbd>) &gt; <b>Parts</b> &gt; <b>Paint Design</b> &gt; your livery.</p>
+
 <h2>What you need</h2>
 <ul>
   <li><b>BeamNG.drive</b></li>
   <li><b>This app</b> (<code>LiveryDesigner.html</code>). Double-click it and it opens in Chrome, Edge or Firefox. It runs on your computer and does not need the internet.</li>
-  <li><b>7-Zip</b> (free from 7-zip.org) to open and add files to vehicle zip files. Windows File Explorer also works.</li>
 </ul>
 
-<h2>Step 1: Find the vehicle's files</h2>
-<p>Every vehicle is a <code>.zip</code> file. Inside it is a folder called <code>vehicles\<b>NAME</b>\</code>. That <b>NAME</b> is the <b>vehicle folder name</b>. Write it down because you will type it in the Export tab.</p>
+<h2>Step 1: Find the vehicle's .zip file</h2>
 <h3>Modded vehicles</h3>
 <p>They are in your BeamNG <code>mods</code> folder. To open it, start the BeamNG.drive launcher, click <b>Manage User Folder</b>, then <b>Open in Explorer</b>, then open <code>mods</code>.
-(It is usually <code>C:\Users\YOU\AppData\Local\BeamNG.drive\VERSION\mods</code> or, on older versions, <code>Documents\BeamNG.drive\mods</code>.)</p>
-<h3>Stock vehicles</h3>
-<p>They are in <code>Steam\steamapps\common\BeamNG.drive\content\vehicles\</code>. Each zip is named after its folder, so <code>pickup.zip</code> has the folder <code>pickup</code>. <b>Only copy files out of these. Never change them.</b></p>
-<div class="tip"><b>Tip:</b> In the game, open the console with the <kbd>~</kbd> key and type <code>print(be:getPlayerVehicle(0):getJBeamFilename())</code>. It prints the folder name of the vehicle you are driving.</div>
+(It is usually <code>C:\Users\YOU\AppData\Local\BeamNG.drive\VERSION\mods</code> or, on older versions, <code>Documents\BeamNG.drive\mods</code>.)
+Vehicles you downloaded from the in-game repository are in <code>mods\repo</code>.</p>
+<h3>Stock vehicles (the game's own)</h3>
+<p>They are in <code>Steam\steamapps\common\BeamNG.drive\content\vehicles\</code>. Each zip is named after the vehicle's folder, for example <code>pickup.zip</code>. The app only reads these files; it never changes them.</p>
+<div class="tip"><b>Tip:</b> Not sure which zip is the vehicle? In the game, open the console with the <kbd>~</kbd> key and type <code>print(be:getPlayerVehicle(0):getJBeamFilename())</code>. It prints the folder name of the vehicle you are driving. Stock vehicles use that name for their zip.</div>
 
-<h3>Copy these files out to your desktop</h3>
-<p>Right-click the vehicle's zip, choose <b>7-Zip &gt; Open archive</b>, and go into <code>vehicles\NAME\</code>.</p>
-<ol>
-  <li><b>The UV template.</b> This picture shows where every body panel sits on the texture. Look for a file with <code>skin_UVs</code>, <code>uv</code>, <code>template</code> or <code>skin</code> in its name. If there is none, use the vehicle's main body texture. It usually ends in <code>_b.color.png</code>, <code>_d.dds</code>, <code>_c.dds</code> or has <code>main</code> in the name. A texture from one of the vehicle's existing skin folders works too.</li>
-  <li><b>The materials file</b>, <code>main.materials.json</code> (or any file ending in <code>.materials.json</code>). It tells the app the vehicle's real body material, so your livery keeps the shine, panel lines and details.</li>
-  <li><i>(Optional)</i> <b>An existing skin's <code>.jbeam</code> file.</b> If the vehicle already has skins, open one of the skin subfolders and copy its <code>.jbeam</code>. The app reads the correct slot type from it.</li>
-</ol>
-
-<h2>Step 2: Set up the app</h2>
-<ol>
-  <li>Open <code>LiveryDesigner.html</code>.</li>
-  <li>Go to the <b>Sheet</b> tab and click <b>Load template…</b>. Pick the UV template (PNG, JPG or DDS). The sheet is set to the template's size.</li>
-  <li>Still in the <b>Sheet</b> tab, click <b>Load vehicle materials file…</b> and pick the <code>.materials.json</code>. The app ticks the paintable body material for you (marked <span class="tag">paint</span>).</li>
-  <li>Choose how the template is shown:
-    <ul>
-      <li><b>Guide on top</b>: see-through lines while you work. They are <b>not</b> saved into your livery.</li>
-      <li><b>Background</b>: the template picture becomes part of the livery. Use this when you loaded the real body texture and want to paint on top of it.</li>
-    </ul>
-  </li>
-</ol>
-<div class="tip"><b>Trucks and big mods:</b> Some vehicles use more than one texture (for example a cab, a box and a trailer). Click <b>Add sheet</b> in the Sheet tab and give each texture its own sheet, its own template and its own material.</div>
+<h2>Step 2: Drag it into the app</h2>
+<p>Drag the vehicle's <b>.zip</b> anywhere onto the app window, or click <b>Load vehicle file…</b> at the top. Don't unzip it first. The app reads only the parts it needs, so even big vehicle files load quickly.</p>
+<p>The app then:</p>
+<ul>
+  <li>reads the vehicle's name and folder name,</li>
+  <li>finds its paint material (the one its own skins use, or the main body material),</li>
+  <li>picks the best template picture: a UV template if the vehicle has one, otherwise its body or skin texture,</li>
+  <li>reads the slot type its skins use, so your livery shows up in the right menu.</li>
+</ul>
+<p>Want a different template picture? In the <b>Sheet</b> tab, pick another one from <b>From vehicle</b>. If the zip has more than one vehicle in it, the app asks which one you want.</p>
+<p>You can also drag in other files: a <code>.livery.json</code> project, a picture to use as a logo, or a template picture.</p>
+<div class="tip"><b>Trucks and big mods:</b> Some vehicles use more than one texture (for example a cab, a box and a trailer). In the Sheet tab, click <b>Add sheet</b>, then pick that part's template under <b>From vehicle</b> and tick its material.</div>
 
 <h2>Step 3: Mark the two sides</h2>
 <ol>
@@ -239,7 +261,7 @@ main > h1 { font-size: 24px; margin: 6px 0 4px; }
 </table>
 <h3>Editing text</h3>
 <p>Select the text and type in the <b>Text</b> box. Double-clicking text on the canvas jumps straight to that box. You can change the font, size, bold, italic, letter spacing, line spacing, slant, alignment, fill (solid, gradient, checkered or stripes), outline, a second outer outline and a drop shadow. Press <b>Enter</b> in the Text box for more lines.</p>
-<p><b>Fonts:</b> Pick a font from the list, choose <b>Other font…</b> to type the name of any font installed on your computer, or click <b>Load font file…</b> to use a <code>.ttf</code>/<code>.otf</code> file. Loaded fonts are saved inside your project.</p>
+<p><b>Fonts:</b> Pick a font from the list, choose <b>Other font…</b> to type the name of any font installed on your computer, or click <b>Load font file…</b> to use a <code>.ttf</code>/<code>.otf</code> file. Loaded fonts are saved with your livery.</p>
 <h3>Layers</h3>
 <p>The top of the list is drawn on top. Drag rows to change the order, or use <b>Up</b>/<b>Down</b>. The eye hides a layer. The lock stops it from being clicked on the canvas. <span class="tag">L</span>/<span class="tag">R</span> show which side a mirrored item is on, and the chain means it is linked.</p>
 <h3>Base color</h3>
@@ -257,36 +279,27 @@ main > h1 { font-size: 24px; margin: 6px 0 4px; }
   <tr><td><kbd>0</kbd>, <kbd>+</kbd>, <kbd>-</kbd></td><td>Fit to screen, zoom in, zoom out</td></tr>
 </table>
 
-<h2>Step 5: Export</h2>
-<p>Open the <b>Export</b> tab and fill in:</p>
+<h2>Step 5: Make the mod file</h2>
+<p>Click <b>Make mod file</b> at the top, give your livery a name in the Export tab, and pick one of these:</p>
 <ul>
-  <li><b>Vehicle folder</b>: exactly like the folder inside the zip, for example <code>pickup</code>.</li>
-  <li><b>Livery name</b>: the name you will see in the game's parts menu.</li>
-  <li><b>Skin ID</b>: made for you from the name (lowercase, no spaces). Every livery for the same vehicle needs a different Skin ID.</li>
-  <li><b>Slot type</b>: leave it as <code>paint_design</code> unless the vehicle uses something else. Click <b>Read slot type from a skin .jbeam…</b> to check.</li>
+  <li><b>Put the livery inside the vehicle's file</b> (the default for modded vehicles). You get a new copy of the vehicle's own zip, with the same name and your livery built in. Everything else in it stays exactly the same.</li>
+  <li><b>Separate livery file</b> (the default for stock vehicles and vehicles from the repository). A small extra zip that adds the livery to the vehicle. It works for every vehicle.</li>
 </ul>
-<p>Click <b>Download livery ZIP</b>. You get a zip like this:</p>
-<pre>vehicles/VEHICLE/SKINID/
-    VEHICLE_skin_SKINID.jbeam        adds the livery to the Paint Design menu
-    skin.materials.json              tells the game to use your picture
-    VEHICLE_skin_SKINID.color.png    your livery picture</pre>
-<p>Also click <b>Save project</b> at the top so you can come back and edit it later. The project file keeps every layer, text and picture.</p>
+<p>Click the big <b>Make mod file</b> button. The file goes to your <b>Downloads</b> folder, and the app shows you what to do next.</p>
 
-<h2>Step 6: Install it (paste it inside the vehicle file)</h2>
-<h3>A. Modded vehicle: paste it inside the vehicle's mod file</h3>
+<h2>Step 6: Put it in your mods folder</h2>
 <ol>
   <li>Close BeamNG.drive.</li>
-  <li>In your <code>mods</code> folder, copy the vehicle's zip somewhere safe as a backup.</li>
-  <li>Right-click the vehicle's zip and choose <b>7-Zip &gt; Open archive</b>. Double-click into <code>vehicles</code>, then into the vehicle folder.</li>
-  <li>Open your livery zip in a second 7-Zip window and go into <code>vehicles</code>, then the vehicle folder.</li>
-  <li>Drag the <b>SKINID</b> folder from the livery zip into the vehicle zip window. Click <b>Yes</b>/<b>OK</b> when 7-Zip asks to copy.</li>
-  <li>Close 7-Zip and start the game.</li>
+  <li>Open your mods folder (launcher &gt; <b>Manage User Folder</b> &gt; <b>Open in Explorer</b> &gt; <code>mods</code>).</li>
+  <li>Drag the new file from Downloads into the mods folder. Don't unzip it.
+    <ul>
+      <li><b>Livery inside the vehicle's file:</b> Windows asks to replace the old file. Click <b>Replace the file</b>. If your browser renamed the download (for example <code>truck (1).zip</code>), rename it back first, so there is only one copy of the vehicle.</li>
+      <li><b>Separate livery file:</b> it sits next to the vehicle. Nothing gets replaced.</li>
+    </ul>
+  </li>
+  <li>Start the game.</li>
 </ol>
-<p>Windows File Explorer can do the same: double-click a zip to open it like a folder, then drag the SKINID folder in.<br>
-If the vehicle mod is unpacked (a normal folder in <code>mods\unpacked\</code>), paste the SKINID folder into <code>mods\unpacked\MOD\vehicles\VEHICLE\</code>.</p>
-<h3>B. Stock vehicle (or if you would rather not touch the mod file)</h3>
-<p>Put the livery zip itself into your <code>mods</code> folder. <b>Do not unzip it.</b> BeamNG adds it to the vehicle by itself. This works for stock and modded vehicles.</p>
-<div class="warnbox"><b>Do not paste into the game's own <code>content\vehicles\*.zip</code> files.</b> Steam puts the original files back on every update or file check, so your livery would disappear, and a broken game file can stop the vehicle from loading.</div>
+<div class="warnbox"><b>Never put anything into the game's own <code>content\vehicles</code> folder,</b> and don't put a copy of a stock vehicle's zip in your mods folder. That's why the app makes a separate livery file for stock vehicles.</div>
 
 <h2>Step 7: Use it in the game</h2>
 <ol>
@@ -297,18 +310,31 @@ If the vehicle mod is unpacked (a normal folder in <code>mods\unpacked\</code>),
 </ol>
 
 <h2>Changing a livery later</h2>
-<p>Open your saved project, make your changes and export again with the <b>same Skin ID</b>. Replace the old SKINID folder inside the vehicle zip (method A), or overwrite the old livery zip in <code>mods</code> (method B). If the game still shows the old version, clear the cache: launcher &gt; <b>Manage User Folder</b> &gt; <b>Clear Cache</b>.</p>
+<p>Drag the file you made (the vehicle's zip with the livery inside, or the separate livery zip) back into the app. It asks if you want to keep editing, and your whole design comes back: every layer, every text, every picture. Make your changes, click <b>Make mod file</b> again and replace the old file in your mods folder.</p>
+<p>If you edit a separate livery file, also drag in the vehicle's own zip so the template shows again. You can save a project file too (<b>Save project</b> at the top).</p>
+<p>If the game still shows the old version, clear the cache: launcher &gt; <b>Manage User Folder</b> &gt; <b>Clear Cache</b>.</p>
+
+<h2>Doing it by hand (without the vehicle's zip)</h2>
+<p>If you only have the vehicle's files unpacked, you can load them one at a time:</p>
+<ol>
+  <li><b>Sheet</b> tab &gt; <b>Load template…</b>: the UV template or body texture (PNG, JPG or DDS).</li>
+  <li><b>Sheet</b> tab &gt; <b>Load vehicle materials file…</b>: the vehicle's <code>main.materials.json</code>.</li>
+  <li><b>Export</b> tab &gt; <b>Vehicle details</b>: type the vehicle folder name (the folder inside <code>vehicles\</code>). Optionally click <b>Read slot type from a skin .jbeam…</b>.</li>
+  <li>Make a <b>Separate livery file</b> and put it in your mods folder. For an unpacked mod you can instead copy the livery's folder (<code>vehicles\VEHICLE\SKINID\</code>) into <code>mods\unpacked\MOD\vehicles\VEHICLE\</code>.</li>
+</ol>
 
 <h2>Troubleshooting</h2>
 <ul>
-  <li><b>The livery isn't in the Paint Design list.</b> Check that the vehicle folder name is spelled exactly right, that the SKINID folder sits inside <code>vehicles\VEHICLE\</code>, and that you restarted the game. Some mods use a different slot type: load one of their skin <code>.jbeam</code> files in the Export tab.</li>
-  <li><b>The vehicle has no Paint Design slot at all.</b> That mod was not made for skins. Advanced fix: open the vehicle's main <code>.jbeam</code> (the part with <code>"slotType": "main"</code>) and add <code>["paint_design", "", "Paint Design"]</code> to its <code>"slots"</code> list. If the part uses <code>"slots2"</code> instead, copy how another slot in that list is written.</li>
-  <li><b>The livery is on the wrong parts, or looks scrambled.</b> The template was not the UV layout of that material. Use a texture from the same material, or tick a different material in the Sheet tab.</li>
-  <li><b>The vehicle turns white, black or orange-checkered.</b> The game can't find the picture. Don't rename the exported files or the SKINID folder, and keep them together.</li>
+  <li><b>"There is no vehicle in this file."</b> That zip has no <code>vehicles\NAME\</code> folder inside. Some mods are packed wrong, with an extra folder at the top. BeamNG can't load those either.</li>
+  <li><b>The livery isn't in the Paint Design list.</b> Restart the game after adding the file. Make sure the vehicle itself is installed and turned on in the Mods menu. If you made a separate livery file, its vehicle folder must match the vehicle.</li>
+  <li><b>The app says the vehicle has no Paint Design slot.</b> That mod was not made for skins. Advanced fix: open the vehicle's main <code>.jbeam</code> (the part with <code>"slotType": "main"</code>) and add <code>["paint_design", "", "Paint Design"]</code> to its <code>"slots"</code> list. If the part uses <code>"slots2"</code> instead, copy how another slot in that list is written.</li>
+  <li><b>The livery is on the wrong parts, or looks scrambled.</b> The template was not the UV layout of that material. Pick another picture under <b>From vehicle</b> in the Sheet tab, or tick a different material.</li>
+  <li><b>The vehicle turns white, black or orange-checkered.</b> The game can't find the livery picture. Make the mod file again and don't rename or unzip anything inside it.</li>
+  <li><b>The vehicle shows up twice, or behaves oddly.</b> There are two copies of the vehicle's zip in your mods folder. Delete the old one.</li>
   <li><b>Text is backwards on one side.</b> Tick <b>Flip graphics on the other side</b> in the Sheet tab, or select that copy and click <b>Flip H</b>.</li>
-  <li><b>The paint looks too dull or too shiny.</b> Load the vehicle's materials file (Sheet tab) so the app copies the vehicle's real body material instead of a generic one.</li>
-  <li><b>A DDS file won't open (BC7).</b> Open it in paint.net or GIMP, save it as PNG, and load the PNG.</li>
-  <li><b>Lost your work?</b> The app saves your design in the browser as you go and offers to bring it back the next time you open it. To be safe, use <b>Save project</b> too.</li>
+  <li><b>The zip won't open ("packed in a way this app can't read").</b> The vehicle was zipped with an unusual compression. Unzip it, zip it again with Windows (right-click &gt; Send to &gt; Compressed folder) or 7-Zip using normal ZIP / Deflate, and drag that in.</li>
+  <li><b>A DDS template won't open (BC7).</b> Pick another picture under <b>From vehicle</b>, or open the DDS in paint.net or GIMP, save it as PNG and load the PNG.</li>
+  <li><b>Lost your work?</b> The app saves your design in the browser as you go and offers to bring it back the next time you open it.</li>
 </ul>
 
 </main>

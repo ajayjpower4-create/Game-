@@ -228,7 +228,10 @@ function check(name, ok, detail) {
   await choose('#btnReadJbeam', A('pickup_skin_police.jbeam'));
   check('slot type is read from a skin .jbeam', (await proj()).vehicle.slotType === 'paint_design');
 
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btnZip')]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btnMake')]);
+  await page.waitForTimeout(200);
+  check('the app says the mod file is ready', /ready/.test(await page.textContent('#askTitle')));
+  await page.click('#askBtns [data-i="0"]');
   const zipPath = path.join(outDir, dl.suggestedFilename());
   await dl.saveAs(zipPath);
   check('ZIP downloads with a clear name', dl.suggestedFilename() === 'speed_demon_racing_pickup_livery.zip', dl.suggestedFilename());
@@ -263,6 +266,7 @@ print(json.dumps(out))
     'vehicles/pickup/speed_demon_racing/pickup_skin_speed_demon_racing.jbeam',
     'vehicles/pickup/speed_demon_racing/skin.materials.json',
     'vehicles/pickup/speed_demon_racing/pickup_skin_speed_demon_racing.color.png',
+    'vehicles/pickup/speed_demon_racing/speed_demon_racing.livery',
     'INSTALL - READ ME.txt']), Z.names);
   check('texture is full size', Z.size[0] === 1024 && Z.size[1] === 1024, Z.size);
   check('template guide lines are not baked into the livery', JSON.stringify(Z.corner) === '[255,255,255,255]', Z.corner);
@@ -277,7 +281,9 @@ print(json.dumps(out))
   await page.waitForTimeout(400);
   const mt2 = JSON.parse(await page.inputValue('#exMat'))['pickup_main.skin.speed_demon_racing'];
   check('paint mode uses a palette map and keeps the paint color on', mt2.Stages[0].colorPaletteMap === '/vehicles/pickup/speed_demon_racing/pickup_skin_speed_demon_racing_palette.data.png' && mt2.Stages[0].instanceDiffuse === true, mt2.Stages[0]);
-  const [dl2] = await Promise.all([page.waitForEvent('download'), page.click('#btnZip')]);
+  const [dl2] = await Promise.all([page.waitForEvent('download'), page.click('#btnMake')]);
+  await page.waitForTimeout(200);
+  await page.click('#askBtns [data-i="0"]');
   const zip2 = path.join(outDir, 'paint_' + dl2.suggestedFilename());
   await dl2.saveAs(zip2);
   const pal = JSON.parse(execFileSync('python3', ['-I', '-c', `

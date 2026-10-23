@@ -162,6 +162,7 @@ function newProject() {
     app: 'beamng-livery-designer', version: 1,
     vehicle: { folder: '', skinId: '', displayName: 'My Livery', author: '', slotType: 'paint_design' },
     materialLib: {},
+    materialDirs: {},
     fonts: [],
     sheets: [newSheet('Body')],
   };
@@ -218,15 +219,15 @@ function makeBrush() {
 }
 
 // ============================================================ assets & fonts
-function addAsset(url, img) {
+function addAsset(url, img, zipRel) {
   const id = 'a' + uid();
-  assets.set(id, { url, img: img || null });
+  assets.set(id, { url, img: img || null, zipRel: zipRel || null });
   return id;
 }
 
 function assetImg(id) {
   const a = id && assets.get(id);
-  if (!a) return null;
+  if (!a || !a.url) return null;
   if (a.img && a.img.complete && a.img.naturalWidth) return a.img;
   if (!a.img) {
     a.img = new Image();
@@ -238,7 +239,7 @@ function assetImg(id) {
 
 function waitAsset(id) {
   const a = assets.get(id);
-  if (!a) return Promise.resolve(null);
+  if (!a || !a.url) return Promise.resolve(null);
   assetImg(id);
   if (a.img.complete && a.img.naturalWidth) return Promise.resolve(a.img);
   return new Promise((res) => { a.img.addEventListener('load', () => res(a.img), { once: true }); a.img.addEventListener('error', () => res(null), { once: true }); });
@@ -262,21 +263,23 @@ if (document.fonts && document.fonts.addEventListener) {
   document.fonts.addEventListener('loadingdone', () => { layoutCache = new WeakMap(); render(); });
 }
 
-async function fileToImageURL(file) {
-  if (/\.dds$/i.test(file.name)) {
-    let tex;
-    try {
-      tex = DDS.decode(await file.arrayBuffer());
-    } catch (e) {
-      if (e.message === 'BC7_DDS') throw new Error('This DDS uses BC7 compression. Open it in paint.net or GIMP, save it as PNG and load the PNG.');
-      throw e;
-    }
-    const c = document.createElement('canvas');
-    c.width = tex.width;
-    c.height = tex.height;
-    c.getContext('2d').putImageData(new ImageData(tex.data, tex.width, tex.height), 0, 0);
-    return c.toDataURL('image/png');
+function ddsToURL(buffer) {
+  let tex;
+  try {
+    tex = DDS.decode(buffer);
+  } catch (e) {
+    if (e.message === 'BC7_DDS') throw new Error('This DDS uses BC7 compression. Open it in paint.net or GIMP, save it as PNG and load the PNG.');
+    throw e;
   }
+  const c = document.createElement('canvas');
+  c.width = tex.width;
+  c.height = tex.height;
+  c.getContext('2d').putImageData(new ImageData(tex.data, tex.width, tex.height), 0, 0);
+  return c.toDataURL('image/png');
+}
+
+async function fileToImageURL(file) {
+  if (/\.dds$/i.test(file.name)) return ddsToURL(await file.arrayBuffer());
   if (/\.(tga|psd|xcf)$/i.test(file.name)) throw new Error('Save it as a PNG first, then load the PNG.');
   return readDataURL(file);
 }
@@ -710,7 +713,7 @@ function drawView() {
   const main = S.vps[0];
   $('#zoomlbl').textContent = Math.round(main.scale * 100) + '%';
   $('#stSize').textContent = 'Sheet ' + s.width + ' × ' + s.height + ' px';
-  $('#emptyhint').classList.toggle('hidden', !!(s.template.assetId || s.layers.length));
+  $('#welcome').classList.toggle('hidden', !!(VZ || s.template.assetId || s.layers.length || S.skipWelcome));
 }
 
 function zoneRectScr(vp, z) {
@@ -909,13 +912,46 @@ const DB = {
     const db = await DB.open();
     return new Promise((res, rej) => { const r = db.transaction('kv').objectStore('kv').get(key); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
   },
+  async del(key) {
+    const db = await DB.open();
+    return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(key); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+  },
+  async keys() {
+    const db = await DB.open();
+    return new Promise((res, rej) => { const r = db.transaction('kv').objectStore('kv').getAllKeys(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  },
 };
 
 let autosaveTimer = 0;
 function hasContent() { return P.sheets.some((s) => s.layers.length || s.template.assetId); }
-function writeAutosave() {
+// Pictures are stored once each under their own key; the project itself only names them.
+const savedAssets = new Set();
+async function writeAutosave() {
   if (!autosaveReady || !hasContent()) return;
-  try { DB.put('autosave', projectJSON()).catch(() => {}); } catch (e) { /* storage blocked */ }
+  try {
+    for (const id of usedAssetIds()) {
+      const a = assets.get(id);
+      if (a.url && !savedAssets.has(id)) { await DB.put('asset:' + id, a.url); savedAssets.add(id); }
+    }
+    await DB.put('autosave', JSON.stringify(projectData(false)));
+  } catch (e) { /* storage blocked or full */ }
+}
+
+async function restoreAutosave(saved) {
+  const data = JSON.parse(saved);
+  for (const [id, url] of Object.entries(data.assets || {})) {
+    if (url) continue;
+    try { data.assets[id] = (await DB.get('asset:' + id)) || null; } catch (e) { /* missing */ }
+    if (data.assets[id]) savedAssets.add(id);
+  }
+  loadProjectData(data);
+}
+
+async function pruneSavedAssets() {
+  const keep = new Set(usedAssetIds());
+  try {
+    for (const k of await DB.keys()) if (String(k).startsWith('asset:') && !keep.has(String(k).slice(6))) { await DB.del(k); savedAssets.delete(String(k).slice(6)); }
+  } catch (e) { /* storage blocked */ }
 }
 // Saves about a second after the first change, even while you keep editing.
 function scheduleAutosave() {
@@ -935,9 +971,25 @@ function usedAssetIds() {
   return [...ids].filter((id) => assets.has(id));
 }
 
+// withData: include the picture and font data. Without it the pictures are only named.
+function projectData(withData) {
+  const out = Object.assign({}, P, { assets: {}, zipAssets: {} });
+  for (const id of usedAssetIds()) {
+    const a = assets.get(id);
+    if (a.zipRel) out.zipAssets[id] = a.zipRel;
+    out.assets[id] = withData ? a.url : null;
+  }
+  return out;
+}
+
 function projectJSON() {
-  const out = Object.assign({}, P, { assets: {} });
-  for (const id of usedAssetIds()) out.assets[id] = assets.get(id).url;
+  return JSON.stringify(projectData(true));
+}
+
+// The copy saved inside the mod file. Pictures from the vehicle's own zip are not stored again.
+function liveryFileJSON() {
+  const out = projectData(true);
+  for (const id of Object.keys(out.zipAssets)) delete out.assets[id];
   return JSON.stringify(out);
 }
 
@@ -951,17 +1003,21 @@ function saveProject() {
 function loadProjectData(data) {
   if (!data || data.app !== 'beamng-livery-designer' || !Array.isArray(data.sheets)) throw new Error('This is not a Livery Designer project.');
   assets.clear();
-  for (const [id, url] of Object.entries(data.assets || {})) assets.set(id, { url, img: null });
+  const urls = data.assets || {}, fromZip = data.zipAssets || {};
+  for (const id of new Set(Object.keys(urls).concat(Object.keys(fromZip)))) assets.set(id, { url: urls[id] || null, img: null, zipRel: fromZip[id] || null });
   delete data.assets;
+  delete data.zipAssets;
   P = Object.assign(newProject(), data);
+  P.vehicle = Object.assign(newProject().vehicle, P.vehicle);
   for (const s of P.sheets) {
     s.zones = Object.assign(defaultZones(s.width, s.height), s.zones);
-    s.template = Object.assign({ assetId: null, name: '', mode: 'overlay', opacity: 0.6, blend: 'source-over' }, s.template);
+    s.template = Object.assign({ assetId: null, name: '', mode: 'overlay', opacity: 0.6, blend: 'multiply' }, s.template);
     s.background = Object.assign({ color: '#ffffff', paint: false }, s.background);
     s.materials = s.materials || [];
   }
   for (const f of P.fonts) registerFont(f.family, f.assetId);
-  S.sheet = 0; S.sel = null; S.cams = {};
+  S.sheet = 0; S.sel = null; S.cams = {}; S.makeMode = null;
+  if (VZ && VZ.folder.toLowerCase() !== String(P.vehicle.folder || '').toLowerCase()) VZ = null;
   layoutCache = new WeakMap();
   resetHistory();
   refreshAll();
@@ -1254,13 +1310,278 @@ async function readSlotType(file) {
   }
 }
 
+// ============================================================ the vehicle file (drag the vehicle's .zip in)
+const IMAGE_RE = /\.(png|jpe?g|dds|webp|bmp)$/i;
+const COLOR_KEYS = ['baseColorMap', 'colorMap', 'diffuseMap'];
+// Folder names of the game's own vehicles. A copy of one of these must never go in the mods folder.
+const STOCK_VEHICLES = new Set(['autobello', 'barstow', 'bastion', 'bluebuck', 'bolide', 'burnside', 'bx', 'citybus', 'covet',
+  'etk800', 'etkc', 'etki', 'fullsize', 'hopper', 'lansdowne', 'legran', 'md_series', 'midsize', 'midtruck', 'miramar',
+  'moonhawk', 'nine', 'pessima', 'pickup', 'racetruck', 'roamer', 'sbr', 'scintilla', 'semi', 'sunburst', 'us_semi',
+  'van', 'vivace', 'wendover', 'wigeon', 'wl40', 'utv', 'atv', 'dryvan', 'tanker', 'flatbed', 'cargotrailer']);
+let VZ = null; // the vehicle zip that was dragged in (only kept while the app is open)
+
+const joinList = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
+
+async function eachLimited(items, limit, fn) {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      try { await fn(item); } catch (e) { /* an unreadable file is skipped */ }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+function findVehicleFolders(zip) {
+  const found = new Map();
+  for (const e of zip.entries) {
+    const m = /^((?:[^/]+\/)*?)vehicles\/([^/]+)\/(.+)$/i.exec(e.name);
+    if (!m || m[2].toLowerCase() === 'common' || e.name.endsWith('/')) continue;
+    const base = m[1] + 'vehicles/' + m[2] + '/';
+    let f = found.get(base.toLowerCase());
+    if (!f) found.set(base.toLowerCase(), (f = { folder: m[2], prefix: m[1], base, files: 0 }));
+    if (/\.(jbeam|materials\.json)$/i.test(m[3])) f.files++;
+  }
+  return [...found.values()].filter((f) => f.files > 0).sort((a, b) => a.prefix.length - b.prefix.length || b.files - a.files);
+}
+
+// Finds the zip entry a material's texture path points to. BeamNG paths may or may not
+// start with "/", may be relative to the materials file, and .png/.dds get swapped.
+function resolveTexture(zip, prefix, dir, path) {
+  if (typeof path !== 'string' || !path) return null;
+  const p = path.replace(/\\/g, '/').replace(/^\.\//, '');
+  const tries = p.startsWith('/') ? [p.slice(1)] : /^vehicles\//i.test(p) ? [p] : [dir.replace(/^\//, '') + p, p];
+  for (const t of tries) {
+    const stem = t.replace(/\.[^./]+$/, '');
+    for (const s of [stem, stem.replace(/\.(color|data|normal)$/i, '')]) {
+      for (const ext of [t.slice(stem.length), '.png', '.dds', '.jpg']) {
+        const e = zip.byName.get((prefix + s + ext).toLowerCase());
+        if (e) return e;
+      }
+    }
+  }
+  return null;
+}
+
+async function zipImageURL(zip, entry) {
+  const bytes = await Zip.read(zip, entry);
+  if (/\.dds$/i.test(entry.name)) return ddsToURL(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  const type = /\.png$/i.test(entry.name) ? 'image/png' : /\.webp$/i.test(entry.name) ? 'image/webp' : /\.bmp$/i.test(entry.name) ? 'image/bmp' : 'image/jpeg';
+  return readDataURL(new Blob([bytes], { type }));
+}
+
+// Reads what the app needs from one vehicle folder in the zip: its name, materials,
+// the slot type its skins use, the paint material and the best template pictures.
+async function analyzeVehicle(zip, f) {
+  const base = f.base.toLowerCase();
+  const inside = zip.entries.filter((e) => e.lower.startsWith(base) && !e.lower.endsWith('/'));
+  const liveryDirs = inside.filter((e) => e.lower.endsWith('.livery')).map((e) => e.lower.slice(0, e.lower.lastIndexOf('/') + 1));
+  const own = inside.filter((e) => !liveryDirs.some((d) => e.lower.startsWith(d)));
+  const a = { own: own.length, info: null, materials: {}, matDirs: {}, slotType: 'paint_design', slotFound: false, hasSlot: false, mat: null, images: [] };
+
+  const infoEntry = zip.byName.get(base + 'info.json');
+  if (infoEntry) { try { a.info = parseLoose(await Zip.readText(zip, infoEntry)); } catch (e) { /* no nice name then */ } }
+  const words = a.info ? [a.info.Brand, a.info.Name].filter((x) => typeof x === 'string' && x.trim()) : [];
+  a.niceName = words.join(' ') || f.folder;
+
+  await eachLimited(own.filter((e) => e.lower.endsWith('.materials.json')), 6, async (e) => {
+    const found = collectMaterials(parseLoose(await Zip.readText(zip, e)));
+    const dir = '/' + e.name.slice(f.prefix.length, e.name.lastIndexOf('/') + 1);
+    for (const [k, m] of Object.entries(found)) { a.materials[k] = m; a.matDirs[k] = dir; }
+  });
+
+  const slots = {};
+  await eachLimited(own.filter((e) => e.lower.endsWith('.jbeam') && e.usize < 4e6).slice(0, 1000), 8, async (e) => {
+    const text = await Zip.readText(zip, e);
+    if (text.includes('"paint_design"')) a.hasSlot = true;
+    if (!text.includes('globalSkin')) return;
+    for (const part of Object.values(parseLoose(text))) {
+      if (part && typeof part === 'object' && part.globalSkin && part.slotType) slots[part.slotType] = (slots[part.slotType] || 0) + 1;
+    }
+  });
+  const best = Object.entries(slots).sort((x, y) => y[1] - x[1])[0];
+  if (best) { a.slotType = best[0]; a.slotFound = true; a.hasSlot = true; }
+
+  // The paint material is the one the vehicle's own skins change, or else the paintable "main" one.
+  const names = Object.keys(a.materials);
+  const byMain = (x, y) => /main/i.test(y) - /main/i.test(x);
+  const skinned = {};
+  for (const n of names) {
+    if (!isSkin(n)) continue;
+    const b = n.split('.skin.')[0];
+    if (a.materials[b]) skinned[b] = (skinned[b] || 0) + 1;
+  }
+  a.mat = Object.keys(skinned).sort((x, y) => skinned[y] - skinned[x] || byMain(x, y))[0] || null;
+  if (!a.mat) a.mat = names.filter((n) => !isSkin(n) && isPaintable(a.materials[n])).sort(byMain)[0] || null;
+
+  // Template pictures, best first: UV templates, then the textures the paint material and its skins use.
+  const refs = new Set();
+  const addRefs = (name) => {
+    const m = a.materials[name];
+    if (!m) return;
+    for (const st of [m].concat(Array.isArray(m.Stages) ? m.Stages : [])) {
+      if (!st) continue;
+      for (const k of COLOR_KEYS) {
+        const e = resolveTexture(zip, f.prefix, a.matDirs[name] || '/' + f.base.slice(f.prefix.length), st[k]);
+        if (e) refs.add(e.lower);
+      }
+    }
+  };
+  if (a.mat) { addRefs(a.mat); for (const n of names) if (n.startsWith(a.mat + '.skin.')) addRefs(n); }
+  const score = (e) => {
+    const n = e.lower.slice(base.length);
+    let s = 0;
+    if (/(skin_?uvs?|uv_?(map|template|layout)|_uvs?\.|template)/.test(n) && !/palette/.test(n)) s += 100;
+    if (refs.has(e.lower)) s += 60;
+    if (/(\.color\.|_d\.|_b\.|_c\.|diffuse|albedo|basecolor)/.test(n)) s += 20;
+    if (/(\.normal\.|_nm\.|_n\.|\.data\.|_ao\.|palette|_spec|_rough|_metal|_s\.|_r\.)/.test(n)) s -= 50;
+    return s;
+  };
+  a.images = own.filter((e) => IMAGE_RE.test(e.name)).map((e) => ({ e, s: score(e) }))
+    .sort((x, y) => y.s - x.s || x.e.name.localeCompare(y.e.name)).map((x) => x.e);
+  return a;
+}
+
+function vehicleKind(zip, f) {
+  if (zip.entries.some((e) => e.lower.startsWith('mod_info/'))) return 'repo';
+  if (!STOCK_VEHICLES.has(f.folder.toLowerCase())) return 'mod';
+  return zip.file.name.replace(/\.zip$/i, '').toLowerCase() === f.folder.toLowerCase() ? 'stock' : 'stockpart';
+}
+
+async function setTemplateFromZip(s, entry) {
+  const url = await zipImageURL(VZ.zip, entry);
+  const img = await loadImage(url);
+  s.template.assetId = addAsset(url, img, entry.name.slice(VZ.prefix.length));
+  s.template.name = entry.name.slice(VZ.base.length);
+  s.template.w = img.naturalWidth;
+  s.template.h = img.naturalHeight;
+  if (s.layers.length === 0) scaleSheet(s, img.naturalWidth, img.naturalHeight);
+  else if (img.naturalWidth !== s.width || img.naturalHeight !== s.height) toast('The template is ' + img.naturalWidth + ' × ' + img.naturalHeight + '. Click "Match template" in the Sheet tab to use that size.', 5000);
+  S.cams = {};
+}
+
+async function autoTemplate(s) {
+  for (const e of VZ.images.slice(0, 8)) {
+    try { await setTemplateFromZip(s, e); return e; } catch (err) { /* try the next picture */ }
+  }
+  return null;
+}
+
+// Pictures that came from a vehicle zip are not stored inside the livery; get them back from the zip.
+async function fillZipAssets(zip, prefix) {
+  for (const a of assets.values()) {
+    if (!a.zipRel || a.url) continue;
+    const e = zip.byName.get((prefix + a.zipRel).toLowerCase());
+    if (!e) continue;
+    try { a.url = await zipImageURL(zip, e); a.img = null; } catch (err) { /* stays missing */ }
+  }
+}
+const missingZipAssets = () => [...assets.values()].filter((a) => a.zipRel && !a.url).length;
+
+async function applyVehicle(zip, f, a, keep) {
+  VZ = Object.assign({ zip, file: zip.file, kind: vehicleKind(zip, f) }, f, a);
+  P.materialLib = a.materials;
+  P.materialDirs = a.matDirs;
+  P.vehicle.folder = f.folder;
+  P.vehicle.vehicleName = a.niceName;
+  P.vehicle.sourceZip = zip.file.name;
+  if (a.slotFound || !keep) P.vehicle.slotType = a.slotType;
+  await fillZipAssets(zip, f.prefix);
+  const s = P.sheets[0];
+  if ((!keep || !s.materials.length) && a.mat) s.materials = [a.mat];
+  const cur = s.template.assetId && assets.get(s.template.assetId);
+  let hasTemplate = !!(cur && cur.url);
+  if (!hasTemplate) hasTemplate = !!(await autoTemplate(s));
+  S.makeMode = null;
+  pushHistory();
+  refreshAll();
+  const found = [hasTemplate && 'template', a.mat && 'paint material', a.hasSlot && 'Paint Design slot'].filter(Boolean);
+  toast('Loaded ' + a.niceName + (found.length ? ', with its ' + joinList(found) : '') + '.' + (keep ? '' : ' Next: mark the two sides with "Set side areas".'), 6500);
+}
+
+function resetDesign() {
+  assets.clear();
+  P = newProject();
+  VZ = null;
+  S.sheet = 0; S.sel = null; S.cams = {}; S.makeMode = null;
+  layoutCache = new WeakMap();
+  resetHistory();
+}
+
+async function openZip(file) {
+  toast('Reading ' + file.name + '…', 60000);
+  try {
+    const zip = await Zip.open(file);
+    const folders = findVehicleFolders(zip);
+    if (!folders.length) { toast('There is no vehicle in "' + file.name + '". A vehicle file has a vehicles\\NAME\\ folder inside it.', 7000); return; }
+    let f = folders[0];
+    if (folders.length > 1) {
+      $('#toast').classList.add('hidden');
+      const i = await ask('Which vehicle?', 'This file has more than one vehicle in it. Pick the one you want to make a livery for.', folders.map((x) => x.folder));
+      if (i < 0) return;
+      f = folders[i];
+      toast('Reading ' + file.name + '…', 60000);
+    }
+    const a = await analyzeVehicle(zip, f);
+    const hasVehicle = a.own > 0;
+    const mine = zip.entries.filter((e) => /\.livery$/i.test(e.name) && e.lower.startsWith(f.base.toLowerCase()));
+    $('#toast').classList.add('hidden');
+
+    let editData = null;
+    const list = [];
+    for (const e of mine) { try { list.push(JSON.parse(await Zip.readText(zip, e))); } catch (err) { /* not one of ours */ } }
+    if (list.length) {
+      const btns = list.map((d) => 'Edit "' + ((d.vehicle && d.vehicle.displayName) || 'my livery') + '"');
+      if (hasVehicle) btns.push('Make a new livery');
+      const i = await ask('Keep editing your livery?', '<b>' + esc(file.name) + '</b> has ' + (list.length === 1 ? 'a livery' : list.length + ' liveries') + ' you made with this app.' + (hasVehicle ? ' Keep working on it, or make a new one?' : ' Pick one to keep working on.'), btns);
+      if (i < 0) return;
+      if (i < list.length) editData = list[i];
+    }
+    if (!editData && !hasVehicle) { toast('"' + file.name + '" only has a livery in it, not the vehicle. Drag in the vehicle\'s own .zip file.', 7000); return; }
+
+    if (editData) loadProjectData(editData);
+    else if (hasContent()) {
+      const i = await ask('Use this vehicle for your design?', 'You already have a design open.', ['Use it for my design', 'Start a new livery']);
+      if (i < 0) return;
+      if (i === 1) resetDesign();
+    }
+    autosaveReady = true;
+    if (hasVehicle) {
+      await applyVehicle(zip, f, a, !!editData || hasContent());
+    } else {
+      VZ = null;
+      refreshAll();
+      toast(missingZipAssets() ? 'Your livery is back. Drag the vehicle\'s .zip in too, to see its template again.' : 'Your livery is back.', 7000);
+    }
+  } catch (e) {
+    toast(e.message || 'That file could not be opened.', 7000);
+  }
+}
+
+// ---------- questions and messages
+let askDone = null;
+function ask(title, html, buttons) {
+  if (askDone) askDone(-1);
+  return new Promise((resolve) => {
+    $('#askTitle').textContent = title;
+    $('#askText').innerHTML = html;
+    $('#askBtns').innerHTML = buttons.map((b, i) => '<button class="btn' + (i === 0 ? ' primary' : '') + '" data-i="' + i + '">' + esc(b) + '</button>').join('');
+    $('#askModal').classList.remove('hidden');
+    askDone = (i) => { askDone = null; $('#askModal').classList.add('hidden'); resolve(i); };
+  });
+}
+$('#askBtns').addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b && askDone) askDone(+b.dataset.i); });
+$('#askModal').addEventListener('click', (e) => { if (e.target.id === 'askModal' && askDone) askDone(-1); });
+
 // ============================================================ export
 function exportInfo() {
   const v = P.vehicle;
   const folder = String(v.folder || '').trim().replace(/[\\/:*?"<>|]+/g, '');
   const skinId = slug(v.skinId) || slug(v.displayName) || 'my_livery';
   const issues = [];
-  if (!folder) issues.push({ err: 'Type the vehicle folder name (see step 1 in the guide).' });
+  if (!folder) issues.push({ err: 'Drag the vehicle\'s .zip file into the app first (or type the vehicle folder name under "Vehicle details").' });
+  if (VZ && !VZ.hasSlot && folder.toLowerCase() === VZ.folder.toLowerCase()) issues.push({ warn: VZ.niceName + ' doesn\'t seem to have a Paint Design slot, so the livery may not show up in the parts menu. See "Troubleshooting" in the guide.' });
   const multi = P.sheets.length > 1;
   const usedSuffix = new Set();
   const sheets = P.sheets.map((s, i) => {
@@ -1294,11 +1615,12 @@ function buildJbeam(info) {
 const TEXTURE_RE = /\.(dds|png|jpe?g|tga|bmp|webp)$/i;
 const ROOT_RE = /^(\/|@|vehicles\/|art\/|core\/|levels\/|assets\/|ui\/|common\/)/i;
 
-function fixPaths(obj, folder) {
+// Texture paths relative to the original materials file would break in the livery's folder.
+function fixPaths(obj, dir) {
   for (const k of Object.keys(obj)) {
     const val = obj[k];
-    if (typeof val === 'string' && TEXTURE_RE.test(val) && !ROOT_RE.test(val)) obj[k] = '/vehicles/' + folder + '/' + val.replace(/^\.\//, '');
-    else if (val && typeof val === 'object') fixPaths(val, folder);
+    if (typeof val === 'string' && TEXTURE_RE.test(val) && !ROOT_RE.test(val)) obj[k] = dir + val.replace(/^\.\//, '');
+    else if (val && typeof val === 'object') fixPaths(val, dir);
   }
 }
 
@@ -1321,7 +1643,7 @@ function skinMaterial(baseName, info, entry) {
   m.mapTo = full;
   m.class = m.class || 'Material';
   delete m.persistentId;
-  fixPaths(m, info.folder || 'vehicle');
+  fixPaths(m, (P.materialDirs && P.materialDirs[baseName]) || '/vehicles/' + (info.folder || 'vehicle') + '/');
   const isPBR = Number(m.version) >= 1.5 || JSON.stringify(m.Stages || []).includes('baseColor');
   if (!Array.isArray(m.Stages) || !m.Stages.length) m.Stages = [{}, {}, {}, {}];
   let idx = m.Stages.findIndex((st) => st && st.colorPaletteMap);
@@ -1381,39 +1703,90 @@ function splitPaint(c) {
   return { colorC, palC };
 }
 
-async function exportZip() {
+async function liveryFiles(info) {
+  const files = [
+    { name: info.dir + info.partName + '.jbeam', data: buildJbeam(info) },
+    { name: info.dir + 'skin.materials.json', data: buildMaterials(info) },
+  ];
+  for (const entry of info.sheets) {
+    const paint = entry.sheet.background.paint;
+    const c = await renderForExport(entry.sheet, paint);
+    if (paint) {
+      const { colorC, palC } = splitPaint(c);
+      files.push({ name: info.dir + entry.color, data: await canvasBytes(colorC) });
+      files.push({ name: info.dir + entry.palette, data: await canvasBytes(palC) });
+    } else {
+      files.push({ name: info.dir + entry.color, data: await canvasBytes(c) });
+    }
+  }
+  files.push({ name: info.dir + info.skinId + '.livery', data: liveryFileJSON() });
+  return files;
+}
+
+function canInside() {
+  if (!VZ) return { ok: false, why: 'Drag the vehicle\'s .zip file into the app to use this.' };
+  if (VZ.kind === 'stock') return { ok: false, why: 'Not for the game\'s own vehicles: a copy of ' + VZ.file.name + ' in your mods folder would break when the game updates.' };
+  if (VZ.folder.toLowerCase() !== String(P.vehicle.folder || '').trim().toLowerCase()) return { ok: false, why: 'The vehicle folder under "Vehicle details" doesn\'t match the vehicle in ' + VZ.file.name + '.' };
+  if (VZ.zip.zip64) return { ok: false, why: VZ.file.name + ' is too big to rebuild.' };
+  return { ok: true };
+}
+
+function makeMode() {
+  const inside = canInside().ok;
+  if (S.makeMode === 'inside' && inside) return 'inside';
+  if (S.makeMode === 'separate') return 'separate';
+  return inside && VZ.kind === 'mod' ? 'inside' : 'separate';
+}
+
+const liveryZipName = (info) => info.skinId + '_' + (info.folder || 'vehicle') + '_livery.zip';
+
+async function makeModFile() {
   refreshExportPane();
   const info = exportInfo();
   const err = info.issues.find((x) => x.err);
-  if (err) { setPane('export'); toast(err.err, 5000); $('#exFolder').focus(); return; }
-  const btn = $('#btnZip');
+  if (err) { setPane('export'); toast(err.err, 6000); return; }
+  const mode = makeMode();
+  const btn = $('#btnMake');
   btn.disabled = true;
-  btn.textContent = 'Making ZIP…';
+  btn.textContent = 'Making your mod file…';
   try {
-    const files = [];
-    for (const entry of info.sheets) {
-      const paint = entry.sheet.background.paint;
-      const c = await renderForExport(entry.sheet, paint);
-      if (paint) {
-        const { colorC, palC } = splitPaint(c);
-        files.push({ name: info.dir + entry.color, data: await canvasBytes(colorC) });
-        files.push({ name: info.dir + entry.palette, data: await canvasBytes(palC) });
-      } else {
-        files.push({ name: info.dir + entry.color, data: await canvasBytes(c) });
-      }
+    const files = await liveryFiles(info);
+    let blob, name;
+    if (mode === 'inside') {
+      const dir = (VZ.prefix + info.dir).toLowerCase();
+      blob = Zip.rebuild(VZ.zip, files.map((x) => ({ name: VZ.prefix + x.name, data: x.data })), (n) => n.toLowerCase().startsWith(dir));
+      name = VZ.file.name;
+    } else {
+      files.push({ name: 'INSTALL - READ ME.txt', data: readme(info) });
+      blob = Zip.build(files);
+      name = liveryZipName(info);
     }
-    files.unshift({ name: info.dir + 'skin.materials.json', data: buildMaterials(info) });
-    files.unshift({ name: info.dir + info.partName + '.jbeam', data: buildJbeam(info) });
-    files.push({ name: 'INSTALL - READ ME.txt', data: readme(info) });
-    const name = info.skinId + '_' + (info.folder || 'vehicle') + '_livery.zip';
-    download(Zip.build(files), name);
-    toast('Downloaded ' + name + '. See "How to install" below.', 5000);
+    download(blob, name);
+    dirty = false;
+    showDone(mode, name);
   } catch (e) {
-    toast('Export failed: ' + e.message, 6000);
+    toast('Could not make the mod file: ' + e.message, 7000);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Download livery ZIP';
+    btn.textContent = 'Make mod file';
   }
+}
+
+function showDone(mode, name) {
+  const livery = esc(P.vehicle.displayName || 'your livery');
+  const steps = [
+    'Close BeamNG.drive if it is running.',
+    'Open your mods folder: in the BeamNG launcher click <b>Manage User Folder</b>, then <b>Open in Explorer</b>, then open <b>mods</b>.',
+    mode === 'inside'
+      ? 'Drag <b>' + esc(name) + '</b> from your Downloads folder into the mods folder, and pick <b>Replace the file</b> when Windows asks.'
+      : 'Drag <b>' + esc(name) + '</b> from your Downloads folder into the mods folder. Leave it as a zip; don\'t unzip it.',
+    'Start the game, spawn the vehicle, open <b>Vehicle Config</b> (Ctrl+W) &gt; <b>Parts</b> &gt; <b>Paint Design</b> and pick <b>' + livery + '</b>.',
+  ];
+  const extra = mode === 'inside'
+    ? '<p class="note">If your browser saved it as "' + esc(name.replace(/\.zip$/i, '')) + ' (1).zip", rename it to <b>' + esc(name) + '</b> first, so there is only one copy of the vehicle in your mods folder.</p>'
+    : '';
+  ask('Your mod file is ready', '<p><b>' + esc(name) + '</b> is in your Downloads folder.</p><ol>' + steps.map((x) => '<li>' + x + '</li>').join('') + '</ol>' + extra +
+    '<p class="note">Want to change it later? Drag <b>' + esc(name) + '</b> back into this app and your design comes back, ready to edit.</p>', ['Got it']);
 }
 
 async function exportPngs() {
@@ -1427,44 +1800,27 @@ async function exportPngs() {
 
 function readme(info) {
   const v = P.vehicle;
-  const nl = '\r\n';
+  const name = v.displayName || info.skinId;
   return [
-    'Livery: ' + (v.displayName || info.skinId),
-    'Vehicle folder: ' + info.folder + '    Skin ID: ' + info.skinId,
+    'Livery: ' + name,
+    'For: ' + (v.vehicleName || info.folder) + '   (vehicle folder: ' + info.folder + ')',
     'Made with BeamNG Livery Designer',
     '',
-    'FILES',
-    '  ' + info.dir + info.partName + '.jbeam',
-    '  ' + info.dir + 'skin.materials.json',
-    ...info.sheets.flatMap((e) => ['  ' + info.dir + e.color].concat(e.palette ? ['  ' + info.dir + e.palette] : [])),
-    '',
     'HOW TO INSTALL',
+    '  1. Put this zip into your BeamNG mods folder. Do NOT unzip it.',
+    '     (BeamNG launcher > Manage User Folder > Open in Explorer > mods)',
+    '  2. Start the game and spawn the vehicle.',
+    '  3. Vehicle Config (Ctrl+W) > Parts > Paint Design > "' + name + '"',
     '',
-    'A) Modded vehicle - paste it inside the vehicle\'s mod file',
-    '   1. Close BeamNG.drive.',
-    '   2. In your mods folder, make a backup copy of the vehicle\'s zip.',
-    '   3. Open the vehicle\'s zip with 7-Zip (right-click > 7-Zip > Open archive).',
-    '   4. Go into  vehicles\\' + info.folder + '\\',
-    '   5. Open this livery zip too, go into vehicles\\' + info.folder + '\\ and drag the',
-    '      "' + info.skinId + '" folder into the vehicle zip window. Click OK to copy.',
-    '   6. Close 7-Zip and start the game.',
-    '   (Unpacked mod? Paste the "' + info.skinId + '" folder into mods\\unpacked\\<mod>\\vehicles\\' + info.folder + '\\)',
-    '',
-    'B) Stock vehicle (or to leave the mod file untouched)',
-    '   Put this whole zip into your BeamNG mods folder. Do not unzip it.',
-    '   Never paste into the game\'s own content\\vehicles zips - Steam replaces them.',
-    '',
-    'IN THE GAME',
-    '   Spawn the vehicle > Vehicle Config (Ctrl+W) > Parts > Paint Design > "' + (v.displayName || info.skinId) + '"',
+    'CHANGE IT LATER',
+    '  Drag this zip into the Livery Designer app. Your design comes back, ready to edit.',
     '',
     'NOT SHOWING UP?',
-    '   - The folder name must match the vehicle exactly: vehicles\\' + info.folder + '\\',
-    '   - Restart the game after adding files. If an old version shows, clear the cache',
-    '     (launcher > Manage User Folder > Clear Cache).',
-    '   - Some mods use a different slot type than "' + (v.slotType || 'paint_design') + '". Check one of the',
-    '     vehicle\'s own skin .jbeam files and change "slotType" in ' + info.partName + '.jbeam to match.',
+    '  - Restart the game after adding the file.',
+    '  - The vehicle must be installed too, and its folder must be vehicles\\' + info.folder + '\\',
+    '  - If an old version still shows, clear the cache: launcher > Manage User Folder > Clear Cache.',
     '',
-  ].join(nl);
+  ].join('\r\n');
 }
 
 // ============================================================ panels
@@ -1877,10 +2233,27 @@ function refreshSheetPane() {
   $('#matInfo').textContent = names.length ? base.length + ' materials loaded' + (skinCount ? ', and ' + skinCount + ' existing skin' + (skinCount === 1 ? '' : 's') + ', so this vehicle has a Paint Design slot.' : '.') : '';
   $('#btnDelSheet').disabled = P.sheets.length < 2;
   $('#btnMatchTpl').disabled = !img;
+  $('#tplPickRow').classList.toggle('hidden', !VZ);
+  if (VZ) {
+    const sel = $('#tplPick');
+    const opts = VZ.images.slice(0, 300);
+    const key = VZ.base + ':' + opts.length;
+    if (sel.dataset.key !== key) {
+      sel.innerHTML = '<option value="">Pick a picture from the vehicle…</option>' + opts.map((e) => '<option value="' + esc(e.name) + '">' + esc(e.name.slice(VZ.base.length)) + '</option>').join('');
+      sel.dataset.key = key;
+    }
+    const a = t.assetId && assets.get(t.assetId);
+    const cur = a && a.zipRel && opts.find((e) => e.lower === (VZ.prefix + a.zipRel).toLowerCase());
+    sel.value = cur ? cur.name : '';
+  }
 }
 
 $('#btnLoadTpl').addEventListener('click', async () => loadTemplate(await pickFile('image/*,.dds')));
-$('#hintTpl').addEventListener('click', async () => loadTemplate(await pickFile('image/*,.dds')));
+$('#tplPick').addEventListener('change', async (e) => {
+  const entry = VZ && e.target.value && VZ.zip.byName.get(e.target.value.toLowerCase());
+  if (!entry) return;
+  try { await setTemplateFromZip(sh(), entry); pushHistory(); refreshAll(); } catch (err) { toast(err.message, 6000); refreshSheetPane(); }
+});
 $('#btnClearTpl').addEventListener('click', () => { sh().template.assetId = null; sh().template.name = ''; pushHistory(); refreshSheetPane(); render(); });
 $('#tplMode').addEventListener('change', (e) => { sh().template.mode = e.target.value; pushHistory(); render(); });
 $('#tplOpacity').addEventListener('input', (e) => { sh().template.opacity = parseFloat(e.target.value); render(); });
@@ -1959,10 +2332,28 @@ function refreshExportPane() {
   set('#exSlot', v.slotType);
   $('#exId').placeholder = slug(v.displayName) || 'my_livery';
   const info = exportInfo();
+  const can = canInside();
+  const mode = makeMode();
+  $('#mkVehicle').innerHTML = VZ
+    ? 'Vehicle: <b>' + esc(VZ.niceName) + '</b> <span class="note">from ' + esc(VZ.file.name) + '</span>'
+    : v.sourceZip
+      ? 'Drag <b>' + esc(v.sourceZip) + '</b> into the app again to put the livery inside it.'
+      : 'No vehicle file yet. <b>Drag the vehicle\'s .zip file into the app</b> and everything below is filled in for you.';
+  for (const r of $$('input[name=mkMode]')) { r.checked = r.value === mode; r.closest('.choice').classList.toggle('on', r.checked); }
+  $('#mkInside').disabled = !can.ok;
+  $('#mkInsideRow').classList.toggle('disabled', !can.ok);
+  $('#mkInsideNote').innerHTML = can.ok
+    ? 'You get a new copy of <b>' + esc(VZ.file.name) + '</b> with your livery built in. Put it in your mods folder and replace the old one.'
+    : esc(can.why);
+  $('#mkSeparateNote').innerHTML = 'A small extra file, <b>' + esc(liveryZipName(info)) + '</b>, that adds the livery to the vehicle. Works for every vehicle, even the game\'s own ones. Put it in your mods folder next to the vehicle.';
+  $('#mkNote').innerHTML = VZ && VZ.kind === 'repo' && mode === 'inside'
+    ? '<div class="warn">This vehicle came from the BeamNG mod repository, which can update it and remove your livery. The separate livery file is safer.</div>' : '';
   $('#exIssues').innerHTML = info.issues.map((x) => '<div class="' + (x.err ? 'err' : 'warn') + '">' + esc(x.err || x.warn) + '</div>').join('');
-  const lines = [info.dir, '  ' + info.partName + '.jbeam', '  skin.materials.json'];
-  for (const e of info.sheets) { lines.push('  ' + e.color); if (e.palette) lines.push('  ' + e.palette); }
-  lines.push('INSTALL - READ ME.txt');
+  const lines = [mode === 'inside' && VZ ? VZ.file.name + '  (everything already in it, plus:)' : liveryZipName(info), '  ' + info.dir,
+    '    ' + info.partName + '.jbeam', '    skin.materials.json'];
+  for (const e of info.sheets) { lines.push('    ' + e.color); if (e.palette) lines.push('    ' + e.palette); }
+  lines.push('    ' + info.skinId + '.livery   (your design, so you can edit it later)');
+  if (mode !== 'inside') lines.push('  INSTALL - READ ME.txt');
   $('#exFiles').textContent = lines.join('\n');
   $('#exJbeamName').textContent = info.partName + '.jbeam';
   $('#exJbeam').value = buildJbeam(info);
@@ -1981,7 +2372,8 @@ bindVehicle('#exSlot', 'slotType', (x) => x.trim());
 ['#exFolder', '#exName', '#exId', '#exAuthor', '#exSlot'].forEach((id) => $(id).addEventListener('change', () => { pushHistory(); refreshExportPane(); }));
 $('#exId').addEventListener('change', (e) => { P.vehicle.skinId = slug(e.target.value); e.target.value = P.vehicle.skinId; refreshExportPane(); });
 $('#btnReadJbeam').addEventListener('click', async () => readSlotType(await pickFile('.jbeam,.json')));
-$('#btnZip').addEventListener('click', exportZip);
+$('#btnMake').addEventListener('click', makeModFile);
+$$('input[name=mkMode]').forEach((r) => r.addEventListener('change', () => { S.makeMode = r.value; refreshExportPane(); }));
 $('#btnPng').addEventListener('click', exportPngs);
 $$('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
   const ta = $('#' + b.dataset.copy);
@@ -1989,7 +2381,17 @@ $$('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
   toast('Copied');
 }));
 
+function renderVehicleChip() {
+  const chip = $('#vehChip');
+  if (VZ) chip.innerHTML = '<b>&#10003;</b> ' + esc(VZ.niceName);
+  else if (P.vehicle.vehicleName) chip.textContent = P.vehicle.vehicleName + ' (vehicle file not loaded)';
+  else chip.textContent = 'No vehicle loaded';
+  chip.title = VZ ? VZ.file.name : '';
+  $('#btnVehicle').textContent = VZ ? 'Change vehicle…' : 'Load vehicle file…';
+}
+
 function refreshAll() {
+  renderVehicleChip();
   renderSheetTabs();
   renderLayerList();
   buildProps();
@@ -2290,18 +2692,36 @@ view.addEventListener('dblclick', (e) => {
   }
 });
 
-// drag and drop files
-const wrap = $('#canvaswrap');
-wrap.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
-wrap.addEventListener('drop', async (e) => {
-  e.preventDefault();
-  const vp = vpAt(e.offsetX, e.offsetY);
-  const at = vp ? toTex(vp, e.offsetX, e.offsetY) : null;
-  for (const f of e.dataTransfer.files) {
-    if (/\.materials\.json$/i.test(f.name)) await loadMaterials(f);
-    else if (/\.json$/i.test(f.name)) await openProject(f);
-    else await addImageFromFile(f, at);
+// drag and drop files anywhere on the window
+async function handleFiles(files, at) {
+  for (const f of files) {
+    const n = f.name.toLowerCase();
+    if (n.endsWith('.zip')) await openZip(f);
+    else if (n.endsWith('.materials.json')) await loadMaterials(f);
+    else if (n.endsWith('.jbeam')) await readSlotType(f);
+    else if (n.endsWith('.json') || n.endsWith('.livery')) await openProject(f);
+    else if (!f.type && !/\.[a-z0-9]+$/.test(n)) toast('Drag in the vehicle\'s .zip file, not a folder.', 5000);
+    else if (!VZ && !sh().template.assetId && !sh().layers.length && IMAGE_RE.test(n)) {
+      const i = await ask('What is this picture?', '<b>' + esc(f.name) + '</b>', ['It\'s the template (UV map)', 'Add it as a logo or picture']);
+      if (i === 0) await loadTemplate(f);
+      else if (i === 1) await addImageFromFile(f, at);
+    } else await addImageFromFile(f, at);
   }
+}
+
+const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+let dragDepth = 0;
+window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; dragDepth++; $('#dropOverlay').classList.remove('hidden'); });
+window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('#dropOverlay').classList.add('hidden'); });
+window.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+window.addEventListener('drop', (e) => {
+  if (!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  $('#dropOverlay').classList.add('hidden');
+  const r = view.getBoundingClientRect();
+  const vp = vpAt(e.clientX - r.left, e.clientY - r.top);
+  handleFiles([...e.dataTransfer.files], vp ? toTex(vp, e.clientX - r.left, e.clientY - r.top) : null);
 });
 
 document.addEventListener('paste', (e) => {
@@ -2322,6 +2742,7 @@ window.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
   const key = e.key.toLowerCase();
   if (mod && key === 's') { e.preventDefault(); saveProject(); return; }
+  if (!$('#askModal').classList.contains('hidden')) { if (e.key === 'Escape' && askDone) askDone(-1); return; }
   if (!$('#guideModal').classList.contains('hidden')) { if (e.key === 'Escape') $('#guideModal').classList.add('hidden'); return; }
   if (typing) { if (e.key === 'Escape') e.target.blur(); return; }
   if (mod && key === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
@@ -2374,18 +2795,20 @@ $('#btnSave').addEventListener('click', saveProject);
 $('#btnOpen').addEventListener('click', async () => { const f = await pickFile('.json'); if (f) openProject(f); });
 $('#btnNew').addEventListener('click', () => {
   if (hasContent() && !confirm('Start a new livery? Anything you have not saved will be lost.')) return;
-  assets.clear();
-  P = newProject();
-  S.sheet = 0; S.sel = null; S.cams = {};
-  resetHistory();
+  resetDesign();
+  S.skipWelcome = false;
   refreshAll();
   autosaveReady = true;
 });
+const chooseVehicle = async () => { const f = await pickFile('.zip'); if (f) openZip(f); };
+$('#btnVehicle').addEventListener('click', chooseVehicle);
+$('#welcomePick').addEventListener('click', chooseVehicle);
+$('#welcomeSkip').addEventListener('click', () => { S.skipWelcome = true; render(); });
 $('#btnExportTop').addEventListener('click', () => setPane('export'));
 const openGuide = () => $('#guideModal').classList.remove('hidden');
 $('#btnGuide').addEventListener('click', openGuide);
 $('#btnGuide2').addEventListener('click', openGuide);
-$('#hintGuide').addEventListener('click', openGuide);
+$('#welcomeGuide').addEventListener('click', (e) => { e.preventDefault(); openGuide(); });
 $('#guideModal').addEventListener('click', (e) => { if (e.target.id === 'guideModal' || e.target.closest('[data-close]')) $('#guideModal').classList.add('hidden'); });
 window.addEventListener('resize', resizeView);
 window.addEventListener('beforeunload', (e) => { if (dirty && hasContent()) { e.preventDefault(); e.returnValue = ''; } });
@@ -2400,19 +2823,29 @@ async function start() {
   try { saved = await DB.get('autosave'); } catch (e) { /* storage blocked: no autosave */ }
   if (saved) {
     $('#restorebar').classList.remove('hidden');
-    $('#btnRestore').onclick = () => {
+    $('#btnRestore').onclick = async () => {
       $('#restorebar').classList.add('hidden');
-      try { loadProjectData(JSON.parse(saved)); toast('Your last livery is back.'); } catch (e) { toast('The saved livery could not be restored.'); }
+      try {
+        await restoreAutosave(saved);
+        toast(P.vehicle.sourceZip ? 'Your last livery is back. Drag ' + P.vehicle.sourceZip + ' in again to put it inside the vehicle.' : 'Your last livery is back.', 6000);
+      } catch (e) { toast('The saved livery could not be restored.'); }
       autosaveReady = true;
+      pruneSavedAssets();
     };
-    $('#btnNoRestore').onclick = () => { $('#restorebar').classList.add('hidden'); autosaveReady = true; scheduleAutosave(); };
+    $('#btnNoRestore').onclick = async () => {
+      $('#restorebar').classList.add('hidden');
+      try { await DB.del('autosave'); } catch (e) { /* storage blocked */ }
+      autosaveReady = true;
+      pruneSavedAssets();
+      scheduleAutosave();
+    };
   } else {
     autosaveReady = true;
   }
 }
 
 // For automated tests.
-window.LiveryDesigner = { get project() { return P; }, state: S, exportInfo, buildJbeam, buildMaterials, parseLoose, select, setView, mirrorSelected, syncTwin, pushHistory, refreshAll, makeText, makeShape, addLayer, assets, loadProjectData, projectJSON };
+window.LiveryDesigner = { get project() { return P; }, get vehicle() { return VZ; }, state: S, exportInfo, buildJbeam, buildMaterials, parseLoose, select, setView, mirrorSelected, syncTwin, pushHistory, refreshAll, makeText, makeShape, addLayer, assets, loadProjectData, projectJSON, makeMode, openZip };
 
 start();
 })();
