@@ -189,6 +189,9 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); bo
   #topbar .brand span { display: none; }
 }
 
+.tplq { display: flex; align-items: center; gap: 6px; color: var(--muted); min-width: 0; }
+.tplq select { max-width: 280px; }
+
 html, body { overflow: auto; height: auto; }
 main { max-width: 900px; margin: 0 auto; padding: 20px 16px 60px; }
 main > h1 { font-size: 24px; margin: 6px 0 4px; }
@@ -227,12 +230,12 @@ Vehicles you downloaded from the in-game repository are in <code>mods\repo</code
 <ul>
   <li>reads the vehicle's name and folder name,</li>
   <li>finds its paint material (the one its own skins use, or the main body material),</li>
-  <li>picks the best template picture: a UV template if the vehicle has one, otherwise its body or skin texture,</li>
+  <li>picks the best template: a UV template if the vehicle has one, a texture from one of its own skins, or the panel outlines drawn from its 3D model (it never uses the pictures from the game's vehicle menu),</li>
   <li>reads the slot type its skins use, so your livery shows up in the right menu.</li>
 </ul>
-<p>Want a different template picture? In the <b>Sheet</b> tab, pick another one from <b>From vehicle</b>. If the zip has more than one vehicle in it, the app asks which one you want.</p>
+<p>The <b>Template</b> list above the canvas shows which picture is being used. Wrong picture? Pick another from that list. <b>Panel outlines drawn from the 3D model</b> works for almost every vehicle, because it is made from the vehicle's own model. Pictures marked <i>(menu picture)</i> are the previews from the game's vehicle menu, not textures, so don't use those. If the zip has more than one vehicle in it, the app asks which one you want.</p>
 <p>You can also drag in other files: a <code>.livery.json</code> project, a picture to use as a logo, or a template picture.</p>
-<div class="tip"><b>Trucks and big mods:</b> Some vehicles use more than one texture (for example a cab, a box and a trailer). In the Sheet tab, click <b>Add sheet</b>, then pick that part's template under <b>From vehicle</b> and tick its material.</div>
+<div class="tip"><b>Trucks and big mods:</b> Some vehicles use more than one texture (for example a cab, a box and a trailer). In the Sheet tab, click <b>Add sheet</b>, then pick that part's template from the <b>Template</b> list and tick its material.</div>
 
 <h2>Step 3: Mark the two sides</h2>
 <ol>
@@ -328,12 +331,13 @@ Vehicles you downloaded from the in-game repository are in <code>mods\repo</code
   <li><b>"There is no vehicle in this file."</b> That zip has no <code>vehicles\NAME\</code> folder inside. Some mods are packed wrong, with an extra folder at the top. BeamNG can't load those either.</li>
   <li><b>The livery isn't in the Paint Design list.</b> Restart the game after adding the file. Make sure the vehicle itself is installed and turned on in the Mods menu. If you made a separate livery file, its vehicle folder must match the vehicle.</li>
   <li><b>The app says the vehicle has no Paint Design slot.</b> That mod was not made for skins. Advanced fix: open the vehicle's main <code>.jbeam</code> (the part with <code>"slotType": "main"</code>) and add <code>["paint_design", "", "Paint Design"]</code> to its <code>"slots"</code> list. If the part uses <code>"slots2"</code> instead, copy how another slot in that list is written.</li>
-  <li><b>The livery is on the wrong parts, or looks scrambled.</b> The template was not the UV layout of that material. Pick another picture under <b>From vehicle</b> in the Sheet tab, or tick a different material.</li>
+  <li><b>The template shows a picture of the whole vehicle</b> (like the one in the game's vehicle menu). That's a menu picture, not a texture. Pick <b>Panel outlines drawn from the 3D model</b> or a texture from the <b>Template</b> list above the canvas.</li>
+  <li><b>The livery is on the wrong parts, or looks scrambled.</b> The template was not the UV layout of that material. Pick another picture from the <b>Template</b> list, or tick a different material in the Sheet tab.</li>
   <li><b>The vehicle turns white, black or orange-checkered.</b> The game can't find the livery picture. Make the mod file again and don't rename or unzip anything inside it.</li>
   <li><b>The vehicle shows up twice, or behaves oddly.</b> There are two copies of the vehicle's zip in your mods folder. Delete the old one.</li>
   <li><b>Text is backwards on one side.</b> Tick <b>Flip graphics on the other side</b> in the Sheet tab, or select that copy and click <b>Flip H</b>.</li>
   <li><b>The zip won't open ("packed in a way this app can't read").</b> The vehicle was zipped with an unusual compression. Unzip it, zip it again with Windows (right-click &gt; Send to &gt; Compressed folder) or 7-Zip using normal ZIP / Deflate, and drag that in.</li>
-  <li><b>A DDS template won't open (BC7).</b> Pick another picture under <b>From vehicle</b>, or open the DDS in paint.net or GIMP, save it as PNG and load the PNG.</li>
+  <li><b>"Panel outlines drawn from the 3D model" isn't in the list.</b> The vehicle only has compiled models (<code>.cdae</code>), which can't be read. Pick a texture from the list instead.</li>
   <li><b>Lost your work?</b> The app saves your design in the browser as you go and offers to bring it back the next time you open it.</li>
 </ul>
 

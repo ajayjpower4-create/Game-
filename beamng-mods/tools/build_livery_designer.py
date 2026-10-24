@@ -13,7 +13,7 @@ out.mkdir(parents=True, exist_ok=True)
 
 css = (src / "styles.css").read_text()
 guide = (src / "guide.html").read_text()
-scripts = "\n".join((src / name).read_text() for name in ("zip.js", "dds.js", "app.js"))
+scripts = "\n".join((src / name).read_text() for name in ("zip.js", "dds.js", "uvmap.js", "app.js"))
 page = (src / "index.html").read_text()
 for marker, text in (("/*STYLES*/", css), ("<!--GUIDE-->", guide), ("/*SCRIPTS*/", scripts)):
     assert page.count(marker) == 1, marker

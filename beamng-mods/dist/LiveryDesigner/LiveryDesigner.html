@@ -189,6 +189,9 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); bo
   #topbar .brand span { display: none; }
 }
 
+.tplq { display: flex; align-items: center; gap: 6px; color: var(--muted); min-width: 0; }
+.tplq select { max-width: 280px; }
+
 </style>
 </head>
 <body>
@@ -237,6 +240,7 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); bo
         <button id="zoomIn" title="Zoom in (+)">+</button>
       </div>
       <span id="zoomlbl">100%</span>
+      <label class="tplq hidden" id="tplQuickWrap">Template <select id="tplQuick"></select></label>
       <div id="sheettabs"></div>
     </div>
     <div id="toolopts"></div>
@@ -426,12 +430,12 @@ Vehicles you downloaded from the in-game repository are in <code>mods\repo</code
 <ul>
   <li>reads the vehicle's name and folder name,</li>
   <li>finds its paint material (the one its own skins use, or the main body material),</li>
-  <li>picks the best template picture: a UV template if the vehicle has one, otherwise its body or skin texture,</li>
+  <li>picks the best template: a UV template if the vehicle has one, a texture from one of its own skins, or the panel outlines drawn from its 3D model (it never uses the pictures from the game's vehicle menu),</li>
   <li>reads the slot type its skins use, so your livery shows up in the right menu.</li>
 </ul>
-<p>Want a different template picture? In the <b>Sheet</b> tab, pick another one from <b>From vehicle</b>. If the zip has more than one vehicle in it, the app asks which one you want.</p>
+<p>The <b>Template</b> list above the canvas shows which picture is being used. Wrong picture? Pick another from that list. <b>Panel outlines drawn from the 3D model</b> works for almost every vehicle, because it is made from the vehicle's own model. Pictures marked <i>(menu picture)</i> are the previews from the game's vehicle menu, not textures, so don't use those. If the zip has more than one vehicle in it, the app asks which one you want.</p>
 <p>You can also drag in other files: a <code>.livery.json</code> project, a picture to use as a logo, or a template picture.</p>
-<div class="tip"><b>Trucks and big mods:</b> Some vehicles use more than one texture (for example a cab, a box and a trailer). In the Sheet tab, click <b>Add sheet</b>, then pick that part's template under <b>From vehicle</b> and tick its material.</div>
+<div class="tip"><b>Trucks and big mods:</b> Some vehicles use more than one texture (for example a cab, a box and a trailer). In the Sheet tab, click <b>Add sheet</b>, then pick that part's template from the <b>Template</b> list and tick its material.</div>
 
 <h2>Step 3: Mark the two sides</h2>
 <ol>
@@ -527,12 +531,13 @@ Vehicles you downloaded from the in-game repository are in <code>mods\repo</code
   <li><b>"There is no vehicle in this file."</b> That zip has no <code>vehicles\NAME\</code> folder inside. Some mods are packed wrong, with an extra folder at the top. BeamNG can't load those either.</li>
   <li><b>The livery isn't in the Paint Design list.</b> Restart the game after adding the file. Make sure the vehicle itself is installed and turned on in the Mods menu. If you made a separate livery file, its vehicle folder must match the vehicle.</li>
   <li><b>The app says the vehicle has no Paint Design slot.</b> That mod was not made for skins. Advanced fix: open the vehicle's main <code>.jbeam</code> (the part with <code>"slotType": "main"</code>) and add <code>["paint_design", "", "Paint Design"]</code> to its <code>"slots"</code> list. If the part uses <code>"slots2"</code> instead, copy how another slot in that list is written.</li>
-  <li><b>The livery is on the wrong parts, or looks scrambled.</b> The template was not the UV layout of that material. Pick another picture under <b>From vehicle</b> in the Sheet tab, or tick a different material.</li>
+  <li><b>The template shows a picture of the whole vehicle</b> (like the one in the game's vehicle menu). That's a menu picture, not a texture. Pick <b>Panel outlines drawn from the 3D model</b> or a texture from the <b>Template</b> list above the canvas.</li>
+  <li><b>The livery is on the wrong parts, or looks scrambled.</b> The template was not the UV layout of that material. Pick another picture from the <b>Template</b> list, or tick a different material in the Sheet tab.</li>
   <li><b>The vehicle turns white, black or orange-checkered.</b> The game can't find the livery picture. Make the mod file again and don't rename or unzip anything inside it.</li>
   <li><b>The vehicle shows up twice, or behaves oddly.</b> There are two copies of the vehicle's zip in your mods folder. Delete the old one.</li>
   <li><b>Text is backwards on one side.</b> Tick <b>Flip graphics on the other side</b> in the Sheet tab, or select that copy and click <b>Flip H</b>.</li>
   <li><b>The zip won't open ("packed in a way this app can't read").</b> The vehicle was zipped with an unusual compression. Unzip it, zip it again with Windows (right-click &gt; Send to &gt; Compressed folder) or 7-Zip using normal ZIP / Deflate, and drag that in.</li>
-  <li><b>A DDS template won't open (BC7).</b> Pick another picture under <b>From vehicle</b>, or open the DDS in paint.net or GIMP, save it as PNG and load the PNG.</li>
+  <li><b>"Panel outlines drawn from the 3D model" isn't in the list.</b> The vehicle only has compiled models (<code>.cdae</code>), which can't be read. Pick a texture from the list instead.</li>
   <li><b>Lost your work?</b> The app saves your design in the browser as you go and offers to bring it back the next time you open it.</li>
 </ul>
 
@@ -734,7 +739,7 @@ const Zip = (() => {
   return { build, open, read, readText, rebuild, crc32 };
 })();
 
-// Reads .dds textures (BC1/DXT1, BC2/DXT3, BC3/DXT5, BC4, BC5 and plain RGBA)
+// Reads .dds textures (BC1/DXT1, BC2/DXT3, BC3/DXT5, BC4, BC5, BC7 and plain RGBA)
 // so a vehicle's existing texture can be used as the template. Only the top
 // mip level is decoded.
 const DDS = (() => {
@@ -797,11 +802,116 @@ const DDS = (() => {
     }
   }
 
+  // BC7, following Pillow's public-domain (CC0) decoder in libImaging/BcnDecode.c.
+  // Per mode: subsets, partition bits, rotation bits, index-select bits, color bits,
+  // alpha bits, per-endpoint p-bit, shared p-bit, index bits, second index bits.
+  const BC7_MODES = [
+    [3, 4, 0, 0, 4, 0, 1, 0, 3, 0], [2, 6, 0, 0, 6, 0, 0, 1, 3, 0], [3, 6, 0, 0, 5, 0, 0, 0, 2, 0], [2, 6, 0, 0, 7, 0, 1, 0, 2, 0],
+    [1, 0, 2, 1, 5, 6, 0, 0, 2, 3], [1, 0, 2, 0, 7, 8, 0, 0, 2, 2], [1, 0, 0, 0, 7, 7, 1, 0, 4, 0], [2, 6, 0, 0, 5, 5, 1, 0, 2, 0],
+  ];
+  const BC7_SI2 = [
+    0xcccc, 0x8888, 0xeeee, 0xecc8, 0xc880, 0xfeec, 0xfec8, 0xec80, 0xc800, 0xffec, 0xfe80, 0xe800, 0xffe8, 0xff00, 0xfff0, 0xf000,
+    0xf710, 0x008e, 0x7100, 0x08ce, 0x008c, 0x7310, 0x3100, 0x8cce, 0x088c, 0x3110, 0x6666, 0x366c, 0x17e8, 0x0ff0, 0x718e, 0x399c,
+    0xaaaa, 0xf0f0, 0x5a5a, 0x33cc, 0x3c3c, 0x55aa, 0x9696, 0xa55a, 0x73ce, 0x13c8, 0x324c, 0x3bdc, 0x6996, 0xc33c, 0x9966, 0x0660,
+    0x0272, 0x04e4, 0x4e40, 0x2720, 0xc936, 0x936c, 0x39c6, 0x639c, 0x9336, 0x9cc6, 0x817e, 0xe718, 0xccf0, 0x0fcc, 0x7744, 0xee22,
+  ];
+  const BC7_SI3 = [
+    0xaa685050, 0x6a5a5040, 0x5a5a4200, 0x5450a0a8, 0xa5a50000, 0xa0a05050, 0x5555a0a0, 0x5a5a5050, 0xaa550000, 0xaa555500,
+    0xaaaa5500, 0x90909090, 0x94949494, 0xa4a4a4a4, 0xa9a59450, 0x2a0a4250, 0xa5945040, 0x0a425054, 0xa5a5a500, 0x55a0a0a0,
+    0xa8a85454, 0x6a6a4040, 0xa4a45000, 0x1a1a0500, 0x0050a4a4, 0xaaa59090, 0x14696914, 0x69691400, 0xa08585a0, 0xaa821414,
+    0x50a4a450, 0x6a5a0200, 0xa9a58000, 0x5090a0a8, 0xa8a09050, 0x24242424, 0x00aa5500, 0x24924924, 0x24499224, 0x50a50a50,
+    0x500aa550, 0xaaaa4444, 0x66660000, 0xa5a0a5a0, 0x50a050a0, 0x69286928, 0x44aaaa44, 0x66666600, 0xaa444444, 0x54a854a8,
+    0x95809580, 0x96969600, 0xa85454a8, 0x80959580, 0xaa141414, 0x96960000, 0xaaaa1414, 0xa05050a0, 0xa0a5a5a0, 0x96000000,
+    0x40804080, 0xa9a8a9a8, 0xaaaaaa44, 0x2a4a5254,
+  ];
+  const BC7_AI0 = [15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 2, 8, 2, 2, 8, 8, 15, 2, 8, 2, 2, 8, 8, 2, 2,
+    15, 15, 6, 8, 2, 8, 15, 15, 2, 8, 2, 2, 2, 15, 15, 6, 6, 2, 6, 8, 15, 15, 2, 2, 15, 15, 15, 15, 15, 2, 2, 15];
+  const BC7_AI1 = [3, 3, 15, 15, 8, 3, 15, 15, 8, 8, 6, 6, 6, 5, 3, 3, 3, 3, 8, 15, 3, 3, 6, 10, 5, 8, 8, 6, 8, 5, 15, 15,
+    8, 15, 3, 5, 6, 10, 8, 15, 15, 3, 15, 5, 15, 15, 15, 15, 3, 15, 5, 5, 5, 8, 5, 10, 5, 10, 8, 13, 15, 12, 3, 3];
+  const BC7_AI2 = [15, 8, 8, 3, 15, 15, 3, 8, 15, 15, 15, 15, 15, 15, 15, 8, 15, 8, 15, 3, 15, 8, 15, 8, 3, 15, 6, 10, 15, 15, 10, 8,
+    15, 3, 15, 10, 10, 8, 9, 10, 6, 15, 8, 15, 3, 6, 6, 8, 15, 3, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 3, 15, 15, 8];
+  const BC7_WEIGHTS = { 2: [0, 21, 43, 64], 3: [0, 9, 18, 27, 37, 46, 55, 64], 4: [0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64] };
+
+  function bc7Block(src, off, out, w, h, bx, by) {
+    const get = (bit, count) => {
+      if (!count) return 0;
+      const i = off + (bit >> 3);
+      return ((src[i] | ((src[i + 1] || 0) << 8)) >> (bit & 7)) & ((1 << count) - 1);
+    };
+    let mode = 0;
+    while (mode < 8 && !(src[off] & (1 << mode))) mode++;
+    if (mode === 8) {
+      for (let k = 0; k < 16; k++) {
+        const x = bx + (k & 3), y = by + (k >> 2);
+        if (x < w && y < h) out.set([0, 0, 0, 255], (y * w + x) * 4);
+      }
+      return;
+    }
+    const [ns, pb, rb, isb, cb0, ab0, epb, spb, ib, ib2] = BC7_MODES[mode];
+    let bit = mode + 1;
+    let cb = cb0, ab = ab0;
+    const cw = BC7_WEIGHTS[ib], aw = BC7_WEIGHTS[ab && ib2 ? ib2 : ib];
+    const partition = get(bit, pb); bit += pb;
+    const rotation = get(bit, rb); bit += rb;
+    const indexSel = get(bit, isb); bit += isb;
+    const numep = ns * 2;
+    const ep = [];
+    for (let i = 0; i < numep; i++) ep.push([0, 0, 0, 255]);
+    for (let c = 0; c < 3; c++) for (let i = 0; i < numep; i++) { ep[i][c] = get(bit, cb); bit += cb; }
+    if (ab) for (let i = 0; i < numep; i++) { ep[i][3] = get(bit, ab); bit += ab; }
+    const addP = (e, v) => { for (let c = 0; c < 3; c++) e[c] = (e[c] << 1) | v; if (ab) e[3] = (e[3] << 1) | v; };
+    if (epb) {
+      cb++; if (ab) ab++;
+      for (let i = 0; i < numep; i++) { const v = get(bit, 1); bit++; addP(ep[i], v); }
+    }
+    if (spb) {
+      cb++; if (ab) ab++;
+      for (let i = 0; i < numep; i += 2) { const v = get(bit, 1); bit++; addP(ep[i], v); addP(ep[i + 1], v); }
+    }
+    const expand = (v, n) => { v = (v << (8 - n)) & 255; return v | (v >> n); };
+    for (const e of ep) {
+      for (let c = 0; c < 3; c++) e[c] = expand(e[c], cb);
+      if (ab) e[3] = expand(e[3], ab);
+    }
+    let cibit = bit, aibit = bit + 16 * ib - ns;
+    for (let i = 0; i < 16; i++) {
+      const s = ns === 2 ? 1 & (BC7_SI2[partition] >> i) : ns === 3 ? 3 & (BC7_SI3[partition] >>> (2 * i)) : 0;
+      let n = ib;
+      if (i === 0) n--;
+      else if (ns === 2 && i === BC7_AI0[partition]) n--;
+      else if (ns === 3 && (i === BC7_AI1[partition] || i === BC7_AI2[partition])) n--;
+      const i0 = get(cibit, n);
+      cibit += n;
+      let wc = cw[i0], wa = cw[i0];
+      if (ab && ib2) {
+        const n2 = i === 0 ? ib2 - 1 : ib2;
+        const i1 = get(aibit, n2);
+        aibit += n2;
+        if (indexSel) { wc = aw[i1]; wa = cw[i0]; } else { wc = cw[i0]; wa = aw[i1]; }
+      }
+      const e0 = ep[s * 2], e1 = ep[s * 2 + 1];
+      const px = [
+        ((64 - wc) * e0[0] + wc * e1[0] + 32) >> 6,
+        ((64 - wc) * e0[1] + wc * e1[1] + 32) >> 6,
+        ((64 - wc) * e0[2] + wc * e1[2] + 32) >> 6,
+        ((64 - wa) * e0[3] + wa * e1[3] + 32) >> 6,
+      ];
+      if (rotation) { const t = px[rotation - 1]; px[rotation - 1] = px[3]; px[3] = t; }
+      const x = bx + (i & 3), y = by + (i >> 2);
+      if (x < w && y < h) out.set(px, (y * w + x) * 4);
+    }
+  }
+
   function decodeBlocks(format, buf, dataOff, w, h) {
     const bytes = new Uint8Array(buf);
     const view = new DataView(buf);
     const out = new Uint8ClampedArray(w * h * 4);
     const blockSize = format === 'bc1' || format === 'bc4' ? 8 : 16;
+    if (format === 'bc7') {
+      if (dataOff + Math.ceil(w / 4) * Math.ceil(h / 4) * 16 > bytes.length) throw new Error('This DDS file is cut short.');
+      for (let by = 0, off = dataOff; by < h; by += 4) for (let bx = 0; bx < w; bx += 4, off += 16) bc7Block(bytes, off, out, w, h, bx, by);
+      return out;
+    }
     const bw = Math.ceil(w / 4), bh = Math.ceil(h / 4);
     if (dataOff + bw * bh * blockSize > bytes.length) throw new Error('This DDS file is cut short.');
     let off = dataOff;
@@ -897,7 +1007,7 @@ const DDS = (() => {
         else if (dxgi >= 27 && dxgi <= 32) return { width: w, height: h, data: decodeMasked(buf, dataOff, w, h, 32, [0xff, 0xff00, 0xff0000, 0xff000000], true) };
         else if (dxgi === 87 || dxgi === 91) return { width: w, height: h, data: decodeMasked(buf, dataOff, w, h, 32, [0xff0000, 0xff00, 0xff, 0xff000000], true) };
         else if (dxgi === 88 || dxgi === 93) return { width: w, height: h, data: decodeMasked(buf, dataOff, w, h, 32, [0xff0000, 0xff00, 0xff, 0], false) };
-        else if (dxgi >= 97 && dxgi <= 99) throw new Error('BC7_DDS');
+        else if (dxgi >= 97 && dxgi <= 99) format = 'bc7';
         else throw new Error('DDS format ' + dxgi + ' is not supported.');
       } else {
         throw new Error('DDS compression "' + String.fromCharCode(fourCC & 255, (fourCC >> 8) & 255, (fourCC >> 16) & 255, fourCC >>> 24) + '" is not supported.');
@@ -916,6 +1026,132 @@ const DDS = (() => {
   }
 
   return { decode };
+})();
+
+// Draws a UV template (the outline of every panel as it lies on the texture) from a
+// vehicle's Collada (.dae) 3D model, using only the parts that wear the paint material.
+const UVMap = (() => {
+  const nums = (t) => { const s = t.trim(); return s ? s.split(/\s+/).map(Number) : []; };
+  const kids = (el, name) => [...el.children].filter((c) => c.localName === name);
+  const all = (el, name) => el.getElementsByTagNameNS('*', name);
+  // "pickup_main-material", "pickup_main.001" and "pickup_main" all mean pickup_main.
+  const norm = (s) => String(s || '').toLowerCase().replace(/\.\d{3}$/, '').replace(/[-_.]?(material|mat)$/, '');
+
+  // Returns { pts: [u, v, u, v, ...], sizes: [corners per polygon] }, or null when the model
+  // has nothing with one of `materialNames`.
+  function fromCollada(text, materialNames) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) return null;
+    const matName = new Map();
+    for (const m of all(doc, 'material')) matName.set(m.getAttribute('id'), m.getAttribute('name') || m.getAttribute('id'));
+    const bound = new Map();
+    for (const im of all(doc, 'instance_material')) {
+      const target = (im.getAttribute('target') || '').replace(/^#/, '');
+      bound.set(im.getAttribute('symbol'), matName.get(target) || target);
+    }
+    const want = new Set(materialNames.map(norm));
+    const matches = (sym) => [sym, bound.get(sym), matName.get(sym)].some((n) => n && want.has(norm(n)));
+
+    const pts = [];
+    const sizes = [];
+    for (const mesh of all(doc, 'mesh')) {
+      const sources = new Map();
+      for (const src of kids(mesh, 'source')) {
+        const fa = all(src, 'float_array')[0];
+        if (!fa) continue;
+        const acc = all(src, 'accessor')[0];
+        sources.set(src.getAttribute('id'), { data: nums(fa.textContent), stride: +(acc && acc.getAttribute('stride')) || 2 });
+      }
+      for (const prim of [...mesh.children].filter((c) => c.localName === 'triangles' || c.localName === 'polylist' || c.localName === 'polygons')) {
+        if (!matches(prim.getAttribute('material'))) continue;
+        const inputs = kids(prim, 'input');
+        const stride = Math.max(0, ...inputs.map((i) => +i.getAttribute('offset') || 0)) + 1;
+        const tc = inputs.filter((i) => i.getAttribute('semantic') === 'TEXCOORD')
+          .sort((a, b) => (+a.getAttribute('set') || 0) - (+b.getAttribute('set') || 0))[0];
+        const src = tc && sources.get((tc.getAttribute('source') || '').replace(/^#/, ''));
+        if (!src) continue;
+        const off = +tc.getAttribute('offset') || 0;
+        const vc = kids(prim, 'vcount')[0];
+        const vcount = vc ? nums(vc.textContent) : null;
+        for (const p of kids(prim, 'p')) {
+          const idx = nums(p.textContent);
+          const corners = Math.floor(idx.length / stride);
+          let k = 0;
+          const emit = (n) => {
+            sizes.push(n);
+            for (let j = 0; j < n; j++, k++) {
+              const t = idx[k * stride + off] * src.stride;
+              pts.push(src.data[t], src.data[t + 1]);
+            }
+          };
+          if (prim.localName === 'triangles') for (let c = 0; c + 3 <= corners; c += 3) emit(3);
+          else if (prim.localName === 'polygons') emit(corners);
+          else if (vcount) for (const n of vcount) { if (k + n > corners) break; emit(n); }
+        }
+      }
+    }
+    return sizes.length ? { pts, sizes } : null;
+  }
+
+  // parts: results of fromCollada. Panels are light gray on white. Panel edges are dark;
+  // the mesh lines inside a panel are faint, so the outlines read clearly. Everything is
+  // drawn in small batches: one huge path is very slow to fill.
+  function draw(parts, w, h) {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    const BATCH = 300;
+    const edges = new Map();
+    let path = new Path2D(), inPath = 0;
+    ctx.fillStyle = '#e3e7ed';
+    for (const { pts, sizes } of parts) {
+      let k = 0;
+      for (const n of sizes) {
+        let su = Infinity, sv = Infinity;
+        for (let j = 0; j < n; j++) { su = Math.min(su, pts[(k + j) * 2]); sv = Math.min(sv, pts[(k + j) * 2 + 1]); }
+        su = Math.floor(su); // tiled UVs fold back onto the texture
+        sv = Math.floor(sv);
+        const xy = [];
+        for (let j = 0; j < n; j++, k++) {
+          // V points up in the model and down in the picture
+          xy.push(Math.round((pts[k * 2] - su) * w * 8) / 8, Math.round((1 - (pts[k * 2 + 1] - sv)) * h * 8) / 8);
+        }
+        for (let j = 0; j < n; j++) {
+          const a = j * 2, b = ((j + 1) % n) * 2;
+          if (j) path.lineTo(xy[a], xy[a + 1]); else path.moveTo(xy[a], xy[a + 1]);
+          const p1 = xy[a] + ',' + xy[a + 1], p2 = xy[b] + ',' + xy[b + 1];
+          const key = p1 < p2 ? p1 + ' ' + p2 : p2 + ' ' + p1;
+          const e = edges.get(key);
+          if (e) e[4]++; else edges.set(key, [xy[a], xy[a + 1], xy[b], xy[b + 1], 1]);
+        }
+        path.closePath();
+        if (++inPath >= BATCH) { ctx.fill(path); path = new Path2D(); inPath = 0; }
+      }
+    }
+    if (inPath) ctx.fill(path);
+
+    const strokeEdges = (wantOuter, width, color) => {
+      ctx.lineWidth = width;
+      ctx.strokeStyle = color;
+      let pth = new Path2D(), m = 0;
+      for (const [x1, y1, x2, y2, count] of edges.values()) {
+        if ((count === 1) !== wantOuter) continue;
+        pth.moveTo(x1, y1);
+        pth.lineTo(x2, y2);
+        if (++m >= BATCH * 3) { ctx.stroke(pth); pth = new Path2D(); m = 0; }
+      }
+      if (m) ctx.stroke(pth);
+    };
+    ctx.lineCap = 'round';
+    if (edges.size < 150000) strokeEdges(false, Math.max(1, w / 4096), '#c3c9d2');
+    strokeEdges(true, Math.max(1.5, w / 1365), '#2f343d');
+    return c;
+  }
+
+  return { fromCollada, draw };
 })();
 
 'use strict';
@@ -2335,31 +2571,46 @@ async function analyzeVehicle(zip, f) {
   a.mat = Object.keys(skinned).sort((x, y) => skinned[y] - skinned[x] || byMain(x, y))[0] || null;
   if (!a.mat) a.mat = names.filter((n) => !isSkin(n) && isPaintable(a.materials[n])).sort(byMain)[0] || null;
 
-  // Template pictures, best first: UV templates, then the textures the paint material and its skins use.
-  const refs = new Set();
-  const addRefs = (name) => {
+  // Template pictures, best first: UV templates, textures the vehicle's own skins use, then the
+  // paint material's texture. Textures can live anywhere in the zip, not only in this folder.
+  const skinRefs = new Set(), matRefs = new Set(), byLower = new Map();
+  const addRefs = (name, into) => {
     const m = a.materials[name];
     if (!m) return;
     for (const st of [m].concat(Array.isArray(m.Stages) ? m.Stages : [])) {
       if (!st) continue;
       for (const k of COLOR_KEYS) {
         const e = resolveTexture(zip, f.prefix, a.matDirs[name] || '/' + f.base.slice(f.prefix.length), st[k]);
-        if (e) refs.add(e.lower);
+        if (e) { into.add(e.lower); byLower.set(e.lower, e); }
       }
     }
   };
-  if (a.mat) { addRefs(a.mat); for (const n of names) if (n.startsWith(a.mat + '.skin.')) addRefs(n); }
+  if (a.mat) { addRefs(a.mat, matRefs); for (const n of names) if (n.startsWith(a.mat + '.skin.')) addRefs(n, skinRefs); }
+
+  // BeamNG's menu pictures (default.jpg, one per .pc config, ...) are never the texture.
+  const configs = new Set(own.filter((e) => e.lower.endsWith('.pc')).map((e) => e.lower.slice(0, -3)));
+  const depth = base.split('/').length;
+  const isPreview = (e) => {
+    const stem = e.lower.replace(/\.[^./]+$/, '');
+    const file = stem.slice(stem.lastIndexOf('/') + 1);
+    return file === 'default' || configs.has(stem) || /(preview|thumb|icon|screenshot|banner|logo)/.test(file) ||
+      /\/ui\//.test(e.lower) || (/\.jpe?g$/.test(e.lower) && stem.split('/').length === depth);
+  };
   const score = (e) => {
-    const n = e.lower.slice(base.length);
+    const n = e.lower.slice(e.lower.lastIndexOf('/') + 1);
     let s = 0;
     if (/(skin_?uvs?|uv_?(map|template|layout)|_uvs?\.|template)/.test(n) && !/palette/.test(n)) s += 100;
-    if (refs.has(e.lower)) s += 60;
+    if (skinRefs.has(e.lower)) s += 80;
+    else if (matRefs.has(e.lower)) s += 60;
     if (/(\.color\.|_d\.|_b\.|_c\.|diffuse|albedo|basecolor)/.test(n)) s += 20;
     if (/(\.normal\.|_nm\.|_n\.|\.data\.|_ao\.|palette|_spec|_rough|_metal|_s\.|_r\.)/.test(n)) s -= 50;
     return s;
   };
-  a.images = own.filter((e) => IMAGE_RE.test(e.name)).map((e) => ({ e, s: score(e) }))
-    .sort((x, y) => y.s - x.s || x.e.name.localeCompare(y.e.name)).map((x) => x.e);
+  const pool = new Map(own.filter((e) => IMAGE_RE.test(e.name)).map((e) => [e.lower, e]));
+  for (const [k, e] of byLower) pool.set(k, e);
+  a.candidates = [...pool.values()].map((e) => ({ e, s: score(e), preview: isPreview(e), ref: matRefs.has(e.lower) }))
+    .sort((x, y) => x.preview - y.preview || y.s - x.s || x.e.name.localeCompare(y.e.name));
+  a.models = own.filter((e) => e.lower.endsWith('.dae') && e.usize > 0).sort((x, y) => y.usize - x.usize);
   return a;
 }
 
@@ -2369,29 +2620,104 @@ function vehicleKind(zip, f) {
   return zip.file.name.replace(/\.zip$/i, '').toLowerCase() === f.folder.toLowerCase() ? 'stock' : 'stockpart';
 }
 
-async function setTemplateFromZip(s, entry) {
-  const url = await zipImageURL(VZ.zip, entry);
-  const img = await loadImage(url);
-  s.template.assetId = addAsset(url, img, entry.name.slice(VZ.prefix.length));
-  s.template.name = entry.name.slice(VZ.base.length);
+const UV_LABEL = 'Panel outlines drawn from the 3D model';
+const relName = (e) => (e.lower.startsWith(VZ.base.toLowerCase()) ? e.name.slice(VZ.base.length) : e.name.slice(VZ.prefix.length));
+
+async function decodeCandidate(e) {
+  const url = await zipImageURL(VZ.zip, e);
+  return { url, img: await loadImage(url), zipRel: e.name.slice(VZ.prefix.length), name: relName(e) };
+}
+
+function useTemplate(s, r) {
+  const { img } = r;
+  s.template.assetId = addAsset(r.url, img, r.zipRel);
+  s.template.name = r.name;
   s.template.w = img.naturalWidth;
   s.template.h = img.naturalHeight;
   if (s.layers.length === 0) scaleSheet(s, img.naturalWidth, img.naturalHeight);
   else if (img.naturalWidth !== s.width || img.naturalHeight !== s.height) toast('The template is ' + img.naturalWidth + ' × ' + img.naturalHeight + '. Click "Match template" in the Sheet tab to use that size.', 5000);
   S.cams = {};
+  return r.name;
+}
+
+async function setTemplateFromZip(s, entry) {
+  return useTemplate(s, await decodeCandidate(entry));
+}
+
+// Real textures are square-ish powers of two (1024, 2048, 4096...). Menu pictures and screenshots aren't.
+const isPow2 = (n) => n >= 256 && (n & (n - 1)) === 0;
+function isPlain(img) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0, 32, 32);
+  const d = x.getImageData(0, 0, 32, 32).data;
+  let sum = 0, sum2 = 0;
+  for (let i = 0; i < d.length; i += 4) { const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11; sum += l; sum2 += l * l; }
+  const n = d.length / 4;
+  return Math.sqrt(Math.max(0, sum2 / n - (sum / n) ** 2)) < 4;
+}
+const isTexture = (img) => isPow2(img.naturalWidth) && isPow2(img.naturalHeight) && !isPlain(img);
+
+// Outlines of every painted panel, from the vehicle's .dae models. spec = "uv:<materials>@<w>x<h>"
+async function uvTemplateURL(spec) {
+  const m = /^uv:(.*)@(\d+)x(\d+)$/.exec(spec);
+  if (!m || !VZ || !VZ.models.length) return null;
+  const mats = m[1].split(',').filter(Boolean);
+  const parts = [];
+  let total = 0;
+  for (const e of VZ.models) {
+    if (e.usize > 150e6 || total + e.usize > 400e6) continue;
+    total += e.usize;
+    try { const r = UVMap.fromCollada(await Zip.readText(VZ.zip, e), mats); if (r) parts.push(r); } catch (err) { /* skip that model */ }
+  }
+  return parts.length ? UVMap.draw(parts, +m[2], +m[3]).toDataURL('image/png') : null;
+}
+
+async function setUVTemplate(s, w, h) {
+  const mats = s.materials.length ? s.materials : VZ.mat ? [VZ.mat] : [];
+  if (!mats.length) return null;
+  const spec = 'uv:' + mats.join(',') + '@' + w + 'x' + h;
+  const url = await uvTemplateURL(spec);
+  if (!url) return null;
+  return useTemplate(s, { url, img: await loadImage(url), zipRel: spec, name: UV_LABEL });
 }
 
 async function autoTemplate(s) {
-  for (const e of VZ.images.slice(0, 8)) {
-    try { await setTemplateFromZip(s, e); return e; } catch (err) { /* try the next picture */ }
+  const cands = VZ.candidates.filter((c) => !c.preview);
+  let fallback = null;
+  const attempt = async (c) => {
+    try { const r = await decodeCandidate(c.e); fallback = fallback || r; return r; } catch (err) { return null; }
+  };
+  // 1. A UV template picture, or a texture one of the vehicle's own skins uses.
+  for (const c of cands.filter((x) => x.s >= 80).slice(0, 6)) {
+    const r = await attempt(c);
+    if (r && isTexture(r.img)) return useTemplate(s, r);
   }
-  return null;
+  // 2. The panel outlines from the 3D model, at the size of the paint texture.
+  const own = [];
+  for (const c of cands.filter((x) => x.ref).slice(0, 4)) { const r = await attempt(c); if (r) own.push(r); }
+  const sized = own.find((r) => isPow2(r.img.naturalWidth) && isPow2(r.img.naturalHeight));
+  if (VZ.models.length) {
+    toast('Drawing the template from the vehicle\'s 3D model…', 60000);
+    const name = await setUVTemplate(s, sized ? sized.img.naturalWidth : 2048, sized ? sized.img.naturalHeight : 2048);
+    if (name) return name;
+  }
+  // 3. The paint texture itself, then any other real texture.
+  for (const r of own) if (isTexture(r.img)) return useTemplate(s, r);
+  for (const c of cands.filter((x) => x.s > -50 && x.s < 80 && !x.ref).slice(0, 6)) {
+    const r = await attempt(c);
+    if (r && isTexture(r.img)) return useTemplate(s, r);
+  }
+  // 4. Anything that opened, as long as it isn't a menu picture.
+  return fallback ? useTemplate(s, fallback) : null;
 }
 
 // Pictures that came from a vehicle zip are not stored inside the livery; get them back from the zip.
 async function fillZipAssets(zip, prefix) {
   for (const a of assets.values()) {
     if (!a.zipRel || a.url) continue;
+    if (a.zipRel.startsWith('uv:')) { try { a.url = await uvTemplateURL(a.zipRel); a.img = null; } catch (err) { /* stays missing */ } continue; }
     const e = zip.byName.get((prefix + a.zipRel).toLowerCase());
     if (!e) continue;
     try { a.url = await zipImageURL(zip, e); a.img = null; } catch (err) { /* stays missing */ }
@@ -2411,13 +2737,13 @@ async function applyVehicle(zip, f, a, keep) {
   const s = P.sheets[0];
   if ((!keep || !s.materials.length) && a.mat) s.materials = [a.mat];
   const cur = s.template.assetId && assets.get(s.template.assetId);
-  let hasTemplate = !!(cur && cur.url);
-  if (!hasTemplate) hasTemplate = !!(await autoTemplate(s));
+  const tpl = cur && cur.url ? s.template.name : await autoTemplate(s);
   S.makeMode = null;
   pushHistory();
   refreshAll();
-  const found = [hasTemplate && 'template', a.mat && 'paint material', a.hasSlot && 'Paint Design slot'].filter(Boolean);
-  toast('Loaded ' + a.niceName + (found.length ? ', with its ' + joinList(found) : '') + '.' + (keep ? '' : ' Next: mark the two sides with "Set side areas".'), 6500);
+  const found = [a.mat && 'paint material', a.hasSlot && 'Paint Design slot'].filter(Boolean);
+  toast('Loaded ' + a.niceName + (found.length ? ', with its ' + joinList(found) : '') + '. ' +
+    (tpl ? 'Template: ' + tpl + '. Wrong picture? Pick another from the Template list above the canvas.' : 'No template picture was found. Pick one from the Template list above the canvas, or load one in the Sheet tab.'), 9000);
 }
 
 function resetDesign() {
@@ -3154,26 +3480,46 @@ function refreshSheetPane() {
   $('#btnDelSheet').disabled = P.sheets.length < 2;
   $('#btnMatchTpl').disabled = !img;
   $('#tplPickRow').classList.toggle('hidden', !VZ);
-  if (VZ) {
-    const sel = $('#tplPick');
-    const opts = VZ.images.slice(0, 300);
-    const key = VZ.base + ':' + opts.length;
-    if (sel.dataset.key !== key) {
-      sel.innerHTML = '<option value="">Pick a picture from the vehicle…</option>' + opts.map((e) => '<option value="' + esc(e.name) + '">' + esc(e.name.slice(VZ.base.length)) + '</option>').join('');
-      sel.dataset.key = key;
-    }
-    const a = t.assetId && assets.get(t.assetId);
-    const cur = a && a.zipRel && opts.find((e) => e.lower === (VZ.prefix + a.zipRel).toLowerCase());
-    sel.value = cur ? cur.name : '';
+  $('#tplQuickWrap').classList.toggle('hidden', !VZ);
+  if (VZ) for (const sel of [$('#tplPick'), $('#tplQuick')]) fillTemplateSelect(sel, t);
+}
+
+function fillTemplateSelect(sel, t) {
+  const cands = VZ.candidates.slice(0, 300);
+  const key = VZ.base + ':' + cands.length + ':' + VZ.models.length;
+  if (sel.dataset.key !== key) {
+    sel.innerHTML = '<option value="">Pick a template picture…</option>' +
+      (VZ.models.length ? '<option value="uv">' + esc(UV_LABEL) + '</option>' : '') +
+      cands.map((c) => '<option value="' + esc(c.e.name) + '">' + esc(relName(c.e)) + (c.preview ? ' (menu picture)' : '') + '</option>').join('');
+    sel.dataset.key = key;
+  }
+  const a = t.assetId && assets.get(t.assetId);
+  const rel = a && a.zipRel;
+  const cur = rel && !rel.startsWith('uv:') && cands.find((c) => c.e.lower === (VZ.prefix + rel).toLowerCase());
+  sel.value = rel && rel.startsWith('uv:') ? 'uv' : cur ? cur.e.name : '';
+}
+
+async function pickTemplate(value) {
+  if (!VZ || !value) return;
+  const s = sh();
+  toast(value === 'uv' ? 'Drawing the template from the vehicle\'s 3D model…' : 'Opening the picture…', 60000);
+  try {
+    const name = value === 'uv'
+      ? await setUVTemplate(s, isPow2(s.width) ? s.width : 2048, isPow2(s.height) ? s.height : 2048)
+      : await setTemplateFromZip(s, VZ.zip.byName.get(value.toLowerCase()));
+    if (!name) throw new Error('The 3D model has no panels with this sheet\'s material.');
+    pushHistory();
+    refreshAll();
+    toast('Template: ' + name);
+  } catch (err) {
+    toast(err.message, 7000);
+    refreshSheetPane();
   }
 }
 
 $('#btnLoadTpl').addEventListener('click', async () => loadTemplate(await pickFile('image/*,.dds')));
-$('#tplPick').addEventListener('change', async (e) => {
-  const entry = VZ && e.target.value && VZ.zip.byName.get(e.target.value.toLowerCase());
-  if (!entry) return;
-  try { await setTemplateFromZip(sh(), entry); pushHistory(); refreshAll(); } catch (err) { toast(err.message, 6000); refreshSheetPane(); }
-});
+$('#tplPick').addEventListener('change', (e) => pickTemplate(e.target.value));
+$('#tplQuick').addEventListener('change', (e) => pickTemplate(e.target.value));
 $('#btnClearTpl').addEventListener('click', () => { sh().template.assetId = null; sh().template.name = ''; pushHistory(); refreshSheetPane(); render(); });
 $('#tplMode').addEventListener('change', (e) => { sh().template.mode = e.target.value; pushHistory(); render(); });
 $('#tplOpacity').addEventListener('input', (e) => { sh().template.opacity = parseFloat(e.target.value); render(); });

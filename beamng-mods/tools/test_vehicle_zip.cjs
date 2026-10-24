@@ -237,6 +237,72 @@ print(json.dumps({"ok": z.testzip() is None, "names": sorted(z.namelist())}))`, 
   check('restored design has its layers and template picture', JSON.stringify(st.layers) === '["SAVED"]' && st.tpl && st.tpl.hasData, st);
   check('it reminds you to drag the vehicle file in again', /cool_hauler\.zip/.test(msg6), msg6);
 
+  // ---------- 7. a bus whose zip has big menu pictures (the bug from the photo)
+  page = await freshPage();
+  await dropFile(page, A('bus_bc7.zip'));
+  await waitFor(page, () => !!window.LiveryDesigner.vehicle);
+  await page.waitForTimeout(400);
+  st = await state(page);
+  check('menu pictures are never picked; the BC7 body texture is', st.tpl && st.tpl.zipRel === 'vehicles/heavystar/heavystar_body_d.dds' && st.tpl.hasData, st.tpl);
+  check('the sheet is the texture\'s size, not the menu picture\'s', st.w === 1024, st.w);
+  const opts7 = await page.$$eval('#tplQuick option', (o) => o.map((x) => x.textContent));
+  check('the Template list above the canvas marks menu pictures', opts7.includes('default.jpg (menu picture)') && opts7.includes('pe_series.jpg (menu picture)'), opts7);
+  const msg7 = await page.textContent('#toast');
+  check('the app says which template it used', /Template: heavystar_body_d\.dds/.test(msg7), msg7);
+  const px7 = await page.evaluate(async () => {
+    const L = window.LiveryDesigner, s = L.project.sheets[0];
+    const img = await new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = L.assets.get(s.template.assetId).url; });
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+    return [Array.from(x.getImageData(60, 120, 1, 1).data), Array.from(x.getImageData(500, 500, 1, 1).data)];
+  });
+  check('the BC7 texture decodes correctly', px7[0][0] < 90 && px7[1][0] > 200, px7);
+  await page.screenshot({ path: path.join(outDir, 'v7-bus-bc7.png') });
+
+  page = await freshPage();
+  await dropFile(page, A('bus_model.zip'));
+  await waitFor(page, () => !!window.LiveryDesigner.vehicle && !!window.LiveryDesigner.project.sheets[0].template.assetId, null, 15000);
+  await page.waitForTimeout(500);
+  st = await state(page);
+  check('a blank texture is skipped and the template is drawn from the 3D model', st.tpl && st.tpl.zipRel === 'uv:heavystar_body@1024x1024' && st.tpl.hasData, st.tpl);
+  const uvpx = await page.evaluate(async () => {
+    const L = window.LiveryDesigner, s = L.project.sheets[0];
+    const img = await new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = L.assets.get(s.template.assetId).url; });
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+    const at = (u, v) => Array.from(x.getImageData(Math.round(u * img.width), Math.round(v * img.height), 1, 1).data).slice(0, 3);
+    return { size: [img.width, img.height], top: at(0.3, 0.2), diagonal: at(0.5, 0.25), tiled: at(0.5, 0.75), glass: at(0.5, 0.5), corner: at(0.03, 0.03), edge: at(0.1, 0.25) };
+  });
+  const gray = (p) => p[0] > 200 && p[0] < 245, white = (p) => p.every((v) => v > 250), dark = (p) => p[0] < 150;
+  check('painted panels show up in the right place (V flipped like the texture)', gray(uvpx.top), uvpx);
+  check('tiled UVs fold back onto the texture', gray(uvpx.tiled), uvpx);
+  check('parts with other materials (glass) are left out', white(uvpx.glass) && white(uvpx.corner), uvpx);
+  check('panel outlines are drawn', dark(uvpx.edge), uvpx);
+  check('mesh lines inside a panel are faint, not dark', uvpx.diagonal[0] > 170, uvpx);
+  await page.screenshot({ path: path.join(outDir, 'v8-bus-model.png') });
+  // the drawn template is not stored in the mod; it is drawn again from the zip when reopened
+  await page.evaluate(() => { const L = window.LiveryDesigner; L.addLayer(L.makeText(400, 250, 'BUS')); });
+  await page.click('#btnExportTop');
+  const made9 = path.join(outDir, 'made_bus.zip');
+  await page.click('input[value=inside]');
+  const r9 = await make(page, made9);
+  const lv9 = py(`
+import zipfile, json, sys
+z = zipfile.ZipFile(sys.argv[1])
+n = [x for x in z.namelist() if x.endswith(".livery")][0]
+d = json.loads(z.read(n))
+print(json.dumps({"zipAssets": list(d["zipAssets"].values()), "stored": [k for k, v in d["assets"].items() if v]}))`, made9);
+  check('the drawn template is not stored in the mod file', JSON.stringify(lv9.zipAssets) === '["uv:heavystar_body@1024x1024"]' && lv9.stored.length === 0, lv9);
+  page = await freshPage();
+  await dropFile(page, made9);
+  await waitFor(page, () => !document.querySelector('#askModal').classList.contains('hidden'));
+  await page.click('#askBtns [data-i="0"]');
+  await waitFor(page, () => !!window.LiveryDesigner.vehicle, null, 15000);
+  await page.waitForTimeout(500);
+  st = await state(page);
+  check('reopening the bus draws its template again', st.tpl && st.tpl.hasData && JSON.stringify(st.layers) === '["BUS"]', st);
+  void r9;
+
   check('no errors at any point', errors.length === 0, errors);
   await browser.close();
   console.log(failures.length ? '\n' + failures.length + ' FAILED: ' + failures.join(' | ') : '\nALL PASSED');

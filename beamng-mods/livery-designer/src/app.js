@@ -1415,31 +1415,46 @@ async function analyzeVehicle(zip, f) {
   a.mat = Object.keys(skinned).sort((x, y) => skinned[y] - skinned[x] || byMain(x, y))[0] || null;
   if (!a.mat) a.mat = names.filter((n) => !isSkin(n) && isPaintable(a.materials[n])).sort(byMain)[0] || null;
 
-  // Template pictures, best first: UV templates, then the textures the paint material and its skins use.
-  const refs = new Set();
-  const addRefs = (name) => {
+  // Template pictures, best first: UV templates, textures the vehicle's own skins use, then the
+  // paint material's texture. Textures can live anywhere in the zip, not only in this folder.
+  const skinRefs = new Set(), matRefs = new Set(), byLower = new Map();
+  const addRefs = (name, into) => {
     const m = a.materials[name];
     if (!m) return;
     for (const st of [m].concat(Array.isArray(m.Stages) ? m.Stages : [])) {
       if (!st) continue;
       for (const k of COLOR_KEYS) {
         const e = resolveTexture(zip, f.prefix, a.matDirs[name] || '/' + f.base.slice(f.prefix.length), st[k]);
-        if (e) refs.add(e.lower);
+        if (e) { into.add(e.lower); byLower.set(e.lower, e); }
       }
     }
   };
-  if (a.mat) { addRefs(a.mat); for (const n of names) if (n.startsWith(a.mat + '.skin.')) addRefs(n); }
+  if (a.mat) { addRefs(a.mat, matRefs); for (const n of names) if (n.startsWith(a.mat + '.skin.')) addRefs(n, skinRefs); }
+
+  // BeamNG's menu pictures (default.jpg, one per .pc config, ...) are never the texture.
+  const configs = new Set(own.filter((e) => e.lower.endsWith('.pc')).map((e) => e.lower.slice(0, -3)));
+  const depth = base.split('/').length;
+  const isPreview = (e) => {
+    const stem = e.lower.replace(/\.[^./]+$/, '');
+    const file = stem.slice(stem.lastIndexOf('/') + 1);
+    return file === 'default' || configs.has(stem) || /(preview|thumb|icon|screenshot|banner|logo)/.test(file) ||
+      /\/ui\//.test(e.lower) || (/\.jpe?g$/.test(e.lower) && stem.split('/').length === depth);
+  };
   const score = (e) => {
-    const n = e.lower.slice(base.length);
+    const n = e.lower.slice(e.lower.lastIndexOf('/') + 1);
     let s = 0;
     if (/(skin_?uvs?|uv_?(map|template|layout)|_uvs?\.|template)/.test(n) && !/palette/.test(n)) s += 100;
-    if (refs.has(e.lower)) s += 60;
+    if (skinRefs.has(e.lower)) s += 80;
+    else if (matRefs.has(e.lower)) s += 60;
     if (/(\.color\.|_d\.|_b\.|_c\.|diffuse|albedo|basecolor)/.test(n)) s += 20;
     if (/(\.normal\.|_nm\.|_n\.|\.data\.|_ao\.|palette|_spec|_rough|_metal|_s\.|_r\.)/.test(n)) s -= 50;
     return s;
   };
-  a.images = own.filter((e) => IMAGE_RE.test(e.name)).map((e) => ({ e, s: score(e) }))
-    .sort((x, y) => y.s - x.s || x.e.name.localeCompare(y.e.name)).map((x) => x.e);
+  const pool = new Map(own.filter((e) => IMAGE_RE.test(e.name)).map((e) => [e.lower, e]));
+  for (const [k, e] of byLower) pool.set(k, e);
+  a.candidates = [...pool.values()].map((e) => ({ e, s: score(e), preview: isPreview(e), ref: matRefs.has(e.lower) }))
+    .sort((x, y) => x.preview - y.preview || y.s - x.s || x.e.name.localeCompare(y.e.name));
+  a.models = own.filter((e) => e.lower.endsWith('.dae') && e.usize > 0).sort((x, y) => y.usize - x.usize);
   return a;
 }
 
@@ -1449,29 +1464,104 @@ function vehicleKind(zip, f) {
   return zip.file.name.replace(/\.zip$/i, '').toLowerCase() === f.folder.toLowerCase() ? 'stock' : 'stockpart';
 }
 
-async function setTemplateFromZip(s, entry) {
-  const url = await zipImageURL(VZ.zip, entry);
-  const img = await loadImage(url);
-  s.template.assetId = addAsset(url, img, entry.name.slice(VZ.prefix.length));
-  s.template.name = entry.name.slice(VZ.base.length);
+const UV_LABEL = 'Panel outlines drawn from the 3D model';
+const relName = (e) => (e.lower.startsWith(VZ.base.toLowerCase()) ? e.name.slice(VZ.base.length) : e.name.slice(VZ.prefix.length));
+
+async function decodeCandidate(e) {
+  const url = await zipImageURL(VZ.zip, e);
+  return { url, img: await loadImage(url), zipRel: e.name.slice(VZ.prefix.length), name: relName(e) };
+}
+
+function useTemplate(s, r) {
+  const { img } = r;
+  s.template.assetId = addAsset(r.url, img, r.zipRel);
+  s.template.name = r.name;
   s.template.w = img.naturalWidth;
   s.template.h = img.naturalHeight;
   if (s.layers.length === 0) scaleSheet(s, img.naturalWidth, img.naturalHeight);
   else if (img.naturalWidth !== s.width || img.naturalHeight !== s.height) toast('The template is ' + img.naturalWidth + ' × ' + img.naturalHeight + '. Click "Match template" in the Sheet tab to use that size.', 5000);
   S.cams = {};
+  return r.name;
+}
+
+async function setTemplateFromZip(s, entry) {
+  return useTemplate(s, await decodeCandidate(entry));
+}
+
+// Real textures are square-ish powers of two (1024, 2048, 4096...). Menu pictures and screenshots aren't.
+const isPow2 = (n) => n >= 256 && (n & (n - 1)) === 0;
+function isPlain(img) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const x = c.getContext('2d');
+  x.drawImage(img, 0, 0, 32, 32);
+  const d = x.getImageData(0, 0, 32, 32).data;
+  let sum = 0, sum2 = 0;
+  for (let i = 0; i < d.length; i += 4) { const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11; sum += l; sum2 += l * l; }
+  const n = d.length / 4;
+  return Math.sqrt(Math.max(0, sum2 / n - (sum / n) ** 2)) < 4;
+}
+const isTexture = (img) => isPow2(img.naturalWidth) && isPow2(img.naturalHeight) && !isPlain(img);
+
+// Outlines of every painted panel, from the vehicle's .dae models. spec = "uv:<materials>@<w>x<h>"
+async function uvTemplateURL(spec) {
+  const m = /^uv:(.*)@(\d+)x(\d+)$/.exec(spec);
+  if (!m || !VZ || !VZ.models.length) return null;
+  const mats = m[1].split(',').filter(Boolean);
+  const parts = [];
+  let total = 0;
+  for (const e of VZ.models) {
+    if (e.usize > 150e6 || total + e.usize > 400e6) continue;
+    total += e.usize;
+    try { const r = UVMap.fromCollada(await Zip.readText(VZ.zip, e), mats); if (r) parts.push(r); } catch (err) { /* skip that model */ }
+  }
+  return parts.length ? UVMap.draw(parts, +m[2], +m[3]).toDataURL('image/png') : null;
+}
+
+async function setUVTemplate(s, w, h) {
+  const mats = s.materials.length ? s.materials : VZ.mat ? [VZ.mat] : [];
+  if (!mats.length) return null;
+  const spec = 'uv:' + mats.join(',') + '@' + w + 'x' + h;
+  const url = await uvTemplateURL(spec);
+  if (!url) return null;
+  return useTemplate(s, { url, img: await loadImage(url), zipRel: spec, name: UV_LABEL });
 }
 
 async function autoTemplate(s) {
-  for (const e of VZ.images.slice(0, 8)) {
-    try { await setTemplateFromZip(s, e); return e; } catch (err) { /* try the next picture */ }
+  const cands = VZ.candidates.filter((c) => !c.preview);
+  let fallback = null;
+  const attempt = async (c) => {
+    try { const r = await decodeCandidate(c.e); fallback = fallback || r; return r; } catch (err) { return null; }
+  };
+  // 1. A UV template picture, or a texture one of the vehicle's own skins uses.
+  for (const c of cands.filter((x) => x.s >= 80).slice(0, 6)) {
+    const r = await attempt(c);
+    if (r && isTexture(r.img)) return useTemplate(s, r);
   }
-  return null;
+  // 2. The panel outlines from the 3D model, at the size of the paint texture.
+  const own = [];
+  for (const c of cands.filter((x) => x.ref).slice(0, 4)) { const r = await attempt(c); if (r) own.push(r); }
+  const sized = own.find((r) => isPow2(r.img.naturalWidth) && isPow2(r.img.naturalHeight));
+  if (VZ.models.length) {
+    toast('Drawing the template from the vehicle\'s 3D model…', 60000);
+    const name = await setUVTemplate(s, sized ? sized.img.naturalWidth : 2048, sized ? sized.img.naturalHeight : 2048);
+    if (name) return name;
+  }
+  // 3. The paint texture itself, then any other real texture.
+  for (const r of own) if (isTexture(r.img)) return useTemplate(s, r);
+  for (const c of cands.filter((x) => x.s > -50 && x.s < 80 && !x.ref).slice(0, 6)) {
+    const r = await attempt(c);
+    if (r && isTexture(r.img)) return useTemplate(s, r);
+  }
+  // 4. Anything that opened, as long as it isn't a menu picture.
+  return fallback ? useTemplate(s, fallback) : null;
 }
 
 // Pictures that came from a vehicle zip are not stored inside the livery; get them back from the zip.
 async function fillZipAssets(zip, prefix) {
   for (const a of assets.values()) {
     if (!a.zipRel || a.url) continue;
+    if (a.zipRel.startsWith('uv:')) { try { a.url = await uvTemplateURL(a.zipRel); a.img = null; } catch (err) { /* stays missing */ } continue; }
     const e = zip.byName.get((prefix + a.zipRel).toLowerCase());
     if (!e) continue;
     try { a.url = await zipImageURL(zip, e); a.img = null; } catch (err) { /* stays missing */ }
@@ -1491,13 +1581,13 @@ async function applyVehicle(zip, f, a, keep) {
   const s = P.sheets[0];
   if ((!keep || !s.materials.length) && a.mat) s.materials = [a.mat];
   const cur = s.template.assetId && assets.get(s.template.assetId);
-  let hasTemplate = !!(cur && cur.url);
-  if (!hasTemplate) hasTemplate = !!(await autoTemplate(s));
+  const tpl = cur && cur.url ? s.template.name : await autoTemplate(s);
   S.makeMode = null;
   pushHistory();
   refreshAll();
-  const found = [hasTemplate && 'template', a.mat && 'paint material', a.hasSlot && 'Paint Design slot'].filter(Boolean);
-  toast('Loaded ' + a.niceName + (found.length ? ', with its ' + joinList(found) : '') + '.' + (keep ? '' : ' Next: mark the two sides with "Set side areas".'), 6500);
+  const found = [a.mat && 'paint material', a.hasSlot && 'Paint Design slot'].filter(Boolean);
+  toast('Loaded ' + a.niceName + (found.length ? ', with its ' + joinList(found) : '') + '. ' +
+    (tpl ? 'Template: ' + tpl + '. Wrong picture? Pick another from the Template list above the canvas.' : 'No template picture was found. Pick one from the Template list above the canvas, or load one in the Sheet tab.'), 9000);
 }
 
 function resetDesign() {
@@ -2234,26 +2324,46 @@ function refreshSheetPane() {
   $('#btnDelSheet').disabled = P.sheets.length < 2;
   $('#btnMatchTpl').disabled = !img;
   $('#tplPickRow').classList.toggle('hidden', !VZ);
-  if (VZ) {
-    const sel = $('#tplPick');
-    const opts = VZ.images.slice(0, 300);
-    const key = VZ.base + ':' + opts.length;
-    if (sel.dataset.key !== key) {
-      sel.innerHTML = '<option value="">Pick a picture from the vehicle…</option>' + opts.map((e) => '<option value="' + esc(e.name) + '">' + esc(e.name.slice(VZ.base.length)) + '</option>').join('');
-      sel.dataset.key = key;
-    }
-    const a = t.assetId && assets.get(t.assetId);
-    const cur = a && a.zipRel && opts.find((e) => e.lower === (VZ.prefix + a.zipRel).toLowerCase());
-    sel.value = cur ? cur.name : '';
+  $('#tplQuickWrap').classList.toggle('hidden', !VZ);
+  if (VZ) for (const sel of [$('#tplPick'), $('#tplQuick')]) fillTemplateSelect(sel, t);
+}
+
+function fillTemplateSelect(sel, t) {
+  const cands = VZ.candidates.slice(0, 300);
+  const key = VZ.base + ':' + cands.length + ':' + VZ.models.length;
+  if (sel.dataset.key !== key) {
+    sel.innerHTML = '<option value="">Pick a template picture…</option>' +
+      (VZ.models.length ? '<option value="uv">' + esc(UV_LABEL) + '</option>' : '') +
+      cands.map((c) => '<option value="' + esc(c.e.name) + '">' + esc(relName(c.e)) + (c.preview ? ' (menu picture)' : '') + '</option>').join('');
+    sel.dataset.key = key;
+  }
+  const a = t.assetId && assets.get(t.assetId);
+  const rel = a && a.zipRel;
+  const cur = rel && !rel.startsWith('uv:') && cands.find((c) => c.e.lower === (VZ.prefix + rel).toLowerCase());
+  sel.value = rel && rel.startsWith('uv:') ? 'uv' : cur ? cur.e.name : '';
+}
+
+async function pickTemplate(value) {
+  if (!VZ || !value) return;
+  const s = sh();
+  toast(value === 'uv' ? 'Drawing the template from the vehicle\'s 3D model…' : 'Opening the picture…', 60000);
+  try {
+    const name = value === 'uv'
+      ? await setUVTemplate(s, isPow2(s.width) ? s.width : 2048, isPow2(s.height) ? s.height : 2048)
+      : await setTemplateFromZip(s, VZ.zip.byName.get(value.toLowerCase()));
+    if (!name) throw new Error('The 3D model has no panels with this sheet\'s material.');
+    pushHistory();
+    refreshAll();
+    toast('Template: ' + name);
+  } catch (err) {
+    toast(err.message, 7000);
+    refreshSheetPane();
   }
 }
 
 $('#btnLoadTpl').addEventListener('click', async () => loadTemplate(await pickFile('image/*,.dds')));
-$('#tplPick').addEventListener('change', async (e) => {
-  const entry = VZ && e.target.value && VZ.zip.byName.get(e.target.value.toLowerCase());
-  if (!entry) return;
-  try { await setTemplateFromZip(sh(), entry); pushHistory(); refreshAll(); } catch (err) { toast(err.message, 6000); refreshSheetPane(); }
-});
+$('#tplPick').addEventListener('change', (e) => pickTemplate(e.target.value));
+$('#tplQuick').addEventListener('change', (e) => pickTemplate(e.target.value));
 $('#btnClearTpl').addEventListener('click', () => { sh().template.assetId = null; sh().template.name = ''; pushHistory(); refreshSheetPane(); render(); });
 $('#tplMode').addEventListener('change', (e) => { sh().template.mode = e.target.value; pushHistory(); render(); });
 $('#tplOpacity').addEventListener('input', (e) => { sh().template.opacity = parseFloat(e.target.value); render(); });

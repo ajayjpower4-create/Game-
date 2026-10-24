@@ -181,3 +181,6 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); bo
   #panel { width: 290px; }
   #topbar .brand span { display: none; }
 }
+
+.tplq { display: flex; align-items: center; gap: 6px; color: var(--muted); min-width: 0; }
+.tplq select { max-width: 280px; }
