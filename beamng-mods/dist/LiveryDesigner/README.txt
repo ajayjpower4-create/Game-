@@ -15,7 +15,14 @@ BEAMNG LIVERY DESIGNER
    Drag it into your mods folder (for a modded vehicle, replace the old file).
 5. In the game: Vehicle Config (Ctrl+W) > Parts > Paint Design > your livery.
 
+To change words that are already on a livery (like the name on a delivery
+truck): pick that livery from the Template list, choose the "Change existing
+words" tool (X) and drag a box around the words. Type the new words.
+
 To change it later, drag the file you made back into the app. Your design
 comes back, ready to edit.
 
 Full step-by-step help: the "Guide" button in the app, or GUIDE.html.
+
+Reading words uses Tesseract / tesseract.js (Apache License 2.0); see the
+LICENSE-tesseract files.

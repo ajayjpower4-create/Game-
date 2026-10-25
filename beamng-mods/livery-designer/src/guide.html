@@ -52,6 +52,7 @@ Vehicles you downloaded from the in-game repository are in <code>mods\repo</code
   <tr><td>Select</td><td><kbd>V</kbd></td><td>Click to select. Drag to move. Drag the white squares to resize (corners keep the shape, sides stretch it). Drag the round handle to rotate; hold <kbd>Shift</kbd> to snap to 15°.</td></tr>
   <tr><td>Move view</td><td><kbd>H</kbd></td><td>Drag to move around the sheet. You can also hold <kbd>Space</kbd> or the middle mouse button. The mouse wheel zooms.</td></tr>
   <tr><td>Text</td><td><kbd>T</kbd></td><td>Click anywhere to add text. Type it in the <b>Text</b> box on the right.</td></tr>
+  <tr><td>Change existing words</td><td><kbd>X</kbd></td><td>Drag a box around words that are already on the livery. They are erased and put back as text you can change. See below.</td></tr>
   <tr><td>Shape</td><td><kbd>R</kbd></td><td>Drag to draw a rectangle, circle, triangle, star, hexagon, slanted bar, chevron or arrow. <kbd>Shift</kbd> makes it even.</td></tr>
   <tr><td>Stripe</td><td><kbd>L</kbd></td><td>Drag to draw a racing stripe at any angle.</td></tr>
   <tr><td>Brush</td><td><kbd>B</kbd></td><td>Paint freehand. It paints on the selected paint layer, or starts a new one.</td></tr>
@@ -62,6 +63,20 @@ Vehicles you downloaded from the in-game repository are in <code>mods\repo</code
 <h3>Editing text</h3>
 <p>Select the text and type in the <b>Text</b> box. Double-clicking text on the canvas jumps straight to that box. You can change the font, size, bold, italic, letter spacing, line spacing, slant, alignment, fill (solid, gradient, checkered or stripes), outline, a second outer outline and a drop shadow. Press <b>Enter</b> in the Text box for more lines.</p>
 <p><b>Fonts:</b> Pick a font from the list, choose <b>Other font…</b> to type the name of any font installed on your computer, or click <b>Load font file…</b> to use a <code>.ttf</code>/<code>.otf</code> file. Loaded fonts are saved with your livery.</p>
+<h3>Changing words that are already on a livery</h3>
+<p>For example the company name or phone number on a delivery truck:</p>
+<ol>
+  <li>Drag the vehicle's .zip into the app and pick the livery with the words from the <b>Template</b> list above the canvas (its texture, for example <code>skin_delivery/…color.png</code>).</li>
+  <li>Pick the <b>Change existing words</b> tool (<kbd>X</kbd>, the T in a dotted box) and drag a box around the words, a little bigger than them. Do one line or one block of words at a time.</li>
+  <li>The first time, the app asks to use the picture as the <b>base</b> of your livery. Say yes: everything else on the picture stays exactly as it was.</li>
+  <li>The app reads the old words, erases them by filling in the background, and puts the same words back as text in the same spot, color, size, outline and boldness. Just type the new words in the <b>Text</b> box.</li>
+</ol>
+<ul>
+  <li>Words on the far side of a vehicle are often stored backwards on the texture. The app notices and keeps the new text backwards too, so it reads the right way on the vehicle.</li>
+  <li>Two layers are added: <b>Erased: …</b> (the cleaned background) and the new text. Hide the text to leave the spot empty, or hide the Erased layer to see the old words again. <kbd>Ctrl</kbd>+<kbd>Z</kbd> takes both back.</li>
+  <li>If the words can't be read (very fancy fonts, or words over a busy picture), the old words are still erased and you get a <b>NEW TEXT</b> box to type into. You can change the font in the text's properties.</li>
+  <li>When you make the mod file, pick your new livery in the game's <b>Paint Design</b> menu instead of the old one.</li>
+</ul>
 <h3>Layers</h3>
 <p>The top of the list is drawn on top. Drag rows to change the order, or use <b>Up</b>/<b>Down</b>. The eye hides a layer. The lock stops it from being clicked on the canvas. <span class="tag">L</span>/<span class="tag">R</span> show which side a mirrored item is on, and the chain means it is linked.</p>
 <h3>Base color</h3>
@@ -75,6 +90,7 @@ Vehicles you downloaded from the in-game repository are in <code>mods\repo</code
   <tr><td>Arrow keys</td><td>Nudge 1 pixel (hold <kbd>Shift</kbd> for 10)</td></tr>
   <tr><td><kbd>[</kbd> / <kbd>]</kbd></td><td>Move down / up in the layer list</td></tr>
   <tr><td><kbd>M</kbd></td><td>Mirror to the other side</td></tr>
+  <tr><td><kbd>X</kbd></td><td>Change words already on the livery</td></tr>
   <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></td><td>Whole sheet / left side / right side / both sides</td></tr>
   <tr><td><kbd>0</kbd>, <kbd>+</kbd>, <kbd>-</kbd></td><td>Fit to screen, zoom in, zoom out</td></tr>
 </table>
@@ -135,5 +151,9 @@ Vehicles you downloaded from the in-game repository are in <code>mods\repo</code
   <li><b>Text is backwards on one side.</b> Tick <b>Flip graphics on the other side</b> in the Sheet tab, or select that copy and click <b>Flip H</b>.</li>
   <li><b>The zip won't open ("packed in a way this app can't read").</b> The vehicle was zipped with an unusual compression. Unzip it, zip it again with Windows (right-click &gt; Send to &gt; Compressed folder) or 7-Zip using normal ZIP / Deflate, and drag that in.</li>
   <li><b>"Panel outlines drawn from the 3D model" isn't in the list.</b> The vehicle only has compiled models (<code>.cdae</code>), which can't be read. Pick a texture from the list instead.</li>
+  <li><b>Changed words look a little different.</b> The app can't know the exact font, so it picks a close one and stretches it to the same size. Pick a better font in the text's properties if you know which one it was.</li>
   <li><b>Lost your work?</b> The app saves your design in the browser as you go and offers to bring it back the next time you open it.</li>
 </ul>
+
+<h2>Credits</h2>
+<p>Reading words uses Tesseract and tesseract.js (Apache License 2.0), built into this app so it works without the internet.</p>

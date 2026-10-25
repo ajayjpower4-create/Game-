@@ -289,7 +289,9 @@ const mctx = document.createElement('canvas').getContext('2d');
 
 function fontCSS(L) {
   const fam = GENERIC_FONTS.has(L.font) ? L.font : '"' + String(L.font).replace(/["\\]/g, '') + '", sans-serif';
-  return (L.italic ? 'italic ' : '') + (L.bold ? '700 ' : '400 ') + L.size + 'px ' + fam;
+  // Heavy fonts ask for weight 900, so a computer without them still shows very bold letters.
+  const weight = L.bold ? '700 ' : /black|heavy/i.test(L.font) ? '900 ' : '400 ';
+  return (L.italic ? 'italic ' : '') + weight + L.size + 'px ' + fam;
 }
 
 function lineWidth(ctx, line, spacing) {
@@ -826,6 +828,15 @@ function drawOverlay(ctx, vp) {
         ctx.strokeRect(p.x - 4.5, p.y - 4.5, 9, 9);
       }
     }
+  }
+
+  if (S.retextBox) {
+    const a = toScr(vp, S.retextBox.x, S.retextBox.y);
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#ff6a00';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(a.x, a.y, S.retextBox.w * vp.scale, S.retextBox.h * vp.scale);
+    ctx.setLineDash([]);
   }
 
   for (const g of S.snapLines) {
@@ -1664,6 +1675,139 @@ function ask(title, html, buttons) {
 $('#askBtns').addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b && askDone) askDone(+b.dataset.i); });
 $('#askModal').addEventListener('click', (e) => { if (e.target.id === 'askModal' && askDone) askDone(-1); });
 
+// ============================================================ changing words already on the livery
+// The picture's own material(s): the livery replaces the picture there.
+function materialsForTemplate(s) {
+  const a = s.template.assetId && assets.get(s.template.assetId);
+  if (!VZ || !a || !a.zipRel || a.zipRel.startsWith('uv:')) return [];
+  const target = (VZ.prefix + a.zipRel).toLowerCase();
+  const out = new Set();
+  for (const [name, m] of Object.entries(VZ.materials)) {
+    for (const st of [m].concat(Array.isArray(m.Stages) ? m.Stages : [])) {
+      if (!st) continue;
+      for (const k of COLOR_KEYS) {
+        const e = resolveTexture(VZ.zip, VZ.prefix, VZ.matDirs[name] || '/' + VZ.base.slice(VZ.prefix.length), st[k]);
+        if (e && e.lower === target) out.add(name.split('.skin.')[0]);
+      }
+    }
+  }
+  return [...out].filter((n) => VZ.materials[n]);
+}
+
+// To change words that are on the picture, the picture has to be part of the livery.
+async function ensurePictureIsBase() {
+  const s = sh();
+  if (!s.template.assetId || s.template.mode === 'background') return true;
+  const i = await ask('Change the words on this picture?',
+    'To change words that are already on the livery, this picture becomes the base of your new livery. Everything else on it stays exactly the same in the game.',
+    ['Use it as the base', 'Cancel']);
+  if (i !== 0) return false;
+  s.template.mode = 'background';
+  const mats = materialsForTemplate(s);
+  if (mats.length && mats.join() !== s.materials.join()) {
+    s.materials = mats;
+    toast('This picture is used by ' + joinList(mats) + ', so your livery replaces it there.', 5000);
+  }
+  pushHistory();
+  refreshSheetPane();
+  render();
+  return true;
+}
+
+// The ink box of a text layer in its own (unscaled) coordinates, the way drawText draws it.
+function inkBox(L) {
+  const t = textLayout(L);
+  mctx.font = fontCSS(L);
+  mctx.textBaseline = 'middle';
+  mctx.textAlign = 'left';
+  const top = -(t.lh * t.lines.length) / 2;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  t.lines.forEach((line, i) => {
+    if (!line.trim()) return;
+    const m = mctx.measureText(line);
+    const w = t.widths[i];
+    const x = L.align === 'left' ? -t.inner / 2 : L.align === 'right' ? t.inner / 2 - w : -w / 2;
+    const ym = top + t.lh * (i + 0.5);
+    x0 = Math.min(x0, x - m.actualBoundingBoxLeft);
+    x1 = Math.max(x1, x + m.actualBoundingBoxRight);
+    y0 = Math.min(y0, ym - m.actualBoundingBoxAscent);
+    y1 = Math.max(y1, ym + m.actualBoundingBoxDescent);
+  });
+  const o = Math.max(0, L.outline.width) + Math.max(0, L.outline2.width);
+  if (!isFinite(x0)) return { x0: -1, y0: -1, x1: 1, y1: 1 };
+  return { x0: x0 - o, y0: y0 - o, x1: x1 + o, y1: y1 + o };
+}
+
+// Makes text layer L cover the same spot, at the same height and width, as the old words.
+function fitText(L, a, origin, matchWidth) {
+  const box = a.box;
+  L.align = a.align;
+  L.sx = L.sy = 1;
+  const fitHeight = () => { const k = inkBox(L); L.size = Math.max(2, L.size * box.h / Math.max(1, k.y1 - k.y0)); };
+  fitHeight();
+  if (a.lines.length > 1) L.lineHeight = Math.min(3, Math.max(0.6, a.spacing / L.size));
+  fitHeight();
+  fitHeight();
+  let k = inkBox(L);
+  if (matchWidth) L.sx = Math.min(3, Math.max(0.3, box.w / Math.max(1, k.x1 - k.x0)));
+  k = inkBox(L);
+  const cx = ((k.x0 + k.x1) / 2) * L.sx * (L.flipX ? -1 : 1);
+  const cy = (k.y0 + k.y1) / 2;
+  L.x = origin.x + box.cx - cx;
+  L.y = origin.y + box.cy - cy;
+}
+
+async function changeWordsInBox(r) {
+  const s = sh();
+  if (!(await ensurePictureIsBase())) return;
+  if (r.w * r.h > 4e6) { toast('That box is very big. Draw it just around the words you want to change.', 6000); return; }
+  const c = document.createElement('canvas');
+  c.width = r.w;
+  c.height = r.h;
+  const ctx = c.getContext('2d');
+  ctx.translate(-r.x, -r.y);
+  drawSheet(ctx, s, { guides: false, k: 1 });
+  const a = TextFix.analyze(ctx.getImageData(0, 0, r.w, r.h));
+  if (!a) { toast('No words found in that box. Draw the box around the words, a little bigger than them.', 6500); return; }
+
+  let found = null;
+  if (OCR.available()) {
+    toast('Reading the words…', 60000);
+    try { found = await OCR.read(a.readable); } catch (err) { found = null; }
+    $('#toast').classList.add('hidden');
+  }
+  const words = found && found.text && found.confidence >= 35 ? found.text : '';
+
+  const pc = document.createElement('canvas');
+  pc.width = r.w;
+  pc.height = r.h;
+  pc.getContext('2d').putImageData(a.patch, 0, 0);
+  const url = pc.toDataURL('image/png');
+  const cover = makeImage(addAsset(url, await loadImage(url)), r.x + r.w / 2, r.y + r.h / 2, r.w, r.h,
+    'Erased: ' + (words ? words.replace(/\n/g, ' ').slice(0, 24) : 'old words'));
+  s.layers.push(cover);
+
+  const T = makeText(0, 0, words || 'NEW TEXT');
+  T.name = nextName('Text');
+  T.fill = { type: 'solid', color: a.fill, color2: '#ffffff', angle: 90, size: 32 };
+  T.outline = a.outline ? { color: a.outline.color, width: a.outline.width } : { color: '#000000', width: 0 };
+  T.font = a.strokeRatio > 0.21 ? 'Arial Black' : 'Arial';
+  T.bold = a.strokeRatio > 0.14 && a.strokeRatio <= 0.21;
+  T.flipX = !!(found && found.mirrored);
+  fitText(T, a, r, !!words);
+  s.layers.push(T);
+  S.sel = T.id;
+  pushHistory();
+  setTool('select');
+  setPane('layers');
+  refreshAll();
+  const ta = $('#propText');
+  if (ta) { ta.focus(); ta.select(); }
+  toast(words
+    ? 'Found "' + words.replace(/\n/g, ' ') + '". Type the new words in the Text box.' + (T.flipX ? ' (It was stored backwards, so it stays backwards.)' : '')
+    : 'The old words are erased. Type the new words in the Text box.', 7000);
+}
+
 // ============================================================ export
 function exportInfo() {
   const v = P.vehicle;
@@ -2221,6 +2365,7 @@ function renderToolopts() {
   else if (t === 'brush' || t === 'eraser') h = (t === 'brush' ? color : '') + '<label>Size <input type="range" id="toSize" min="1" max="400" value="' + S.brushSize + '"><input type="number" id="toSizeN" min="1" max="2000" value="' + S.brushSize + '" style="width:64px"></label><span class="hint">' + (t === 'brush' ? 'Paints on the selected paint layer, or starts a new one.' : 'Erases on the selected paint layer.') + '</span>';
   else if (t === 'image') h = '<button class="btn small primary" id="toImage">Choose a picture…</button><span class="hint">Or drag a picture onto the sheet, or paste one with Ctrl+V. PNG logos with see-through backgrounds work best.</span>';
   else if (t === 'picker') h = color + '<span class="hint">Click on the sheet to pick up a color. It is used for new items and given to the selected item.</span>';
+  else if (t === 'retext') h = '<span class="hint">Drag a box around words that are already on the livery, a little bigger than the words. The app erases them and puts the same words back as text you can change.</span>';
   $('#toolopts').innerHTML = h;
 }
 
@@ -2251,6 +2396,7 @@ $('#tools').addEventListener('click', async (e) => {
   if (!b) return;
   setTool(b.dataset.tool);
   if (b.dataset.tool === 'image') { const f = await pickFile('image/*,.dds'); if (f) addImageFromFile(f); }
+  if (b.dataset.tool === 'retext' && OCR.available()) OCR.start().catch(() => {}); // get the word reader ready
 });
 
 // ---------- view bar
@@ -2624,6 +2770,7 @@ view.addEventListener('pointerdown', (e) => {
     return;
   }
   if (tool === 'brush' || tool === 'eraser') { S.drag = startBrush(p); if (S.drag) S.drag.vp = vp; render(); return; }
+  if (tool === 'retext') { S.drag = { kind: 'retext', p0: p, vp }; S.retextBox = { x: p.x, y: p.y, w: 0, h: 0 }; return; }
   if (tool === 'picker') {
     const c = document.createElement('canvas');
     c.width = c.height = 1;
@@ -2706,6 +2853,8 @@ view.addEventListener('pointermove', (e) => {
     const lx = p.x - d.L.x, ly = p.y - d.L.y;
     const n = st.pts.length;
     if (Math.hypot(lx - st.pts[n - 2], ly - st.pts[n - 1]) >= Math.max(1, st.size * 0.12)) brushAddPoint(d.L, st, lx, ly);
+  } else if (d.kind === 'retext') {
+    S.retextBox = { x: Math.min(p.x, d.p0.x), y: Math.min(p.y, d.p0.y), w: Math.abs(p.x - d.p0.x), h: Math.abs(p.y - d.p0.y) };
   } else if (d.kind === 'zone') {
     const z = sh().zones[d.key], z0 = d.z0;
     const dx = p.x - d.p0.x, dy = p.y - d.p0.y;
@@ -2751,6 +2900,17 @@ function endDrag() {
   if (!d) return;
   updateCursor();
   if (d.kind === 'pan') { render(); return; }
+  if (d.kind === 'retext') {
+    const b = S.retextBox;
+    S.retextBox = null;
+    render();
+    const s = sh();
+    const x0 = Math.max(0, Math.floor(b.x)), y0 = Math.max(0, Math.floor(b.y));
+    const x1 = Math.min(s.width, Math.ceil(b.x + b.w)), y1 = Math.min(s.height, Math.ceil(b.y + b.h));
+    if (x1 - x0 < 8 || y1 - y0 < 6) { toast('Drag a box around the words you want to change.'); return; }
+    changeWordsInBox({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+    return;
+  }
   if (d.kind === 'create' || d.kind === 'stripe') {
     const L = d.L;
     const s = sh();
@@ -2846,7 +3006,7 @@ document.addEventListener('paste', (e) => {
 });
 
 // ============================================================ keyboard
-const TOOL_KEYS = { v: 'select', h: 'hand', t: 'text', r: 'shape', l: 'stripe', b: 'brush', e: 'eraser', i: 'image', k: 'picker' };
+const TOOL_KEYS = { v: 'select', h: 'hand', t: 'text', x: 'retext', r: 'shape', l: 'stripe', b: 'brush', e: 'eraser', i: 'image', k: 'picker' };
 window.addEventListener('keydown', (e) => {
   const typing = e.target.closest && e.target.closest('input, textarea, select');
   const mod = e.ctrlKey || e.metaKey;
@@ -2955,7 +3115,7 @@ async function start() {
 }
 
 // For automated tests.
-window.LiveryDesigner = { get project() { return P; }, get vehicle() { return VZ; }, state: S, exportInfo, buildJbeam, buildMaterials, parseLoose, select, setView, mirrorSelected, syncTwin, pushHistory, refreshAll, makeText, makeShape, addLayer, assets, loadProjectData, projectJSON, makeMode, openZip };
+window.LiveryDesigner = { changeWordsInBox, ocr: OCR, drawSheetForTest: (ctx, s) => drawSheet(ctx, s, { guides: false, k: 1 }), get project() { return P; }, get vehicle() { return VZ; }, state: S, exportInfo, buildJbeam, buildMaterials, parseLoose, select, setView, mirrorSelected, syncTwin, pushHistory, refreshAll, makeText, makeShape, addLayer, assets, loadProjectData, projectJSON, makeMode, openZip };
 
 start();
 })();
