@@ -14,6 +14,12 @@ app.use(express.json({ limit: '256kb' }));
 // index: false so the routes below decide what lives at each path; assets
 // (css/js) are still served straight out of public/.
 app.use(express.static(join(__dirname, 'public'), { index: false }));
+// Tow Truck Simulator loads three.js and the Rapier physics engine straight
+// out of node_modules, so `npm install` is the only build step.
+const modules = join(__dirname, 'node_modules');
+app.use('/tow/vendor/three', express.static(join(modules, 'three', 'build')));
+app.use('/tow/vendor/three-addons', express.static(join(modules, 'three', 'examples', 'jsm')));
+app.use('/tow/vendor/rapier', express.static(join(modules, '@dimforge', 'rapier3d-compat')));
 
 // The homepage is a hub listing every game; each game keeps its own path.
 const page = (...parts) => (req, res) => res.sendFile(join(__dirname, 'public', ...parts));
@@ -22,6 +28,7 @@ app.get('/', page('hub.html'));
 app.get(['/election', '/election/'], page('election', 'index.html'));
 app.get(['/chat', '/chat/'], page('index.html'));
 app.get(['/inspection', '/inspection/'], page('inspection', 'index.html'));
+app.get(['/tow', '/tow/'], page('tow', 'index.html'));
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
@@ -274,5 +281,6 @@ app.listen(PORT, () => {
   console.log(`Game hub at http://localhost:${PORT}`);
   console.log(`Political Election Simulator at http://localhost:${PORT}/election`);
   console.log(`Inspection Simulator at http://localhost:${PORT}/inspection`);
+  console.log(`Tow Truck Simulator at http://localhost:${PORT}/tow`);
   console.log(`Swerve AI chat at http://localhost:${PORT}/chat`);
 });

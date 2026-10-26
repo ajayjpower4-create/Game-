@@ -1,0 +1,56 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Showroom</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block}#info{position:fixed;left:10px;top:10px;color:#fff;font:14px sans-serif;background:#0008;padding:6px 10px}</style>
+<script type="importmap">{"imports":{"three":"/tow/vendor/three/three.module.js","three/addons/":"/tow/vendor/three-addons/"}}</script>
+</head><body><canvas id="c"></canvas><div id="info"></div>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Renderer } from '../js/renderer.js';
+import { CATALOG } from '../js/vehicles/catalog.js';
+import { buildCarModel, instantiate } from '../js/vehicles/carbuilder.js';
+import * as TX from '../js/textures.js';
+const params = new URLSearchParams(location.search);
+const R = new Renderer(document.getElementById('c'), params.get('q') || 'high');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fb3c8);
+const pm = new THREE.PMREMGenerator(R.renderer);
+scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 500);
+R.camera = cam; R.resize();
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+sun.position.set(8, 14, 6); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20 });
+scene.add(sun, new THREE.HemisphereLight(0xcfe3ff, 0x3a3530, 0.6));
+const asp = TX.cloneSet(TX.asphalt(), 10, 10);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ ...asp, roughness: 1 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const ids = (params.get('ids') || '').split(',').filter(Boolean);
+const list = ids.length ? CATALOG.filter(c => ids.includes(c.id)) : CATALOG;
+const colors = ['#8b1a1a','#f4f4f2','#1d3557','#b9bcc1','#101112','#3a6fb0','#2e4a3a','#c0392b'];
+const cols = +(params.get('cols') || Math.ceil(Math.sqrt(list.length)));
+const t0 = performance.now();
+list.forEach((spec, i) => {
+  const model = buildCarModel(spec);
+  const inst = instantiate(model, { color: colors[i % colors.length], plate: 'SKV ' + (1000 + i) });
+  const r = Math.floor(i / cols), c = i % cols;
+  inst.root.position.set((c - (cols - 1) / 2) * 7, 0, -r * 7);
+  inst.root.rotation.y = +(params.get('rot') || 0.6);
+  if (params.get('hood')) { inst.hoodPivot.rotation.x = -1.1; inst.bay.visible = true; }
+  scene.add(inst.root);
+  window.lastInst = inst;
+});
+document.getElementById('info').textContent = `${list.length} models, built in ${(performance.now() - t0).toFixed(0)} ms`;
+const controls = new OrbitControls(cam, R.canvas);
+const cp = (params.get('cam') || '7,3.2,8').split(',').map(Number);
+cam.position.set(...cp);
+const tg = (params.get('target') || '0,0.7,0').split(',').map(Number);
+controls.target.set(...tg); controls.update();
+R.buildComposer(scene, cam);
+function loop() { requestAnimationFrame(loop); R.render(scene, cam); }
+loop();
+window.setView = (c, t) => { cam.position.set(...c); controls.target.set(...t); controls.update(); };
+window.scene = scene;
+window.ready = true;
+</script></body></html>

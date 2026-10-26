@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>City</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block}#info{position:fixed;left:10px;top:10px;color:#fff;font:14px sans-serif;background:#0008;padding:6px 10px}</style>
+<script type="importmap">{"imports":{"three":"/tow/vendor/three/three.module.js","three/addons/":"/tow/vendor/three-addons/"}}</script>
+</head><body><canvas id="c"></canvas><div id="info">loading</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Renderer } from '../js/renderer.js';
+import { Physics } from '../js/physics.js';
+import { buildCity } from '../js/city/city.js';
+import { Weather } from '../js/weather.js';
+const params = new URLSearchParams(location.search);
+const info = document.getElementById('info');
+try {
+const R = new Renderer(document.getElementById('c'), params.get('q') || 'medium');
+const scene = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.2, 6000);
+R.camera = cam; R.resize();
+const physics = await Physics.create();
+const t0 = performance.now();
+const city = await buildCity(scene, physics, (p, m) => info.textContent = m);
+const weather = new Weather(R.renderer, scene);
+weather.registerWet([city.mats.road, city.mats.roadLight, city.mats.sidewalk]);
+weather.set(params.get('w') || 'clear');
+info.textContent = `built in ${(performance.now() - t0).toFixed(0)} ms`;
+const controls = new OrbitControls(cam, R.canvas);
+window.setView = (c, t) => { cam.position.set(...c); controls.target.set(...t); controls.update(); };
+setView([300, 180, 700], [0, 0, 0]);
+R.buildComposer(scene, cam);
+window.scene = scene; window.city = city;
+let last = performance.now();
+function loop() {
+  requestAnimationFrame(loop);
+  const now = performance.now(); const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  weather.update(dt, cam, controls.target);
+  city.update(now / 1000);
+  R.render(scene, cam);
+}
+loop();
+window.ready = true;
+} catch (e) { info.textContent = 'ERR ' + e.message; console.error(e); }
+</script></body></html>
