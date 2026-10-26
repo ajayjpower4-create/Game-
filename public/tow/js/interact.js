@@ -26,6 +26,14 @@ export class Interact {
       return hits[0] ? { hit: hits[0], obj: hits[0].object } : null;
     }
     if (g.mode !== 'foot' && g.mode !== 'under') return null;
+    // On the creeper the frame's tow eye is the only thing to grab, and a
+    // crumpled bumper can hang in the way of it.
+    if (g.mode === 'under') {
+      if (!g.under?.eye?.visible) return null;   // already hooked
+      ray.far = 2.5;
+      const hits = ray.intersectObjects(g.jobs.underTargets ?? [], true);
+      return hits[0] ? { hit: hits[0], obj: hits[0].object } : null;
+    }
     ray.far = g.mode === 'under' ? 2.5 : (g.camRig.mode === 'first' ? 2.6 : 2.6 + g.camRig.dist);
     const list = [];
     const p = g.player.feet;
@@ -67,7 +75,7 @@ export class Interact {
     // ---- cab controls
     if (ud.interact) return this.cabAction(ud.interact.id, t);
     // ---- under a car: the tow eye on the frame
-    if (ud.underHook) return { label: 'Hook the winch to the frame here', press: () => g.attachHookUnder() };
+    if (ud.underHook) return T.hand === 'hook' ? { label: 'Hook the winch to the frame here', press: () => g.attachHookUnder() } : null;
     // ---- tools lying in the toolbox / on the ground / connected
     let toolName = null;
     for (let q = o; q; q = q.parent) if (q.userData.tool) { toolName = q.userData.tool; break; }

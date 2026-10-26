@@ -395,6 +395,9 @@ class Game {
     eye.position.copy(tp.local).add(new THREE.Vector3(0, -0.07, sign * 0.13));
     // Vertical loop facing out of the bumper, so it faces you on the creeper.
     eye.userData.underHook = true;
+    const grab = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), M.pickProxy);
+    grab.userData.underHook = true;
+    eye.add(grab);
     car.root.add(eye);
     this.jobs.underTargets = [eye];
     this.under.eye = eye;
