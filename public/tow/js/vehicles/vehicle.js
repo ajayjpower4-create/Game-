@@ -109,23 +109,36 @@ export class VehicleBase {
         if (v > 0.6) brake = this.brakeForce * c.brake;
         else { this.gear = 'R'; const k = clamp(1 + v / this.reverseSpeed, 0, 1); engine = -this.engineForce * 0.55 * c.brake * k; brake = 0; }
       } else {
-        brake = this.brakeForce * 0.03;
+        // Coasting; nearly stopped with no pedal, hill-hold keeps it from
+        // rolling back (say, halfway up a tilted bed when you lift off).
+        brake = Math.abs(v) < 1 ? this.brakeForce * 0.6 : this.brakeForce * 0.03;
       }
     } else if (!this.driven) {
       brake = this.parkedBrake ?? this.brakeForce * 0.8;
     }
     if (c.handbrake > 0) brake = Math.max(brake, this.brakeForce * 1.6);
     if (this.parkingBrake) { engine = 0; brake = Math.max(brake, this.brakeForce * 3); }
-    // Raycast-vehicle brakes never quite hold at a crawl, so when the brakes
-    // are on and we're nearly stopped, bleed off the remaining slide
-    // (relative to whatever we're standing on, e.g. a moving truck bed).
-    if (engine === 0 && brake >= this.brakeForce * 0.5 && Math.abs(v) < 1.6 && this.ctrl.wheelIsInContact(0)) {
+    // Raycast-vehicle brakes never really hold, least of all on a slope like
+    // a tilted rollback bed. With the brakes on and the vehicle slow, act like
+    // static friction instead: cancel the slide relative to whatever it's
+    // standing on, plus this step's pull of gravity down the slope, up to
+    // what the tires can grip (~0.8 g), so a hard enough shove still moves it.
+    if (engine === 0 && brake >= this.brakeForce * 0.5 && Math.abs(v) < 2.5 && this.ctrl.wheelIsInContact(0)) {
       const lv = this.body.linvel();
-      let gx = 0, gz = 0;
+      let gx = 0, gy = 0, gz = 0;
       const ground = this.ctrl.wheelGroundObject(0)?.parent();
-      if (ground && !ground.isFixed()) { const gv = ground.linvel(); gx = gv.x; gz = gv.z; }
-      const k = 0.22;
-      this.body.applyImpulse({ x: -(lv.x - gx) * this.mass * k, y: 0, z: -(lv.z - gz) * this.mass * k }, true);
+      if (ground && !ground.isFixed()) { const gv = ground.linvel(); gx = gv.x; gy = gv.y; gz = gv.z; }
+      const n = this.ctrl.wheelContactNormal(0) ?? { x: 0, y: 1, z: 0 };
+      // Sliding velocity and gravity, both along the ground plane.
+      let rx = lv.x - gx, ry = lv.y - gy, rz = lv.z - gz;
+      const rn = rx * n.x + ry * n.y + rz * n.z;
+      rx -= rn * n.x; ry -= rn * n.y; rz -= rn * n.z;
+      const gn = -9.81 * n.y;
+      const tx = -gn * n.x, ty = -9.81 - gn * n.y, tz = -gn * n.z;
+      let ix = -(rx + tx * dt) * this.mass, iy = -(ry + ty * dt) * this.mass, iz = -(rz + tz * dt) * this.mass;
+      const cap = this.mass * 0.8 * 9.81 * dt, mag = Math.hypot(ix, iy, iz);
+      if (mag > cap) { const k = cap / mag; ix *= k; iy *= k; iz *= k; }
+      this.body.applyImpulse({ x: ix, y: iy, z: iz }, true);
     }
     const drivenWheels = this.wheels.filter((w) => w.drive && !w.removed).length || 1;
     this.wheels.forEach((w, i) => {
