@@ -499,7 +499,11 @@ class Game {
     if (I.mouse.wheel) this.camRig.zoom(I.mouse.wheel);
     this.eAction = this.computeEAction();
     if (I.hit('KeyE') && this.eAction) { this.eAction.run(); this.eAction = null; }
-    if (I.hit('KeyF') && this.jobs.job?.canDrop) this.jobs.dropOff();
+    if (I.hit('KeyF') && this.jobs.job) {
+      const j = this.jobs.job;
+      if (j.canDrop) this.jobs.dropOff();
+      else if (j.flags.atShop) this.hud.toast('Come to a full stop in the yellow box first.', 2.5);
+    }
     const v = this.vehicle;
     if (v) {
       const steerT = I.axis('KeyD', 'KeyA');

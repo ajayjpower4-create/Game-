@@ -14,6 +14,7 @@ npm start
 ```
 
 - Game hub: <http://localhost:3000/> — lists every game
+- Tow Truck Simulator: <http://localhost:3000/tow>
 - Inspection Simulator: <http://localhost:3000/inspection>
 - Election game: <http://localhost:3000/election>
 - The original Swerve chatbot: <http://localhost:3000/chat>
@@ -167,3 +168,72 @@ report says so on screen — every screen still works offline.
 
 Nothing in this report is real. It is a simulator for practicing and drafting,
 not a substitute for an inspection by a licensed inspector.
+
+# Tow Truck Simulator
+
+A 3D tow truck game in the browser, set in Skyville, a mid-size East Coast city
+ringed by the elevated I-671. It runs entirely client-side (Three.js for
+rendering, Rapier for physics), served from `/tow` by the same `npm start`.
+Use a desktop browser with a mouse and keyboard.
+
+## A shift
+
+1. Build your driver: face, race, skin tone, height, build, hair.
+2. Pick work clothes and a high-visibility vest.
+3. Pick one of five rollbacks (F-550, Ram 5500, Isuzu NPR, International MV,
+   Peterbilt 337), then one of its five liveries, lettered in white or black.
+4. Pick the day's weather (sunny through snow; it changes grip too).
+5. Pick where you start: a marked spot, or click any street on the map.
+
+About a minute in, the radio in the cab calls: a Honda Civic with a dead
+battery. Grab the jump box from the toolbox under the bed, pop the hood, clamp
+red and black to the battery, start the car, lower the bed, drive it up, bring
+the bed back, take straps from the toolbox, hook them to the deck and crank the
+ratchets with the mouse, then follow the GPS to the shop the customer named.
+The next call is a fender bender: grab the winch hook, slide under on the
+creeper, hook the frame, tilt and slide the bed with the levers behind the cab,
+and winch it aboard. After that, calls come from 111 scenarios across city
+streets and the beltway shoulders.
+
+The cab has a working interior: gauges, the MDT that shows calls (click
+ACCEPT on it or press Enter), an amber ELS panel (slow flash, steady, off),
+parking brake, lights, wipers, hazards, and bags of chips on the passenger seat
+you can eat. Wheels come off with the impact wrench, or by holding the mouse
+and pulling with your bare hands.
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| W / S, A / D | Gas, brake/reverse, steer |
+| Space | Handbrake |
+| Mouse | Look around (inside the cab too) |
+| Left click | Use / press buttons / take tools |
+| Hold left/right click | Bed and winch levers, impact wrench, pulling |
+| E | Get in/out, talk, slide under a car |
+| G | Put down what you're holding |
+| P | Parking brake (the bed and winch need it set) |
+| 1 / 2 / 3 | ELS: slow amber flash / steady amber / off |
+| L, K, J, H | Headlights, hazards, deck work lights, horn |
+| C | Cab view / chase cam |
+| V | First / third person on foot |
+| Enter / Backspace | Accept / decline a call |
+| F | Drop the car off in the shop's yellow box |
+| M | Map |
+| F1, Esc | Help, pause (graphics quality, traffic, mouse speed) |
+
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `public/tow/js/main.js` | Game loop, modes (foot, truck, car, under a car), input |
+| `public/tow/js/setup.js` | The six setup screens and their preview stage |
+| `public/tow/js/city/` | Skyville: street grid, I-671 and its interchanges, signs, buildings, shops |
+| `public/tow/js/vehicles/` | Car builder and the 49-car catalog, tow trucks, liveries, cab interior, physics |
+| `public/tow/js/jobs/` | The 111 tow calls, scene setup, objectives and pay |
+| `public/tow/js/tools.js`, `interact.js` | Jump box, impact wrench, straps, winch hook, what the crosshair can use |
+| `public/tow/dev/` | Preview pages for the cars, trucks and city |
+
+Graphics quality (low to ultra) is in the pause menu; `?q=low` in the URL forces
+it for slower machines.
+

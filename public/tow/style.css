@@ -107,6 +107,8 @@ input[type=text] { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1
 .ind.amber { background: #3a2a05; color: #ffcc55; }
 #handInd { margin-top: 8px; font-size: 13px; color: #ffd27a; }
 #radio { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(520px, 90vw); background: rgba(16,12,4,0.92); border: 1px solid #ffb000; border-radius: 12px; padding: 12px 16px; }
+/* Short screens: keep the call card off the crosshair so you can still tap ACCEPT on the cab radio. */
+@media (max-height: 760px) { #radio { left: 16px; bottom: 16px; transform: none; width: min(420px, 60vw); } }
 .r-head { font-size: 12px; letter-spacing: 0.12em; color: #ffcc55; font-weight: 800; }
 .r-title { font-size: 18px; font-weight: 800; margin: 6px 0 4px; }
 .r-body { font-size: 13px; color: #e8dcc2; }
