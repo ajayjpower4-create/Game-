@@ -348,6 +348,8 @@ class Game {
   toggleParkingBrake() {
     const t = this.truck;
     if (!t.parkingBrake && Math.abs(t.speed) > 2.5) { this.hud.toast('Too fast to set the parking brake.'); return; }
+    // Interlock, like the real thing: no driving off with the deck tilted.
+    if (t.parkingBrake && (t.bed.tilt > 0.002 || t.bed.slide > 0.01)) { this.hud.toast('Bring the bed all the way back down before you release the parking brake.', 3); this.audio.click(); return; }
     t.parkingBrake = !t.parkingBrake;
     this.audio.burst(0.6, { freq: 3000, type: 'highpass', vol: 0.25 });
     this.hud.toast(t.parkingBrake ? 'Parking brake set.' : 'Parking brake released.', 1.6);

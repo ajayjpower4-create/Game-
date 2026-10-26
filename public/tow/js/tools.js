@@ -210,7 +210,8 @@ export class Tools {
     // Winch hook in your hand (or in front of your face under a car).
     const W = t.winch;
     if (W.state === 'held') {
-      if (g.mode === 'under' && g.underCamPos) W.hookPos.copy(g.underCamPos).add(_v.set(0, 0.05, 0));
+      // On the creeper you hold it out toward the frame, not in your face.
+      if (g.mode === 'under' && g.underCamPos && g.under?.eye) W.hookPos.copy(g.underCamPos).lerp(g.under.eye.getWorldPosition(_v), 0.45);
       else if (handObj && g.mode === 'foot') { handObj.updateWorldMatrix(true, false); handObj.getWorldPosition(W.hookPos); }
       else W.hookPos.copy(g.player.chest());
     }
