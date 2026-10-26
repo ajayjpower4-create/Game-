@@ -265,7 +265,7 @@ export class TowTruck extends VehicleBase {
           const toward = path[path.length - 2];
           w.hookPos.lerp(toward, (d - MAX_CABLE) / Math.max(0.01, hook.distanceTo(toward)));
           const gh = this.physics.ray({ x: w.hookPos.x, y: w.hookPos.y + 1.5, z: w.hookPos.z }, { x: 0, y: -1, z: 0 }, 4, { excludeBody: this.body });
-          if (gh) w.hookPos.y = Math.max(w.hookPos.y, gh.point.y + 0.05);
+          if (gh) w.hookPos.y = gh.point.y + 0.05;   // it scrapes along the road
         }
       }
       w.length = Math.min(Math.max(w.length, d), MAX_CABLE);
