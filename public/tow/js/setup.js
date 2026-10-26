@@ -48,7 +48,25 @@ export class Setup {
     this.bindPreviewControls();
   }
 
-  load() { try { return JSON.parse(localStorage.getItem('towsim.setup')); } catch { return null; } }
+  // The last setup, checked field by field so an old or hand-edited save can't
+  // pick a truck, livery, weather or spawn that doesn't exist.
+  load() {
+    let s;
+    try { s = JSON.parse(localStorage.getItem('towsim.setup')); } catch { return null; }
+    if (!s || typeof s !== 'object') return null;
+    const truck = TRUCKS.some((t) => t.id === s.truck) ? s.truck : 'f550';
+    const nLiv = LIVERIES[truck]?.length ?? 5;
+    const spawn = s.spawn?.kind === 'custom' && Number.isFinite(s.spawn.x) && Number.isFinite(s.spawn.z) && Number.isInteger(s.spawn.edge)
+      ? s.spawn
+      : { kind: 'preset', index: Number.isInteger(s.spawn?.index) && s.spawn.index >= 0 && s.spawn.index < SPAWNS.length ? s.spawn.index : 0 };
+    return {
+      appearance: { ...defaultAppearance(), ...(s.appearance && typeof s.appearance === 'object' ? s.appearance : {}) },
+      truck,
+      livery: Number.isInteger(s.livery) && s.livery >= 0 && s.livery < nLiv ? s.livery : 0,
+      weather: WEATHERS.some((w) => w.id === s.weather) ? s.weather : 'clear',
+      spawn,
+    };
+  }
   save() { try { localStorage.setItem('towsim.setup', JSON.stringify(this.state)); } catch {} }
 
   open() {
@@ -116,8 +134,8 @@ export class Setup {
   bindPreviewControls() {
     const cv = this.game.renderer.canvas;
     let drag = null;
-    cv.addEventListener('mousedown', (e) => { if (this.active) drag = { x: e.clientX, y: e.clientY }; });
-    addEventListener('mouseup', () => { drag = null; });
+    cv.addEventListener('mousedown', (e) => { if (this.active) { drag = { x: e.clientX, y: e.clientY }; this.dragging = true; } });
+    addEventListener('mouseup', () => { drag = null; this.dragging = false; });
     addEventListener('mousemove', (e) => {
       if (!drag || !this.active) return;
       this.orbit.yaw -= (e.clientX - drag.x) * 0.008;
@@ -187,7 +205,8 @@ export class Setup {
     el.innerHTML = '';
     const name = document.createElement('div');
     name.className = 'opt';
-    name.innerHTML = `<label class="lab">Name</label><input type="text" maxlength="20" value="${a.name ?? 'Driver'}">`;
+    name.innerHTML = '<label class="lab">Name</label><input type="text" maxlength="20">';
+    name.querySelector('input').value = a.name ?? 'Driver';
     name.querySelector('input').oninput = (e) => { a.name = e.target.value || 'Driver'; this.save(); };
     el.appendChild(name);
     el.appendChild(this.chipRow('Face', FACES.map((f, i) => [i, f.name]), () => a.face, (v) => { a.face = v; }));

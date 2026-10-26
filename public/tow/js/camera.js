@@ -2,6 +2,11 @@
 // view with free head look, chase cam behind a vehicle, and under-car view.
 import * as THREE from 'three';
 import { clamp, damp, dampAngle, wrapAngle } from './util.js';
+import { GROUPS, groups } from './physics.js';
+
+// The chase cam only dodges buildings, terrain and the highway: a car on your
+// own bed (or one driving past) mustn't yank it in.
+const WORLD_ONLY = groups(0xffff, GROUPS.world);
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
@@ -78,16 +83,17 @@ export class CameraRig {
     const vy = vehicle.yaw();
     this.freeLook = Math.max(0, this.freeLook - dt);
     if (this.freeLook <= 0) {
+      // Stays behind the vehicle in reverse too: backing up to a car is
+      // most of the job, and the bed is what you need to see.
       const speed = Math.abs(vehicle.speed);
-      const targetYaw = vy + Math.PI + (vehicle.speed < -0.5 ? Math.PI : 0);
-      this.chaseYaw = dampAngle(this.chaseYaw, targetYaw, speed > 1 ? 3 : 1.2, dt);
+      this.chaseYaw = dampAngle(this.chaseYaw, vy + Math.PI, speed > 1 ? 3 : 1.2, dt);
       this.chasePitch = damp(this.chasePitch, -0.2, 2, dt);
     }
     const dist = length * 0.85 + 4.2;
     const center = _v2.copy(vehicle.position).add(_v.set(0, height * 0.75, 0));
     const offset = new THREE.Vector3(Math.sin(this.chaseYaw) * Math.cos(this.chasePitch), -Math.sin(this.chasePitch), Math.cos(this.chaseYaw) * Math.cos(this.chasePitch)).multiplyScalar(dist);
     const dir = offset.clone().normalize();
-    const hit = this.physics.ray(center, dir, dist + 0.3, { excludeBody: vehicle.body, excludeCollider: exclude });
+    const hit = this.physics.ray(center, dir, dist + 0.3, { filterGroups: WORLD_ONLY });
     let d = dist;
     if (hit) d = Math.max(1.2, hit.toi - 0.3);
     this.cam.position.copy(center).addScaledVector(dir, d);

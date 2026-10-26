@@ -309,7 +309,8 @@ export class Parked {
       this.game.scene.add(inst.root);
       const sp = model.spec;
       const body = this.game.physics.world.createRigidBody(this.game.physics.R.RigidBodyDesc.fixed().setTranslation(s.x, s.y, s.z).setRotation({ x: 0, y: Math.sin(s.yaw / 2), z: 0, w: Math.cos(s.yaw / 2) }));
-      this.game.physics.world.createCollider(this.game.physics.R.ColliderDesc.cuboid(sp.W / 2 - 0.05, (sp.H - sp.gc) / 2, sp.L / 2 - 0.05).setTranslation(0, sp.gc + (sp.H - sp.gc) / 2, 0), body);
+      this.game.physics.world.createCollider(this.game.physics.R.ColliderDesc.cuboid(sp.W / 2 - 0.05, (sp.H - sp.gc) / 2, sp.L / 2 - 0.05).setTranslation(0, sp.gc + (sp.H - sp.gc) / 2, 0)
+        .setCollisionGroups(groups(GROUPS.vehicle, 0xffff)), body);
       this.active.set(s, { inst, body });
     }
   }

@@ -207,6 +207,13 @@ export class Tools {
       J.box.quaternion.copy(J.car.curQuat);
     }
     this.updateCables(dt);
+    // Winch hook in your hand (or in front of your face under a car).
+    const W = t.winch;
+    if (W.state === 'held') {
+      if (g.mode === 'under' && g.underCamPos) W.hookPos.copy(g.underCamPos).add(_v.set(0, 0.05, 0));
+      else if (handObj && g.mode === 'foot') { handObj.updateWorldMatrix(true, false); handObj.getWorldPosition(W.hookPos); }
+      else W.hookPos.copy(g.player.chest());
+    }
     // Drill.
     const D = this.drill;
     if (D.state === 'box') { D.mesh.position.copy(st.drill); D.mesh.quaternion.copy(q); D.mesh.rotateZ(Math.PI / 2); D.mesh.position.y += 0.04; }
@@ -312,11 +319,24 @@ export class Tools {
     if (!tool) return;
     if (tool === 'jumpbox') this.jump.state = 'box';
     if (tool === 'drill') this.drill.state = 'box';
-    if (tool === 'straps') { this.straps += this.strapsInHand; this.strapsInHand = 0; }
+    if (tool === 'straps') this.returnStraps();
     if (tool === 'hook') g.truck.stowHook();
     this.hand = null;
     g.player.carrying = null;
     g.audio.clank();
+  }
+  // Straps in hand, plus one draped over a tire but not hooked yet, go back in the box.
+  returnStraps() {
+    this.straps += this.strapsInHand + (this.pendingStrap ? 1 : 0);
+    this.strapsInHand = 0;
+    this.pendingStrap = null;
+  }
+  // Climbing into a cab: whatever you're holding goes back where it lives.
+  stowHand() {
+    const tool = this.hand;
+    if (!tool) return;
+    this.putBack();
+    this.game.hud.toast(tool === 'hook' ? 'You let the winch reel the hook back in.' : `Put the ${tool === 'straps' ? 'straps' : tool === 'drill' ? 'impact wrench' : 'jump box'} back in the toolbox.`, 2.5);
   }
   drop() {
     const g = this.game;
@@ -327,7 +347,7 @@ export class Tools {
     p.y = g.physics.groundHeight(p.x, p.z, p.y + 1.5) + 0.002;
     if (tool === 'jumpbox') { this.jump.state = 'ground'; this.jump.groundPos.copy(p); }
     if (tool === 'drill') { this.drill.state = 'ground'; this.drill.groundPos.copy(p); }
-    if (tool === 'straps') { this.straps += this.strapsInHand; this.strapsInHand = 0; g.hud.toast('Straps tossed back in the toolbox.'); }
+    if (tool === 'straps') { this.returnStraps(); g.hud.toast('Straps tossed back in the toolbox.'); }
     if (tool === 'hook') { g.truck.winch.state = 'dropped'; g.truck.winch.hookPos.copy(p).add(new THREE.Vector3(0, 0.05, 0)); }
     this.hand = null;
     g.player.carrying = null;
@@ -340,6 +360,12 @@ export class Tools {
     if (this.jump.state === 'ground' || this.jump.state === 'connected') this.jump.state = 'box';
     if (this.drill.state === 'ground') this.drill.state = 'box';
     this.jump.car = null; this.jump.red = this.jump.black = false;
+    // A hook left lying around gets reeled in; a dangling strap goes back in the box.
+    const W = this.game.truck.winch;
+    if (W.state === 'dropped') this.game.truck.stowHook();
+    if (this.pendingStrap) { this.straps++; this.pendingStrap = null; }
+    // Four straps, wherever they are.
+    this.straps = Math.max(0, 4 - this.strapsInHand - this.game.truck.straps.length);
   }
 
   // Clamp the next cable on, in the right order: red to +, black to -.
@@ -352,6 +378,7 @@ export class Tools {
   }
   unclamp() {
     const J = this.jump;
+    if (this.hand) { this.game.hud.toast(`Hands full \u2014 put down the ${this.handName()} first (G).`); return; }
     J.red = J.black = false;
     J.state = 'hand';
     this.hand = 'jumpbox';

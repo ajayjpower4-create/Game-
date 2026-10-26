@@ -231,6 +231,8 @@ class Game {
 
   enterTruck(initial = false) {
     const t = this.truck;
+    this.interact?.endHold();
+    this.tools?.stowHand();
     this.mode = 'truck';
     t.driven = true;
     if (!t.engineOn) { t.engineOn = true; if (!initial) this.audio.starter(); }
@@ -273,6 +275,8 @@ class Game {
   }
 
   enterCar(car) {
+    this.interact.endHold();
+    this.tools.stowHand();
     this.mode = 'car';
     this.driving = car;
     car.driven = true;
@@ -301,6 +305,7 @@ class Game {
   removeCar(car) {
     if (!car) return;
     if (this.driving === car) this.exitVehicle();
+    if (this.under?.car === car) this.slideOut();
     for (const s of [...(this.truck?.straps ?? [])]) if (s.car === car) this.truck.removeStrap(s);
     if (this.truck?.winch.attach?.car === car) this.truck.stowHook();
     this.truck?.unsecure(car);
@@ -490,10 +495,19 @@ class Game {
     const I = this.input;
     if (I.hit('F1')) this.hud.helpOn = !this.hud.helpOn;
     if (I.hit('KeyM')) { this.mapOpen = !this.mapOpen; this.hud.openBigMap(this.mapOpen); if (this.mapOpen) I.exitLock(); else I.requestLock(); }
-    if (this.mapOpen) return;
+    // While the map or a conversation has your attention, let go of the
+    // pedals and stop walking (otherwise the last keys stay held).
+    const idle = () => {
+      const v = this.vehicle;
+      if (v) Object.assign(v.controls, { throttle: 0, brake: 0, steer: 0, handbrake: 0 });
+      this.player?.wish.set(0, 0, 0);
+      this.audio.horn(false);
+      I.consumeMouse();
+    };
+    if (this.mapOpen) { idle(); return; }
     if (I.hit('Enter')) this.jobs.accept();
     if (I.hit('Backspace')) this.jobs.decline();
-    if (this.hud.dialogState) { if (I.hit('KeyE') || I.mouse.pressed[0]) this.hud.advanceDialog(); return; }
+    if (this.hud.dialogState) { idle(); if (I.hit('KeyE') || I.mouse.pressed[0]) this.hud.advanceDialog(); return; }
     const m = I.consumeMouse();
     this.camRig.look(m.dx, m.dy);
     if (I.mouse.wheel) this.camRig.zoom(I.mouse.wheel);
@@ -552,11 +566,12 @@ class Game {
     if (this.mode === 'menu' || this.paused) return;
     this.paused = true;
     $('pause').classList.add('show');
-    this.audio.setEngine(false);
+    this.audio.ctx?.suspend();
   }
   resume() {
     this.paused = false;
     $('pause').classList.remove('show');
+    this.audio.ctx?.resume();
     if (!this.input.locked) this.input.requestLock();
   }
 

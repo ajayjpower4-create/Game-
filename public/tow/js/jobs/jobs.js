@@ -369,14 +369,22 @@ export class Jobs {
     // Physics-driven props follow their bodies.
     for (const p of this.props) {
       if (p.body && p.mesh) {
+        // The mesh's origin is the cone's base, `offset` below the body along its own axis.
         const t = p.body.translation(), r = p.body.rotation();
-        p.mesh.position.set(t.x, t.y + p.offset, t.z);
         p.mesh.quaternion.set(r.x, r.y, r.z, r.w);
+        p.mesh.position.set(0, p.offset, 0).applyQuaternion(p.mesh.quaternion).add(t);
       }
       if (p.kind === 'flare') { p.mesh.userData.flame.material.emissiveIntensity = 3 + Math.random() * 2.5; }
       if (p.kind === 'car' && p.car.police) animatePolice(p.car, g.time);
     }
     if (!g.truck) return;
+    // Delivered cars stay at the shop a couple of minutes, then go inside
+    // (only once you've driven off, so nothing vanishes in front of you).
+    this.delivered = (this.delivered ?? []).filter((d) => {
+      if (g.time - d.t < 120 || g.focus().distanceTo(d.car.curPos) < 70) return true;
+      g.removeCar(d.car);
+      return false;
+    });
     // Next call.
     if (!this.job && !this.offer) {
       this.timer -= dt;
@@ -456,8 +464,8 @@ export class Jobs {
     if (tr.winch.attach?.car === j.car) tr.stowHook();
     tr.unsecure(j.car);
     const shop = j.shop;
-    const spot = new THREE.Vector3(shop.x + shop.face[0] * 12 + (shop.face[1] ? -9 : 0), (shop.base ?? 0) + 0.2, shop.z + shop.face[1] * 12 + (shop.face[0] ? -9 : 0));
-    j.car.teleport(spot, Math.atan2(-shop.face[0], -shop.face[1]));
+    const slot = this.shopSlot(shop, j.car);
+    if (slot) j.car.teleport(slot, Math.atan2(-shop.face[0], -shop.face[1]));
     j.car.hazards = false;
     g.hud.fade();
     const strapped = !!j.flags.strapBonus || tr.secured.size > 0;
@@ -473,13 +481,32 @@ export class Jobs {
     g.tools.restock();
     // The car stays parked at the shop for a while; the scene gets cleaned up.
     this.clearScene(j, true);
-    this.finished = j.car;
-    setTimeout(() => { if (this.finished && this.finished !== this.job?.car) { g.removeCar(this.finished); this.finished = null; } }, 90000);
+    j.car.jobCar = false;
+    if (slot) this.delivered = [...(this.delivered ?? []), { car: j.car, t: g.time, shop }];
+    else g.removeCar(j.car);   // no room on the forecourt: they roll it straight into a bay
     this.job = null;
     g.nav.clear();
     this.timer = this.count === 1 ? 25 : 35 + Math.random() * 45;
     this.updateMDT();
     return true;
+  }
+
+  // A free space on the shop's forecourt, beside the drop box and clear of
+  // the truck and the customer cars parked on the other side.
+  shopSlot(shop, car) {
+    const g = this.game;
+    const [fx, fz] = shop.face;
+    const tr = g.truck;
+    const inv = new THREE.Matrix4().compose(tr.curPos, tr.curQuat, new THREE.Vector3(1, 1, 1)).invert();
+    for (const side of [-9, -3.8, -13]) {
+      const p = new THREE.Vector3(shop.x + fx * 12 + (fz ? side : 0), (shop.base ?? 0) + 0.2, shop.z + fz * 12 + (fx ? side : 0));
+      const lt = p.clone().applyMatrix4(inv);
+      if (Math.abs(lt.x) < 2.6 && lt.z > tr.spec.bed.rear - 3 && lt.z < tr.spec.cabFront + 3) continue;
+      if (g.cars.some((c) => c !== car && c.curPos.distanceTo(p) < 3.5)) continue;
+      if (g.player.active && g.player.feet.distanceTo(p) < 3) continue;
+      return p;
+    }
+    return null;
   }
 
   cancel() {

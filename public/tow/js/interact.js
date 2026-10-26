@@ -30,7 +30,8 @@ export class Interact {
     const list = [];
     const p = g.player.feet;
     const near = (o, r) => o && o.position.distanceTo(p) < r;
-    if (g.truck && g.truck.curPos.distanceTo(p) < 14) list.push(g.truck.root, g.truck.hookMesh, ...g.truck.straps.map((s) => s.ratchet));
+    if (g.truck && g.truck.curPos.distanceTo(p) < 14) list.push(g.truck.root, ...g.truck.straps.map((s) => s.ratchet));
+    if (g.truck && g.truck.hookMesh.position.distanceTo(p) < 4) list.push(g.truck.hookMesh);   // may be lying far from the truck
     for (const c of g.cars) if (c.curPos.distanceTo(p) < 9) list.push(c.root);
     const T = g.tools;
     list.push(T.jump.box, T.drill.mesh, T.strapCoil);
@@ -101,7 +102,10 @@ export class Interact {
     // ---- winch hook
     if (ud.part === 'winchHook' || ud.part === 'winchDrum') {
       const W = g.truck.winch;
-      if (W.state === 'attached') return { label: 'Unhook the winch from the car', press: () => { g.truck.stowHook(); W.state = 'held'; W.hookPos.copy(g.player.chest()); T.hand = 'hook'; g.player.carrying = 'hook'; g.audio.clank(); } };
+      if (W.state === 'attached') {
+        if (T.hand) return { label: `Hands full \u2014 [G] put down the ${T.handName()}`, press: () => {} };
+        return { label: 'Unhook the winch from the car', press: () => { g.truck.stowHook(); W.state = 'held'; W.hookPos.copy(g.player.chest()); T.hand = 'hook'; g.player.carrying = 'hook'; g.audio.clank(); } };
+      }
       if (W.state === 'stowed' || W.state === 'dropped') {
         if (T.hand) return { label: `Hands full — [G] put down the ${T.handName()}`, press: () => {} };
         return { label: 'Grab the winch hook (free-spool)', press: () => { W.state = 'held'; T.hand = 'hook'; g.player.carrying = 'hook'; g.audio.clank(); g.events.emit('tool', 'hook'); } };
@@ -137,13 +141,13 @@ export class Interact {
       if (car.driven) return null;
       const wi = wheelIndex(car, o);
       if (wi >= 0 && !car.wheels[wi].removed) {
-        if (T.hand === 'drill') return { label: '[Hold LMB] Zip the lug nuts off with the impact', hold: (dt) => { if (T.drillWheel(car, wi, dt)) this.held = null; }, release: () => T.stopWork(), pose: 'kneel' };
+        if (T.hand === 'drill') return { label: '[Hold LMB] Zip the lug nuts off with the impact', hold: (dt) => T.drillWheel(car, wi, dt), release: () => T.stopWork(), pose: 'kneel' };
         if (T.hand === 'straps' && g.truck.onBed(car)) {
           if (T.pendingStrap) return { label: 'Hook the strap you\'re holding to a tie-down slot first', press: () => {} };
           if (g.truck.straps.some((s) => s.car === car && s.wheel === wi)) return { label: 'This tire is already strapped', press: () => {} };
           return { label: `Wrap a ratchet strap over this tire (${T.strapsInHand} left)`, press: () => this.wrapStrap(car, wi), pose: 'kneel' };
         }
-        if (!T.hand) return { label: '[Hold LMB] Rip the wheel off with all your strength', hold: (dt) => { g.player.action = 1; if (T.pullWheel(car, wi, dt)) this.held = null; }, release: () => { T.stopWork(); g.player.action = 0; }, pose: 'pull' };
+        if (!T.hand) return { label: '[Hold LMB] Rip the wheel off with all your strength', hold: (dt) => { g.player.action = 1; return T.pullWheel(car, wi, dt); }, release: () => { T.stopWork(); g.player.action = 0; }, pose: 'pull' };
       }
       if (ud.part === 'hood') {
         return { label: car.hoodTarget ? 'Close the hood' : 'Pop the hood', press: () => { car.setHood(!car.hoodTarget); g.audio.thump(0.3, 120); g.events.emit('hood', car); } };
@@ -243,31 +247,52 @@ export class Interact {
   update(dt) {
     const g = this.game;
     const inp = g.input;
-    // Continue a hold action while the button stays down.
-    if (this.held) {
-      const btn = this.held.btn;
-      if (inp.mouse.down[btn]) { this.held.act.hold(dt, btn); this.target = this.held.act; return; }
-      this.held.act.release?.();
-      this.held = null;
-      g.player.pose = 'auto';
-      g.player.action = 0;
-    }
     const picked = this.pick();
+    // Continue a hold action while the button stays down and you're still on
+    // the same thing; a hold that reports it's finished ends itself.
+    if (this.held) {
+      const H = this.held;
+      if (inp.mouse.down[H.btn] && targetKey(picked) === H.key) {
+        this.target = H.act;
+        if (H.act.hold(dt, H.btn)) this.endHold();
+        return;
+      }
+      this.endHold();
+    }
     const act = this.resolve(picked);
     this.target = act;
     if (!act) return;
     // Poses only play while you're actually doing the thing.
     const posePlayer = () => { if (act.pose && g.mode === 'foot') { g.player.pose = act.pose; g.player.poseTimer = act.hold ? 0 : 0.9; } };
+    const startHold = (btn) => { this.held = { act, btn, key: targetKey(picked) }; if (act.hold(dt, btn)) this.endHold(); };
     if (inp.mouse.pressed[0]) {
       posePlayer();
-      if (act.hold) { this.held = { act, btn: 0 }; act.hold(dt, 0); }
+      if (act.hold) startHold(0);
       else act.press?.();
     } else if (inp.mouse.pressed[2]) {
       posePlayer();
-      if (act.hold && act.holdBoth) { this.held = { act, btn: 2 }; act.hold(dt, 2); }
+      if (act.hold && act.holdBoth) startHold(2);
       else act.alt?.();
     }
   }
+
+  endHold() {
+    const g = this.game;
+    this.held?.act.release?.();
+    this.held = null;
+    g.player.pose = 'auto';
+    g.player.action = 0;
+  }
+}
+
+// What a hold is attached to: one wheel, one lever, or one object.
+function targetKey(t) {
+  if (!t) return null;
+  const o = t.obj;
+  if (o.userData.part === 'lever') return 'lever:' + o.userData.lever;
+  const owner = findOwner(o);
+  if (owner instanceof Car) { const wi = wheelIndex(owner, o); if (wi >= 0) return `wheel:${owner.body?.handle}:${wi}`; }
+  return o.uuid;
 }
 
 function isChild(root, o) { for (let q = o; q; q = q.parent) if (q === root) return true; return false; }

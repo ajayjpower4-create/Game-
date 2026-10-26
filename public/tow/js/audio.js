@@ -120,7 +120,7 @@ export class Audio {
   burst(dur, { freq = 2000, type = 'bandpass', q = 1, vol = 0.3, at = 0, decay = true } = {}) {
     if (!this.ctx) return;
     const c = this.ctx, t = c.currentTime + at;
-    const s = c.createBufferSource(); s.buffer = this.noiseBuf;
+    const s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = dur > 1.5;   // the buffer is 2 s long
     const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
     const g = c.createGain();
     g.gain.setValueAtTime(vol, t);

@@ -10,6 +10,9 @@ import * as TX from '../textures.js';
 import { clamp, damp, lerp } from '../util.js';
 import { GROUPS, groups } from '../physics.js';
 
+// Usable cable on the winch drum (m).
+const MAX_CABLE = 30;
+
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4();
 const X = new THREE.Vector3(1, 0, 0);
@@ -252,7 +255,20 @@ export class TowTruck extends VehicleBase {
     const path = this.cablePath(hook);
     const d = TowTruck.pathLen(path);
     if (w.state === 'held' || w.state === 'dropped') {
-      w.length = Math.max(w.length, d);
+      // There's only so much cable on the drum: walking off with the hook
+      // makes you let go of it, and driving off drags a dropped hook along.
+      if (d > MAX_CABLE) {
+        if (w.state === 'held') {
+          this.game.tools.drop();
+          this.game.hud.toast('That\u2019s all the cable on the drum \u2014 you had to let go of the hook.', 3);
+        } else {
+          const toward = path[path.length - 2];
+          w.hookPos.lerp(toward, (d - MAX_CABLE) / Math.max(0.01, hook.distanceTo(toward)));
+          const gh = this.physics.ray({ x: w.hookPos.x, y: w.hookPos.y + 1.5, z: w.hookPos.z }, { x: 0, y: -1, z: 0 }, 4, { excludeBody: this.body });
+          if (gh) w.hookPos.y = Math.max(w.hookPos.y, gh.point.y + 0.05);
+        }
+      }
+      w.length = Math.min(Math.max(w.length, d), MAX_CABLE);
       if (running && lever > 0) {
         w.length = Math.max(0.5, w.length - 0.6 * dt);
         if (w.state === 'dropped' && d > w.length) {

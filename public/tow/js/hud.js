@@ -116,19 +116,28 @@ export class Hud {
     const job = g.jobs.job;
     $('jobPanel').classList.toggle('hidden', !job);
     if (job) {
-      $('jobTitle').textContent = `${job.title} · ${fmtMoney(job.pay)}`;
+      const title = `${job.title} · ${fmtMoney(job.pay)}`;
+      if ($('jobTitle').textContent !== title) $('jobTitle').textContent = title;
       const steps = g.jobs.objectives();
       const firstOpen = steps.findIndex((s) => !s.done && !s.optional);
-      $('jobSteps').innerHTML = steps.map((s, i) => `<li class="${s.done ? 'done' : i === firstOpen ? 'cur' : ''}${s.optional && !s.done ? ' opt' : ''}">${s.text}</li>`).join('');
+      const html = steps.map((s, i) => `<li class="${s.done ? 'done' : i === firstOpen ? 'cur' : ''}${s.optional && !s.done ? ' opt' : ''}">${s.text}</li>`).join('');
+      if (html !== this.lastSteps) { $('jobSteps').innerHTML = html; this.lastSteps = html; }
     }
     // GPS line.
     const gps = g.nav.route ? g.nav.instruction() : '';
     $('gps').classList.toggle('hidden', !gps);
     $('gps').textContent = gps;
     this.drawMinimap();
-    // Help card for the first minute.
+    // Keep the full map's markers live while it's open.
+    if ($('bigmap').classList.contains('show') && this.redrawBig) {
+      this.bigT = (this.bigT ?? 0) - dt;
+      if (this.bigT <= 0) { this.bigT = 0.25; this.redrawBig(); }
+    }
+    // Help card for the first minute (F1 brings it back); it steps aside for
+    // the dispatch card and conversations, which use the same corner.
+    if (this.helpOn && !this.helpTimed && g.time > 60) { this.helpTimed = true; this.helpOn = false; }
     const help = $('help');
-    if (this.helpOn) {
+    if (this.helpOn && $('radio').classList.contains('hidden') && !this.dialogState) {
       help.classList.remove('hidden');
       help.innerHTML = g.mode === 'truck'
         ? '<div><b>W/S</b> drive · <b>A/D</b> steer · <b>Space</b> brake</div><div><b>Mouse</b> look around the cab · <b>Click</b> buttons</div><div><b>P</b> parking brake · <b>1/2/3</b> ELS slow/steady/off · <b>L</b> lights</div><div><b>C</b> cab / chase cam · <b>E</b> get out · <b>M</b> map · <b>Esc</b> menu · <b>F1</b> hide help</div>'
@@ -248,9 +257,11 @@ export class Hud {
       ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(16 * (devicePixelRatio || 1))}px sans-serif`;
       ctx.fillText('I-671 SKYVILLE BELTWAY', S / 2, 26 * (devicePixelRatio || 1));
     };
+    this.redrawBig = draw;
     draw();
     if (!this.bigBound) {
       this.bigBound = true;
+      const draw = () => this.redrawBig();
       cv.addEventListener('wheel', (e) => { view.span = clamp(view.span * (e.deltaY > 0 ? 1.15 : 0.87), 250, 2000); draw(); });
       let drag = null;
       cv.addEventListener('mousedown', (e) => { drag = { x: e.clientX, y: e.clientY, cx: view.cx, cz: view.cz }; });
@@ -262,7 +273,6 @@ export class Hud {
         view.cz = drag.cz - (e.clientY - drag.y) / k;
         draw();
       });
-      this.redrawBig = draw;
     }
   }
 

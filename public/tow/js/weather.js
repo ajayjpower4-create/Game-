@@ -12,6 +12,8 @@ export const WEATHERS = [
   { id: 'fog', name: 'Fog', desc: 'Pea soup off the bay. Headlights on.', cloud: 0.95, sun: 0.35, hemi: 0.95, fog: 0.0125, exposure: 0.72, envI: 0.5, wet: 0.35, grip: 0.95, rain: 0, snow: 0, elev: 30, fogColor: 0xb4b8bb },
   { id: 'snow', name: 'Snow', desc: 'Snow coming down, slush in the lanes, low grip.', cloud: 1, sun: 0.4, hemi: 1.05, fog: 0.004, exposure: 0.68, envI: 0.55, wet: 0.5, grip: 0.58, rain: 0, snow: 1, elev: 32, fogColor: 0xc9ced3 },
 ];
+// Half-size of the dry box around the camera (m): about a truck cab.
+const DRY = 1.6;
 export const WEATHER_BY_ID = Object.fromEntries(WEATHERS.map((w) => [w.id, w]));
 
 function cloudTexture(seed = 5) {
@@ -194,7 +196,9 @@ export class Weather {
         let y = data[i * 3 + 1] - speed * dt;
         if (y < -2) y += 40;
         data[i * 3 + 1] = y;
-        const x = cp.x + data[i * 3], z = cp.z + data[i * 3 + 2], yy = cp.y - 12 + y;
+        const x = cp.x + data[i * 3], z = cp.z + data[i * 3 + 2];
+        // Nothing falls within arm's reach of the camera, so it never rains inside the cab.
+        const yy = Math.abs(data[i * 3]) < DRY && Math.abs(data[i * 3 + 2]) < DRY ? -1e4 : cp.y - 12 + y;
         pos[i * 6] = x; pos[i * 6 + 1] = yy; pos[i * 6 + 2] = z;
         pos[i * 6 + 3] = x + 0.06; pos[i * 6 + 4] = yy + len; pos[i * 6 + 5] = z + 0.03;
       }
@@ -202,13 +206,16 @@ export class Weather {
     }
     if (this.snow) {
       const pos = this.snow.geometry.attributes.position.array;
+      this.snow.position.set(Math.round(cp.x / 90) * 90 + 0, cp.y - 15, Math.round(cp.z / 90) * 90);
+      const sp = this.snow.position;
       for (let i = 0; i < pos.length / 3; i++) {
         let y = pos[i * 3 + 1] - 1.4 * dt;
         if (y < 0) y += 45;
+        // Flakes that drift into the dry zone around the camera start over up top.
+        if (Math.abs(sp.x + pos[i * 3] - cp.x) < DRY && Math.abs(sp.z + pos[i * 3 + 2] - cp.z) < DRY && Math.abs(sp.y + y - cp.y) < 2.5) y += 30;
         pos[i * 3 + 1] = y;
         pos[i * 3] += Math.sin(this.time * 0.8 + i) * 0.3 * dt;
       }
-      this.snow.position.set(Math.round(cp.x / 90) * 90 + 0, cp.y - 15, Math.round(cp.z / 90) * 90);
       this.snow.geometry.attributes.position.needsUpdate = true;
     }
     // Lightning.
