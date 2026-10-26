@@ -126,6 +126,8 @@ export class Interact {
           label: bed ? '[Hold LMB] Bed up (tilt & slide back) · [Hold RMB] bed down' : '[Hold LMB] Winch in · [Hold RMB] winch out',
           hold: (dt, btn) => { const v = btn === 2 ? -1 : 1; if (bed) owner.bed.lever = v; else owner.winch.lever = v; },
           release: () => { owner.bed.lever = 0; owner.winch.lever = 0; },
+          // The lever leans as you pull it; keep going while you stand at the controls.
+          stay: () => g.mode === 'foot' && owner.controlStationWorld().distanceTo(g.player.feet) < 2.6,
           holdBoth: true,
         };
       }
@@ -141,13 +143,15 @@ export class Interact {
       if (car.driven) return null;
       const wi = wheelIndex(car, o);
       if (wi >= 0 && !car.wheels[wi].removed) {
-        if (T.hand === 'drill') return { label: '[Hold LMB] Zip the lug nuts off with the impact', hold: (dt) => T.drillWheel(car, wi, dt), release: () => T.stopWork(), pose: 'kneel' };
+        // The car rocks while you work on it, so the hold lasts while you stay at the wheel.
+        const atWheel = () => g.mode === 'foot' && !car.wheels[wi].removed && car.wheels[wi].pivot.getWorldPosition(new THREE.Vector3()).distanceTo(g.player.chest()) < 2.4;
+        if (T.hand === 'drill') return { label: '[Hold LMB] Zip the lug nuts off with the impact', hold: (dt) => T.drillWheel(car, wi, dt), release: () => T.stopWork(), stay: atWheel, pose: 'kneel' };
         if (T.hand === 'straps' && g.truck.onBed(car)) {
           if (T.pendingStrap) return { label: 'Hook the strap you\'re holding to a tie-down slot first', press: () => {} };
           if (g.truck.straps.some((s) => s.car === car && s.wheel === wi)) return { label: 'This tire is already strapped', press: () => {} };
           return { label: `Wrap a ratchet strap over this tire (${T.strapsInHand} left)`, press: () => this.wrapStrap(car, wi), pose: 'kneel' };
         }
-        if (!T.hand) return { label: '[Hold LMB] Rip the wheel off with all your strength', hold: (dt) => { g.player.action = 1; return T.pullWheel(car, wi, dt); }, release: () => { T.stopWork(); g.player.action = 0; }, pose: 'pull' };
+        if (!T.hand) return { label: '[Hold LMB] Rip the wheel off with all your strength', hold: (dt) => { g.player.action = 1; return T.pullWheel(car, wi, dt); }, release: () => { T.stopWork(); g.player.action = 0; }, stay: atWheel, pose: 'pull' };
       }
       if (ud.part === 'hood') {
         return { label: car.hoodTarget ? 'Close the hood' : 'Pop the hood', press: () => { car.setHood(!car.hoodTarget); g.audio.thump(0.3, 120); g.events.emit('hood', car); } };
@@ -182,7 +186,7 @@ export class Interact {
       case 'parkingBrake': return { label: tr.parkingBrake ? 'Release the parking brake (push in)' : 'Set the parking brake (pull out)', press: () => g.toggleParkingBrake() };
       case 'headlights': return { label: tr.headlights ? 'Headlights off' : 'Headlights on', press: () => { tr.headlights = !tr.headlights; g.audio.click(); } };
       case 'wipers': return { label: tr.wipers ? 'Wipers off' : 'Wipers on', press: () => { tr.wipers = !tr.wipers; g.audio.click(); } };
-      case 'horn': return { label: 'Horn', hold: () => g.audio.horn(true), release: () => g.audio.horn(false) };
+      case 'horn': return { label: 'Horn', hold: () => { g.audio.horn(true); }, release: () => g.audio.horn(false), stay: () => g.mode === 'truck' };
       case 'chips': {
         const bag = t.obj;
         const c = bag.userData.chips;
@@ -252,7 +256,7 @@ export class Interact {
     // the same thing; a hold that reports it's finished ends itself.
     if (this.held) {
       const H = this.held;
-      if (inp.mouse.down[H.btn] && targetKey(picked) === H.key) {
+      if (inp.mouse.down[H.btn] && (H.act.stay ? H.act.stay() : targetKey(picked) === H.key)) {
         this.target = H.act;
         if (H.act.hold(dt, H.btn)) this.endHold();
         return;

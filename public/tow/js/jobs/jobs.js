@@ -413,6 +413,9 @@ export class Jobs {
     if (f.clamped) f.gotJump = f.hood = true;
     if (f.started) f.gotJump = f.hood = f.clamped = true;
     if (f.hooked) f.gotHook = true;
+    // Loaded another way (winching a dead car instead of jumping it, say):
+    // the steps that led up to loading count as done.
+    if (f.loaded) f.gotJump = f.hood = f.clamped = f.started = f.gotHook = f.hooked = f.bedDown = true;
     if (tr.bed.slide > tr.bed.slideMax * 0.9) f.bedDown = true;
     const loaded = tr.loaded(car);
     if (loaded && !car.driven) f.loaded = true;

@@ -254,8 +254,7 @@ class Game {
     const v = this.vehicle;
     if (!v) return;
     const isTruck = v === this.truck;
-    const door = isTruck ? v.driverDoorWorld() : v.doorPosition();
-    door.y = this.physics.groundHeight(door.x, door.z, v.curPos.y + 2.5);
+    const door = this.exitSpot(v, isTruck);
     if (isTruck) this.lastTruckCam = this.camRig.mode;
     v.driven = false;
     v.controls = { throttle: 0, brake: 0, steer: 0, handbrake: 0 };
@@ -272,6 +271,31 @@ class Game {
     this.driving = null;
     this.audio.thump(0.35, 90);
     if (!isTruck && v.engineOn && v.dead === false) { /* leave it running */ }
+  }
+
+  // Where you step out: the driver's door, unless that's off the edge of the
+  // highway deck or into a wall, then the passenger side, then behind.
+  exitSpot(v, isTruck) {
+    const s = isTruck ? null : v.model.spec;
+    const sideX = isTruck ? this.truck.spec.cab.W / 2 + 0.75 : s.W / 2 + 0.6;
+    const doorZ = isTruck ? this.truck.interior.seatPos.z + 0.1 : (s.zW + s.bPillar) / 2;
+    const backZ = isTruck ? this.truck.spec.bed.rear - 1.2 : -s.L / 2 - 1.0;
+    const under = this.physics.ray({ x: v.curPos.x, y: v.curPos.y + 1.5, z: v.curPos.z }, { x: 0, y: -1, z: 0 }, 6, { excludeBody: v.body });
+    const baseY = under ? under.point.y : v.curPos.y;
+    const from = v.localToWorld(new THREE.Vector3(0, 1.1, doorZ));
+    for (const local of [new THREE.Vector3(sideX, 0, doorZ), new THREE.Vector3(-sideX, 0, doorZ), new THREE.Vector3(0, 0, backZ)]) {
+      const p = v.localToWorld(local);
+      const g = this.physics.ray({ x: p.x, y: baseY + 2.5, z: p.z }, { x: 0, y: -1, z: 0 }, 6, { excludeBody: v.body });
+      if (!g || g.point.y < baseY - 2 || g.point.y > baseY + 1) continue;   // off the highway deck, or up a wall
+      const to = new THREE.Vector3(p.x, from.y, p.z).sub(from);
+      const wall = this.physics.ray(from, to.clone().normalize(), to.length(), { excludeBody: v.body, predicate: (c) => !c.userData?.player });
+      if (wall) continue;                                                // something in the way
+      p.y = g.point.y;
+      return p;
+    }
+    const p = v.localToWorld(new THREE.Vector3(sideX, 0, doorZ));
+    p.y = this.physics.groundHeight(p.x, p.z, v.curPos.y + 2.5);
+    return p;
   }
 
   enterCar(car) {
@@ -478,7 +502,8 @@ class Game {
     for (const c of this.cars) {
       if (!c.jobCar) continue;
       const s = c.model.spec;
-      if (this.tools.hand === 'hook') {
+      // Sliding under only works for a car sitting on the ground in front of you.
+      if (this.tools.hand === 'hook' && Math.abs(c.curPos.y - p.y) < 0.8 && !this.truck.onBed(c)) {
         for (const end of ['front', 'rear']) {
           const e = c.localToWorld(new THREE.Vector3(0, 0, (end === 'front' ? 1 : -1) * (s.L / 2 + 0.3)));
           if (Math.hypot(e.x - p.x, e.z - p.z) < 1.9) return { label: `Slide under the ${end} and hook the frame`, run: () => this.slideUnder(c, end) };
