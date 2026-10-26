@@ -78,9 +78,9 @@ export class Physics {
 
   // ------------------------------------------------------------ queries
   // Raycast against the world; returns {toi, point, normal, collider} or null.
-  ray(origin, dir, maxToi = 100, { exclude = null, filterGroups } = {}) {
-    const r = new this.R.Ray(origin, dir);
-    const hit = this.world.castRayAndGetNormal(r, maxToi, true, undefined, filterGroups, undefined, exclude ?? undefined);
+  ray(origin, dir, maxToi = 100, { excludeBody = null, excludeCollider = null, filterGroups, predicate } = {}) {
+    const r = new this.R.Ray({ x: origin.x, y: origin.y, z: origin.z }, { x: dir.x, y: dir.y, z: dir.z });
+    const hit = this.world.castRayAndGetNormal(r, maxToi, true, undefined, filterGroups, excludeCollider ?? undefined, excludeBody ?? undefined, predicate);
     if (!hit) return null;
     const t = hit.timeOfImpact ?? hit.toi;
     return {

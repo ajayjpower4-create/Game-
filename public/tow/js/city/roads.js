@@ -55,17 +55,23 @@ export function buildRoads(root, physics, M) {
   const Y = 0.02;
 
   // ---- ground: grass everywhere, bay water handled elsewhere
-  const ground = hquad(-2200, -2200, BAY_X, 2200, 0, 6);
-  b.add('grass', M.grass, ground);
+  // Tiled, not one giant quad: huge triangles interpolate depth badly and
+  // the grass would poke through the streets laid over it.
+  for (let x = -2200; x < BAY_X; x += 100) {
+    for (let z = -2200; z < 2200; z += 100) b.add('grass', M.grass, hquad(x, z, Math.min(x + 100, BAY_X), z + 100, 0, 6));
+  }
 
   // ---- street pavement
   const extent = (c) => (ARTERIAL.has(c) && c !== 0 ? PARKWAY.half : hi + halfWidthAt(hi));
   for (const c of GRID) {
     const hw = halfWidthAt(c);
     const e = extent(c);
-    // North-south (constant x) and east-west (constant z) strips.
-    b.add('road', M.road, hquad(c - hw, -e, c + hw, e, Y, 8));
-    b.add('road', M.road, hquad(-e, c - hw, e, c + hw, Y, 8));
+    // North-south (constant x) and east-west (constant z) strips, in 40 m pieces.
+    for (let a = -e; a < e; a += 40) {
+      const a1 = Math.min(e, a + 40);
+      b.add('road', M.road, hquad(c - hw, a, c + hw, a1, Y, 8));
+      b.add('road', M.road, hquad(a, c - hw, a1, c + hw, Y, 8));
+    }
   }
   // Parkway ring.
   const pkPath = [];

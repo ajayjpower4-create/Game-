@@ -4,13 +4,13 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { makeCanvas, canvasTexture, fbmTiling, mulberry32, clamp } from './util.js';
 
 export const WEATHERS = [
-  { id: 'clear', name: 'Sunny', desc: 'Blue sky, hard shadows, dry roads.', cloud: 0.06, sun: 2.6, hemi: 0.42, fog: 0.0007, exposure: 0.78, envI: 0.55, wet: 0, grip: 1, rain: 0, snow: 0, elev: 50, fogColor: 0xbfd2e6 },
-  { id: 'partly', name: 'Partly Cloudy', desc: 'Puffy clouds drifting over the skyline.', cloud: 0.45, sun: 2.3, hemi: 0.48, fog: 0.0009, exposure: 0.8, envI: 0.55, wet: 0, grip: 1, rain: 0, snow: 0, elev: 45, fogColor: 0xc4d3e2 },
-  { id: 'overcast', name: 'Overcast', desc: 'Flat gray light, soft shadows.', cloud: 0.92, sun: 0.55, hemi: 0.95, fog: 0.0015, exposure: 0.9, envI: 0.5, wet: 0.1, grip: 1, rain: 0, snow: 0, elev: 40, fogColor: 0xaeb5bd },
-  { id: 'rain', name: 'Rain', desc: 'Steady rain, slick asphalt, longer stops.', cloud: 1, sun: 0.3, hemi: 0.85, fog: 0.0032, exposure: 0.92, envI: 0.5, wet: 1, grip: 0.82, rain: 1, snow: 0, elev: 38, fogColor: 0x8e979f },
-  { id: 'storm', name: 'Thunderstorm', desc: 'Downpour, lightning, standing water.', cloud: 1, sun: 0.15, hemi: 0.65, fog: 0.0048, exposure: 0.95, envI: 0.45, wet: 1, grip: 0.75, rain: 1.8, snow: 0, elev: 35, fogColor: 0x6d757d, lightning: true },
-  { id: 'fog', name: 'Fog', desc: 'Pea soup off the bay. Headlights on.', cloud: 0.95, sun: 0.35, hemi: 0.95, fog: 0.0125, exposure: 0.92, envI: 0.5, wet: 0.35, grip: 0.95, rain: 0, snow: 0, elev: 30, fogColor: 0xb4b8bb },
-  { id: 'snow', name: 'Snow', desc: 'Snow coming down, slush in the lanes, low grip.', cloud: 1, sun: 0.4, hemi: 1.05, fog: 0.004, exposure: 0.88, envI: 0.55, wet: 0.5, grip: 0.58, rain: 0, snow: 1, elev: 32, fogColor: 0xc9ced3 },
+  { id: 'clear', name: 'Sunny', desc: 'Blue sky, hard shadows, dry roads.', cloud: 0.06, sun: 2.6, hemi: 0.42, fog: 0.0007, exposure: 0.58, envI: 0.55, wet: 0, grip: 1, rain: 0, snow: 0, elev: 50, fogColor: 0xbfd2e6 },
+  { id: 'partly', name: 'Partly Cloudy', desc: 'Puffy clouds drifting over the skyline.', cloud: 0.45, sun: 2.3, hemi: 0.48, fog: 0.0009, exposure: 0.6, envI: 0.55, wet: 0, grip: 1, rain: 0, snow: 0, elev: 45, fogColor: 0xc4d3e2 },
+  { id: 'overcast', name: 'Overcast', desc: 'Flat gray light, soft shadows.', cloud: 0.92, sun: 0.55, hemi: 0.95, fog: 0.0015, exposure: 0.7, envI: 0.5, wet: 0.1, grip: 1, rain: 0, snow: 0, elev: 40, fogColor: 0xaeb5bd },
+  { id: 'rain', name: 'Rain', desc: 'Steady rain, slick asphalt, longer stops.', cloud: 1, sun: 0.3, hemi: 0.85, fog: 0.0032, exposure: 0.72, envI: 0.5, wet: 1, grip: 0.82, rain: 1, snow: 0, elev: 38, fogColor: 0x8e979f },
+  { id: 'storm', name: 'Thunderstorm', desc: 'Downpour, lightning, standing water.', cloud: 1, sun: 0.15, hemi: 0.65, fog: 0.0048, exposure: 0.76, envI: 0.45, wet: 1, grip: 0.75, rain: 1.8, snow: 0, elev: 35, fogColor: 0x6d757d, lightning: true },
+  { id: 'fog', name: 'Fog', desc: 'Pea soup off the bay. Headlights on.', cloud: 0.95, sun: 0.35, hemi: 0.95, fog: 0.0125, exposure: 0.72, envI: 0.5, wet: 0.35, grip: 0.95, rain: 0, snow: 0, elev: 30, fogColor: 0xb4b8bb },
+  { id: 'snow', name: 'Snow', desc: 'Snow coming down, slush in the lanes, low grip.', cloud: 1, sun: 0.4, hemi: 1.05, fog: 0.004, exposure: 0.68, envI: 0.55, wet: 0.5, grip: 0.58, rain: 0, snow: 1, elev: 32, fogColor: 0xc9ced3 },
 ];
 export const WEATHER_BY_ID = Object.fromEntries(WEATHERS.map((w) => [w.id, w]));
 

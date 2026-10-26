@@ -58,7 +58,9 @@ export class Renderer {
       c.addPass(ao);
     }
     if (q.bloom) {
-      this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.25, 0.5, 0.92);
+      // Threshold is in linear HDR (before exposure): sunlit pavement stays
+      // below it, lamps, LEDs and specular glints go over.
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.22, 0.45, 2.0);
       c.addPass(this.bloom);
     }
     c.addPass(new OutputPass());

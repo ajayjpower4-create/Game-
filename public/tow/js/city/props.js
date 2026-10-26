@@ -242,22 +242,23 @@ export function buildProps(root, physics, info) {
   for (const s of info.benchSpots) benchI.add(s.x, CURB, s.z, s.rot);
 
   // --------------------------------------------------------- trees
+  // Instanced per 350 m chunk, so off-screen trees are frustum-culled (and
+  // skipped by the shadow pass), with a per-instance leaf tint.
   const leafTex = TX.leafCluster('#4d7a34', 3);
   const barkSet = TX.bark();
-  const variants = [1, 2, 3].map((seed, i) => {
-    const g = treeGeos(seed * 13);
-    const trunkMat = new THREE.MeshStandardMaterial({ ...barkSet, roughness: 0.95 });
-    const tint = [0x5d8a3a, 0x4a7a33, 0x6b8f3c][i];
-    const leafMat = new THREE.MeshStandardMaterial({ color: tint, roughness: 0.92, flatShading: false, map: leafTex.map });
-    return { trunk: new Instancer(g.trunk, trunkMat, 5000), canopy: new Instancer(g.canopy, leafMat, 5000) };
-  });
+  const trunkMat = new THREE.MeshStandardMaterial({ ...barkSet, roughness: 0.95 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, map: leafTex.map });
+  const treeVariants = [1, 2, 3].map((seed) => treeGeos(seed * 13));
+  const tints = [0x5d8a3a, 0x4a7a33, 0x6b8f3c, 0x557f36].map((c) => new THREE.Color(c));
+  const treeChunks = new Map();
+  const CHUNK = 350;
   const pitG = new THREE.PlaneGeometry(1.3, 1.3); pitG.rotateX(-Math.PI / 2);
   const pitI = new Instancer(pitG, new THREE.MeshStandardMaterial({ color: 0x3a2c20, roughness: 1 }), 2000, { cast: false });
   const placeTree = (x, z, y, s) => {
-    const v = variants[rng.int(0, 2)];
-    const rot = rng.next() * Math.PI * 2;
-    v.trunk.add(x, y, z, rot, s);
-    v.canopy.add(x, y, z, rot, s);
+    const vi = rng.int(0, 2);
+    const key = `${vi}:${Math.floor(x / CHUNK)}:${Math.floor(z / CHUNK)}`;
+    if (!treeChunks.has(key)) treeChunks.set(key, { vi, list: [] });
+    treeChunks.get(key).list.push([x, y, z, rng.next() * Math.PI * 2, s, rng.int(0, tints.length - 1)]);
   };
   for (const t of info.treeSpots) {
     placeTree(t.x, t.z, t.y ?? 0, t.s);
@@ -282,7 +283,17 @@ export function buildProps(root, physics, info) {
 
   for (const i of [lights.pole, lights.arm, lights.head, inst.pole, inst.housing, stopI.pole, stopI.sign, hydI, canI, mailI, benchI, meterI, pitI]) i.finish(root);
   for (const l of Object.values(lens)) l.finish(root);
-  for (const v of variants) { v.trunk.finish(root); v.canopy.finish(root); }
+  for (const { vi, list } of treeChunks.values()) {
+    const g = treeVariants[vi];
+    const trunk = new Instancer(g.trunk, trunkMat, list.length);
+    const canopy = new Instancer(g.canopy, leafMat, list.length);
+    for (const [x, y, z, rot, sc, ti] of list) {
+      trunk.add(x, y, z, rot, sc);
+      canopy.mesh.setColorAt(canopy.add(x, y, z, rot, sc), tints[ti]);
+    }
+    trunk.finish(root);
+    canopy.finish(root);
+  }
   b.build(root, { name: 'props-' });
 
   return { signals: sig, signalized, lampMat };

@@ -22,9 +22,9 @@ export const TRUCKS = [
   {
     id: 'f550', name: 'Ford F-550 Super Duty', blurb: '19.5 ft steel carrier, 6.7L Power Stroke diesel, regular cab.',
     wb: 4.9, tire: tire19, trackF: 0.9, trackR: 0.86, cabFront: 3.5, cabBack: 0.45,
-    cab: { W: 2.03, H: 2.12, gc: 0.62, noseY: 1.28, hoodY: 1.56, beltF: 1.63, beltR: 1.63, hoodLen: 1.5, wsLen: 0.44, roofLen: 1.0,
+    cab: { W: 2.03, H: 2.2, gc: 0.62, noseY: 1.28, hoodY: 1.56, beltF: 1.63, beltR: 1.63, hoodLen: 1.5, wsLen: 0.44, roofLen: 1.0,
       cornerF: 0.2, cornerR: 0.08, topR: 0.1, tumble: 0.1, head: 'rect', grille: 'chrome', grilleBox: { w: 1.02, h: 0.5, y: 1.02 }, headlight: { w: 0.4, h: 0.26, x: 0.74, y: 1.14 } },
-    floorY: 0.98, seatY: 1.34, eyeY: 1.94,
+    floorY: 0.86, seatY: 1.22, eyeY: 1.95,
     frameTop: 0.92, bed: { len: 5.95, width: 2.44, front: 0.3, deckTop: 1.25, pivotZ: -3.5, pivotY: 1.07 },
     toolbox: { z0: -0.36, z1: -1.62, y0: 0.5, y1: 1.06 }, controlZ: -0.12,
     mass: 6400, engine: 15500, topSpeed: 34, exhaust: 'side', rim: 'truck',
@@ -32,9 +32,9 @@ export const TRUCKS = [
   {
     id: 'ram5500', name: 'Ram 5500 HD', blurb: '20 ft aluminum carrier, Cummins diesel, big crosshair grille.',
     wb: 4.95, tire: tire19, trackF: 0.9, trackR: 0.86, cabFront: 3.56, cabBack: 0.47,
-    cab: { W: 2.05, H: 2.17, gc: 0.64, noseY: 1.38, hoodY: 1.62, beltF: 1.68, beltR: 1.68, hoodLen: 1.52, wsLen: 0.42, roofLen: 1.0,
+    cab: { W: 2.05, H: 2.24, gc: 0.64, noseY: 1.38, hoodY: 1.62, beltF: 1.68, beltR: 1.68, hoodLen: 1.52, wsLen: 0.42, roofLen: 1.0,
       cornerF: 0.24, cornerR: 0.08, topR: 0.11, tumble: 0.1, head: 'rect', grille: 'mesh', grilleBox: { w: 1.18, h: 0.56, y: 1.08 }, headlight: { w: 0.34, h: 0.3, x: 0.76, y: 1.2 } },
-    floorY: 1.0, seatY: 1.37, eyeY: 1.98,
+    floorY: 0.88, seatY: 1.25, eyeY: 1.98,
     frameTop: 0.93, bed: { len: 6.1, width: 2.44, front: 0.32, deckTop: 1.26, pivotZ: -3.55, pivotY: 1.08 },
     toolbox: { z0: -0.36, z1: -1.62, y0: 0.5, y1: 1.06 }, controlZ: -0.12,
     mass: 6600, engine: 16500, topSpeed: 35, exhaust: 'side', rim: 'truck',
@@ -44,7 +44,7 @@ export const TRUCKS = [
     wb: 4.5, tire: tire16, trackF: 0.83, trackR: 0.8, cabFront: 3.35, cabBack: 1.55,
     cab: { W: 2.0, H: 2.36, gc: 0.5, noseY: 0.95, hoodY: 1.24, beltF: 1.34, beltR: 1.4, hoodLen: 0.12, wsLen: 0.3, roofLen: 1.3,
       cornerF: 0.14, cornerR: 0.05, topR: 0.13, tumble: 0.06, head: 'rect', grille: 'bars', grilleBox: { w: 1.1, h: 0.3, y: 0.96 }, headlight: { w: 0.38, h: 0.2, x: 0.73, y: 0.8 }, fo: 1.1 },
-    floorY: 1.05, seatY: 1.43, eyeY: 2.07,
+    floorY: 1.0, seatY: 1.36, eyeY: 2.08,
     frameTop: 0.86, bed: { len: 5.5, width: 2.4, front: 1.45, deckTop: 1.16, pivotZ: -2.95, pivotY: 1.0 },
     toolbox: { z0: 1.2, z1: -0.1, y0: 0.46, y1: 0.98 }, controlZ: 1.38,
     mass: 5400, engine: 12500, topSpeed: 31, exhaust: 'side', rim: 'steel', cabover: true,
@@ -54,7 +54,7 @@ export const TRUCKS = [
     wb: 5.6, tire: tire22, trackF: 1.02, trackR: 0.92, cabFront: 3.95, cabBack: 1.0,
     cab: { W: 2.3, H: 2.78, gc: 0.78, noseY: 1.26, hoodY: 1.7, beltF: 1.88, beltR: 1.88, hoodLen: 1.45, wsLen: 0.36, roofLen: 0.74,
       cornerF: 0.26, cornerR: 0.08, topR: 0.12, tumble: 0.1, head: 'swept', grille: 'mesh', grilleBox: { w: 1.0, h: 0.62, y: 1.2 }, headlight: { w: 0.42, h: 0.22, x: 0.86, y: 1.32 } },
-    floorY: 1.34, seatY: 1.74, eyeY: 2.38,
+    floorY: 1.3, seatY: 1.68, eyeY: 2.4,
     frameTop: 1.06, bed: { len: 6.5, width: 2.44, front: 0.86, deckTop: 1.42, pivotZ: -4.1, pivotY: 1.24 },
     toolbox: { z0: 0.6, z1: -1.0, y0: 0.62, y1: 1.2 }, controlZ: 0.76,
     mass: 9800, engine: 26000, topSpeed: 32, exhaust: 'side', rim: 'truck',
@@ -64,7 +64,7 @@ export const TRUCKS = [
     wb: 5.6, tire: tire22, trackF: 1.02, trackR: 0.92, cabFront: 4.05, cabBack: 1.0,
     cab: { W: 2.3, H: 2.86, gc: 0.8, noseY: 1.46, hoodY: 1.8, beltF: 1.92, beltR: 1.92, hoodLen: 1.62, wsLen: 0.28, roofLen: 0.76,
       cornerF: 0.1, cornerR: 0.06, topR: 0.08, tumble: 0.05, head: 'rect', grille: 'chrome', grilleBox: { w: 1.02, h: 0.78, y: 1.22 }, headlight: { w: 0.36, h: 0.2, x: 0.9, y: 1.36 }, crown: 0.01 },
-    floorY: 1.36, seatY: 1.76, eyeY: 2.4,
+    floorY: 1.32, seatY: 1.7, eyeY: 2.42,
     frameTop: 1.06, bed: { len: 6.5, width: 2.44, front: 0.86, deckTop: 1.42, pivotZ: -4.1, pivotY: 1.24 },
     toolbox: { z0: 0.6, z1: -1.0, y0: 0.62, y1: 1.2 }, controlZ: 0.76,
     mass: 10200, engine: 27000, topSpeed: 32, exhaust: 'stack', rim: 'truck',
@@ -157,14 +157,23 @@ export function buildTowTruck(t, liveryIndex = 0) {
   const cab = instantiate(cabModel, { color: liv.cab, metallic: liv.metallic, plate: 'TOW ' + (100 + liveryIndex * 37) });
   cab.root.position.z = cabCenter;
   root.add(cab.root);
-  const cabPaint = cab.paint.clone();
-  cabPaint.side = THREE.DoubleSide;
+  const wipers = [];
+  cab.root.traverse((o) => { if (o.userData.part === 'wiperPivot') wipers.push(o); });
+  // The shell's inside faces get door-panel plastic and headliner instead of
+  // showing the exterior paint from within.
+  const cabTrim = new THREE.MeshStandardMaterial({ color: 0x3b3e42, roughness: 0.88, metalness: 0, side: THREE.BackSide });
+  const shell = [];
   cab.root.traverse((o) => {
     if (!o.isMesh) return;
-    if (o.material === cab.paint) o.material = cabPaint;
+    if (o.material === cab.paint) shell.push(o);
     if (o.userData.slot === 'glass') { o.material = M.glassClear(); o.castShadow = false; o.renderOrder = 2; }
     if (o.userData.slot === 'black') o.material = M.glossBlack();
   });
+  for (const o of shell) {
+    const inside = new THREE.Mesh(o.geometry, cabTrim);
+    inside.receiveShadow = true;
+    o.add(inside);
+  }
   // Door lettering.
   const cs = cabModel.spec;
   const doorZc = (cs.zW - 0.06 + cs.zB + 0.12) / 2;
@@ -391,7 +400,7 @@ export function buildTowTruck(t, liveryIndex = 0) {
   return {
     spec: t, livery: liv, liveryIndex, root, cab, cabCenter, wheels, toolboxes, controls, bed, rams, els,
     lamps: { headMat, tailMat, headSpots, work, reverse: bed.reverseMat, brake: bed.tailMat },
-    mirrors: mirrorParts,
+    mirrors: mirrorParts, wipers,
   };
 }
 
@@ -415,7 +424,7 @@ function buildBed(t, liv) {
 
   // Deck surface: steel slat deck with a fine anti-slip texture.
   const deckSet = TX.cloneSet(TX.diamondPlate(), W / 0.6, mainLen / 0.6);
-  const deckMat = new THREE.MeshStandardMaterial({ ...deckSet, color: 0x8e9196, metalness: 0.85, roughness: 0.45 });
+  const deckMat = new THREE.MeshStandardMaterial({ ...deckSet, color: 0x80838a, metalness: 0.8, roughness: 0.78 });
   const deck = box(W, 0.05, mainLen, deckMat, 0, deckY - 0.025, mainZ, slideG);
   deck.userData.part = 'deck';
   // Tapered tail section.

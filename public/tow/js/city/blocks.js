@@ -560,7 +560,7 @@ export function buildBlocks(root, physics, blocks, env) {
   }
 
   // ------------------------------------------------- the bay to the east
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(1400, 4400), waterMaterial());
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(1400, 4400, 14, 44), waterMaterial());
   water.rotation.x = -Math.PI / 2;
   water.position.set(BAY_X + 700, -0.6, 0);
   water.receiveShadow = true;

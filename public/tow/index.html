@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tow Truck Simulator</title>
+<meta name="description" content="Run a rollback tow truck in Skyville: jump dead batteries, winch wrecks, strap them down and deliver them to the shop." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🛻</text></svg>" />
+<link rel="stylesheet" href="/tow/style.css" />
+<script type="importmap">
+{ "imports": { "three": "/tow/vendor/three/three.module.js", "three/addons/": "/tow/vendor/three-addons/" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ============================================================ LOADING -->
+<div id="loading" class="screen show">
+  <div class="load-card">
+    <div class="brand"><span class="beacon"></span>TOW TRUCK SIMULATOR</div>
+    <div class="sub">Skyville · East Coast</div>
+    <div class="bar"><div id="loadFill"></div></div>
+    <div id="loadText">Starting the engine…</div>
+  </div>
+</div>
+
+<!-- ============================================================== SETUP -->
+<div id="setup" class="screen">
+  <div class="setup-preview" id="previewPane">
+    <canvas id="spawnMap" class="hidden"></canvas>
+    <div id="previewHint">Drag to turn · scroll to zoom</div>
+  </div>
+  <div class="setup-panel">
+    <div class="steps" id="steps"></div>
+    <section data-step="title" class="step active">
+      <div class="brand big"><span class="beacon"></span>TOW TRUCK SIMULATOR</div>
+      <p class="lede">You drive a rollback in <b>Skyville</b>, a mid-size East Coast city ringed by the elevated I-671. Calls come in over the radio in your cab. Jump dead batteries, winch wrecks up the deck, strap them down, and get them to whichever of the eight shops the customer wants.</p>
+      <ul class="facts">
+        <li>5 tow trucks × 5 liveries, full working interiors with an amber ELS panel</li>
+        <li>49 vehicle models · 111 different tow calls</li>
+        <li>I-671 beltway with 8 diamond interchanges, exit signs, 8 mechanic shops</li>
+        <li>Real physics: winch cable, ratchet straps, wheels you can rip off</li>
+      </ul>
+      <div class="row">
+        <button class="primary" data-next>Create your driver →</button>
+        <button id="quickStart" class="ghost">Use last setup</button>
+      </div>
+      <p class="tiny">Best with a mouse and keyboard on a desktop browser.</p>
+    </section>
+    <section data-step="character" class="step">
+      <h2>Your driver</h2>
+      <p class="lede">Face, race, height and the rest. You'll see yourself in the side mirrors.</p>
+      <div class="opts" id="optCharacter"></div>
+      <div class="row nav"><button data-back>← Back</button><button class="primary" data-next>Clothes →</button></div>
+    </section>
+    <section data-step="clothes" class="step">
+      <h2>Work clothes</h2>
+      <p class="lede">What you wear on shift — and your high-visibility vest.</p>
+      <div class="opts" id="optClothes"></div>
+      <div class="row nav"><button data-back>← Back</button><button class="primary" data-next>Pick a truck →</button></div>
+    </section>
+    <section data-step="truck" class="step">
+      <h2>Your tow truck</h2>
+      <p class="lede">Five rollbacks. Every one has a cab you can sit in, a tilting carrier bed, a winch, and toolboxes under the deck.</p>
+      <div class="cards" id="optTruck"></div>
+      <div class="row nav"><button data-back>← Back</button><button class="primary" data-next>Livery →</button></div>
+    </section>
+    <section data-step="livery" class="step">
+      <h2>Livery</h2>
+      <p class="lede">Five paint jobs for this truck, lettered in white or black.</p>
+      <div class="cards" id="optLivery"></div>
+      <div class="row nav"><button data-back>← Back</button><button class="primary" data-next>Weather →</button></div>
+    </section>
+    <section data-step="weather" class="step">
+      <h2>Today's weather</h2>
+      <p class="lede">It changes how the city looks and how much grip you've got.</p>
+      <div class="cards" id="optWeather"></div>
+      <div class="row nav"><button data-back>← Back</button><button class="primary" data-next>Where you start →</button></div>
+    </section>
+    <section data-step="spawn" class="step">
+      <h2>Where you start</h2>
+      <p class="lede">Pick a marked spot or click any street on the map.</p>
+      <div class="cards slim" id="optSpawn"></div>
+      <div class="row nav"><button data-back>← Back</button><button class="primary" id="startShift">Start your shift ▶</button></div>
+    </section>
+  </div>
+</div>
+
+<!-- ================================================================ HUD -->
+<div id="hud" class="hidden">
+  <div id="crosshair"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="toast"></div>
+  <div id="topbar">
+    <div id="money">$0</div>
+    <div id="clock">9:00 AM</div>
+    <div id="location">—</div>
+  </div>
+  <div id="jobPanel" class="hidden">
+    <div class="jp-title" id="jobTitle"></div>
+    <ol id="jobSteps"></ol>
+  </div>
+  <div id="gps" class="hidden"></div>
+  <div id="minimapWrap"><canvas id="minimap" width="240" height="240"></canvas></div>
+  <div id="dash">
+    <div id="speed"><span id="speedVal">0</span><small>MPH</small></div>
+    <div id="dashRow">
+      <span id="gear">P</span>
+      <span id="pbrake" class="ind on">PARK</span>
+      <span id="elsInd" class="ind">ELS OFF</span>
+      <span id="bedInd" class="ind">BED ⇣</span>
+    </div>
+    <div id="handInd"></div>
+  </div>
+  <div id="radio" class="hidden">
+    <div class="r-head"><span class="beacon"></span>DISPATCH — NEW CALL</div>
+    <div class="r-title" id="radioTitle"></div>
+    <div class="r-body" id="radioBody"></div>
+    <div class="r-keys"><b>Enter</b> accept · <b>Backspace</b> decline · or tap ACCEPT on the radio in your cab</div>
+  </div>
+  <div id="dialog" class="hidden">
+    <div class="d-name" id="dialogName"></div>
+    <div class="d-text" id="dialogText"></div>
+    <div class="d-hint">Click or press <b>E</b> to continue</div>
+  </div>
+  <div id="fade"></div>
+  <div id="help" class="hidden"></div>
+</div>
+
+<div id="bigmap" class="screen overlay">
+  <canvas id="bigmapCanvas"></canvas>
+  <div class="bm-legend"><b>M</b> close · scroll to zoom · drag to pan</div>
+</div>
+
+<div id="pause" class="screen overlay">
+  <div class="pause-card">
+    <h2>Paused</h2>
+    <button class="primary" id="resume">Resume</button>
+    <div class="settings">
+      <label>Graphics <select id="quality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="ultra">Ultra</option></select></label>
+      <label>Mouse sensitivity <input type="range" id="sens" min="0.3" max="2.5" step="0.05" value="1"></label>
+      <label>Volume <input type="range" id="vol" min="0" max="1" step="0.05" value="0.8"></label>
+      <label>Traffic <select id="trafficSel"><option value="0">Off</option><option value="0.5">Light</option><option value="1" selected>Normal</option><option value="1.6">Heavy</option></select></label>
+    </div>
+    <div class="row"><button id="cancelJob">Cancel current job</button><button id="toMenu">Back to menu</button></div>
+    <div class="controls" id="controlsList"></div>
+  </div>
+</div>
+
+<div id="clickToPlay" class="screen overlay"><div class="ctp">Click to drive</div></div>
+
+<script type="module" src="/tow/js/main.js"></script>
+</body>
+</html>

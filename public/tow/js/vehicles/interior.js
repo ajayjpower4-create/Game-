@@ -266,7 +266,7 @@ export function buildInterior(t, truck) {
   }
 
   // ---- Dashboard.
-  const dashDepth = 0.5;
+  const dashDepth = 0.4;
   const dashTop = belt - 0.04;
   const dz0 = zDash - 0.02;
   const dz1 = zDash - dashDepth;
@@ -290,27 +290,30 @@ export function buildInterior(t, truck) {
   const drvX = 0.46;   // driver centerline (+x = left side)
   const psgX = -0.46;
   // Gauge binnacle and cluster.
-  const binZ = dz1 + 0.13;
-  rbox(0.46, 0.07, 0.16, 0.03, plastic, drvX, dashTop + 0.025, binZ + 0.02, group);
+  // Hood overhangs the dash face; the cluster sits in a black bezel under it,
+  // above where the steering column goes in.
+  rbox(0.48, 0.07, 0.16, 0.03, plastic, drvX, dashTop + 0.035, dz1 + 0.03, group);
+  rbox(0.46, 0.185, 0.02, 0.01, M.std(0x0b0b0c, 0.7), drvX, dashTop - 0.078, dz1, group);
   const gaugeCanvas = makeCanvas(512, 200);
   drawGauges(gaugeCanvas, { rpm: 700, mph: 0, gear: 'P', odo: 128440, fuel: 0.8, parking: true, els: 'off' });
   const gaugeTex = canvasTexture(gaugeCanvas, { mips: false });
   const gaugeMat = new THREE.MeshStandardMaterial({ map: gaugeTex, emissive: 0xffffff, emissiveMap: gaugeTex, emissiveIntensity: 0.75, roughness: 0.3 });
-  const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.17), gaugeMat);
-  gauges.position.set(drvX, dashTop - 0.045, binZ - 0.065);
+  const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.155), gaugeMat);
+  gauges.position.set(drvX, dashTop - 0.078, dz1 - 0.016);
   gauges.rotation.y = Math.PI;
-  gauges.rotation.x = 0.25;
+  gauges.rotation.x = 0.12;
   group.add(gauges);
 
   // Steering column & wheel.
   const steerGroup = new THREE.Group();
-  const wheelCenter = new THREE.Vector3(drvX, dashTop - 0.1, dz1 - 0.24);
+  // About 0.45 m ahead of and 0.35 m below the driver's eyes.
+  const wheelCenter = new THREE.Vector3(drvX, dashTop - 0.06, dz1 - 0.17);
   steerGroup.position.copy(wheelCenter);
   steerGroup.rotation.x = 0.42; // top of the rim leans toward the windshield
   group.add(steerGroup);
   const col = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.36, 14), plastic);
-  col.rotation.x = Math.PI / 2;
-  col.position.z = 0.2;
+  col.rotation.x = Math.PI / 2 + 0.55;   // dives under the cluster into the dash
+  col.position.set(0, -0.085, 0.15);
   steerGroup.add(col);
   const wheel = new THREE.Group();
   steerGroup.add(wheel);

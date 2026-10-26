@@ -903,13 +903,25 @@ export function buildCarModel(specIn) {
     arm.position.set(mx + side * 0.04, my - 0.03, mz + 0.02);
     root.add(arm);
   }
-  // Wipers resting at the cowl.
-  for (const side of [1, -1]) {
-    const wiper = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.012, 0.02), M.blackTrim());
-    const y = prof.topF(s.zW + 0.04) + 0.012;
-    wiper.position.set(side * 0.26 - 0.08, y, s.zW + 0.02);
-    wiper.rotation.y = side * 0.05;
-    root.add(wiper);
+  // Wipers resting at the cowl, each on a pivot whose axis is the windshield
+  // normal so they can sweep up the glass (the tow truck cabs run them).
+  {
+    const y0 = prof.topF(s.zW + 0.04) + 0.012;
+    const dy = prof.topF(s.zW - 0.4) - prof.topF(s.zW);
+    const n = new THREE.Vector3(0, 0.4, dy).normalize();
+    for (const side of [1, -1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.26 - 0.08 - 0.27, y0, s.zW + 0.02);
+      pivot.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+      const wiper = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.012, 0.02), M.blackTrim());
+      wiper.position.x = 0.27;
+      pivot.add(wiper);
+      // Which way is "up the glass" for a positive turn about the pivot's Y?
+      const tip = new THREE.Vector3(0.55, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.5).applyQuaternion(pivot.quaternion);
+      pivot.userData.part = 'wiperPivot';
+      pivot.userData.sweep = tip.y > 0 ? 1 : -1;
+      root.add(pivot);
+    }
   }
   // Exhaust tip(s).
   const exG = new THREE.CylinderGeometry(0.035, 0.035, 0.12, 16, 1, true);
@@ -1254,3 +1266,145 @@ export function instantiate(model, { color = '#c0c0c0', metallic = true, plate =
 }
 
 export { mergeSimple };
+
+// ------------------------------------------------ static (merged) cars
+// Parked and traffic cars don't need separate parts: everything is merged
+// into a handful of meshes by material role so each costs ~8 draw calls.
+const staticCache = new Map();
+const _sm = new THREE.Matrix4();
+
+function roleOf(mesh) {
+  const m = mesh.material;
+  const ud = mesh.userData;
+  if (ud.slot === 'paint') return 'paint';
+  if (ud.slot === 'glass') return 'glass';
+  if (ud.slot === 'head') return 'head';
+  if (ud.slot === 'tail') return 'tail';
+  if (ud.part === 'plate') return 'plate';
+  if (m === M.chrome() || (m.metalness > 0.7 && m.roughness < 0.5)) return 'metal';
+  if (m.map && !ud.slot) return 'grille:' + m.uuid;
+  return 'dark';
+}
+
+function mergeGeos(list) {
+  let count = 0;
+  const parts = list.map((g) => (g.index ? g.toNonIndexed() : g));
+  for (const g of parts) count += g.attributes.position.count;
+  const pos = new Float32Array(count * 3), nor = new Float32Array(count * 3), uv = new Float32Array(count * 2);
+  let o = 0;
+  for (const g of parts) {
+    if (!g.attributes.normal) g.computeVertexNormals();
+    pos.set(g.attributes.position.array, o * 3);
+    nor.set(g.attributes.normal.array, o * 3);
+    if (g.attributes.uv) uv.set(g.attributes.uv.array, o * 2);
+    o += g.attributes.position.count;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  out.computeBoundingSphere();
+  return out;
+}
+
+export function staticParts(model) {
+  if (staticCache.has(model)) return staticCache.get(model);
+  const root = model.template;
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const body = new Map(), wheel = [new Map(), new Map()];
+  const wheelPivots = new Set(model.wheels.map((w) => w.pivot));
+  const insideWheel = (o) => { for (let q = o; q; q = q.parent) if (wheelPivots.has(q)) return q; return null; };
+  const bayGroup = model.bay?.group;
+  const inBay = (o) => { for (let q = o; q; q = q.parent) if (q === bayGroup) return true; return false; };
+  const grilleMats = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh || inBay(o)) return;
+    const role = roleOf(o);
+    if (role.startsWith('grille:')) grilleMats.set(role, o.material);
+    const piv = insideWheel(o);
+    if (piv) {
+      // Only collect one front-left and one front-right wheel as templates.
+      const w = model.wheels.find((x) => x.pivot === piv);
+      if (piv !== model.wheels[0].pivot && piv !== model.wheels[1].pivot) return;
+      const sideIdx = piv.userData.side > 0 ? 0 : 1;
+      _sm.copy(piv.matrixWorld).invert().multiply(o.matrixWorld);
+      const g = o.geometry.clone().applyMatrix4(_sm);
+      const key = role === 'metal' ? 'metal' : 'dark';
+      (wheel[sideIdx].get(key) || wheel[sideIdx].set(key, []).get(key)).push(g);
+      return;
+    }
+    _sm.copy(inv).multiply(o.matrixWorld);
+    const g = o.geometry.clone().applyMatrix4(_sm);
+    (body.get(role) || body.set(role, []).get(role)).push(g);
+  });
+  const out = {
+    body: [...body.entries()].map(([role, geos]) => ({ role, geo: mergeGeos(geos) })),
+    wheels: wheel.map((m) => [...m.entries()].map(([role, geos]) => ({ role, geo: mergeGeos(geos) }))),
+    wheelPos: model.wheels.map((w) => ({ pos: w.pivot.position.clone(), side: w.pivot.userData.side, front: w.pivot.userData.front })),
+    grilleMats,
+    model,
+  };
+  staticCache.set(model, out);
+  return out;
+}
+
+const staticMats = {};
+function staticMat(role, model, sp, color, metallic) {
+  if (role === 'paint') return M.carPaint(color, { metallic, seamMap: model.seamTex });
+  if (role === 'glass') return M.glassOpaque();
+  if (role === 'metal') return staticMats.metal ||= M.alloy(0xc4c7cc, 0.3);
+  if (role === 'dark') return staticMats.dark ||= new THREE.MeshStandardMaterial({ color: 0x141516, roughness: 0.75 });
+  if (role === 'head') return model.lampsInfo.head[0].material;
+  if (role === 'tail') return model.lampsInfo.tail[0]?.material ?? M.lightLens('tail');
+  if (role === 'plate') return staticMats.plate ||= new THREE.MeshStandardMaterial({ map: plateTexture('SKV ' + (1000 + Math.floor(Math.random() * 8999))), roughness: 0.4 });
+  if (role.startsWith('grille:')) return sp.grilleMats.get(role);
+  return M.std(0x222222, 0.7);
+}
+
+const farWheels = new Map();
+function farWheel(model) {
+  const s = model.spec;
+  if (!farWheels.has(s.id)) {
+    const g = new THREE.CylinderGeometry(s.tireR, s.tireR, s.tireW, 18);
+    g.rotateZ(Math.PI / 2);
+    farWheels.set(s.id, g);
+  }
+  return farWheels.get(s.id);
+}
+
+// A cheap car: merged body plus four wheels you can spin.
+export function instantiateStatic(model, { color = '#c0c0c0', metallic = true, shadows = true } = {}) {
+  const sp = staticParts(model);
+  const root = new THREE.Group();
+  for (const { role, geo } of sp.body) {
+    const m = new THREE.Mesh(geo, staticMat(role, model, sp, color, metallic));
+    m.castShadow = shadows && role !== 'glass';
+    m.receiveShadow = true;
+    root.add(m);
+  }
+  const wheels = [];
+  for (const w of sp.wheelPos) {
+    const pivot = new THREE.Group();
+    pivot.position.copy(w.pos);
+    const spin = new THREE.Group();
+    pivot.add(spin);
+    // Full tire and rim up close; a plain tire past 30 m, where the spokes
+    // are a few pixels anyway (they're half of a car's triangles).
+    const lod = new THREE.LOD();
+    const hi = new THREE.Group();
+    for (const { role, geo } of sp.wheels[w.side > 0 ? 0 : 1]) {
+      const m = new THREE.Mesh(geo, staticMat(role, model, sp, color, metallic));
+      m.castShadow = shadows;
+      hi.add(m);
+    }
+    const lo = new THREE.Mesh(farWheel(model), staticMats.farTire ||= new THREE.MeshStandardMaterial({ color: 0x1c1d1f, roughness: 0.8 }));
+    lo.castShadow = shadows;
+    lod.addLevel(hi, 0);
+    lod.addLevel(lo, 30);
+    spin.add(lod);
+    root.add(pivot);
+    wheels.push({ pivot, spin, front: w.front, side: w.side });
+  }
+  return { root, wheels };
+}

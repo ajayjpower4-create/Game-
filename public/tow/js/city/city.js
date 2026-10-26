@@ -37,7 +37,7 @@ export async function buildCity(scene, physics, progress = () => {}) {
 
   return {
     root, mats, graph, shops: SHOPS, blocks: roads.blocks, solids: blocks.solids,
-    parkingSpots: blocks.parkingSpots, signals: props.signals, signalized: props.signalized,
+    parkingSpots: blocks.parkingSpots, aprons: blocks.aprons, signals: props.signals, signalized: props.signalized,
     lampMats: [props.lampMat, highway.lampMat], water: blocks.water,
     update(t) { updateSignals(props.signals, t); },
   };
