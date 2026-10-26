@@ -99,7 +99,7 @@ class Npc {
     // Waves when the truck pulls up.
     const wave = d < 40 && d > 6 && !this.talked;
     this.avatar.update(dt, { speed: 0, pose: wave ? 'reach' : 'auto', action: wave ? Math.sin(this.t * 8) : 0 });
-    if (wave) this.avatar.rig.R.elbow.rotation.z = Math.sin(this.t * 9) * 0.6;
+    this.avatar.rig.R.elbow.rotation.z = wave ? Math.sin(this.t * 9) * 0.6 : 0;
   }
   dispose() { this.game.scene.remove(this.root); }
 }
