@@ -21,7 +21,9 @@ export class Interact {
     ray.setFromCamera(center, g.camera);
     const inCab = g.mode === 'truck' && g.camRig.mode === 'cab';
     if (inCab) {
-      ray.far = 1.6;
+      // Only the cab's own controls are candidates; the center stack in the
+      // cab-over sits about 1.6 m from the driver's eyes.
+      ray.far = 1.9;
       const hits = ray.intersectObjects(g.truck.interior.interactive, false);
       return hits[0] ? { hit: hits[0], obj: hits[0].object } : null;
     }
