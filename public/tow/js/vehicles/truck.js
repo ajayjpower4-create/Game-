@@ -385,6 +385,10 @@ export class TowTruck extends VehicleBase {
     s.mesh.castShadow = true;
     s.mesh.frustumCulled = false;
     s.ratchet = buildRatchet();
+    // A bigger invisible grab area: the ratchet is small and shifts as it tightens.
+    const grab = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.3), M.pickProxy);
+    grab.position.z = 0.07;
+    s.ratchet.add(grab);
     s.ratchet.traverse((o) => { if (o.isMesh) { o.userData.part = 'ratchet'; o.userData.strap = s; o.userData.owner = this; } });
     this.game.scene.add(s.mesh, s.ratchet);
     this.straps.push(s);

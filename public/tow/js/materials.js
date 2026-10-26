@@ -13,6 +13,10 @@ function once(key, fn) {
 }
 
 // Metallic flake paint vs solid paint. `seamMap` darkens the panel gaps.
+// Never drawn (not even into shadows) but still hit by raycasts: invisible
+// grab areas around small parts you have to click.
+export const pickProxy = new THREE.MeshBasicMaterial({ visible: false });
+
 export function carPaint(color, { metallic = true, seamMap = null, matte = false } = {}) {
   const key = `${color}|${metallic}|${seamMap ? seamMap.uuid : ''}|${matte}`;
   if (paintCache.has(key)) return paintCache.get(key);

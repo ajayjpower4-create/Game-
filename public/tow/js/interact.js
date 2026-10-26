@@ -44,6 +44,8 @@ export class Interact {
       const camToPlayer = g.camera.position.distanceTo(g.player.chest());
       if (g.mode === 'foot' && g.camRig.mode === 'third' && h.distance < camToPlayer - 0.6) continue;
       if (h.object.userData.avatar) continue;
+      // Tie-down slots only matter while you're holding a strap to hook.
+      if (h.object.userData.part === 'anchor' && !T.pendingStrap) continue;
       if (!h.object.visible) continue;
       // Must be within arm's reach of the player, not just the camera.
       if (g.mode === 'foot' && h.point.distanceTo(g.player.chest()) > 2.3) return null;

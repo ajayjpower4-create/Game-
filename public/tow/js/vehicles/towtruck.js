@@ -465,6 +465,10 @@ function buildBed(t, liv) {
       const slot = box(0.05, 0.012, 0.11, M.std(0x050505, 0.9), x - side * 0.01, deckY + 0.032, z, slideG, { cast: false });
       slot.userData.part = 'anchor';
       slot.userData.anchor = anchors.length;
+      // The slot is a few centimeters across; give the crosshair more to land on.
+      const grab = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.24), M.pickProxy);
+      grab.userData = { part: 'anchor', anchor: anchors.length };
+      slot.add(grab);
       anchors.push({ side, local: new THREE.Vector3(x - side * 0.01, deckY + 0.035, z), mesh: slot, used: false });
     }
   }
