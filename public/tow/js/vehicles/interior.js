@@ -289,25 +289,33 @@ export function buildInterior(t, truck) {
 
   const drvX = 0.46;   // driver centerline (+x = left side)
   const psgX = -0.46;
-  // Gauge binnacle and cluster.
-  // Hood overhangs the dash face; the cluster sits in a black bezel under it,
-  // above where the steering column goes in.
-  rbox(0.48, 0.07, 0.16, 0.03, plastic, drvX, dashTop + 0.035, dz1 + 0.03, group);
-  rbox(0.46, 0.185, 0.02, 0.01, M.std(0x0b0b0c, 0.7), drvX, dashTop - 0.078, dz1, group);
+  // Wheel and gauges go where the driver is, not where the body's beltline
+  // happens to put the dash: the rim about 0.45 m ahead of and 0.33 m above
+  // the seat cushion, the cluster just beyond it so you read it over the rim.
+  const seatZ = zRear + 0.42;
+  const wheelCenter = new THREE.Vector3(drvX, t.seatY + 0.33, Math.min(seatZ + 0.45, dz1 - 0.12));
+  const cY = wheelCenter.y - 0.02, cZ = Math.min(wheelCenter.z + 0.155, dz1 - 0.016);
+  // In tall cabs (cab-overs, big conventionals) the dash sits low, so an
+  // instrument pod rises from it to carry the cluster and the column.
+  if (cY - 0.09 > dashTop - 0.06) {
+    const podTop = cY + 0.09, podBot = dashTop - 0.12, podZ0 = cZ + 0.012, podZ1 = dz1 + 0.18;
+    rbox(0.5, podTop - podBot, podZ1 - podZ0, 0.03, plastic, drvX, (podTop + podBot) / 2, (podZ0 + podZ1) / 2, group);
+  }
+  // Hood overhangs the cluster, which sits in a black bezel.
+  rbox(0.48, 0.07, 0.16, 0.03, plastic, drvX, cY + 0.113, cZ + 0.046, group);
+  rbox(0.46, 0.185, 0.02, 0.01, M.std(0x0b0b0c, 0.7), drvX, cY, cZ + 0.016, group);
   const gaugeCanvas = makeCanvas(512, 200);
   drawGauges(gaugeCanvas, { rpm: 700, mph: 0, gear: 'P', odo: 128440, fuel: 0.8, parking: true, els: 'off' });
   const gaugeTex = canvasTexture(gaugeCanvas, { mips: false });
   const gaugeMat = new THREE.MeshStandardMaterial({ map: gaugeTex, emissive: 0xffffff, emissiveMap: gaugeTex, emissiveIntensity: 0.75, roughness: 0.3 });
   const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.155), gaugeMat);
-  gauges.position.set(drvX, dashTop - 0.078, dz1 - 0.016);
+  gauges.position.set(drvX, cY, cZ);
   gauges.rotation.y = Math.PI;
   gauges.rotation.x = 0.12;
   group.add(gauges);
 
   // Steering column & wheel.
   const steerGroup = new THREE.Group();
-  // About 0.45 m ahead of and 0.35 m below the driver's eyes.
-  const wheelCenter = new THREE.Vector3(drvX, dashTop - 0.06, dz1 - 0.17);
   steerGroup.position.copy(wheelCenter);
   steerGroup.rotation.x = 0.42; // top of the rim leans toward the windshield
   group.add(steerGroup);
