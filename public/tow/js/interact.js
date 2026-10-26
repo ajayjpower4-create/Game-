@@ -113,7 +113,7 @@ export class Interact {
       }
       if (W.state === 'stowed' || W.state === 'dropped') {
         if (T.hand) return { label: `Hands full — [G] put down the ${T.handName()}`, press: () => {} };
-        return { label: 'Grab the winch hook (free-spool)', press: () => { W.state = 'held'; T.hand = 'hook'; g.player.carrying = 'hook'; g.audio.clank(); g.events.emit('tool', 'hook'); } };
+        return { label: 'Grab the winch hook (free-spool)', press: () => { W.state = 'held'; W.hookPos.copy(g.player.chest()); T.hand = 'hook'; g.player.carrying = 'hook'; g.audio.clank(); g.events.emit('tool', 'hook'); } };
       }
       return null;
     }
