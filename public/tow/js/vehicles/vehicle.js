@@ -123,22 +123,25 @@ export class VehicleBase {
     // static friction instead: cancel the slide relative to whatever it's
     // standing on, plus this step's pull of gravity down the slope, up to
     // what the tires can grip (~0.8 g), so a hard enough shove still moves it.
-    if (engine === 0 && brake >= this.brakeForce * 0.5 && Math.abs(v) < 2.5 && this.ctrl.wheelIsInContact(0)) {
+    if (engine === 0 && brake >= this.brakeForce * 0.5 && this.ctrl.wheelIsInContact(0)) {
       const lv = this.body.linvel();
       let gx = 0, gy = 0, gz = 0;
       const ground = this.ctrl.wheelGroundObject(0)?.parent();
       if (ground && !ground.isFixed()) { const gv = ground.linvel(); gx = gv.x; gy = gv.y; gz = gv.z; }
       const n = this.ctrl.wheelContactNormal(0) ?? { x: 0, y: 1, z: 0 };
-      // Sliding velocity and gravity, both along the ground plane.
+      // Sliding velocity (relative to what we stand on, e.g. a moving truck
+      // bed) and gravity, both along the ground plane.
       let rx = lv.x - gx, ry = lv.y - gy, rz = lv.z - gz;
       const rn = rx * n.x + ry * n.y + rz * n.z;
       rx -= rn * n.x; ry -= rn * n.y; rz -= rn * n.z;
-      const gn = -9.81 * n.y;
-      const tx = -gn * n.x, ty = -9.81 - gn * n.y, tz = -gn * n.z;
-      let ix = -(rx + tx * dt) * this.mass, iy = -(ry + ty * dt) * this.mass, iz = -(rz + tz * dt) * this.mass;
-      const cap = this.mass * 0.8 * 9.81 * dt, mag = Math.hypot(ix, iy, iz);
-      if (mag > cap) { const k = cap / mag; ix *= k; iy *= k; iz *= k; }
-      this.body.applyImpulse({ x: ix, y: iy, z: iz }, true);
+      if (Math.hypot(rx, ry, rz) < 2.5) {
+        const gn = -9.81 * n.y;
+        const tx = -gn * n.x, ty = -9.81 - gn * n.y, tz = -gn * n.z;
+        let ix = -(rx + tx * dt) * this.mass, iy = -(ry + ty * dt) * this.mass, iz = -(rz + tz * dt) * this.mass;
+        const cap = this.mass * 0.8 * 9.81 * dt, mag = Math.hypot(ix, iy, iz);
+        if (mag > cap) { const k = cap / mag; ix *= k; iy *= k; iz *= k; }
+        this.body.applyImpulse({ x: ix, y: iy, z: iz }, true);
+      }
     }
     const drivenWheels = this.wheels.filter((w) => w.drive && !w.removed).length || 1;
     this.wheels.forEach((w, i) => {
