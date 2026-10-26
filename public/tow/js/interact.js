@@ -39,7 +39,10 @@ export class Interact {
     for (const n of g.jobs.npcs) if (n.root.position.distanceTo(p) < 6) list.push(n.root);
     if (g.jobs.underTargets) list.push(...g.jobs.underTargets);
     const hits = ray.intersectObjects(list, true);
+    // Whatever's in your own hand can't be what you're pointing at.
+    const held = { straps: T.strapCoil, jumpbox: T.jump.box, drill: T.drill.mesh, hook: g.truck?.hookMesh }[T.hand];
     for (const h of hits) {
+      if (held && isChild(held, h.object)) continue;
       // Ignore hits closer to the camera than the player (third-person camera behind them).
       const camToPlayer = g.camera.position.distanceTo(g.player.chest());
       if (g.mode === 'foot' && g.camRig.mode === 'third' && h.distance < camToPlayer - 0.6) continue;
