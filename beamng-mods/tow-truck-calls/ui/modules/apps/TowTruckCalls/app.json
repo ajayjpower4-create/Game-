@@ -1,0 +1,23 @@
+{
+  "domElement": "<tow-truck-calls></tow-truck-calls>",
+  "name": "Tow Dispatch",
+  "types": [
+    "ui.apps.categories.gameplay"
+  ],
+  "css": {
+    "right": "12px",
+    "top": "120px",
+    "width": "340px",
+    "height": "470px",
+    "min-width": "300px",
+    "min-height": "260px"
+  },
+  "description": "Tow Truck Calls: accept random tow calls, strap the car down, tow it anywhere and get paid.",
+  "author": "Tow Truck Calls",
+  "version": "1.0",
+  "directive": "towTruckCalls",
+  "category": "Gameplay",
+  "isAuxiliary": false,
+  "interactive": "required",
+  "preserveAspectRatio": false
+}

@@ -1,0 +1,116 @@
+<div class="ttc-app">
+  <style>
+    .ttc-app { box-sizing: border-box; width: 100%; height: 100%; display: flex; flex-direction: column; color: #f1f1f1;
+      background: rgba(16, 17, 21, 0.92); border-radius: 6px; border-top: 3px solid #ff9f1a; font-family: inherit; font-size: 13px;
+      overflow: hidden; }
+    .ttc-app *, .ttc-layer * { box-sizing: border-box; }
+    .ttc-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px; }
+    .ttc-logo { font-weight: 800; font-size: 15px; letter-spacing: 1px; color: #ffb547; }
+    .ttc-logo i { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 50%; background: #ff9f1a;
+      box-shadow: 0 0 6px #ff9f1a; animation: ttc-blink 1.2s infinite; }
+    .ttc-duty { padding: 4px 10px; border: 0; border-radius: 4px; font-weight: 800; font-size: 11px; cursor: pointer;
+      background: #3d4049; color: #bbb; }
+    .ttc-duty.on { background: #2f9e44; color: #fff; }
+    .ttc-stats { display: flex; justify-content: space-between; padding: 2px 10px 7px; color: #9ea2ad; font-size: 11px;
+      border-bottom: 1px solid #2b2e36; }
+    .ttc-stats b { color: #fff; font-weight: 700; }
+    .ttc-body { flex: 1; overflow-y: auto; padding: 8px 10px 10px; }
+    .ttc-sec { font-size: 10px; font-weight: 800; letter-spacing: 1.2px; color: #8b8f99; margin: 4px 0 6px; }
+    .ttc-card { background: #23252c; border: 1px solid #33363f; border-radius: 6px; padding: 8px 9px; margin-bottom: 8px; }
+    .ttc-card.ttc-job { border-color: #ff9f1a; background: #2a2620; }
+    .ttc-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .ttc-badge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 10px; font-weight: 800; letter-spacing: 0.6px;
+      text-transform: uppercase; background: #4a4e59; color: #fff; }
+    .ttc-badge.t-accident { background: #c92a2a; } .ttc-badge.t-impound { background: #1c62b9; }
+    .ttc-badge.t-repo { background: #6b3fa0; } .ttc-badge.t-flat { background: #a26a00; }
+    .ttc-badge.t-nogas { background: #9c4f00; } .ttc-badge.t-breakdown { background: #8a5a00; }
+    .ttc-badge.t-battery { background: #5c7c00; } .ttc-badge.t-abandoned { background: #555b66; }
+    .ttc-pay { font-weight: 800; color: #69db7c; font-size: 14px; }
+    .ttc-veh { font-weight: 700; font-size: 14px; margin-top: 5px; }
+    .ttc-sub { color: #a9adb8; font-size: 11px; margin-top: 2px; }
+    .ttc-desc { color: #c7cad2; font-size: 11px; margin-top: 4px; font-style: italic; }
+    .ttc-timer { height: 3px; background: #33363f; border-radius: 2px; margin-top: 7px; overflow: hidden; }
+    .ttc-timer i { display: block; height: 100%; background: #ff9f1a; transition: width 0.25s linear; }
+    .ttc-btns { display: flex; gap: 6px; margin-top: 8px; }
+    .ttc-btns button { flex: 1; padding: 7px 0; border: 1px solid #454955; border-radius: 4px; background: #30333b; color: #eee;
+      font-weight: 800; font-size: 12px; letter-spacing: 0.5px; cursor: pointer; }
+    .ttc-btns button:hover:not([disabled]) { filter: brightness(1.2); }
+    .ttc-btns button[disabled] { opacity: 0.35; cursor: default; }
+    .ttc-btns button.go { background: #2f9e44; border-color: #2f9e44; color: #fff; }
+    .ttc-btns button.strap { background: #ff9f1a; border-color: #ff9f1a; color: #1b1b1b; }
+    .ttc-btns button.done { background: #1c7ed6; border-color: #1c7ed6; color: #fff; }
+    .ttc-btns.small button { padding: 4px 0; font-size: 10px; font-weight: 700; }
+    .ttc-btns button.warn { background: #c92a2a; border-color: #c92a2a; color: #fff; }
+    .ttc-steps { list-style: none; margin: 8px 0 0; padding: 0; }
+    .ttc-steps li { display: flex; justify-content: space-between; padding: 3px 0 3px 22px; position: relative; color: #8b8f99; font-size: 12px; }
+    .ttc-steps li::before { content: ''; position: absolute; left: 3px; top: 5px; width: 11px; height: 11px; border-radius: 50%;
+      border: 2px solid #555a66; }
+    .ttc-steps li.now { color: #fff; font-weight: 700; }
+    .ttc-steps li.now::before { border-color: #ff9f1a; background: #ff9f1a; box-shadow: 0 0 6px #ff9f1a; }
+    .ttc-steps li.done { color: #69db7c; }
+    .ttc-steps li.done::before { border-color: #2f9e44; background: #2f9e44; }
+    .ttc-steps li span { color: #ffd08a; font-weight: 600; }
+    .ttc-hint { margin-top: 7px; padding: 6px 8px; border-radius: 4px; background: #1b1d22; color: #ffd08a; font-size: 12px; min-height: 30px; }
+    .ttc-empty { text-align: center; color: #8b8f99; padding: 18px 6px; }
+    .ttc-empty .ttc-wave { font-size: 22px; color: #ff9f1a; animation: ttc-blink 1.6s infinite; margin-bottom: 6px; }
+    @keyframes ttc-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* Pop-ups over the whole screen */
+    .ttc-layer { position: fixed; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 99999;
+      font-family: inherit; color: #f1f1f1; }
+    .ttc-banner { position: absolute; left: 50%; top: 70px; transform: translate(-50%, -30px); opacity: 0; width: 460px; max-width: 92%;
+      pointer-events: none; visibility: hidden; background: rgba(20, 21, 26, 0.96); border: 2px solid #ff9f1a; border-radius: 8px;
+      padding: 10px 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); transition: transform 0.25s, opacity 0.25s, visibility 0.25s; }
+    .ttc-banner.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; visibility: visible; }
+    .ttc-banner .ttc-btns button { padding: 6px 0; }
+    .ttc-radio { font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #ff9f1a; }
+
+    .ttc-modal { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(0.9); opacity: 0; width: 520px; max-width: 96%;
+      pointer-events: none; visibility: hidden; background: rgba(18, 19, 24, 0.97); border: 2px solid #ff9f1a; border-radius: 10px;
+      padding: 12px 14px 14px; box-shadow: 0 12px 50px rgba(0, 0, 0, 0.65); transition: transform 0.2s, opacity 0.2s, visibility 0.2s; }
+    .ttc-modal.show { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: auto; visibility: visible; }
+    .ttc-modal-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .ttc-modal-title { font-size: 18px; font-weight: 900; letter-spacing: 1px; color: #ffb547; }
+    .ttc-close { border: 0; background: #3d4049; color: #ddd; border-radius: 4px; padding: 3px 9px; cursor: pointer; font-weight: 700; }
+    .ttc-strapdots { display: flex; gap: 6px; margin: 8px 0 6px; }
+    .ttc-strapdots div { flex: 1; text-align: center; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; padding: 4px 0; border-radius: 4px;
+      background: #2a2c33; color: #8b8f99; }
+    .ttc-strapdots div.now { background: #ff9f1a; color: #1b1b1b; }
+    .ttc-strapdots div.done { background: #2f9e44; color: #fff; }
+    .ttc-stage { font-size: 13px; color: #ddd; margin: 2px 0 6px; min-height: 18px; }
+    .ttc-stage b { color: #ffd08a; }
+    .ttc-canvas-wrap { position: relative; }
+    .ttc-canvas { display: block; width: 100%; height: auto; border-radius: 6px; background: #15161a; cursor: pointer; user-select: none; }
+    .ttc-pause { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; padding: 20px;
+      background: rgba(10, 10, 12, 0.82); border-radius: 6px; font-size: 16px; font-weight: 800; color: #ffd08a; }
+    .ttc-pause.show { display: flex; }
+    .ttc-quality { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: #a9adb8; }
+    .ttc-quality b { color: #fff; }
+
+    .ttc-result { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(0.4); opacity: 0; width: 380px; max-width: 92%;
+      pointer-events: none; visibility: hidden; text-align: center; background: rgba(18, 19, 24, 0.97); border: 3px solid #69db7c; border-radius: 12px;
+      padding: 16px 18px; box-shadow: 0 0 0 0 rgba(105, 219, 124, 0.7), 0 14px 50px rgba(0, 0, 0, 0.6); cursor: pointer; }
+    .ttc-result.show { pointer-events: auto; visibility: visible; animation: ttc-boom 0.55s cubic-bezier(.2, 1.6, .4, 1) forwards, ttc-ring 1.2s ease-out 0.1s; }
+    .ttc-result .big { font-size: 40px; font-weight: 900; color: #69db7c; line-height: 1.1; text-shadow: 0 0 18px rgba(105, 219, 124, 0.6); }
+    .ttc-result .what { font-size: 13px; color: #c7cad2; margin: 4px 0 10px; }
+    .ttc-result .head { font-size: 14px; font-weight: 900; letter-spacing: 3px; color: #ffb547; }
+    .ttc-result table { width: 100%; font-size: 12px; border-collapse: collapse; }
+    .ttc-result td { padding: 2px 0; color: #c7cad2; text-align: left; }
+    .ttc-result td.amt { text-align: right; font-weight: 700; color: #fff; }
+    .ttc-result td.neg { color: #ff8787; }
+    .ttc-result tr.total td { border-top: 1px solid #3d4049; padding-top: 5px; font-weight: 900; color: #69db7c; font-size: 14px; }
+    @keyframes ttc-boom { 0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+    @keyframes ttc-ring { 0% { box-shadow: 0 0 0 0 rgba(105, 219, 124, 0.8), 0 14px 50px rgba(0, 0, 0, 0.6); }
+      100% { box-shadow: 0 0 0 60px rgba(105, 219, 124, 0), 0 14px 50px rgba(0, 0, 0, 0.6); } }
+  </style>
+  <div class="ttc-head">
+    <div class="ttc-logo"><i></i>TOW DISPATCH</div>
+    <button class="ttc-duty" data-act="duty">ON DUTY</button>
+  </div>
+  <div class="ttc-stats">
+    <span>Bank <b data-f="bank">$0</b></span>
+    <span>Today <b data-f="session">$0</b></span>
+    <span>Jobs <b data-f="jobs">0</b></span>
+  </div>
+  <div class="ttc-body"></div>
+</div>
