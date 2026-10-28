@@ -1,5 +1,6 @@
 // Tests "Change words already on the livery" in LiveryDesigner.html with Chromium.
 //   node test_change_words.cjs <LiveryDesigner.html> <folder with delivery_van.zip, delivery_boxes.json> <output folder>
+// Make that folder with: python3 make_livery_test_vehicle.py <folder>
 const path = require('path');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
