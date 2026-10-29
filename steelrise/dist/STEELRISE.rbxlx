@@ -2653,7 +2653,9 @@ add({
 		truss.CanQuery = false
 		truss.CanTouch = true
 		truss.CastShadow = false
-		truss.Style = Enum.Style.NoSupports
+		pcall(function()
+			truss.Style = Enum.Style.NoSupports
+		end)
 		truss.Parent = b.model
 	end,
 	rotStep = 90,
@@ -6838,7 +6840,7 @@ local function tube(parent, name, a, b, dia, color, material, flags)
 	return cyl(parent, name, len, dia, lookAlong((a + b) / 2, b - a) * CFrame.Angles(0, math.pi / 2, 0), color, material, flags)
 end
 
-local function sign(part, face, text, bg, fg)
+local function signUnsafe(part, face, text, bg, fg)
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -6854,6 +6856,14 @@ local function sign(part, face, text, bg, fg)
 	t.Text = text
 	t.Parent = gui
 	return gui
+end
+
+-- Signs are decoration: never let one stop the crane from building.
+local function sign(...)
+	local ok, err = pcall(signUnsafe, ...)
+	if not ok then
+		warn("[STEELRISE] crane sign skipped:", err)
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -6930,15 +6940,22 @@ local function buildStatic(model, cfg)
 		end
 	end
 	-- climbing ladder inside the mast (climbable)
-	local truss = Instance.new("TrussPart")
-	truss.Name = "MastLadder"
-	truss.Size = V(2, 2 * math.max(1, math.floor(mastH / 2)), 2)
-	truss.CFrame = CF(base.X, mastBottom + truss.Size.Y / 2, base.Z - 0.6)
-	truss.Color = Color3.fromRGB(196, 198, 202)
-	truss.Material = M.Metal
-	truss.Anchored = true
-	truss.Style = Enum.Style.AlternateSupports
-	truss.Parent = static
+	local okLadder, ladderErr = pcall(function()
+		local truss = Instance.new("TrussPart")
+		truss.Name = "MastLadder"
+		truss.Anchored = true
+		truss.Size = V(2, 2 * math.max(1, math.floor(mastH / 2)), 2)
+		truss.CFrame = CF(base.X, mastBottom + truss.Size.Y / 2, base.Z - 0.6)
+		truss.Color = Color3.fromRGB(196, 198, 202)
+		truss.Material = M.Metal
+		truss.Parent = static
+		pcall(function()
+			truss.Style = Enum.Style.AlternateSupports
+		end)
+	end)
+	if not okLadder then
+		warn("[STEELRISE] mast ladder skipped:", ladderErr)
+	end
 
 	-- landing at the mast top (ring around the ladder opening)
 	local ringOuter = Wm + 2.4
@@ -7217,19 +7234,102 @@ end
 
 ---------------------------------------------------------------------------
 
+---------------------------------------------------------------------------
+-- Minimal fallbacks: plain blocks with the same names and pivots, used for
+-- any section whose detailed build fails, so the crane always works.
+---------------------------------------------------------------------------
+
+local function fallbackStatic(model, cfg)
+	local static = Instance.new("Model")
+	static.Name = "Static"
+	static.Parent = model
+	local base = cfg.base
+	local Wm = CraneMath.MastWidth
+	local mastTop = cfg.pivot.Y - 1.0
+	P(static, "Foundation", V(m(7), m(0.6), m(7)), CF(base + V(0, m(0.3), 0)), CONCRETE, M.Concrete)
+	P(static, "Mast", V(Wm, mastTop - base.Y - m(0.6), Wm), CF(base.X, (mastTop + base.Y + m(0.6)) / 2, base.Z), YELLOW, M.Metal, { tr = 0.3 })
+	local access = P(static, "CraneAccess", V(Wm + 1, m(2.4), 1), CF(base + V(0, m(1.8), -(Wm / 2 + 1.2))), YELLOW, M.Metal, { tr = 0.6, nc = true })
+	access:SetAttribute("CraneInteract", "Access")
+	local top = P(static, "CraneAccessTop", V(Wm + 2, 5, Wm + 2), CF(base.X, mastTop + 2.4, base.Z), YELLOW, M.Metal, { tr = 1, nc = true })
+	top:SetAttribute("CraneInteract", "Access")
+	return static
+end
+
+local function fallbackSlew(model, cfg)
+	local slew = Instance.new("Model")
+	slew.Name = "Slew"
+	slew.Parent = model
+	local frame = CF(cfg.pivot)
+	local root = P(slew, "Root", V(0.4, 0.4, 0.4), frame, YELLOW, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
+	slew.PrimaryPart = root
+	local jy, jh = CraneMath.JibBottomY, CraneMath.JibHeight
+	P(slew, "Jib", V(cfg.jib - 2.4, jh, CraneMath.JibWidth), frame * CF(2.4 + (cfg.jib - 2.4) / 2, jy + jh / 2, 0), YELLOW, M.Metal, { nc = true, tr = 0.4 })
+	P(slew, "CounterJib", V(cfg.counter, 1.4, 4), frame * CF(-cfg.counter / 2 - 1.5, jy + 0.5, 0), YELLOW, M.Metal, { nc = true })
+	P(slew, "Counterweight", V(5, m(2.4), 4.6), frame * CF(-cfg.counter, jy - m(0.55), 0), CONCRETE, M.Concrete, { nc = true })
+	local drum = P(slew, "WinchDrum", V(2, 2, 2), frame * CF(-7.5, jy + 2.2, 1.7), YELLOW_DARK, M.Metal, { nc = true })
+	drum:SetAttribute("Sound", "Hoist")
+	local cab = frame * CF(CraneMath.CabOffset)
+	P(slew, "Cab", V(3.8, 4.4, 3.2), cab, WHITE, M.Metal, { nc = true, tr = 0.5 })
+	local door = P(slew, "CabDoor", V(3.6, 4.0, 0.3), cab * CF(0, 0, -1.75), YELLOW, M.Metal, { tr = 0.9, nc = true })
+	door:SetAttribute("CraneInteract", "Cab")
+	return slew
+end
+
+local function fallbackTrolley(model, cfg, st)
+	local trolley = Instance.new("Model")
+	trolley.Name = "Trolley"
+	trolley.Parent = model
+	local tcf = CraneMath.trolleyCf(cfg, st)
+	trolley.PrimaryPart = P(trolley, "Root", V(0.3, 0.3, 0.3), tcf, YELLOW, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
+	P(trolley, "Frame", V(3.4, 1.2, CraneMath.JibWidth + 0.9), tcf * CF(0, 0.9, 0), YELLOW, M.Metal, { nc = true })
+	return trolley
+end
+
+local function fallbackHook(model, cfg, st)
+	local hook = Instance.new("Model")
+	hook.Name = "Hook"
+	hook.Parent = model
+	local hcf = CraneMath.hookCf(cfg, st)
+	hook.PrimaryPart = P(hook, "Root", V(0.3, 0.3, 0.3), hcf, YELLOW, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
+	P(hook, "Block", V(1.3, 2.0, 1.6), hcf * CF(0, 1.9, 0), YELLOW, M.Metal, { nc = true })
+	P(hook, "HookBowl", V(0.9, 0.5, 0.3), hcf * CF(0, -0.1, 0), YELLOW, M.Metal, { nc = true })
+	return hook
+end
+
 function CraneFactory.build(craneDef, id)
 	local cfg = CraneMath.config(craneDef)
 	local model = Instance.new("Model")
 	model.Name = "TowerCrane_" .. id
 	model:SetAttribute("CraneId", id)
-	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	pcall(function()
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	end)
 	local st = CraneMath.defaultState(craneDef)
+	local warnings = {}
 
-	buildStatic(model, cfg)
-	local slew = buildSlew(model, cfg)
-	slew:PivotTo(CraneMath.slewCf(cfg, st.slew))
-	buildTrolley(model, cfg, st)
-	buildHook(model, cfg, st)
+	-- each section is built in isolation; a failure falls back to plain blocks
+	local function section(name, detailed, fallback, ...)
+		local ok, result = pcall(detailed, model, cfg, ...)
+		if ok and result and result.Parent == model then
+			return result
+		end
+		local msg = tostring(result)
+		warn("[STEELRISE] crane section '" .. name .. "' failed, using a simple version:", msg)
+		table.insert(warnings, name .. ": " .. (string.match(msg, "^[^\n]+") or msg))
+		local partial = model:FindFirstChild(name)
+		if partial then
+			partial:Destroy()
+		end
+		return fallback(model, cfg, ...)
+	end
+
+	section("Static", buildStatic, fallbackStatic)
+	local slew = section("Slew", buildSlew, fallbackSlew)
+	pcall(function()
+		slew:PivotTo(CraneMath.slewCf(cfg, st.slew))
+	end)
+	section("Trolley", buildTrolley, fallbackTrolley, st)
+	section("Hook", buildHook, fallbackHook, st)
 
 	local cables = Instance.new("Folder")
 	cables.Name = "Cables"
@@ -7247,6 +7347,9 @@ function CraneFactory.build(craneDef, id)
 	model:SetAttribute("Operator", 0)
 	model:SetAttribute("LoadId", "")
 	model:SetAttribute("ResetSeq", 0)
+	if #warnings > 0 then
+		model:SetAttribute("BuildWarnings", table.concat(warnings, " | "))
+	end
 	model.PrimaryPart = slew.PrimaryPart
 	return model, cfg
 end
@@ -9112,6 +9215,10 @@ function SiteService.load(siteId, saveData, host)
 		local craneModel, cfg = WorldFactory.buildCrane(def.crane, "1")
 		craneModel.Parent = folder.Cranes
 		Services.Crane.register("1", craneModel, cfg)
+		local w = craneModel:GetAttribute("BuildWarnings")
+		if w then
+			table.insert(failures, "crane detail (simplified): " .. w)
+		end
 	end)
 
 	step("materials", function()
@@ -9958,7 +10065,7 @@ local function bar(parent, name, a, b, w, color, material, flags)
 	return P(parent, name, V(w, w, len), lookAlong((a + b) / 2, b - a), color, material, flags)
 end
 
-local function surfaceText(part, face, text, bg, fg, font)
+local function surfaceTextUnsafe(part, face, text, bg, fg, font)
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -9981,6 +10088,16 @@ local function surfaceText(part, face, text, bg, fg, font)
 	pad.PaddingBottom = UDim.new(0.08, 0)
 	pad.Parent = t
 	return gui
+end
+
+-- Signs are decoration: a failure is logged, never fatal.
+local function surfaceText(...)
+	local ok, result = pcall(surfaceTextUnsafe, ...)
+	if not ok then
+		warn("[STEELRISE] sign skipped:", result)
+		return nil
+	end
+	return result
 end
 
 ---------------------------------------------------------------------------

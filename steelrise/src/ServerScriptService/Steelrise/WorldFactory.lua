@@ -80,7 +80,7 @@ local function bar(parent, name, a, b, w, color, material, flags)
 	return P(parent, name, V(w, w, len), lookAlong((a + b) / 2, b - a), color, material, flags)
 end
 
-local function surfaceText(part, face, text, bg, fg, font)
+local function surfaceTextUnsafe(part, face, text, bg, fg, font)
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -103,6 +103,16 @@ local function surfaceText(part, face, text, bg, fg, font)
 	pad.PaddingBottom = UDim.new(0.08, 0)
 	pad.Parent = t
 	return gui
+end
+
+-- Signs are decoration: a failure is logged, never fatal.
+local function surfaceText(...)
+	local ok, result = pcall(surfaceTextUnsafe, ...)
+	if not ok then
+		warn("[STEELRISE] sign skipped:", result)
+		return nil
+	end
+	return result
 end
 
 ---------------------------------------------------------------------------

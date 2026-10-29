@@ -268,6 +268,10 @@ function SiteService.load(siteId, saveData, host)
 		local craneModel, cfg = WorldFactory.buildCrane(def.crane, "1")
 		craneModel.Parent = folder.Cranes
 		Services.Crane.register("1", craneModel, cfg)
+		local w = craneModel:GetAttribute("BuildWarnings")
+		if w then
+			table.insert(failures, "crane detail (simplified): " .. w)
+		end
 	end)
 
 	step("materials", function()

@@ -787,7 +787,9 @@ add({
 		truss.CanQuery = false
 		truss.CanTouch = true
 		truss.CastShadow = false
-		truss.Style = Enum.Style.NoSupports
+		pcall(function()
+			truss.Style = Enum.Style.NoSupports
+		end)
 		truss.Parent = b.model
 	end,
 	rotStep = 90,
