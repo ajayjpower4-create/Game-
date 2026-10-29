@@ -1,4 +1,5 @@
 *.rbxlx
 *.rbxl
+!dist/STEELRISE.rbxlx
 *.rbxlx.lock
 sourcemap.json

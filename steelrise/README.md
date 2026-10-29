@@ -22,7 +22,17 @@ invented: every sound slot is wired up but silent until you supply audio
 
 ## 1. Install and run
 
-### Option A — Rojo (recommended)
+### Option 0 — ready-made place file (easiest)
+
+Download [`dist/STEELRISE.rbxlx`](dist/STEELRISE.rbxlx) (on GitHub: open the
+file, then the download button), double-click it to open it in Roblox
+Studio, and press **Play**. You start in the main menu — click **PLAY** or
+**Start New Construction** to spawn on the site.
+
+The file is generated from `src/` by `python3 tools/build_rbxlx.py`; re-run
+it after changing any script.
+
+### Option A — Rojo
 
 1. Install [Rojo](https://rojo.space) 7.4 or newer and the Rojo Studio plugin.
 2. From this folder:
