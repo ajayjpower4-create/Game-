@@ -512,7 +512,9 @@ function HUD.build()
 	UIKit.label(ui.tasks, "Tab catalog · P site menu · F1 help · J hide", 11, F.Mono, C.SteelDark, { LayoutOrder = 9, Size = UDim2.new(1, 0, 0, 14) })
 
 	-- toasts
-	ui.toasts = UIKit.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 20), Size = UDim2.new(0, 380, 0, 400), BackgroundTransparency = 1, Parent = gui })
+	-- toasts get their own always-enabled screen so messages show in the menu too
+	local toastGui = UIKit.screen("SR_Toasts", 60)
+	ui.toasts = UIKit.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 20), Size = UDim2.new(0, 420, 0, 400), BackgroundTransparency = 1, Parent = toastGui })
 	UIKit.list(ui.toasts, nil, 6)
 
 	-- crane panel

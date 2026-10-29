@@ -72,11 +72,15 @@ end
 local function start(siteId, mode, slot)
 	setBusy(mode == "continue" and "Restoring your construction site…" or (mode == "join" and "Joining site…" or "Preparing " .. (Sites.get(siteId or "") and Sites.get(siteId).name or "site") .. "…"))
 	local ok, msg, data = Net.call("Site", true, "Start", siteId, mode, slot)
-	setBusy(nil)
 	if not ok then
-		State.notify(msg or "Couldn't start the site.", "error")
+		local why = msg or "Couldn't start the site."
+		State.notify(why, "error")
+		setBusy("Couldn't start the site:\n" .. why)
+		task.wait(5)
+		setBusy(nil)
 		return
 	end
+	setBusy(nil)
 	State.lastStartMode = mode
 	State.fire("EnteredSite", data)
 end
@@ -443,7 +447,7 @@ function MainMenu.build()
 	footer = UIKit.label(gui, "", 12, F.Mono, C.Muted, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 64, 1, -24), Size = UDim2.new(1, -128, 0, 16) })
 
 	busyOverlay = UIKit.new("Frame", { BackgroundColor3 = C.Charcoal, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 50, Parent = gui })
-	local bl = UIKit.label(busyOverlay, "", 20, F.Bold, C.OffWhite, { Name = "Label", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 600, 0, 30), TextXAlignment = Enum.TextXAlignment.Center })
+	local bl = UIKit.label(busyOverlay, "", 20, F.Bold, C.OffWhite, { Name = "Label", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 900, 0, 200), TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center })
 	bl.ZIndex = 51
 	busyOverlay.Active = true
 

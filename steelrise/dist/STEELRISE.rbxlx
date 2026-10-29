@@ -6306,10 +6306,11 @@ local function bind(name, handler)
 		if not allow(player) then
 			return false, "Slow down."
 		end
-		local results = table.pack(pcall(handler, player, ...))
+		local results = table.pack(xpcall(handler, debug.traceback, player, ...))
 		if not results[1] then
 			warn("[STEELRISE] " .. name .. " error:", results[2])
-			return false, "Server error — see output."
+			local first = string.match(tostring(results[2]), "^[^\n]+") or tostring(results[2])
+			return false, "Server error: " .. first
 		end
 		return table.unpack(results, 2, results.n)
 	end
@@ -6943,102 +6944,119 @@ function SiteService.load(siteId, saveData, host)
 	site.world = BuildRules.newWorld(folder)
 	SiteService.current = site
 
-	WorldFactory.applyLighting(def)
-	WorldFactory.buildTerrain(def)
-	WorldFactory.buildFencing(def, env)
-	WorldFactory.buildSiteDressing(def, env)
+	-- Each build step is isolated: a failure in one part of the world is
+	-- logged (and reported to the host) instead of aborting the whole site.
+	local failures = {}
+	local function step(label, fn, ...)
+		local ok, err = xpcall(fn, debug.traceback, ...)
+		if not ok then
+			warn("[STEELRISE] site build step '" .. label .. "' failed:", err)
+			table.insert(failures, label .. ": " .. (string.match(tostring(err), "^[^\n]+") or tostring(err)))
+		end
+		return ok
+	end
+	site.buildFailures = failures
+
+	step("lighting", WorldFactory.applyLighting, def)
+	step("terrain", WorldFactory.buildTerrain, def)
+	step("fencing", WorldFactory.buildFencing, def, env)
+	step("site dressing", WorldFactory.buildSiteDressing, def, env)
 	local surroundings = newFolder(folder, "Surroundings")
-	WorldFactory.buildSurroundings(def, surroundings)
+	step("surroundings", WorldFactory.buildSurroundings, def, surroundings)
 
 	-- crane
-	local craneModel, cfg = WorldFactory.buildCrane(def.crane, "1")
-	craneModel.Parent = folder.Cranes
-	Services.Crane.register("1", craneModel, cfg)
+	step("tower crane", function()
+		local craneModel, cfg = WorldFactory.buildCrane(def.crane, "1")
+		craneModel.Parent = folder.Cranes
+		Services.Crane.register("1", craneModel, cfg)
+	end)
 
-	if saveData then
-		for _, c in ipairs(saveData.components or {}) do
-			local cf = Util.arrayToCf(c.c)
-			if cf and Registry.get(c.t) then
-				Services.Components.spawn(c.t, cf, c.s or "Loose", {
-					id = c.i,
-					fastened = c.f,
-					supportedBy = c.sb,
-					restraint = c.r,
-					trailer = c.tr,
-					on = c.on,
+	step("materials", function()
+		if saveData then
+			for _, c in ipairs(saveData.components or {}) do
+				local cf = Util.arrayToCf(c.c)
+				if cf and Registry.get(c.t) then
+					Services.Components.spawn(c.t, cf, c.s or "Loose", {
+						id = c.i,
+						fastened = c.f,
+						supportedBy = c.sb,
+						restraint = c.r,
+						trailer = c.tr,
+						on = c.on,
+					})
+				end
+			end
+			Services.Delivery.restore(saveData.trailers)
+			Services.Crane.restore(saveData.cranes)
+			Services.Delivery.refreshAll()
+		else
+			-- starting stage of the building
+			local stageModels = {}
+			for _, e in ipairs(Sites.stageEntries(def)) do
+				local m = Services.Components.spawn(e.item, e.cf, "Installed", {})
+				if m then
+					table.insert(stageModels, m)
+				end
+			end
+			site.world:markDirty()
+			for _, m in ipairs(stageModels) do
+				local ids = BuildRules.supportsOf(site.world, Registry.get(m:GetAttribute("ItemId")), m:GetPivot(), m:GetAttribute("ComponentId"))
+				m:SetAttribute("SupportedBy", table.concat(ids, ","))
+			end
+			-- first work package on a truck, scaffold kit in the yard
+			if def.starter then
+				if def.starter.trailer then
+					local reqs = {}
+					for _, r in ipairs(def.starter.trailer) do
+						table.insert(reqs, { id = r[1], qty = r[2] })
+					end
+					Services.Delivery.spawnLoaded(1, reqs)
+				end
+				spawnLaydown(site, def.starter.laydown)
+			else
+				-- next work package from the blueprint
+				local pending = {}
+				local entries = Sites.sortEntries(Sites.layout(def.grid))
+				local stage = {}
+				for _, e in ipairs(Sites.stageEntries(def)) do
+					stage[e.key] = true
+				end
+				local counts, order = {}, {}
+				local n = 0
+				for _, e in ipairs(entries) do
+					if not stage[e.key] and e.phase ~= "deck" and e.phase ~= "gusset" then
+						if not counts[e.item] then
+							counts[e.item] = 0
+							table.insert(order, e.item)
+						end
+						counts[e.item] += 1
+						n += 1
+						if n >= 10 then
+							break
+						end
+					end
+				end
+				for _, id in ipairs(order) do
+					table.insert(pending, { id = id, qty = counts[id] })
+				end
+				if #pending > 0 then
+					Services.Delivery.spawnLoaded(1, pending)
+				end
+				spawnLaydown(site, {
+					{ "CON-GUSSET-350", 4 },
+					{ "SC-BASEJACK", 4 },
+					{ "SC-STD-2000", 8 },
+					{ "SC-LEDGER-2570", 6 },
+					{ "SC-LEDGER-1090", 6 },
+					{ "SC-DECK-2570", 2 },
+					{ "SC-LADDER-27", 1 },
 				})
 			end
 		end
-		Services.Delivery.restore(saveData.trailers)
-		Services.Crane.restore(saveData.cranes)
-		Services.Delivery.refreshAll()
-	else
-		-- starting stage of the building
-		local stageModels = {}
-		for _, e in ipairs(Sites.stageEntries(def)) do
-			local m = Services.Components.spawn(e.item, e.cf, "Installed", {})
-			if m then
-				table.insert(stageModels, m)
-			end
-		end
-		site.world:markDirty()
-		for _, m in ipairs(stageModels) do
-			local ids = BuildRules.supportsOf(site.world, Registry.get(m:GetAttribute("ItemId")), m:GetPivot(), m:GetAttribute("ComponentId"))
-			m:SetAttribute("SupportedBy", table.concat(ids, ","))
-		end
-		-- first work package on a truck, scaffold kit in the yard
-		if def.starter then
-			if def.starter.trailer then
-				local reqs = {}
-				for _, r in ipairs(def.starter.trailer) do
-					table.insert(reqs, { id = r[1], qty = r[2] })
-				end
-				Services.Delivery.spawnLoaded(1, reqs)
-			end
-			spawnLaydown(site, def.starter.laydown)
-		else
-			-- next work package from the blueprint
-			local pending = {}
-			local entries = Sites.sortEntries(Sites.layout(def.grid))
-			local stage = {}
-			for _, e in ipairs(Sites.stageEntries(def)) do
-				stage[e.key] = true
-			end
-			local counts, order = {}, {}
-			local n = 0
-			for _, e in ipairs(entries) do
-				if not stage[e.key] and e.phase ~= "deck" and e.phase ~= "gusset" then
-					if not counts[e.item] then
-						counts[e.item] = 0
-						table.insert(order, e.item)
-					end
-					counts[e.item] += 1
-					n += 1
-					if n >= 10 then
-						break
-					end
-				end
-			end
-			for _, id in ipairs(order) do
-				table.insert(pending, { id = id, qty = counts[id] })
-			end
-			if #pending > 0 then
-				Services.Delivery.spawnLoaded(1, pending)
-			end
-			spawnLaydown(site, {
-				{ "CON-GUSSET-350", 4 },
-				{ "SC-BASEJACK", 4 },
-				{ "SC-STD-2000", 8 },
-				{ "SC-LEDGER-2570", 6 },
-				{ "SC-LEDGER-1090", 6 },
-				{ "SC-DECK-2570", 2 },
-				{ "SC-LADDER-27", 1 },
-			})
-		end
-	end
+	end)
 
 	local bp = saveData and saveData.blueprint or (def.grid and "Site" or nil)
-	SiteService.setBlueprint(bp)
+	step("blueprint", SiteService.setBlueprint, bp)
 	folder:SetAttribute("Ready", true)
 	folder:SetAttribute("Host", host and host.UserId or 0)
 	-- keep player streaming focused on the site while in menus
@@ -7084,7 +7102,7 @@ function SiteService.spawnCharacter(player)
 		hrp.CFrame = CFrame.new(p + Vector3.new(0, 4, 0)) * CFrame.Angles(0, math.rad(180), 0)
 	end
 	player.ReplicationFocus = nil
-	Services.Components.equip(player, "TL-HANDS")
+	pcall(Services.Components.equip, player, "TL-HANDS")
 	local hum = character:FindFirstChildOfClass("Humanoid")
 	if hum then
 		hum.Died:Connect(function()
@@ -7147,6 +7165,9 @@ function SiteService.handle(player, action, a, b, c)
 		SiteService.spawnCharacter(player)
 		local cur = SiteService.current
 		cur.dirty = true
+		if cur.buildFailures and #cur.buildFailures > 0 then
+			Remotes.get("Notify"):FireClient(player, "Some of the site failed to build (the game still works): " .. table.concat(cur.buildFailures, " | "), "warn")
+		end
 		return true, nil, { siteId = cur.id, host = cur.host and cur.host.UserId or 0 }
 	elseif action == "Blueprint" then
 		local site = SiteService.current
@@ -7365,8 +7386,8 @@ function WorldFactory.applyLighting(site)
 	local dof = Instance.new("DepthOfFieldEffect")
 	dof.Name = "SR_DOF"
 	dof.FarIntensity = 0.12
-	dof.FocusDistance = 260
-	dof.InFocusRadius = 220
+	dof.FocusDistance = 200
+	dof.InFocusRadius = 50
 	dof.NearIntensity = 0
 	dof.Enabled = true
 	tag(dof)
@@ -10881,7 +10902,9 @@ function HUD.build()
 	UIKit.label(ui.tasks, "Tab catalog · P site menu · F1 help · J hide", 11, F.Mono, C.SteelDark, { LayoutOrder = 9, Size = UDim2.new(1, 0, 0, 14) })
 
 	-- toasts
-	ui.toasts = UIKit.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 20), Size = UDim2.new(0, 380, 0, 400), BackgroundTransparency = 1, Parent = gui })
+	-- toasts get their own always-enabled screen so messages show in the menu too
+	local toastGui = UIKit.screen("SR_Toasts", 60)
+	ui.toasts = UIKit.new("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -20, 0, 20), Size = UDim2.new(0, 420, 0, 400), BackgroundTransparency = 1, Parent = toastGui })
 	UIKit.list(ui.toasts, nil, 6)
 
 	-- crane panel
@@ -11479,11 +11502,15 @@ end
 local function start(siteId, mode, slot)
 	setBusy(mode == "continue" and "Restoring your construction site…" or (mode == "join" and "Joining site…" or "Preparing " .. (Sites.get(siteId or "") and Sites.get(siteId).name or "site") .. "…"))
 	local ok, msg, data = Net.call("Site", true, "Start", siteId, mode, slot)
-	setBusy(nil)
 	if not ok then
-		State.notify(msg or "Couldn't start the site.", "error")
+		local why = msg or "Couldn't start the site."
+		State.notify(why, "error")
+		setBusy("Couldn't start the site:\n" .. why)
+		task.wait(5)
+		setBusy(nil)
 		return
 	end
+	setBusy(nil)
 	State.lastStartMode = mode
 	State.fire("EnteredSite", data)
 end
@@ -11850,7 +11877,7 @@ function MainMenu.build()
 	footer = UIKit.label(gui, "", 12, F.Mono, C.Muted, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 64, 1, -24), Size = UDim2.new(1, -128, 0, 16) })
 
 	busyOverlay = UIKit.new("Frame", { BackgroundColor3 = C.Charcoal, BackgroundTransparency = 0.25, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 50, Parent = gui })
-	local bl = UIKit.label(busyOverlay, "", 20, F.Bold, C.OffWhite, { Name = "Label", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 600, 0, 30), TextXAlignment = Enum.TextXAlignment.Center })
+	local bl = UIKit.label(busyOverlay, "", 20, F.Bold, C.OffWhite, { Name = "Label", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0, 900, 0, 200), TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Center })
 	bl.ZIndex = 51
 	busyOverlay.Active = true
 

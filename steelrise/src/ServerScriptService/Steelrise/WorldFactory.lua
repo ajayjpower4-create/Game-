@@ -167,8 +167,8 @@ function WorldFactory.applyLighting(site)
 	local dof = Instance.new("DepthOfFieldEffect")
 	dof.Name = "SR_DOF"
 	dof.FarIntensity = 0.12
-	dof.FocusDistance = 260
-	dof.InFocusRadius = 220
+	dof.FocusDistance = 200
+	dof.InFocusRadius = 50
 	dof.NearIntensity = 0
 	dof.Enabled = true
 	tag(dof)

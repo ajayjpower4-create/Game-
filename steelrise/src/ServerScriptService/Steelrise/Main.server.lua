@@ -44,10 +44,11 @@ local function bind(name, handler)
 		if not allow(player) then
 			return false, "Slow down."
 		end
-		local results = table.pack(pcall(handler, player, ...))
+		local results = table.pack(xpcall(handler, debug.traceback, player, ...))
 		if not results[1] then
 			warn("[STEELRISE] " .. name .. " error:", results[2])
-			return false, "Server error — see output."
+			local first = string.match(tostring(results[2]), "^[^\n]+") or tostring(results[2])
+			return false, "Server error: " .. first
 		end
 		return table.unpack(results, 2, results.n)
 	end
