@@ -210,6 +210,9 @@ function World:raycast(origin, dir, exclude)
 			dir = dir.Unit * remaining
 			result = workspace:Raycast(origin, dir, params)
 		end
+		if guard >= 8 then
+			return nil
+		end
 		return result
 	end
 	return workspace:Raycast(origin, dir, params)
@@ -714,11 +717,19 @@ function BuildRules.solve(world, def, aim, opts)
 				end
 			end
 			if bestNode then
-				local A, B = Config.Geo.ScaffoldBayLong * S, Config.Geo.ScaffoldBayShort * S
 				local dx, dz = p.X - bestNode.pos.X, p.Z - bestNode.pos.Z
+				-- snap each axis to the nearest whole number of any standard bay length
 				local function snapAxis(v)
-					local options = { Util.round(v, A), Util.round(v, B) }
-					return math.abs(options[1] - v) <= math.abs(options[2] - v) and options[1] or options[2]
+					local best, bestErr = 0, math.huge
+					for _, bayM in ipairs(Config.Geo.ScaffoldBays) do
+						local L = bayM * S
+						local cand = Util.round(v, L)
+						local err = math.abs(cand - v)
+						if err < bestErr then
+							best, bestErr = cand, err
+						end
+					end
+					return best
 				end
 				p = Vector3.new(bestNode.pos.X + snapAxis(dx), p.Y, bestNode.pos.Z + snapAxis(dz))
 				snapped = true
@@ -755,7 +766,8 @@ function BuildRules.solveSlab(world, aim)
 	local deckCf = rec.cf
 	local s = Vector3.new(deckCf.XVector.X, 0, deckCf.XVector.Z).Unit
 	local probe = deckCf * Vector3.new(rec.def.size.X / 2 - 0.09, 0.6, 0)
-	local hit = world:raycast(probe, Vector3.new(0, -1.6, 0))
+	-- look past the sheet itself to the beam flange it bears on
+	local hit = world:raycast(probe, Vector3.new(0, -1.6, 0), { rec.model })
 	local beam = hit and world:record(hit.Instance)
 	if not beam or not beam.def.tags.Beam then
 		return nil, nil, "That deck sheet isn't bearing on a beam."

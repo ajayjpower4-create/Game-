@@ -11,6 +11,7 @@ bit32 = {
 }
 math.clamp = function(x, a, b) if a > b then error("math.clamp: max < min", 2) end return math.max(a, math.min(b, x)) end
 math.atan2 = function(y, x) return math.atan(y, x) end
+math.noise = function(x, y, z) return math.sin((x or 0) * 1.7 + (y or 0) * 2.3 + (z or 0)) * 0.5 end
 math.sign = function(x) return x > 0 and 1 or (x < 0 and -1 or 0) end
 table.find = function(t, v) for i, x in ipairs(t) do if x == v then return i end end return nil end
 table.clone = function(t) local n = {} for k, v in pairs(t) do n[k] = v end return n end

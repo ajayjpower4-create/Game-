@@ -9,4 +9,5 @@ engine accepts every call.
 pip install lupa
 python3 tools/sim/run.py . server   # boots the server, loads all 8 sites, save/continue, delivery, crane, carry
 python3 tools/sim/run.py . client   # loading screen -> menu -> click PLAY -> in-game keys
+python3 tools/sim/run.py . count    # item count per category; builds every item model
 ```

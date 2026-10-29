@@ -103,6 +103,69 @@ try("Pick up + drop a light item", function()
 		end
 	end
 end)
+try("Rail delivery on Office4", function()
+	assert(Site.handle(player, "Start", "Office4", "new", nil))
+	local ok, msg = Delivery.request(player, "BM-W21x44-9000", 10, "rail")
+	py_print("   " .. tostring(ok) .. " " .. tostring(msg))
+	assert(ok, msg)
+	local cars = 0
+	for _, t in ipairs(workspace.SteelriseSite.Trailers:GetChildren()) do
+		if t:GetAttribute("Kind") == "rail" then cars = cars + 1 end
+	end
+	py_print("   railcars=" .. cars)
+	local ok2, msg2 = Delivery.request(player, "BM-W21x44-9000", 2, "rail")
+	py_print("   second: " .. tostring(ok2) .. " " .. tostring(msg2))
+	local ok3, msg3 = Delivery.request(player, "BM-W21x44-9000", 2, "rail")
+	py_print("   third: " .. tostring(ok3) .. " " .. tostring(msg3))
+	local snap = Save.snapshot()
+	local rail = 0
+	for _, t in ipairs(snap.trailers) do if t.kind == "rail" then rail = rail + 1 end end
+	py_print("   saved railcars=" .. rail)
+end)
+try("Rail delivery refused on Empty Land", function()
+	assert(Site.handle(player, "Start", "EmptyLand", "new", nil))
+	local ok, msg = Delivery.request(player, "BM-W16x31-6000", 2, "rail")
+	py_print("   " .. tostring(ok) .. " " .. tostring(msg))
+	assert(not ok)
+end)
+try("Pour and finish a slab on Office3 level 2", function()
+	local fakeT = 1000
+	os.clock = function() fakeT = fakeT + 0.5 return fakeT end
+	assert(Site.handle(player, "Start", "Office3", "new", nil))
+	local BuildRules = require(game.ReplicatedStorage.Steelrise.BuildRules)
+	local world = Site.current.world
+	-- the real mock raycast only knows the ground; give it the components for this test
+	local deck
+	for _, m in ipairs(workspace.SteelriseSite.Components:GetChildren()) do
+		if m:GetAttribute("ItemId"):sub(1, 3) == "DK-" and m:GetPivot().Y > 20 and m:GetAttribute("State") == "Installed" then deck = m break end
+	end
+	assert(deck, "no level-2 deck")
+	local def, cf, why = BuildRules.solveSlab(world, { point = deck:GetPivot().Position, hit = deck.PrimaryPart })
+	py_print("   solveSlab: " .. tostring(def and def.id) .. " " .. tostring(why))
+	assert(def, why)
+	Components.equip(player, "TL-POUR")
+	player.Character.HumanoidRootPart.CFrame = cf + Vector3.new(0, 3, 0)
+	local ok, msg = Components.pour(player, def.id, cf)
+	py_print("   pour: " .. tostring(ok) .. " " .. tostring(msg))
+	assert(ok, msg)
+	local slab
+	for _, m in ipairs(workspace.SteelriseSite.Components:GetChildren()) do
+		if m:GetAttribute("ItemId") == def.id and m:GetAttribute("State") == "Placed" then slab = m end
+	end
+	local ok2, msg2 = Components.pour(player, def.id, cf)
+	py_print("   pour again: " .. tostring(ok2) .. " " .. tostring(msg2))
+	assert(not ok2)
+	Components.equip(player, "TL-TROWEL")
+	local id = slab:GetAttribute("ComponentId")
+	for i = 1, 4 do
+		local fp = slab:GetPivot() * (def.fasteners[i].pos * 3)
+		player.Character.HumanoidRootPart.CFrame = CFrame.new(fp + Vector3.new(0, 3, 0))
+		os_clock_bump = (os_clock_bump or 0) + 1
+		local okf, mf = Components.fasten(player, id, i)
+		if not okf then py_print("   fasten " .. i .. ": " .. tostring(mf)) end
+	end
+	py_print("   slab state: " .. tostring(slab:GetAttribute("State")) .. " colour R=" .. string.format("%.2f", slab.Concrete.Color.R))
+end)
 try("Run delayed callbacks", function()
 	for _, d in ipairs(M.delayed) do d.f(table.unpack(d.args)) end
 end)

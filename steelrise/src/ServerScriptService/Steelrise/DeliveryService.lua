@@ -13,14 +13,33 @@ local Util = require(Shared.Util)
 local Remotes = require(Shared.Remotes)
 
 local WorldFactory = require(script.Parent.WorldFactory)
+local VehicleFactory = require(script.Parent.VehicleFactory)
 local Packing = require(script.Parent.Packing)
 
 local S = Config.S
 local D = Config.Delivery
 
+-- Load space per vehicle type (metres / kg).
+local VEHICLES = {
+	truck = { len = D.BedLength, width = D.BedWidth, maxKg = D.TrailerMaxKg, maxH = D.MaxStackHeight, animM = 70, name = "truck" },
+	rail = { len = 17.4, width = 2.7, maxKg = 60000, maxH = 2.8, animM = 160, name = "railcar" },
+}
+
+
 local DeliveryService = {}
 local Services
 local trailers = {} -- id -> record
+
+local function spotsFor(kind)
+	local site = Services.Site.current
+	if not site then
+		return {}
+	end
+	if kind == "rail" then
+		return site.def.railSpots or {}
+	end
+	return site.def.bays
+end
 
 local function now()
 	return workspace:GetServerTimeNow()
@@ -36,7 +55,7 @@ function DeliveryService.init(services)
 		while true do
 			task.wait(5)
 			for id, t in pairs(trailers) do
-				if t.model and t.model.Parent and t.emptySince and not t.departing and now() - t.emptySince > 120 then
+				if t.model and t.model.Parent and t.emptySince and not t.departing and now() - t.emptySince > (t.kind == "rail" and 20 or 120) then
 					DeliveryService.depart(id)
 				end
 			end
@@ -112,7 +131,7 @@ local function buildStrap(t, s, strapId)
 	model:SetAttribute("StrapId", strapId)
 	model:SetAttribute("Group", s.group)
 	model:SetAttribute("TrailerId", t.id)
-	local W = math.max(s.width, D.BedWidth * S * 0.5)
+	local W = math.max(s.width, t.bedWidthM * S * 0.5)
 	local function part(name, size, cf)
 		local p = Instance.new("Part")
 		p.Name = name
@@ -127,7 +146,7 @@ local function buildStrap(t, s, strapId)
 		p.Parent = model
 		return p
 	end
-	local bedHalf = D.BedWidth * S / 2
+	local bedHalf = t.bedWidthM * S / 2
 	part("Band", Vector3.new(0.16, 0.06, W + 0.12), CFrame.new(s.x, s.top + 0.04, 0))
 	for _, sz in ipairs({ -1, 1 }) do
 		local zEdge = sz * (W / 2 + 0.05)
@@ -177,16 +196,21 @@ local function buildLoadExtras(t, extras)
 	end
 end
 
-function DeliveryService.freeBay()
+function DeliveryService.freeBay(kind)
+	kind = kind or "truck"
 	local site = Services.Site.current
 	if not site then
 		return nil
 	end
 	local used = {}
 	for _, t in pairs(trailers) do
-		used[t.bay] = true
+		if t.kind == kind then
+			used[t.bay] = true
+		end
 	end
-	for i = 1, math.min(#site.def.bays, D.MaxTrailers) do
+	local spots = spotsFor(kind)
+	local limit = kind == "truck" and math.min(#spots, D.MaxTrailers) or #spots
+	for i = 1, limit do
 		if not used[i] then
 			return i
 		end
@@ -199,18 +223,33 @@ end
 -- (cargo is restored separately with its saved state).
 function DeliveryService.spawnTrailer(bayIndex, placed, extras, opts)
 	opts = opts or {}
-	local site = Services.Site.current
-	local id = opts.id or ("T" .. string.sub(HttpService:GenerateGUID(false), 1, 8))
-	local bayCf = site.def.bays[bayIndex]
+	local kind = opts.kind or "truck"
+	local vehicle = VEHICLES[kind]
+	local id = opts.id or ((kind == "rail" and "R" or "T") .. string.sub(HttpService:GenerateGUID(false), 1, 8))
+	local bayCf = spotsFor(kind)[bayIndex]
 	local seed = opts.seed or math.random(1, 1e6)
-	local model, bedTop = WorldFactory.buildTrailer(bayCf, seed)
+	local model, bedTop
+	if kind == "rail" then
+		local carLen
+		model, bedTop, carLen = VehicleFactory.buildFlatcar(bayCf, seed)
+		if opts.loco then
+			-- the locomotive is coupled ahead of the first car and leaves with it
+			local loco, locoLen = VehicleFactory.buildLocomotive(bayCf * CFrame.new(-(carLen / 2 + Config.m(9.1)), 0, 0))
+			loco.Parent = model
+			model:SetAttribute("HasLoco", true)
+		end
+	else
+		model, bedTop = WorldFactory.buildTrailer(bayCf, seed)
+	end
 	model.Name = "Trailer_" .. id
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:SetAttribute("TrailerId", id)
 	model:SetAttribute("Bay", bayIndex)
+	model:SetAttribute("Kind", kind)
+	model:SetAttribute("AnimDist", Config.m(vehicle.animM))
 	model:SetAttribute("ArriveAt", opts.instant and 0 or now())
 	model:SetAttribute("DepartAt", 0)
-	local t = { id = id, bay = bayIndex, bayCf = bayCf, bedTop = bedTop, model = model, seed = seed }
+	local t = { id = id, bay = bayIndex, kind = kind, bedWidthM = vehicle.width, bayCf = bayCf, bedTop = bedTop, model = model, seed = seed, loco = opts.loco }
 	trailers[id] = t
 	buildLoadExtras(t, extras)
 	model.Parent = DeliveryService.folder()
@@ -236,10 +275,15 @@ function DeliveryService.spawnTrailer(bayIndex, placed, extras, opts)
 	return t
 end
 
-function DeliveryService.request(player, itemId, qty)
+function DeliveryService.request(player, itemId, qty, mode)
 	local site = Services.Site.current
 	if not site then
 		return false, "No site loaded."
+	end
+	local kind = mode == "rail" and "rail" or "truck"
+	local vehicle = VEHICLES[kind]
+	if kind == "rail" and #(site.def.railSpots or {}) == 0 then
+		return false, "This site has no rail siding — deliveries come by truck."
 	end
 	local def = Registry.get(itemId or "")
 	if not def or not def.deliverable then
@@ -261,36 +305,40 @@ function DeliveryService.request(player, itemId, qty)
 	local delivered = 0
 	local trucks = 0
 	while #remaining > 0 do
-		local bay = DeliveryService.freeBay()
+		local bay = DeliveryService.freeBay(kind)
 		if not bay then
 			break
 		end
-		local placed, extras, leftovers = Packing.pack(remaining, D.BedLength * S, D.BedWidth * S, D.MaxStackHeight * S, { maxKg = D.TrailerMaxKg })
+		local placed, extras, leftovers = Packing.pack(remaining, vehicle.len * S, vehicle.width * S, vehicle.maxH * S, { maxKg = vehicle.maxKg })
 		if #placed == 0 then
 			if delivered == 0 then
-				return false, "That load won't fit on a flatbed."
+				return false, "That load won't fit on a " .. vehicle.name .. "."
 			end
 			break
 		end
-		DeliveryService.spawnTrailer(bay, placed, extras, {})
+		DeliveryService.spawnTrailer(bay, placed, extras, { kind = kind, loco = kind == "rail" and trucks == 0 })
 		delivered += #placed
 		trucks += 1
 		remaining = leftovers
 	end
 	if delivered == 0 then
+		if kind == "rail" then
+			return false, "The siding is full — unload and release the railcars first."
+		end
 		return false, "All unloading bays are occupied — unload and dismiss a truck first."
 	end
-	local msg = string.format("%d × %s on %d truck%s — arriving now.", delivered, def.name, trucks, trucks > 1 and "s" or "")
+	local msg = string.format("%d × %s on %d %s%s — arriving now.", delivered, def.name, trucks, vehicle.name, trucks > 1 and "s" or "")
 	if delivered < qty then
 		msg ..= string.format(" %d didn't fit: free a bay and order again.", qty - delivered)
 	end
-	fx("TruckArrive", site.def.bays[1].Position, nil)
+	fx("TruckArrive", spotsFor(kind)[1].Position, nil)
 	return true, msg
 end
 
 -- Starter loads for a fresh site (instant, no drive-in).
 function DeliveryService.spawnLoaded(bayIndex, requests)
-	local placed, extras = Packing.pack(requests, D.BedLength * S, D.BedWidth * S, D.MaxStackHeight * S, { maxKg = D.TrailerMaxKg })
+	local v = VEHICLES.truck
+	local placed, extras = Packing.pack(requests, v.len * S, v.width * S, v.maxH * S, { maxKg = v.maxKg })
 	return DeliveryService.spawnTrailer(bayIndex, placed, extras, { instant = true })
 end
 
@@ -394,9 +442,9 @@ function DeliveryService.dismiss(player, id)
 	return true, "Truck released."
 end
 
-function DeliveryService.handle(player, action, a, b)
+function DeliveryService.handle(player, action, a, b, c)
 	if action == "Request" then
-		return DeliveryService.request(player, a, b)
+		return DeliveryService.request(player, a, b, c)
 	elseif action == "Dismiss" then
 		return DeliveryService.dismiss(player, a)
 	end
@@ -415,7 +463,7 @@ function DeliveryService.serialize()
 			for _, s in ipairs(t.straps) do
 				table.insert(straps, { id = s.id, x = s.x, top = s.top, width = s.width, group = s.group, released = s.released })
 			end
-			table.insert(out, { id = t.id, bay = t.bay, seed = t.seed, dunnage = dun, straps = straps })
+			table.insert(out, { id = t.id, bay = t.bay, kind = t.kind, loco = t.loco, seed = t.seed, dunnage = dun, straps = straps })
 		end
 	end
 	return out
@@ -430,9 +478,9 @@ function DeliveryService.restore(list)
 				table.insert(dun, { cf = cf, size = Vector3.new(d.size[1], d.size[2], d.size[3]) })
 			end
 		end
-		local site = Services.Site.current
-		if data.bay and site.def.bays[data.bay] then
-			DeliveryService.spawnTrailer(data.bay, nil, { dunnage = dun, straps = data.straps or {} }, { instant = true, id = data.id, seed = data.seed })
+		local kind = data.kind or "truck"
+		if data.bay and spotsFor(kind)[data.bay] then
+			DeliveryService.spawnTrailer(data.bay, nil, { dunnage = dun, straps = data.straps or {} }, { instant = true, id = data.id, seed = data.seed, kind = kind, loco = data.loco })
 		end
 	end
 end

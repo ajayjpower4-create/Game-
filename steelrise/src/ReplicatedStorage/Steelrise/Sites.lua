@@ -29,6 +29,11 @@ local function bay(x, z, yawDeg)
 	return CFrame.new(m(x), 0, m(z)) * CFrame.Angles(0, math.rad(yawDeg or 0), 0)
 end
 
+-- Railcar spot on the siding: rail head height, deck along +X.
+local function railSpot(x, z)
+	return CFrame.new(m(x), m(0.4), m(z))
+end
+
 Sites.Order = { "EmptyLand", "Office1", "Office2", "Office3", "Office4", "Office5", "Apartment", "HighRise" }
 
 Sites.Defs = {
@@ -178,7 +183,7 @@ Sites.Defs = {
 		description = "A long, wide office between warehouses and the freight line. Ground-floor framing is incomplete and the metal wall cladding is only on part of the west and south walls.",
 		stageText = "Partial frame L1, metal walls started",
 		difficulty = "Standard",
-		equipment = { "Tower crane — 65 m jib, 10 t", "Flatbed deliveries (3 bays)", "Rail siding (phase 2)" },
+		equipment = { "Tower crane — 65 m jib, 10 t", "Flatbed deliveries (3 bays)", "Rail siding — 2 flatcar spots" },
 		style = "Industrial",
 		lotM = V(170, 0, 110),
 		lighting = { clock = 14.8, latitude = 42, haze = 2.0, density = 0.38, tint = Color3.fromRGB(255, 244, 226) },
@@ -188,6 +193,7 @@ Sites.Defs = {
 		spawnM = V(50, 0, -46),
 		laydownM = { center = V(-20, 0, -34), size = V(26, 0, 14) },
 		rail = true,
+		railSpots = { railSpot(-14, 63), railSpot(6, 63) },
 		grid = { originM = V(-27, 0, -9), nx = 6, nz = 2, bayX = 9.0, bayZ = 9.0, floorH = 4.5, floors = 2, column = "W14×90", beam = "W21×44", deck = true, braces = { { "x", 0, 0 }, { "x", 5, 0 }, { "x", 0, 2 }, { "x", 5, 2 } }, facade = "wall" },
 		stage = function(e)
 			if e.phase == "footing" then

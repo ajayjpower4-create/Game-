@@ -32,6 +32,8 @@ Impacts, Ambience, Footsteps, UI.
 | ImpactWrench | Tools | one-shot | bolt tightened (≈0.6 s burst) | cordless 1" impact wrench rattle |
 | HammerWedge | Tools | one-shot | wedge driven | hammer on steel |
 | WeldArc | Tools | one-shot | weld made | stick-weld crackle, ~1 s |
+| ConcretePour | Tools | one-shot | slab poured with the pump hose | pump surge + concrete slap, ~2 s |
+| PowerTrowel | Tools | one-shot | slab finishing mark trowelled | power trowel / float scrape |
 | TruckIdle | Machinery | loop, 3D | delivery truck present (louder while driving) | diesel idle |
 | TruckAirBrake | Machinery | one-shot | truck stops/leaves | air-brake release |
 | TruckReverseBeeper | Machinery | loop | reserved | back-up alarm |

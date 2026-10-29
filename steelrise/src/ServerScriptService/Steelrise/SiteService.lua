@@ -27,8 +27,48 @@ local function notifyAll(text, kind)
 	Remotes.get("Notify"):FireAllClients(text, kind or "info")
 end
 
+-- Typical mean wind by site exposure (m/s at crane height).
+local WIND_BASE = { Rural = 6, Suburban = 5, Downtown = 6, Waterfront = 9, Industrial = 7, CityCenter = 8, Residential = 5, HighRise = 9 }
+
 function SiteService.init(services)
 	Services = services
+	-- gusty wind: a mean that drifts slowly plus short gusts
+	task.spawn(function()
+		local mean, gust, dir = 6, 0, math.rad(40)
+		local rng = Random.new()
+		while true do
+			task.wait(1)
+			local site = SiteService.current
+			if site and site.folder.Parent then
+				local base = WIND_BASE[site.def.style] or 6
+				mean += (base - mean) * 0.02 + rng:NextNumber(-0.25, 0.25)
+				gust = gust * 0.8 + rng:NextNumber(-1, 1) * (rng:NextNumber() < 0.08 and 6 or 1.2)
+				dir += rng:NextNumber(-0.04, 0.04)
+				local speed = math.clamp(mean + gust, 0, 22)
+				site.folder:SetAttribute("WindSpeed", math.floor(speed * 10 + 0.5) / 10)
+				site.folder:SetAttribute("WindDir", dir)
+			end
+		end
+	end)
+end
+
+-- Sets the time of day and switches street lighting to match.
+function SiteService.setClock(clock)
+	local site = SiteService.current
+	if not site then
+		return false, "No site."
+	end
+	clock = math.clamp(tonumber(clock) or 12, 0, 24)
+	game:GetService("Lighting").ClockTime = clock
+	site.folder:SetAttribute("Clock", clock)
+	local night = WorldFactory.isNight(clock)
+	for _, d in ipairs(site.folder:GetDescendants()) do
+		if d:IsA("Light") and d.Name == "NightLight" then
+			d.Enabled = night
+		end
+	end
+	site.dirty = true
+	return true
 end
 
 local function newFolder(parent, name)
@@ -314,6 +354,12 @@ function SiteService.load(siteId, saveData, host)
 		end
 	end)
 
+	if saveData and saveData.clock then
+		step("time of day", SiteService.setClock, saveData.clock)
+	else
+		folder:SetAttribute("Clock", def.lighting.clock or 12)
+	end
+
 	local bp = saveData and saveData.blueprint or (def.grid and "Site" or nil)
 	step("blueprint", SiteService.setBlueprint, bp)
 	folder:SetAttribute("Ready", true)
@@ -428,6 +474,12 @@ function SiteService.handle(player, action, a, b, c)
 			Remotes.get("Notify"):FireClient(player, "Some of the site failed to build (the game still works): " .. table.concat(cur.buildFailures, " | "), "warn")
 		end
 		return true, nil, { siteId = cur.id, host = cur.host and cur.host.UserId or 0 }
+	elseif action == "TimeOfDay" then
+		local site = SiteService.current
+		if not site or (site.host and site.host ~= player) then
+			return false, "Only the host can change the time of day."
+		end
+		return SiteService.setClock(a)
 	elseif action == "Blueprint" then
 		local site = SiteService.current
 		if not site or site.host ~= player then

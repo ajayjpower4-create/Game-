@@ -198,8 +198,10 @@ local function updateAmbience(dt)
 	local cam = workspace.CurrentCamera
 	local height = cam and cam.CFrame.Position.Y or 0
 	local high = math.clamp((height - 30) / 120, 0, 1)
-	ambience.wind:set(playing and (0.6 + 0.4 * (1 - high)) or 0.3)
-	ambience.windHigh:set(playing and high or 0)
+	local windMs = State.site and State.site:GetAttribute("WindSpeed") or 6
+	local gust = math.clamp(windMs / 10, 0.3, 1.4)
+	ambience.wind:set(playing and (0.6 + 0.4 * (1 - high)) * gust or 0.3)
+	ambience.windHigh:set(playing and high * gust or 0)
 	ambience.site:set(playing and 0.8 or 0.4)
 	if ambience.city then
 		ambience.city:set(playing and 0.8 or 0.4)

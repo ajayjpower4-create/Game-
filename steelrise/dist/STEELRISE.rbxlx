@@ -527,11 +527,11 @@ gui:Destroy()
 </Properties>
 </Item>
 </Item>
-<Item class="ReplicatedStorage" referent="RBX0000000E">
+<Item class="ReplicatedStorage" referent="RBX0000000F">
 <Properties>
 <string name="Name">ReplicatedStorage</string>
 </Properties>
-<Item class="Folder" referent="RBX0000000D">
+<Item class="Folder" referent="RBX0000000E">
 <Properties>
 <string name="Name">Steelrise</string>
 </Properties>
@@ -820,6 +820,9 @@ function World:raycast(origin, dir, exclude)
 			origin = result.Position + dir.Unit * 0.01
 			dir = dir.Unit * remaining
 			result = workspace:Raycast(origin, dir, params)
+		end
+		if guard >= 8 then
+			return nil
 		end
 		return result
 	end
@@ -1325,11 +1328,19 @@ function BuildRules.solve(world, def, aim, opts)
 				end
 			end
 			if bestNode then
-				local A, B = Config.Geo.ScaffoldBayLong * S, Config.Geo.ScaffoldBayShort * S
 				local dx, dz = p.X - bestNode.pos.X, p.Z - bestNode.pos.Z
+				-- snap each axis to the nearest whole number of any standard bay length
 				local function snapAxis(v)
-					local options = { Util.round(v, A), Util.round(v, B) }
-					return math.abs(options[1] - v) <= math.abs(options[2] - v) and options[1] or options[2]
+					local best, bestErr = 0, math.huge
+					for _, bayM in ipairs(Config.Geo.ScaffoldBays) do
+						local L = bayM * S
+						local cand = Util.round(v, L)
+						local err = math.abs(cand - v)
+						if err < bestErr then
+							best, bestErr = cand, err
+						end
+					end
+					return best
 				end
 				p = Vector3.new(bestNode.pos.X + snapAxis(dx), p.Y, bestNode.pos.Z + snapAxis(dz))
 				snapped = true
@@ -1366,7 +1377,8 @@ function BuildRules.solveSlab(world, aim)
 	local deckCf = rec.cf
 	local s = Vector3.new(deckCf.XVector.X, 0, deckCf.XVector.Z).Unit
 	local probe = deckCf * Vector3.new(rec.def.size.X / 2 - 0.09, 0.6, 0)
-	local hit = world:raycast(probe, Vector3.new(0, -1.6, 0))
+	-- look past the sheet itself to the beam flange it bears on
+	local hit = world:raycast(probe, Vector3.new(0, -1.6, 0), { rec.model })
 	local beam = hit and world:record(hit.Instance)
 	if not beam or not beam.def.tags.Beam then
 		return nil, nil, "That deck sheet isn't bearing on a beam."
@@ -1562,13 +1574,14 @@ Config.Geo = {
 	FootingTop = 0.80, -- top of a precast footing above grade
 	ScaffoldBayLong = 2.57,
 	ScaffoldBayShort = 1.09,
+	ScaffoldBays = { 0.73, 1.09, 1.57, 2.07, 2.57, 3.07 }, -- standard ring-lock bay lengths
 	ScaffoldLift = 2.0,
 	ScaffoldJack = 0.30, -- base-jack node height above the ground
 	SnapTolerance = 0.08, -- studs
 }
 
-Config.Bays = { 4.5, 6.0, 7.5, 9.0 }
-Config.FloorHeights = { 3.6, 4.2, 4.5 }
+Config.Bays = { 3.0, 4.5, 6.0, 7.5, 9.0 }
+Config.FloorHeights = { 3.0, 3.6, 4.2, 4.5, 4.8 }
 
 Config.Grid = {
 	Ground = 0.5, -- metres, default ground grid
@@ -1601,6 +1614,9 @@ Config.Crane = {
 	StreamRate = 15, -- Hz, operator -> server
 	AttributeRate = 12, -- Hz, server -> everyone
 	RemoteRange = 600, -- studs from the mast for the radio remote
+	WindWarnMs = 12, -- crane panel warning
+	WindStopMs = 15, -- no new lifts above this
+	WindForce = 0.0035, -- pendulum push per (m/s)² at full exposure
 }
 
 -- Capacity chart: full capacity inside FullRadius, then falls off with the
@@ -1966,18 +1982,24 @@ end
 ---------------------------------------------------------------------------
 
 local BEAMS = {
+	{ name = "W8×18", d = 0.207, bf = 0.133, tf = 0.0084, tw = 0.0058, kgm = 26.8 },
 	{ name = "W10×26", d = 0.262, bf = 0.147, tf = 0.0112, tw = 0.0066, kgm = 38.7 },
 	{ name = "W12×26", d = 0.310, bf = 0.165, tf = 0.0097, tw = 0.0058, kgm = 38.7 },
+	{ name = "W14×22", d = 0.349, bf = 0.127, tf = 0.0085, tw = 0.0058, kgm = 32.7 },
 	{ name = "W16×31", d = 0.403, bf = 0.140, tf = 0.0112, tw = 0.0070, kgm = 46.1 },
 	{ name = "W18×35", d = 0.450, bf = 0.152, tf = 0.0108, tw = 0.0076, kgm = 52.1 },
 	{ name = "W21×44", d = 0.526, bf = 0.165, tf = 0.0114, tw = 0.0089, kgm = 65.5 },
 	{ name = "W24×55", d = 0.599, bf = 0.178, tf = 0.0128, tw = 0.0100, kgm = 81.8 },
+	{ name = "W27×84", d = 0.678, bf = 0.253, tf = 0.0163, tw = 0.0117, kgm = 125.0 },
+	{ name = "W30×99", d = 0.753, bf = 0.266, tf = 0.0170, tw = 0.0132, kgm = 147.0 },
 }
 
 local COLUMNS = {
+	{ name = "W8×31", d = 0.203, bf = 0.203, tf = 0.0110, tw = 0.0072, kgm = 46.1 },
 	{ name = "W10×49", d = 0.253, bf = 0.254, tf = 0.0142, tw = 0.0086, kgm = 72.9 },
 	{ name = "W12×65", d = 0.308, bf = 0.305, tf = 0.0154, tw = 0.0099, kgm = 96.7 },
 	{ name = "W14×90", d = 0.356, bf = 0.369, tf = 0.0180, tw = 0.0112, kgm = 134.0 },
+	{ name = "W14×120", d = 0.368, bf = 0.373, tf = 0.0239, tw = 0.0150, kgm = 179.0 },
 }
 
 Registry.BeamProfiles = BEAMS
@@ -2372,7 +2394,7 @@ end
 -- Footings
 ---------------------------------------------------------------------------
 
-for _, size in ipairs({ 1.5, 2.0 }) do
+for _, size in ipairs({ 1.5, 2.0, 2.5, 3.0 }) do
 	add({
 		id = "FT-PRECAST-" .. idLen(size),
 		name = string.format("Precast Pad Footing %.1f m with Anchor Rods", size),
@@ -2435,7 +2457,7 @@ add({
 	proxyColor = GALV,
 })
 
-for _, H in ipairs({ 2.0, 1.0 }) do
+for _, H in ipairs({ 2.0, 1.0, 0.5, 1.5, 3.0 }) do
 	local rosettes = {}
 	local sockets = { { type = "ScafStdTop", cf = CF(0, H, 0) } }
 	for k = 1, math.floor(H / 0.5 + 0.5) do
@@ -2518,7 +2540,19 @@ ledgerDef("SC-TOE-1090", "Scaffold Toe Board 1.09 m", G.ScaffoldBayShort, "ScafT
 		b:box("Board", V(len - 0.1, 0.15, 0.025), CF(0, 0.135, 0), Color3.fromRGB(176, 140, 92), M.WoodPlanks)
 	end, { "Scaffold", "ScaffoldToeBoard" })
 
-for _, spec in ipairs({ { G.ScaffoldBayLong, "2570" }, { G.ScaffoldBayShort, "1090" } }) do
+-- the other standard ring-lock bay lengths
+for _, len in ipairs({ 0.73, 1.57, 2.07, 3.07 }) do
+	local tag = tostring(math.floor(len * 1000 + 0.5))
+	ledgerDef("SC-LEDGER-" .. tag, string.format("Scaffold Ledger %.2f m", len), len, "ScafLedgerEnd",
+		string.format("Horizontal ring-lock ledger for a %.2f m bay; wedges hammered into the rosettes.", len))
+	ledgerDef("SC-TOE-" .. tag, string.format("Scaffold Toe Board %.2f m", len), len, "ScafToeEnd",
+		string.format("Timber toe board for a %.2f m bay edge.", len),
+		function(b, l)
+			b:box("Board", V(l - 0.1, 0.15, 0.025), CF(0, 0.135, 0), Color3.fromRGB(176, 140, 92), M.WoodPlanks)
+		end, { "Scaffold", "ScaffoldToeBoard" })
+end
+
+for _, spec in ipairs({ { G.ScaffoldBayLong, "2570" }, { G.ScaffoldBayShort, "1090" }, { 2.07, "2070" }, { 3.07, "3070" } }) do
 	local bay, tag = spec[1], spec[2]
 	local Ld = math.sqrt(bay * bay + G.ScaffoldLift * G.ScaffoldLift)
 	add({
@@ -2551,7 +2585,7 @@ for _, spec in ipairs({ { G.ScaffoldBayLong, "2570" }, { G.ScaffoldBayShort, "10
 	})
 end
 
-for _, spec in ipairs({ { G.ScaffoldBayLong, G.ScaffoldBayShort, "2570" }, { G.ScaffoldBayShort, G.ScaffoldBayShort, "1090" } }) do
+for _, spec in ipairs({ { G.ScaffoldBayLong, G.ScaffoldBayShort, "2570" }, { G.ScaffoldBayShort, G.ScaffoldBayShort, "1090" }, { 2.07, G.ScaffoldBayShort, "2070" }, { 3.07, G.ScaffoldBayShort, "3070" } }) do
 	local a, w, tag = spec[1], spec[2], spec[3]
 	local planks = math.max(1, math.floor((w - 0.05) / 0.32))
 	local deckW = planks * 0.32
@@ -3275,6 +3309,8 @@ require(script.Parent.ItemsBuilding)({
 	panelPlugs = panelPlugs,
 	panelFasteners = panelFasteners,
 })
+
+require(script.Parent.ItemsSite)({ add = add, CF = CF, V = V, C = C, M = M })
 
 ---------------------------------------------------------------------------
 -- Tools (hotbar). Models are used for the hand-held visual and catalog.
@@ -4054,6 +4090,649 @@ end
 </Item>
 <Item class="ModuleScript" referent="RBX00000009">
 <Properties>
+<string name="Name">ItemsSite</string>
+<ProtectedString name="Source"><![CDATA[-- Phase 4 catalog content: rigging gear, site machinery, safety equipment and
+-- site furnishings. Each has its own model and behaviour (Rest placement,
+-- carry/crane handling by weight; equipment marked functional can be
+-- switched on with F).
+
+return function(R)
+	local add, CF, V = R.add, R.CF, R.V
+	local C, M = R.C, R.M
+
+	local YEL = C.CraneYellow
+	local DARK = Color3.fromRGB(40, 42, 46)
+	local RUBBER = C.Rubber
+	local GLASS = Color3.fromRGB(40, 52, 60)
+
+	local function prop(def)
+		def.kind = "Rest"
+		def.originBottom = true
+		def.rest = def.rest or { grid = 0.05 }
+		def.allowFree = true
+		def.class = def.class or "Decorative"
+		def.tags = def.tags or { "Prop" }
+		return add(def)
+	end
+
+	local function wheelsAt(b, xs, zs, dia, width)
+		for _, x in ipairs(xs) do
+			for _, z in ipairs(zs) do
+				b:cylX("Wheel", width, dia, CF(x, dia / 2, z) * CFrame.Angles(0, math.pi / 2, 0), RUBBER, M.SmoothPlastic, { ns = true })
+			end
+		end
+	end
+
+	-------------------------------------------------------------------------
+	-- Rigging
+	-------------------------------------------------------------------------
+	for _, L in ipairs({ 2, 6, 8 }) do
+		prop({
+			id = "RG-SPREADER-" .. L,
+			name = string.format("Spreader Bar %d m", L),
+			category = "Connections & Rigging",
+			class = "Equipment",
+			tags = { "Rigging" },
+			weightKg = 45 * L + 20,
+			sizeM = V(L, 0.35, 0.3),
+			description = string.format("Fabricated %d m spreader beam with end lugs for long or flexible lifts. Store it in the laydown yard.", L),
+			build = function(b)
+				b:hss("Bar", L - 0.2, 0.22, 0.01, CF(0, 0.22, 0), YEL)
+				for _, sx in ipairs({ -1, 1 }) do
+					b:box("Lug", V(0.14, 0.14, 0.03), CF(sx * (L / 2 - 0.1), 0.36, 0), YEL)
+					b:box("Foot", V(0.1, 0.11, 0.3), CF(sx * (L / 2 - 0.4), 0.055, 0), C.Timber, M.Wood)
+				end
+			end,
+		})
+	end
+	for _, s in ipairs({ { "12", 0.18, 6 }, { "25", 0.28, 18 } }) do
+		prop({
+			id = "RG-SHACKLE-" .. s[1] .. "T",
+			name = "Bow Shackle " .. s[1] .. " t",
+			category = "Connections & Rigging",
+			class = "Equipment",
+			tags = { "Rigging" },
+			weightKg = s[3],
+			sizeM = V(s[2], s[2] * 1.4, 0.06),
+			description = "Galvanised bow shackle with safety bolt, nut and cotter pin for connecting slings to lifting points.",
+			build = function(b)
+				local h = s[2]
+				b:box("BowL", V(0.035, h, 0.035), CF(-h / 3, h * 0.7, 0), C.Galvanized)
+				b:box("BowR", V(0.035, h, 0.035), CF(h / 3, h * 0.7, 0), C.Galvanized)
+				b:box("BowTop", V(h * 0.75, 0.035, 0.035), CF(0, h * 1.2, 0), C.Galvanized)
+				b:cylX("Pin", h * 0.95, 0.04, CF(0, 0.03, 0), Color3.fromRGB(200, 60, 40))
+			end,
+		})
+	end
+	prop({
+		id = "RG-CHAINSLING-4L",
+		name = "Four-Leg Chain Sling 7 t",
+		category = "Connections & Rigging",
+		class = "Equipment",
+		tags = { "Rigging" },
+		weightKg = 62,
+		sizeM = V(0.9, 0.25, 0.9),
+		description = "Grade 80 chain sling with master link and four hooks, coiled on the ground ready for the next pick.",
+		build = function(b)
+			b:cylX("Coil", 0.18, 0.75, CF(0, 0.09, 0) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(70, 70, 72))
+			b:box("MasterLink", V(0.25, 0.04, 0.12), CF(0, 0.2, 0), DARK)
+			for k = 0, 3 do
+				local a = k * math.pi / 2
+				b:box("Hook", V(0.08, 0.06, 0.12), CF(math.cos(a) * 0.38, 0.05, math.sin(a) * 0.38), YEL)
+			end
+		end,
+	})
+	prop({
+		id = "RG-WIRESLINGS",
+		name = "Wire Rope Sling Set (rack)",
+		category = "Connections & Rigging",
+		class = "Equipment",
+		tags = { "Rigging" },
+		weightKg = 48,
+		sizeM = V(1.2, 1.6, 0.5),
+		description = "Rigging rack with tagged wire-rope slings of several lengths. Inspect before every lift.",
+		build = function(b)
+			b:box("Post", V(0.08, 1.6, 0.08), CF(-0.55, 0.8, 0), YEL)
+			b:box("Post", V(0.08, 1.6, 0.08), CF(0.55, 0.8, 0), YEL)
+			b:box("Rail", V(1.2, 0.08, 0.08), CF(0, 1.55, 0), YEL)
+			b:box("Foot", V(1.2, 0.06, 0.5), CF(0, 0.03, 0), DARK)
+			for k = 0, 4 do
+				b:box("Sling", V(0.04, 1.2, 0.04), CF(-0.4 + k * 0.2, 0.95, 0.06), Color3.fromRGB(90, 90, 94), M.Metal, { nc = true })
+			end
+		end,
+	})
+	for _, bk in ipairs({ { "1M3", 1.0, 480 }, { "2M3", 2.0, 760 } }) do
+		local sz = bk[2] ^ (1 / 3)
+		prop({
+			id = "RG-BUCKET-" .. bk[1],
+			name = string.format("Concrete Bucket %.0f m³ (crane)", bk[2]),
+			category = "Connections & Rigging",
+			class = "Equipment",
+			tags = { "Rigging", "Concrete" },
+			weightKg = bk[3],
+			sizeM = V(sz + 0.2, sz + 0.6, sz + 0.2),
+			description = "Crane-hung concrete bucket with a hand-lever discharge gate, for pours the pump can't reach.",
+			build = function(b)
+				b:cylX("Body", sz, sz + 0.1, CF(0, 0.6 + sz / 2, 0) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(110, 112, 116))
+				b:box("Cone", V(sz * 0.6, 0.5, sz * 0.6), CF(0, 0.35, 0), Color3.fromRGB(100, 102, 106))
+				b:box("Gate", V(0.3, 0.1, 0.3), CF(0, 0.08, 0), YEL)
+				b:box("Bail", V(sz + 0.2, 0.08, 0.08), CF(0, sz + 0.7, 0), YEL)
+				for _, sx in ipairs({ -1, 1 }) do
+					b:box("Leg", V(0.08, 0.6, 0.08), CF(sx * sz * 0.4, 0.3, sx * sz * 0.4), DARK)
+				end
+			end,
+			liftPoints = { V(0, sz + 0.75, 0) },
+		})
+	end
+	prop({
+		id = "RG-MANBASKET",
+		name = "Crane Personnel Basket (2 person)",
+		category = "Connections & Rigging",
+		class = "Equipment",
+		tags = { "Rigging", "Safety" },
+		weightKg = 240,
+		sizeM = V(1.6, 2.6, 1.2),
+		description = "Engineered man-riding basket with four-leg bridle, gate and anchor points.",
+		build = function(b)
+			b:box("Floor", V(1.6, 0.08, 1.2), CF(0, 0.04, 0), C.Galvanized, M.DiamondPlate)
+			for _, sx in ipairs({ -0.78, 0.78 }) do
+				for _, sz in ipairs({ -0.58, 0.58 }) do
+					b:box("Post", V(0.06, 1.1, 0.06), CF(sx, 0.6, sz), YEL)
+					b:bar("Bridle", V(sx, 1.15, sz), V(0, 2.55, 0), 0.03, 0.03, Color3.fromRGB(90, 90, 94), M.Metal, { nc = true })
+				end
+			end
+			b:box("Rail", V(1.6, 0.06, 0.06), CF(0, 1.15, 0.58), YEL)
+			b:box("Rail", V(1.6, 0.06, 0.06), CF(0, 1.15, -0.58), YEL)
+			b:box("Mesh", V(1.6, 1.0, 0.02), CF(0, 0.6, 0.6), C.Galvanized, M.DiamondPlate, { tr = 0.5, nc = true })
+		end,
+		liftPoints = { V(0, 2.6, 0) },
+	})
+
+	-------------------------------------------------------------------------
+	-- Machinery (static equipment and parked plant)
+	-------------------------------------------------------------------------
+	prop({
+		id = "MC-MINIEX",
+		name = "Mini Excavator 3 t",
+		category = "Machinery",
+		class = "Decorative",
+		tags = { "Machine" },
+		weightKg = 3200,
+		sizeM = V(3.6, 2.5, 1.6),
+		description = "Parked compact excavator with a digging bucket. Crane it into place or leave it in the yard.",
+		build = function(b)
+			b:box("TrackL", V(2.0, 0.4, 0.3), CF(0, 0.2, -0.6), RUBBER, M.SmoothPlastic)
+			b:box("TrackR", V(2.0, 0.4, 0.3), CF(0, 0.2, 0.6), RUBBER, M.SmoothPlastic)
+			b:box("Body", V(1.6, 0.7, 1.5), CF(-0.1, 0.8, 0), YEL)
+			b:box("Cab", V(0.8, 1.1, 0.8), CF(0.2, 1.7, 0.3), YEL)
+			b:box("Glass", V(0.82, 0.7, 0.82), CF(0.2, 1.85, 0.3), GLASS, M.Glass, { tr = 0.3, nc = true })
+			b:bar("Boom", V(0.7, 1.2, -0.3), V(1.6, 2.3, -0.3), 0.18, 0.18, YEL)
+			b:bar("Stick", V(1.6, 2.3, -0.3), V(2.1, 0.8, -0.3), 0.14, 0.14, YEL)
+			b:box("Bucket", V(0.45, 0.4, 0.55), CF(2.1, 0.45, -0.3), DARK)
+			b:box("Blade", V(0.1, 0.35, 1.5), CF(-1.15, 0.25, 0), DARK)
+		end,
+	})
+	prop({
+		id = "MC-SKIDSTEER",
+		name = "Skid Steer Loader",
+		category = "Machinery",
+		class = "Decorative",
+		tags = { "Machine" },
+		weightKg = 2900,
+		sizeM = V(3.2, 2.0, 1.7),
+		description = "Wheeled skid steer with a bucket — site clean-up and gravel moves.",
+		build = function(b)
+			wheelsAt(b, { -0.6, 0.6 }, { -0.75, 0.75 }, 0.75, 0.3)
+			b:box("Body", V(1.8, 0.9, 1.2), CF(0, 0.85, 0), YEL)
+			b:box("Cab", V(1.0, 0.9, 1.1), CF(0.1, 1.6, 0), DARK, M.Metal)
+			b:box("Glass", V(0.02, 0.7, 0.9), CF(0.62, 1.6, 0), GLASS, M.Glass, { tr = 0.3, nc = true })
+			b:box("Arm", V(1.6, 0.12, 0.12), CF(0.3, 1.5, 0.65), YEL)
+			b:box("Arm", V(1.6, 0.12, 0.12), CF(0.3, 1.5, -0.65), YEL)
+			b:box("Bucket", V(0.5, 0.5, 1.7), CF(1.35, 0.35, 0), DARK)
+		end,
+	})
+	prop({
+		id = "MC-SCISSOR",
+		name = "Electric Scissor Lift 8 m",
+		category = "Machinery",
+		class = "Decorative",
+		tags = { "Machine" },
+		weightKg = 2200,
+		sizeM = V(2.5, 2.3, 1.2),
+		description = "Slab scissor lift (stowed) for ceiling and MEP work on finished floors.",
+		build = function(b)
+			wheelsAt(b, { -0.9, 0.9 }, { -0.5, 0.5 }, 0.38, 0.15)
+			b:box("Chassis", V(2.4, 0.5, 1.1), CF(0, 0.45, 0), Color3.fromRGB(32, 92, 168))
+			for k = 0, 2 do
+				b:bar("Scissor", V(-0.9, 0.7 + k * 0.4, 0.5), V(0.9, 1.1 + k * 0.4, 0.5), 0.08, 0.08, YEL, M.Metal, { nc = true })
+				b:bar("Scissor", V(0.9, 0.7 + k * 0.4, 0.5), V(-0.9, 1.1 + k * 0.4, 0.5), 0.08, 0.08, YEL, M.Metal, { nc = true })
+			end
+			b:box("Deck", V(2.5, 0.1, 1.2), CF(0, 1.95, 0), Color3.fromRGB(32, 92, 168))
+			b:box("Rail", V(2.5, 0.05, 0.05), CF(0, 2.3, 0.58), YEL, M.Metal, { nc = true })
+			b:box("Rail", V(2.5, 0.05, 0.05), CF(0, 2.3, -0.58), YEL, M.Metal, { nc = true })
+		end,
+	})
+	prop({
+		id = "MC-TELEHANDLER",
+		name = "Telehandler 4 t / 17 m",
+		category = "Machinery",
+		class = "Decorative",
+		tags = { "Machine" },
+		weightKg = 11000,
+		sizeM = V(6.0, 2.5, 2.4),
+		description = "Parked telescopic handler with pallet forks. (Driving it is planned for a later update.)",
+		build = function(b)
+			wheelsAt(b, { -1.6, 1.6 }, { -1.0, 1.0 }, 1.2, 0.5)
+			b:box("Frame", V(4.6, 0.7, 1.6), CF(0, 0.95, 0), YEL)
+			b:box("Cab", V(1.4, 1.4, 0.9), CF(0.2, 1.9, -0.75), DARK)
+			b:box("Glass", V(1.2, 1.0, 0.02), CF(0.2, 2.0, -1.21), GLASS, M.Glass, { tr = 0.3, nc = true })
+			b:bar("Boom", V(-1.8, 2.0, 0.3), V(2.6, 1.3, 0.3), 0.45, 0.45, YEL)
+			b:box("Carriage", V(0.2, 0.9, 1.2), CF(2.85, 0.9, 0.3), DARK)
+			b:box("Fork", V(1.1, 0.05, 0.12), CF(3.4, 0.5, -0.05), DARK)
+			b:box("Fork", V(1.1, 0.05, 0.12), CF(3.4, 0.5, 0.65), DARK)
+		end,
+	})
+	prop({
+		id = "MC-FORKLIFT",
+		name = "Rough-Terrain Forklift",
+		category = "Machinery",
+		class = "Decorative",
+		tags = { "Machine" },
+		weightKg = 6000,
+		sizeM = V(4.2, 2.6, 2.1),
+		description = "Parked rough-terrain forklift with a tall mast.",
+		build = function(b)
+			wheelsAt(b, { -1.1, 1.0 }, { -0.85, 0.85 }, 1.0, 0.4)
+			b:box("Body", V(3.0, 0.9, 1.6), CF(-0.2, 1.0, 0), Color3.fromRGB(220, 110, 30))
+			b:box("Cage", V(1.2, 1.2, 1.2), CF(-0.3, 2.0, 0), DARK, M.Metal, { tr = 0.2 })
+			b:box("Mast", V(0.2, 2.6, 1.0), CF(1.4, 1.3, 0), DARK)
+			b:box("Fork", V(1.1, 0.06, 0.12), CF(2.0, 0.3, -0.35), DARK)
+			b:box("Fork", V(1.1, 0.06, 0.12), CF(2.0, 0.3, 0.35), DARK)
+		end,
+	})
+	prop({
+		id = "MC-MIXERTRUCK",
+		name = "Ready-Mix Concrete Truck",
+		category = "Machinery",
+		class = "Decorative",
+		tags = { "Machine" },
+		weightKg = 12000,
+		sizeM = V(9.0, 3.7, 2.5),
+		description = "Parked transit mixer with a rotating drum and chute. Pours themselves are made with the pump hose.",
+		build = function(b)
+			wheelsAt(b, { -3.4, 1.4, 2.8 }, { -1.0, 1.0 }, 1.05, 0.35)
+			b:box("Frame", V(8.5, 0.4, 1.0), CF(0, 0.9, 0), DARK)
+			b:box("Cab", V(1.9, 1.9, 2.4), CF(-3.4, 2.0, 0), Color3.fromRGB(236, 236, 232))
+			b:box("Windshield", V(0.02, 0.8, 2.1), CF(-4.36, 2.4, 0), GLASS, M.Glass, { nc = true })
+			b:cylX("Drum", 4.6, 2.2, CF(1.2, 2.4, 0) * CFrame.Angles(0, 0, math.rad(12)), Color3.fromRGB(230, 200, 60))
+			b:box("Chute", V(1.2, 0.12, 0.4), CF(4.1, 2.0, 0) * CFrame.Angles(0, 0, math.rad(-25)), DARK)
+		end,
+	})
+	prop({
+		id = "MC-COMPRESSOR",
+		name = "Towable Air Compressor 185 cfm",
+		category = "Machinery",
+		class = "Equipment",
+		functional = "Engine",
+		tags = { "Machine" },
+		weightKg = 1100,
+		sizeM = V(3.4, 1.4, 1.6),
+		description = "Diesel air compressor for pneumatic tools. F to start or stop.",
+		build = function(b)
+			wheelsAt(b, { 0.2 }, { -0.75, 0.75 }, 0.6, 0.2)
+			b:box("Canopy", V(2.0, 1.0, 1.3), CF(0.3, 0.9, 0), YEL)
+			b:box("Drawbar", V(1.2, 0.08, 0.08), CF(-1.2, 0.5, 0), DARK)
+			b:box("Panel", V(0.02, 0.4, 0.6), CF(1.31, 1.0, 0), DARK, M.SmoothPlastic, { nc = true })
+		end,
+	})
+	prop({
+		id = "MC-COMPACTOR",
+		name = "Plate Compactor",
+		category = "Machinery",
+		class = "Decorative",
+		tags = { "Machine" },
+		weightKg = 88,
+		sizeM = V(1.0, 1.0, 0.5),
+		description = "Vibratory plate for compacting gravel sub-base.",
+		build = function(b)
+			b:box("Plate", V(0.6, 0.08, 0.5), CF(0, 0.04, 0), DARK)
+			b:box("Engine", V(0.4, 0.35, 0.35), CF(0, 0.3, 0), Color3.fromRGB(200, 60, 30))
+			b:bar("Handle", V(-0.2, 0.4, 0), V(-0.55, 0.95, 0), 0.04, 0.04, DARK)
+		end,
+	})
+	prop({
+		id = "MC-SAW",
+		name = "Walk-Behind Concrete Saw",
+		category = "Machinery",
+		class = "Decorative",
+		tags = { "Machine" },
+		weightKg = 120,
+		sizeM = V(1.4, 1.0, 0.6),
+		description = "Flat saw for cutting control joints in cured slabs.",
+		build = function(b)
+			wheelsAt(b, { -0.4, 0.4 }, { -0.25, 0.25 }, 0.25, 0.06)
+			b:box("Frame", V(1.0, 0.25, 0.5), CF(0, 0.3, 0), Color3.fromRGB(220, 110, 30))
+			b:cylX("Blade", 0.02, 0.5, CF(0.5, 0.3, 0.28) * CFrame.Angles(0, math.pi / 2, 0), C.Galvanized)
+			b:bar("Handle", V(-0.4, 0.45, 0), V(-0.75, 0.95, 0), 0.04, 0.04, DARK)
+		end,
+	})
+
+	-------------------------------------------------------------------------
+	-- Site safety
+	-------------------------------------------------------------------------
+	prop({
+		id = "SF-EDGEGUARD-25",
+		name = "Edge Protection Barrier 2.5 m",
+		category = "Site Safety",
+		tags = { "Safety", "Fence" },
+		weightKg = 22,
+		sizeM = V(2.5, 1.2, 0.5),
+		description = "Free-standing mesh edge barrier for open slab edges and stair openings. Solid — you can't walk through it.",
+		build = function(b)
+			b:box("Mesh", V(2.4, 1.0, 0.02), CF(0, 0.65, 0), C.Galvanized, M.DiamondPlate, { tr = 0.5 })
+			b:box("TopRail", V(2.5, 0.05, 0.05), CF(0, 1.17, 0), C.Safety)
+			for _, sx in ipairs({ -1.2, 1.2 }) do
+				b:box("Post", V(0.05, 1.2, 0.05), CF(sx, 0.6, 0), C.Safety)
+				b:box("Foot", V(0.2, 0.08, 0.5), CF(sx, 0.04, 0), DARK)
+			end
+		end,
+	})
+	prop({
+		id = "SF-HARDHAT",
+		name = "PPE Station (hard hats & vests)",
+		category = "Site Safety",
+		tags = { "Safety" },
+		weightKg = 30,
+		sizeM = V(1.2, 1.8, 0.4),
+		description = "Visitor PPE rack with hard hats, hi-vis vests and safety glasses.",
+		build = function(b)
+			b:box("Board", V(1.2, 1.2, 0.04), CF(0, 1.1, 0.15), C.OffWhite, M.SmoothPlastic)
+			b:box("Legs", V(1.1, 0.5, 0.05), CF(0, 0.25, 0.15), DARK)
+			for k = 0, 2 do
+				b:box("Hat", V(0.25, 0.14, 0.28), CF(-0.35 + k * 0.35, 1.4, 0.02), k == 1 and C.OffWhite or C.Safety, M.SmoothPlastic, { nc = true })
+				b:box("Vest", V(0.25, 0.35, 0.02), CF(-0.35 + k * 0.35, 0.95, 0.11), C.HiVis, M.Fabric, { nc = true })
+			end
+		end,
+	})
+	prop({
+		id = "SF-EYEWASH",
+		name = "Emergency Shower & Eyewash",
+		category = "Site Safety",
+		tags = { "Safety" },
+		weightKg = 45,
+		sizeM = V(0.8, 2.3, 0.8),
+		description = "Self-contained emergency drench shower with eyewash bowl.",
+		build = function(b)
+			b:box("Base", V(0.6, 0.05, 0.6), CF(0, 0.025, 0), C.Safety)
+			b:cylY("Pipe", 2.2, 0.06, V(0, 1.1, 0), C.HiVis)
+			b:box("Arm", V(0.6, 0.05, 0.05), CF(0.3, 2.2, 0), C.HiVis)
+			b:cylY("Head", 0.08, 0.3, V(0.55, 2.15, 0), C.HiVis)
+			b:cylY("Bowl", 0.08, 0.3, V(0.2, 1.0, 0), C.HiVis)
+		end,
+	})
+	prop({
+		id = "SF-WARNLIGHT",
+		name = "Amber Warning Beacon on Stand",
+		category = "Site Safety",
+		class = "Equipment",
+		functional = "Light",
+		tags = { "Safety" },
+		weightKg = 8,
+		sizeM = V(0.4, 1.5, 0.4),
+		description = "Battery amber beacon for crane exclusion zones. F to switch on.",
+		build = function(b)
+			b:box("Foot", V(0.4, 0.05, 0.4), CF(0, 0.025, 0), DARK)
+			b:box("Pole", V(0.04, 1.3, 0.04), CF(0, 0.7, 0), DARK)
+			local lamp = b:box("Lamp1", V(0.18, 0.2, 0.18), CF(0, 1.42, 0), Color3.fromRGB(255, 170, 20), M.SmoothPlastic)
+			local lens = b:box("Lens1", V(0.16, 0.16, 0.16), CF(0, 1.42, 0), Color3.fromRGB(255, 170, 20), M.Glass, { nc = true })
+			lens:SetAttribute("Lens", true)
+			local light = Instance.new("PointLight")
+			light.Name = "Flood"
+			light.Range = 12
+			light.Brightness = 2
+			light.Color = Color3.fromRGB(255, 170, 40)
+			light.Enabled = false
+			light.Parent = lamp
+		end,
+	})
+	prop({
+		id = "SF-SPILLKIT",
+		name = "Spill Kit Bin",
+		category = "Site Safety",
+		tags = { "Safety" },
+		weightKg = 25,
+		sizeM = V(0.7, 0.9, 0.6),
+		description = "Wheelie bin of absorbent pads and booms for fuel and hydraulic spills.",
+		build = function(b)
+			b:box("Bin", V(0.7, 0.85, 0.6), CF(0, 0.45, 0), Color3.fromRGB(230, 200, 30), M.SmoothPlastic)
+			b:box("Lid", V(0.72, 0.05, 0.62), CF(0, 0.9, 0), Color3.fromRGB(200, 170, 20), M.SmoothPlastic)
+		end,
+	})
+	prop({
+		id = "SF-MUSTER",
+		name = "Muster Point Sign",
+		category = "Site Safety",
+		tags = { "Safety" },
+		weightKg = 12,
+		sizeM = V(0.9, 2.2, 0.4),
+		description = "Green emergency assembly-point sign on a post.",
+		build = function(b)
+			local board = b:box("Board", V(0.9, 0.7, 0.03), CF(0, 1.85, 0), Color3.fromRGB(0, 130, 70), M.SmoothPlastic)
+			b:box("Post", V(0.06, 1.5, 0.06), CF(0, 0.75, 0.03), DARK)
+			b:box("Foot", V(0.5, 0.06, 0.4), CF(0, 0.03, 0), RUBBER, M.SmoothPlastic)
+			if not b.opts.preview then
+				local gui = Instance.new("SurfaceGui")
+				gui.Face = Enum.NormalId.Front
+				gui.PixelsPerStud = 40
+				gui.LightInfluence = 1
+				gui.Parent = board
+				local t = Instance.new("TextLabel")
+				t.Size = UDim2.fromScale(1, 1)
+				t.BackgroundTransparency = 1
+				t.TextColor3 = Color3.new(1, 1, 1)
+				t.Font = Enum.Font.GothamBlack
+				t.TextScaled = true
+				t.Text = "MUSTER\nPOINT"
+				t.Parent = gui
+			end
+		end,
+	})
+	prop({
+		id = "SF-WHEELSTOP",
+		name = "Rubber Wheel Stop",
+		category = "Site Safety",
+		tags = { "Safety" },
+		weightKg = 9,
+		sizeM = V(1.8, 0.12, 0.15),
+		description = "Recycled-rubber wheel stop for the delivery bays.",
+		build = function(b)
+			b:box("Stop", V(1.8, 0.12, 0.15), CF(0, 0.06, 0), RUBBER, M.SmoothPlastic)
+			b:box("Stripe", V(0.3, 0.122, 0.152), CF(0, 0.06, 0), C.Safety, M.SmoothPlastic, { nc = true, ns = true })
+		end,
+	})
+	prop({
+		id = "SF-WATERBARRIER",
+		name = "Water-Filled Barrier 2 m",
+		category = "Site Safety",
+		tags = { "Safety" },
+		weightKg = 22,
+		sizeM = V(2.0, 0.8, 0.45),
+		description = "Interlocking plastic barrier (shown empty) for pedestrian routes.",
+		build = function(b)
+			b:box("Body", V(2.0, 0.65, 0.4), CF(0, 0.33, 0), Color3.fromRGB(230, 70, 30), M.SmoothPlastic)
+			b:box("Top", V(1.9, 0.15, 0.25), CF(0, 0.72, 0), Color3.fromRGB(230, 70, 30), M.SmoothPlastic)
+		end,
+	})
+	prop({
+		id = "SF-NETTING",
+		name = "Debris Netting Roll",
+		category = "Site Safety",
+		tags = { "Safety" },
+		weightKg = 18,
+		sizeM = V(1.5, 0.4, 0.4),
+		description = "Roll of scaffold debris netting.",
+		build = function(b)
+			b:cylX("Roll", 1.5, 0.4, CF(0, 0.2, 0), Color3.fromRGB(40, 120, 60), M.Fabric)
+		end,
+	})
+
+	-------------------------------------------------------------------------
+	-- Site furnishings
+	-------------------------------------------------------------------------
+	for _, c in ipairs({ { "20", 6.06, 2300 }, { "40", 12.19, 3800 } }) do
+		prop({
+			id = "FN-CONTAINER-" .. c[1],
+			name = "Storage Container " .. c[1] .. " ft",
+			category = "Site Furnishings",
+			tags = { "Storage" },
+			weightKg = c[3],
+			sizeM = V(c[2], 2.6, 2.44),
+			description = "Corrugated steel storage container for tools and small materials.",
+			build = function(b)
+				local L = c[2]
+				b:box("Body", V(L, 2.6, 2.44), CF(0, 1.3, 0), Color3.fromRGB(46, 84, 128), M.Metal)
+				for k = 0, math.floor(L / 0.6) do
+					b:box("Corrugation", V(0.08, 2.4, 2.46), CF(-L / 2 + 0.3 + k * 0.6, 1.3, 0), Color3.fromRGB(40, 76, 118), M.Metal, { nc = true, ns = true })
+				end
+				b:box("Doors", V(0.04, 2.4, 2.3), CF(L / 2 + 0.02, 1.3, 0), Color3.fromRGB(40, 76, 118), M.Metal, { nc = true })
+				for _, sz in ipairs({ -0.4, 0.4 }) do
+					b:box("LockBar", V(0.05, 2.3, 0.05), CF(L / 2 + 0.06, 1.3, sz), C.Galvanized, M.Metal, { nc = true, ns = true })
+				end
+			end,
+			liftPoints = { V(-c[2] / 2 + 0.1, 2.6, -1.1), V(c[2] / 2 - 0.1, 2.6, 1.1) },
+		})
+	end
+	prop({
+		id = "FN-TOOLTRAILER",
+		name = "Enclosed Tool Trailer",
+		category = "Site Furnishings",
+		tags = { "Storage" },
+		weightKg = 1400,
+		sizeM = V(4.8, 2.4, 2.1),
+		description = "Single-axle enclosed trailer stocked with hand tools and consumables.",
+		build = function(b)
+			wheelsAt(b, { 0.3 }, { -1.0, 1.0 }, 0.7, 0.2)
+			b:box("Box", V(3.8, 1.9, 2.0), CF(0.4, 1.4, 0), C.OffWhite, M.Metal)
+			b:wedge("Nose", V(2.0, 1.9, 0.5), CF(-1.75, 1.4, 0) * CFrame.Angles(0, -math.pi / 2, 0), C.OffWhite, M.Metal)
+			b:box("Tongue", V(1.0, 0.08, 0.08), CF(-2.3, 0.5, 0), DARK)
+		end,
+	})
+	prop({
+		id = "FN-WATERCOOLER",
+		name = "Water Cooler on Table",
+		category = "Site Furnishings",
+		tags = { "Welfare" },
+		weightKg = 30,
+		sizeM = V(0.8, 1.3, 0.6),
+		description = "Insulated water jug and cups for heat-stress breaks.",
+		build = function(b)
+			b:box("Table", V(0.8, 0.05, 0.6), CF(0, 0.8, 0), C.Timber, M.WoodPlanks)
+			for _, x in ipairs({ -0.35, 0.35 }) do
+				b:box("Leg", V(0.04, 0.8, 0.5), CF(x, 0.4, 0), DARK)
+			end
+			b:cylY("Jug", 0.45, 0.32, V(0, 1.05, 0), Color3.fromRGB(220, 60, 40), M.SmoothPlastic)
+		end,
+	})
+	prop({
+		id = "FN-HANDWASH",
+		name = "Portable Hand-Wash Station",
+		category = "Site Furnishings",
+		tags = { "Welfare" },
+		weightKg = 40,
+		sizeM = V(0.9, 1.4, 0.7),
+		description = "Foot-pump twin basin hand-wash station.",
+		build = function(b)
+			b:box("Body", V(0.9, 1.0, 0.7), CF(0, 0.5, 0), C.OffWhite, M.SmoothPlastic)
+			b:box("Splash", V(0.9, 0.4, 0.06), CF(0, 1.2, 0.32), C.OffWhite, M.SmoothPlastic)
+		end,
+	})
+	prop({
+		id = "FN-SHELTER",
+		name = "Break Shelter Canopy 3 × 3 m",
+		category = "Site Furnishings",
+		tags = { "Welfare" },
+		weightKg = 60,
+		sizeM = V(3.0, 2.6, 3.0),
+		description = "Pop-up canopy for the crew's shaded break area.",
+		build = function(b)
+			for _, sx in ipairs({ -1.45, 1.45 }) do
+				for _, sz in ipairs({ -1.45, 1.45 }) do
+					b:box("Leg", V(0.05, 2.4, 0.05), CF(sx, 1.2, sz), C.Galvanized)
+				end
+			end
+			b:box("Roof", V(3.0, 0.05, 3.0), CF(0, 2.45, 0), Color3.fromRGB(32, 80, 140), M.Fabric)
+			b:wedge("Peak", V(3.0, 0.2, 1.5), CF(0, 2.57, -0.75), Color3.fromRGB(32, 80, 140), M.Fabric, { nc = true })
+		end,
+	})
+	prop({
+		id = "FN-REBARBUNDLE",
+		name = "Rebar Bundle (decorative)",
+		category = "Site Furnishings",
+		tags = { "Storage" },
+		weightKg = 900,
+		sizeM = V(6.0, 0.35, 0.5),
+		description = "Bundle of #5 reinforcing bars on timbers — set dressing for the laydown yard.",
+		build = function(b)
+			for _, x in ipairs({ -2, 2 }) do
+				b:box("Timber", V(0.1, 0.1, 0.6), CF(x, 0.05, 0), C.Timber, M.Wood)
+			end
+			for i = 0, 2 do
+				for j = 0, 3 do
+					b:cylX("Bar", 6.0, 0.05, CF(0, 0.13 + i * 0.07, -0.15 + j * 0.1), Color3.fromRGB(110, 70, 50))
+				end
+			end
+		end,
+	})
+	prop({
+		id = "FN-PLYSTACK",
+		name = "Plywood Stack (formwork)",
+		category = "Site Furnishings",
+		tags = { "Storage" },
+		weightKg = 640,
+		sizeM = V(2.44, 0.7, 1.22),
+		description = "Stack of 18 mm formply sheets on bearers.",
+		build = function(b)
+			b:box("Bearers", V(2.3, 0.1, 1.2), CF(0, 0.05, 0), C.Timber, M.Wood)
+			b:box("Sheets", V(2.44, 0.6, 1.22), CF(0, 0.4, 0), Color3.fromRGB(196, 150, 100), M.WoodPlanks)
+		end,
+	})
+	prop({
+		id = "FN-SANDBAGS",
+		name = "Sandbag Stack",
+		category = "Site Furnishings",
+		tags = { "Storage" },
+		weightKg = 300,
+		sizeM = V(1.2, 0.5, 0.8),
+		description = "Sandbags for weighting signs and barriers.",
+		build = function(b)
+			for i = 0, 2 do
+				for j = 0, 1 do
+					b:box("Bag", V(0.55, 0.15, 0.35), CF(-0.3 + j * 0.6 - (i % 2) * 0.1, 0.08 + i * 0.16, 0), Color3.fromRGB(180, 160, 110), M.Fabric)
+					b:box("Bag", V(0.55, 0.15, 0.35), CF(-0.3 + j * 0.6 - (i % 2) * 0.1, 0.08 + i * 0.16, 0.38), Color3.fromRGB(176, 156, 106), M.Fabric)
+				end
+			end
+		end,
+	})
+	prop({
+		id = "FN-BINS",
+		name = "Segregated Waste Bins (3)",
+		category = "Site Furnishings",
+		tags = { "Waste" },
+		weightKg = 45,
+		sizeM = V(2.2, 1.1, 0.8),
+		description = "Colour-coded bins for metal, timber and general waste.",
+		build = function(b)
+			for k, col in ipairs({ Color3.fromRGB(60, 100, 170), Color3.fromRGB(120, 80, 50), Color3.fromRGB(60, 60, 64) }) do
+				b:box("Bin", V(0.65, 1.0, 0.75), CF(-0.75 + (k - 1) * 0.75, 0.5, 0), col, M.SmoothPlastic)
+			end
+		end,
+	})
+end
+]]></ProtectedString>
+</Properties>
+</Item>
+<Item class="ModuleScript" referent="RBX0000000A">
+<Properties>
 <string name="Name">ModelFactory</string>
 <ProtectedString name="Source"><![CDATA[-- Procedural geometry for every catalog item.
 --
@@ -4379,7 +5058,7 @@ return Factory
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000000A">
+<Item class="ModuleScript" referent="RBX0000000B">
 <Properties>
 <string name="Name">Remotes</string>
 <ProtectedString name="Source"><![CDATA[-- Single place that defines every network endpoint.
@@ -4462,7 +5141,7 @@ return Remotes
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000000B">
+<Item class="ModuleScript" referent="RBX0000000C">
 <Properties>
 <string name="Name">Sites</string>
 <ProtectedString name="Source"><![CDATA[-- Site definitions and the deterministic building layout generator.
@@ -4494,6 +5173,11 @@ end
 -- bed length along local X, cab toward -X.
 local function bay(x, z, yawDeg)
 	return CFrame.new(m(x), 0, m(z)) * CFrame.Angles(0, math.rad(yawDeg or 0), 0)
+end
+
+-- Railcar spot on the siding: rail head height, deck along +X.
+local function railSpot(x, z)
+	return CFrame.new(m(x), m(0.4), m(z))
 end
 
 Sites.Order = { "EmptyLand", "Office1", "Office2", "Office3", "Office4", "Office5", "Apartment", "HighRise" }
@@ -4645,7 +5329,7 @@ Sites.Defs = {
 		description = "A long, wide office between warehouses and the freight line. Ground-floor framing is incomplete and the metal wall cladding is only on part of the west and south walls.",
 		stageText = "Partial frame L1, metal walls started",
 		difficulty = "Standard",
-		equipment = { "Tower crane — 65 m jib, 10 t", "Flatbed deliveries (3 bays)", "Rail siding (phase 2)" },
+		equipment = { "Tower crane — 65 m jib, 10 t", "Flatbed deliveries (3 bays)", "Rail siding — 2 flatcar spots" },
 		style = "Industrial",
 		lotM = V(170, 0, 110),
 		lighting = { clock = 14.8, latitude = 42, haze = 2.0, density = 0.38, tint = Color3.fromRGB(255, 244, 226) },
@@ -4655,6 +5339,7 @@ Sites.Defs = {
 		spawnM = V(50, 0, -46),
 		laydownM = { center = V(-20, 0, -34), size = V(26, 0, 14) },
 		rail = true,
+		railSpots = { railSpot(-14, 63), railSpot(6, 63) },
 		grid = { originM = V(-27, 0, -9), nx = 6, nz = 2, bayX = 9.0, bayZ = 9.0, floorH = 4.5, floors = 2, column = "W14×90", beam = "W21×44", deck = true, braces = { { "x", 0, 0 }, { "x", 5, 0 }, { "x", 0, 2 }, { "x", 5, 2 } }, facade = "wall" },
 		stage = function(e)
 			if e.phase == "footing" then
@@ -5169,7 +5854,7 @@ return Sites
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000000C">
+<Item class="ModuleScript" referent="RBX0000000D">
 <Properties>
 <string name="Name">Util</string>
 <ProtectedString name="Source"><![CDATA[-- Small shared helpers.
@@ -5300,15 +5985,15 @@ return Util
 </Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX0000001A">
+<Item class="ServerScriptService" referent="RBX0000001B">
 <Properties>
 <string name="Name">ServerScriptService</string>
 </Properties>
-<Item class="Folder" referent="RBX00000019">
+<Item class="Folder" referent="RBX0000001A">
 <Properties>
 <string name="Name">Steelrise</string>
 </Properties>
-<Item class="ModuleScript" referent="RBX0000000F">
+<Item class="ModuleScript" referent="RBX00000010">
 <Properties>
 <string name="Name">ComponentService</string>
 <ProtectedString name="Source"><![CDATA[-- Owns every physical material/component instance on the site and its
@@ -6046,7 +6731,7 @@ return ComponentService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000010">
+<Item class="ModuleScript" referent="RBX00000011">
 <Properties>
 <string name="Name">CraneFactory</string>
 <ProtectedString name="Source"><![CDATA[-- Flat-top tower crane, modelled on modern 8–10 t city cranes.
@@ -6570,7 +7255,7 @@ return CraneFactory
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000011">
+<Item class="ModuleScript" referent="RBX00000012">
 <Properties>
 <string name="Name">CraneService</string>
 <ProtectedString name="Source"><![CDATA[-- Server authority for tower cranes.
@@ -6865,6 +7550,10 @@ function CraneService.attach(player, componentId)
 	end
 	if (hook - target).Magnitude > K.AttachRange + 1.5 + spread * 0.25 then
 		return false, "Bring the hook over the rigging points first."
+	end
+	local wind = Services.Site.current.folder:GetAttribute("WindSpeed") or 0
+	if wind > K.WindStopMs then
+		return false, string.format("Wind %.0f m/s — above the %d m/s lifting limit. Wait for it to drop.", wind, K.WindStopMs)
 	end
 	local kg = def.weightKg + K.RiggingKg
 	local cap = CraneMath.capacityKg(rec.cfg, rec.st.trolley)
@@ -7170,7 +7859,7 @@ return CraneService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000012">
+<Item class="ModuleScript" referent="RBX00000013">
 <Properties>
 <string name="Name">DeliveryService</string>
 <ProtectedString name="Source"><![CDATA[-- Flatbed deliveries: trucks pull into unloading bays with every ordered
@@ -7188,14 +7877,33 @@ local Util = require(Shared.Util)
 local Remotes = require(Shared.Remotes)
 
 local WorldFactory = require(script.Parent.WorldFactory)
+local VehicleFactory = require(script.Parent.VehicleFactory)
 local Packing = require(script.Parent.Packing)
 
 local S = Config.S
 local D = Config.Delivery
 
+-- Load space per vehicle type (metres / kg).
+local VEHICLES = {
+	truck = { len = D.BedLength, width = D.BedWidth, maxKg = D.TrailerMaxKg, maxH = D.MaxStackHeight, animM = 70, name = "truck" },
+	rail = { len = 17.4, width = 2.7, maxKg = 60000, maxH = 2.8, animM = 160, name = "railcar" },
+}
+
+
 local DeliveryService = {}
 local Services
 local trailers = {} -- id -> record
+
+local function spotsFor(kind)
+	local site = Services.Site.current
+	if not site then
+		return {}
+	end
+	if kind == "rail" then
+		return site.def.railSpots or {}
+	end
+	return site.def.bays
+end
 
 local function now()
 	return workspace:GetServerTimeNow()
@@ -7211,7 +7919,7 @@ function DeliveryService.init(services)
 		while true do
 			task.wait(5)
 			for id, t in pairs(trailers) do
-				if t.model and t.model.Parent and t.emptySince and not t.departing and now() - t.emptySince > 120 then
+				if t.model and t.model.Parent and t.emptySince and not t.departing and now() - t.emptySince > (t.kind == "rail" and 20 or 120) then
 					DeliveryService.depart(id)
 				end
 			end
@@ -7287,7 +7995,7 @@ local function buildStrap(t, s, strapId)
 	model:SetAttribute("StrapId", strapId)
 	model:SetAttribute("Group", s.group)
 	model:SetAttribute("TrailerId", t.id)
-	local W = math.max(s.width, D.BedWidth * S * 0.5)
+	local W = math.max(s.width, t.bedWidthM * S * 0.5)
 	local function part(name, size, cf)
 		local p = Instance.new("Part")
 		p.Name = name
@@ -7302,7 +8010,7 @@ local function buildStrap(t, s, strapId)
 		p.Parent = model
 		return p
 	end
-	local bedHalf = D.BedWidth * S / 2
+	local bedHalf = t.bedWidthM * S / 2
 	part("Band", Vector3.new(0.16, 0.06, W + 0.12), CFrame.new(s.x, s.top + 0.04, 0))
 	for _, sz in ipairs({ -1, 1 }) do
 		local zEdge = sz * (W / 2 + 0.05)
@@ -7352,16 +8060,21 @@ local function buildLoadExtras(t, extras)
 	end
 end
 
-function DeliveryService.freeBay()
+function DeliveryService.freeBay(kind)
+	kind = kind or "truck"
 	local site = Services.Site.current
 	if not site then
 		return nil
 	end
 	local used = {}
 	for _, t in pairs(trailers) do
-		used[t.bay] = true
+		if t.kind == kind then
+			used[t.bay] = true
+		end
 	end
-	for i = 1, math.min(#site.def.bays, D.MaxTrailers) do
+	local spots = spotsFor(kind)
+	local limit = kind == "truck" and math.min(#spots, D.MaxTrailers) or #spots
+	for i = 1, limit do
 		if not used[i] then
 			return i
 		end
@@ -7374,18 +8087,33 @@ end
 -- (cargo is restored separately with its saved state).
 function DeliveryService.spawnTrailer(bayIndex, placed, extras, opts)
 	opts = opts or {}
-	local site = Services.Site.current
-	local id = opts.id or ("T" .. string.sub(HttpService:GenerateGUID(false), 1, 8))
-	local bayCf = site.def.bays[bayIndex]
+	local kind = opts.kind or "truck"
+	local vehicle = VEHICLES[kind]
+	local id = opts.id or ((kind == "rail" and "R" or "T") .. string.sub(HttpService:GenerateGUID(false), 1, 8))
+	local bayCf = spotsFor(kind)[bayIndex]
 	local seed = opts.seed or math.random(1, 1e6)
-	local model, bedTop = WorldFactory.buildTrailer(bayCf, seed)
+	local model, bedTop
+	if kind == "rail" then
+		local carLen
+		model, bedTop, carLen = VehicleFactory.buildFlatcar(bayCf, seed)
+		if opts.loco then
+			-- the locomotive is coupled ahead of the first car and leaves with it
+			local loco, locoLen = VehicleFactory.buildLocomotive(bayCf * CFrame.new(-(carLen / 2 + Config.m(9.1)), 0, 0))
+			loco.Parent = model
+			model:SetAttribute("HasLoco", true)
+		end
+	else
+		model, bedTop = WorldFactory.buildTrailer(bayCf, seed)
+	end
 	model.Name = "Trailer_" .. id
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:SetAttribute("TrailerId", id)
 	model:SetAttribute("Bay", bayIndex)
+	model:SetAttribute("Kind", kind)
+	model:SetAttribute("AnimDist", Config.m(vehicle.animM))
 	model:SetAttribute("ArriveAt", opts.instant and 0 or now())
 	model:SetAttribute("DepartAt", 0)
-	local t = { id = id, bay = bayIndex, bayCf = bayCf, bedTop = bedTop, model = model, seed = seed }
+	local t = { id = id, bay = bayIndex, kind = kind, bedWidthM = vehicle.width, bayCf = bayCf, bedTop = bedTop, model = model, seed = seed, loco = opts.loco }
 	trailers[id] = t
 	buildLoadExtras(t, extras)
 	model.Parent = DeliveryService.folder()
@@ -7411,10 +8139,15 @@ function DeliveryService.spawnTrailer(bayIndex, placed, extras, opts)
 	return t
 end
 
-function DeliveryService.request(player, itemId, qty)
+function DeliveryService.request(player, itemId, qty, mode)
 	local site = Services.Site.current
 	if not site then
 		return false, "No site loaded."
+	end
+	local kind = mode == "rail" and "rail" or "truck"
+	local vehicle = VEHICLES[kind]
+	if kind == "rail" and #(site.def.railSpots or {}) == 0 then
+		return false, "This site has no rail siding — deliveries come by truck."
 	end
 	local def = Registry.get(itemId or "")
 	if not def or not def.deliverable then
@@ -7436,36 +8169,40 @@ function DeliveryService.request(player, itemId, qty)
 	local delivered = 0
 	local trucks = 0
 	while #remaining > 0 do
-		local bay = DeliveryService.freeBay()
+		local bay = DeliveryService.freeBay(kind)
 		if not bay then
 			break
 		end
-		local placed, extras, leftovers = Packing.pack(remaining, D.BedLength * S, D.BedWidth * S, D.MaxStackHeight * S, { maxKg = D.TrailerMaxKg })
+		local placed, extras, leftovers = Packing.pack(remaining, vehicle.len * S, vehicle.width * S, vehicle.maxH * S, { maxKg = vehicle.maxKg })
 		if #placed == 0 then
 			if delivered == 0 then
-				return false, "That load won't fit on a flatbed."
+				return false, "That load won't fit on a " .. vehicle.name .. "."
 			end
 			break
 		end
-		DeliveryService.spawnTrailer(bay, placed, extras, {})
+		DeliveryService.spawnTrailer(bay, placed, extras, { kind = kind, loco = kind == "rail" and trucks == 0 })
 		delivered += #placed
 		trucks += 1
 		remaining = leftovers
 	end
 	if delivered == 0 then
+		if kind == "rail" then
+			return false, "The siding is full — unload and release the railcars first."
+		end
 		return false, "All unloading bays are occupied — unload and dismiss a truck first."
 	end
-	local msg = string.format("%d × %s on %d truck%s — arriving now.", delivered, def.name, trucks, trucks > 1 and "s" or "")
+	local msg = string.format("%d × %s on %d %s%s — arriving now.", delivered, def.name, trucks, vehicle.name, trucks > 1 and "s" or "")
 	if delivered < qty then
 		msg ..= string.format(" %d didn't fit: free a bay and order again.", qty - delivered)
 	end
-	fx("TruckArrive", site.def.bays[1].Position, nil)
+	fx("TruckArrive", spotsFor(kind)[1].Position, nil)
 	return true, msg
 end
 
 -- Starter loads for a fresh site (instant, no drive-in).
 function DeliveryService.spawnLoaded(bayIndex, requests)
-	local placed, extras = Packing.pack(requests, D.BedLength * S, D.BedWidth * S, D.MaxStackHeight * S, { maxKg = D.TrailerMaxKg })
+	local v = VEHICLES.truck
+	local placed, extras = Packing.pack(requests, v.len * S, v.width * S, v.maxH * S, { maxKg = v.maxKg })
 	return DeliveryService.spawnTrailer(bayIndex, placed, extras, { instant = true })
 end
 
@@ -7569,9 +8306,9 @@ function DeliveryService.dismiss(player, id)
 	return true, "Truck released."
 end
 
-function DeliveryService.handle(player, action, a, b)
+function DeliveryService.handle(player, action, a, b, c)
 	if action == "Request" then
-		return DeliveryService.request(player, a, b)
+		return DeliveryService.request(player, a, b, c)
 	elseif action == "Dismiss" then
 		return DeliveryService.dismiss(player, a)
 	end
@@ -7590,7 +8327,7 @@ function DeliveryService.serialize()
 			for _, s in ipairs(t.straps) do
 				table.insert(straps, { id = s.id, x = s.x, top = s.top, width = s.width, group = s.group, released = s.released })
 			end
-			table.insert(out, { id = t.id, bay = t.bay, seed = t.seed, dunnage = dun, straps = straps })
+			table.insert(out, { id = t.id, bay = t.bay, kind = t.kind, loco = t.loco, seed = t.seed, dunnage = dun, straps = straps })
 		end
 	end
 	return out
@@ -7605,9 +8342,9 @@ function DeliveryService.restore(list)
 				table.insert(dun, { cf = cf, size = Vector3.new(d.size[1], d.size[2], d.size[3]) })
 			end
 		end
-		local site = Services.Site.current
-		if data.bay and site.def.bays[data.bay] then
-			DeliveryService.spawnTrailer(data.bay, nil, { dunnage = dun, straps = data.straps or {} }, { instant = true, id = data.id, seed = data.seed })
+		local kind = data.kind or "truck"
+		if data.bay and spotsFor(kind)[data.bay] then
+			DeliveryService.spawnTrailer(data.bay, nil, { dunnage = dun, straps = data.straps or {} }, { instant = true, id = data.id, seed = data.seed, kind = kind, loco = data.loco })
 		end
 	end
 end
@@ -7622,7 +8359,7 @@ return DeliveryService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="Script" referent="RBX00000013">
+<Item class="Script" referent="RBX00000014">
 <Properties>
 <string name="Name">Main</string>
 <ProtectedString name="Source"><![CDATA[-- STEELRISE server bootstrap: creates remotes, wires services together and
@@ -7711,7 +8448,7 @@ print("[STEELRISE] server ready")
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000014">
+<Item class="ModuleScript" referent="RBX00000015">
 <Properties>
 <string name="Name">Packing</string>
 <ProtectedString name="Source"><![CDATA[-- Lays out a list of items on a rectangular bed (trailer deck or laydown yard)
@@ -7847,7 +8584,7 @@ return Packing
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000015">
+<Item class="ModuleScript" referent="RBX00000016">
 <Properties>
 <string name="Name">SaveService</string>
 <ProtectedString name="Source"><![CDATA[-- Saves and settings.
@@ -8017,6 +8754,7 @@ function SaveService.snapshot()
 		v = 1,
 		site = site.id,
 		blueprint = site.blueprint,
+		clock = site.folder:GetAttribute("Clock"),
 		savedAt = os.time(),
 		progress = { installed = site.folder:GetAttribute("BPInstalled") or 0, total = site.folder:GetAttribute("BPTotal") or 0 },
 		components = comps,
@@ -8101,7 +8839,7 @@ return SaveService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000016">
+<Item class="ModuleScript" referent="RBX00000017">
 <Properties>
 <string name="Name">SiteService</string>
 <ProtectedString name="Source"><![CDATA[-- Loads a site: terrain, lighting, environment, crane, the starting stage of
@@ -8133,8 +8871,48 @@ local function notifyAll(text, kind)
 	Remotes.get("Notify"):FireAllClients(text, kind or "info")
 end
 
+-- Typical mean wind by site exposure (m/s at crane height).
+local WIND_BASE = { Rural = 6, Suburban = 5, Downtown = 6, Waterfront = 9, Industrial = 7, CityCenter = 8, Residential = 5, HighRise = 9 }
+
 function SiteService.init(services)
 	Services = services
+	-- gusty wind: a mean that drifts slowly plus short gusts
+	task.spawn(function()
+		local mean, gust, dir = 6, 0, math.rad(40)
+		local rng = Random.new()
+		while true do
+			task.wait(1)
+			local site = SiteService.current
+			if site and site.folder.Parent then
+				local base = WIND_BASE[site.def.style] or 6
+				mean += (base - mean) * 0.02 + rng:NextNumber(-0.25, 0.25)
+				gust = gust * 0.8 + rng:NextNumber(-1, 1) * (rng:NextNumber() < 0.08 and 6 or 1.2)
+				dir += rng:NextNumber(-0.04, 0.04)
+				local speed = math.clamp(mean + gust, 0, 22)
+				site.folder:SetAttribute("WindSpeed", math.floor(speed * 10 + 0.5) / 10)
+				site.folder:SetAttribute("WindDir", dir)
+			end
+		end
+	end)
+end
+
+-- Sets the time of day and switches street lighting to match.
+function SiteService.setClock(clock)
+	local site = SiteService.current
+	if not site then
+		return false, "No site."
+	end
+	clock = math.clamp(tonumber(clock) or 12, 0, 24)
+	game:GetService("Lighting").ClockTime = clock
+	site.folder:SetAttribute("Clock", clock)
+	local night = WorldFactory.isNight(clock)
+	for _, d in ipairs(site.folder:GetDescendants()) do
+		if d:IsA("Light") and d.Name == "NightLight" then
+			d.Enabled = night
+		end
+	end
+	site.dirty = true
+	return true
 end
 
 local function newFolder(parent, name)
@@ -8420,6 +9198,12 @@ function SiteService.load(siteId, saveData, host)
 		end
 	end)
 
+	if saveData and saveData.clock then
+		step("time of day", SiteService.setClock, saveData.clock)
+	else
+		folder:SetAttribute("Clock", def.lighting.clock or 12)
+	end
+
 	local bp = saveData and saveData.blueprint or (def.grid and "Site" or nil)
 	step("blueprint", SiteService.setBlueprint, bp)
 	folder:SetAttribute("Ready", true)
@@ -8534,6 +9318,12 @@ function SiteService.handle(player, action, a, b, c)
 			Remotes.get("Notify"):FireClient(player, "Some of the site failed to build (the game still works): " .. table.concat(cur.buildFailures, " | "), "warn")
 		end
 		return true, nil, { siteId = cur.id, host = cur.host and cur.host.UserId or 0 }
+	elseif action == "TimeOfDay" then
+		local site = SiteService.current
+		if not site or (site.host and site.host ~= player) then
+			return false, "Only the host can change the time of day."
+		end
+		return SiteService.setClock(a)
 	elseif action == "Blueprint" then
 		local site = SiteService.current
 		if not site or site.host ~= player then
@@ -8579,7 +9369,7 @@ return SiteService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000017">
+<Item class="ModuleScript" referent="RBX00000018">
 <Properties>
 <string name="Name">VehicleFactory</string>
 <ProtectedString name="Source"><![CDATA[-- Delivery vehicles: a long-hood American tractor with a 53 ft steel-hauling
@@ -9083,7 +9873,7 @@ return VehicleFactory
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000018">
+<Item class="ModuleScript" referent="RBX00000019">
 <Properties>
 <string name="Name">WorldFactory</string>
 <ProtectedString name="Source"><![CDATA[-- Server-side builders for site environments, the tower crane and the
@@ -9196,6 +9986,10 @@ end
 ---------------------------------------------------------------------------
 -- Lighting
 ---------------------------------------------------------------------------
+
+function WorldFactory.isNight(clock)
+	return clock >= 18.3 or clock < 6.6
+end
 
 function WorldFactory.applyLighting(site)
 	local L = site.lighting or {}
@@ -9511,15 +10305,16 @@ function WorldFactory.buildSurroundings(site, folder)
 		local x = k * m(30)
 		local pole = cyl(folder, "LampPost", m(8), m(0.2), CF(x, m(4), roadZ - m(7.5)) * CFrame.Angles(0, 0, math.pi / 2), C.SteelDark, M.Metal)
 		local head = P(folder, "LampHead", V(m(0.6), m(0.2), m(1.4)), CF(x, m(8), roadZ - m(6.9)), C.SteelDark, M.Metal, { nc = true })
-		if (site.lighting.clock or 12) > 17 or (site.lighting.clock or 12) < 7 then
-			local l = Instance.new("SpotLight")
-			l.Face = Enum.NormalId.Bottom
-			l.Range = 40
-			l.Angle = 110
-			l.Brightness = 2
-			l.Color = Color3.fromRGB(255, 214, 160)
-			l.Parent = head
-		end
+		-- street lights follow the time of day (SiteService.setClock toggles them)
+		local l = Instance.new("SpotLight")
+		l.Name = "NightLight"
+		l.Face = Enum.NormalId.Bottom
+		l.Range = 40
+		l.Angle = 110
+		l.Brightness = 2
+		l.Color = Color3.fromRGB(255, 214, 160)
+		l.Enabled = WorldFactory.isNight(site.lighting.clock or 12)
+		l.Parent = head
 		pole.CastShadow = true
 	end
 
@@ -9676,19 +10471,19 @@ return WorldFactory
 </Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX00000030">
+<Item class="StarterPlayer" referent="RBX00000031">
 <Properties>
 <string name="Name">StarterPlayer</string>
 </Properties>
-<Item class="StarterPlayerScripts" referent="RBX0000002F">
+<Item class="StarterPlayerScripts" referent="RBX00000030">
 <Properties>
 <string name="Name">StarterPlayerScripts</string>
 </Properties>
-<Item class="Folder" referent="RBX0000002E">
+<Item class="Folder" referent="RBX0000002F">
 <Properties>
 <string name="Name">Steelrise</string>
 </Properties>
-<Item class="ModuleScript" referent="RBX0000001B">
+<Item class="ModuleScript" referent="RBX0000001C">
 <Properties>
 <string name="Name">Audio</string>
 <ProtectedString name="Source"><![CDATA[-- Client audio: mix groups with separate volumes, varied one-shots and
@@ -9850,7 +10645,7 @@ return Audio
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001C">
+<Item class="ModuleScript" referent="RBX0000001D">
 <Properties>
 <string name="Name">Blueprint</string>
 <ProtectedString name="Source"><![CDATA[-- Blueprint ghosts: translucent outlines of what still has to be built on
@@ -9978,12 +10773,13 @@ return Blueprint
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001D">
+<Item class="ModuleScript" referent="RBX0000001E">
 <Properties>
 <string name="Name">Catalog</string>
-<ProtectedString name="Source"><![CDATA[-- Searchable catalog over the item registry: categories, favourites, lazy
--- 3D thumbnails (only cards scrolled into view get a model, and the oldest
--- are released once the cache is full) and physical delivery requests.
+<ProtectedString name="Source"><![CDATA[-- Searchable catalog over the item registry: categories, favourites, a
+-- virtualised card grid (only the rows on screen exist, card frames are
+-- reused) with lazily built 3D thumbnails in a bounded cache, and physical
+-- delivery requests by truck or, on rail-served sites, by rail.
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10007,9 +10803,14 @@ local category = "All"
 local favoritesOnly = false
 local selected = nil
 local qty = 1
-local cards = {} -- id -> { frame, vp, model, lastSeen }
-local built = 0
-local MAX_THUMBS = 48
+local filtered = {} -- defs matching the current search
+local pool = {} -- reusable card frames (only enough for the visible rows)
+local thumbs = {} -- id -> preview model (bounded cache)
+local thumbOrder = {}
+local MAX_THUMBS = 64
+local CELL_W, CELL_H, GAP = 150, 126, 8
+local deliveryMode = "truck"
+local setDetail -- defined below; cards call it
 
 local CLASS_COLOR = {
 	Installable = C.Safety,
@@ -10026,54 +10827,119 @@ local function thumbModel(def)
 	return nil
 end
 
-local function releaseThumb(c)
-	if c.model then
-		c.model:Destroy()
-		c.model = nil
-		built -= 1
+-- Preview model for an item, cached; the oldest unused previews are freed.
+local function thumbFor(def, inUse)
+	local m = thumbs[def.id]
+	if m then
+		return m
 	end
+	m = thumbModel(def)
+	if not m then
+		return nil
+	end
+	thumbs[def.id] = m
+	table.insert(thumbOrder, def.id)
+	local i = 1
+	while #thumbOrder > MAX_THUMBS and i <= #thumbOrder do
+		local id = thumbOrder[i]
+		if not inUse[id] then
+			if thumbs[id] then
+				thumbs[id]:Destroy()
+			end
+			thumbs[id] = nil
+			table.remove(thumbOrder, i)
+		else
+			i += 1
+		end
+	end
+	return m
 end
 
-local function updateThumbs()
-	if not root.Visible then
+local function newCard()
+	local frame = UIKit.new("TextButton", { AutoButtonColor = false, Text = "", BackgroundColor3 = C.CharcoalLight, BorderSizePixel = 0, Size = UDim2.new(0, CELL_W, 0, CELL_H), Parent = grid })
+	UIKit.corner(frame, 5)
+	local stroke = UIKit.stroke(frame, C.SteelDark, 1, 0)
+	local vp = UIKit.new("ViewportFrame", {
+		BackgroundColor3 = Color3.fromRGB(44, 48, 54),
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, -8, 0, 86),
+		Position = UDim2.new(0, 4, 0, 4),
+		Ambient = Color3.fromRGB(130, 132, 138),
+		LightColor = Color3.fromRGB(255, 246, 232),
+		LightDirection = Vector3.new(-0.5, -1, -0.6),
+		Parent = frame,
+	})
+	UIKit.corner(vp, 4)
+	local bar = UIKit.new("Frame", { BorderSizePixel = 0, Size = UDim2.new(0, 3, 0, 86), Position = UDim2.new(0, 4, 0, 4), Parent = frame })
+	bar.ZIndex = 2
+	local label = UIKit.label(frame, "", 12, F.Medium, C.OffWhite, { Position = UDim2.new(0, 6, 0, 92), Size = UDim2.new(1, -12, 0, 30), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top })
+	local fav = UIKit.label(frame, "★", 14, F.Bold, C.Safety, { Position = UDim2.new(1, -20, 0, 6), Size = UDim2.new(0, 16, 0, 16) })
+	fav.ZIndex = 3
+	local card = { frame = frame, vp = vp, bar = bar, label = label, fav = fav }
+	frame.MouseButton1Click:Connect(function()
+		if card.def then
+			setDetail(card.def)
+		end
+	end)
+	frame.MouseEnter:Connect(function()
+		stroke.Color = C.Safety
+	end)
+	frame.MouseLeave:Connect(function()
+		stroke.Color = C.SteelDark
+	end)
+	return card
+end
+
+-- Lays out only the rows that are on screen (plus one), reusing card frames.
+local function layoutCards()
+	if not root or not root.Visible then
 		return
 	end
-	local winPos, winSize = grid.AbsolutePosition, grid.AbsoluteSize
-	local now = os.clock()
-	for _, c in pairs(cards) do
-		local p, s = c.frame.AbsolutePosition, c.frame.AbsoluteSize
-		local visible = c.frame.Visible and p.Y + s.Y > winPos.Y - 100 and p.Y < winPos.Y + winSize.Y + 100
-		if visible then
-			c.lastSeen = now
-			if not c.model and built < MAX_THUMBS + 12 then
-				c.model = thumbModel(c.def)
-				if c.model then
-					built += 1
-					c.model.Parent = c.vp
-					UIKit.frameModel(c.vp, c.model, 35, 24, 0.95)
+	local width = math.max(grid.AbsoluteSize.X, CELL_W)
+	local cols = math.max(1, math.floor((width + GAP) / (CELL_W + GAP)))
+	local rows = math.ceil(#filtered / cols)
+	grid.CanvasSize = UDim2.new(0, 0, 0, rows * (CELL_H + GAP))
+	local firstRow = math.max(0, math.floor(grid.CanvasPosition.Y / (CELL_H + GAP)))
+	local rowCount = math.ceil(math.max(grid.AbsoluteSize.Y, CELL_H) / (CELL_H + GAP)) + 1
+	local first = firstRow * cols + 1
+	local last = math.min(#filtered, (firstRow + rowCount) * cols)
+	local inUse = {}
+	for i = first, last do
+		inUse[filtered[i].id] = true
+	end
+	local n = 0
+	for i = first, last do
+		n += 1
+		local card = pool[n] or newCard()
+		pool[n] = card
+		local def = filtered[i]
+		local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
+		card.frame.Position = UDim2.new(0, col * (CELL_W + GAP), 0, row * (CELL_H + GAP))
+		card.frame.Visible = true
+		card.fav.Visible = State.favorites[def.id] == true
+		if card.def ~= def then
+			card.def = def
+			card.label.Text = def.name
+			card.bar.BackgroundColor3 = CLASS_COLOR[def.class] or C.Steel
+			for _, ch in ipairs(card.vp:GetChildren()) do
+				if ch:IsA("Model") then
+					ch.Parent = nil
 				end
+			end
+			local m = thumbFor(def, inUse)
+			if m then
+				m.Parent = card.vp
+				UIKit.frameModel(card.vp, m, 35, 24, 0.95)
 			end
 		end
 	end
-	if built > MAX_THUMBS then
-		local list = {}
-		for _, c in pairs(cards) do
-			if c.model then
-				table.insert(list, c)
-			end
-		end
-		table.sort(list, function(a, b)
-			return (a.lastSeen or 0) < (b.lastSeen or 0)
-		end)
-		for i = 1, built - MAX_THUMBS do
-			if list[i] and now - (list[i].lastSeen or 0) > 0.5 then
-				releaseThumb(list[i])
-			end
-		end
+	for k = n + 1, #pool do
+		pool[k].frame.Visible = false
+		pool[k].def = nil
 	end
 end
 
-local function setDetail(def)
+setDetail = function(def)
 	selected = def
 	qty = 1
 	for _, c in ipairs(detail.vp:GetChildren()) do
@@ -10124,6 +10990,7 @@ local function setDetail(def)
 	detail.desc.Text = def.description or ""
 	detail.fav.Text = State.favorites[def.id] and "★ FAVOURITE" or "☆ ADD TO FAVOURITES"
 	detail.qtyRow.Visible = def.deliverable
+	detail.modeRow.Visible = def.deliverable and State.siteDef ~= nil and State.siteDef.railSpots ~= nil
 	detail.order.Visible = def.deliverable
 	detail.equip.Visible = def.kind == "Tool"
 	detail.qty.Text = tostring(qty)
@@ -10131,49 +10998,10 @@ end
 
 local function rebuild()
 	local favs = State.favorites
-	local list = Registry.search(search.Text, category ~= "Favourites" and category or nil, favs, category == "Favourites")
-	local keep = {}
-	for i, def in ipairs(list) do
-		keep[def.id] = i
-	end
-	for id, c in pairs(cards) do
-		c.frame.Visible = keep[id] ~= nil
-		c.frame.LayoutOrder = keep[id] or 0
-	end
-	countLabel.Text = string.format("%d shown  ·  %d items implemented  ·  target %d", #list, Registry.count().total, Registry.TargetCount)
-	task.defer(updateThumbs)
-end
-
-local function makeCard(def, order)
-	local frame = UIKit.new("TextButton", { AutoButtonColor = false, Text = "", BackgroundColor3 = C.CharcoalLight, BorderSizePixel = 0, LayoutOrder = order, Parent = grid })
-	UIKit.corner(frame, 5)
-	local stroke = UIKit.stroke(frame, C.SteelDark, 1, 0)
-	local vp = UIKit.new("ViewportFrame", {
-		BackgroundColor3 = Color3.fromRGB(44, 48, 54),
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, -8, 0, 86),
-		Position = UDim2.new(0, 4, 0, 4),
-		Ambient = Color3.fromRGB(130, 132, 138),
-		LightColor = Color3.fromRGB(255, 246, 232),
-		LightDirection = Vector3.new(-0.5, -1, -0.6),
-		Parent = frame,
-	})
-	UIKit.corner(vp, 4)
-	local bar = UIKit.new("Frame", { BackgroundColor3 = CLASS_COLOR[def.class] or C.Steel, BorderSizePixel = 0, Size = UDim2.new(0, 3, 0, 86), Position = UDim2.new(0, 4, 0, 4), Parent = frame })
-	bar.ZIndex = 2
-	UIKit.label(frame, def.name, 12, F.Medium, C.OffWhite, { Position = UDim2.new(0, 6, 0, 92), Size = UDim2.new(1, -12, 0, 30), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top })
-	local fav = UIKit.label(frame, "★", 14, F.Bold, C.Safety, { Position = UDim2.new(1, -20, 0, 6), Size = UDim2.new(0, 16, 0, 16), Visible = State.favorites[def.id] == true })
-	fav.ZIndex = 3
-	frame.MouseButton1Click:Connect(function()
-		setDetail(def)
-	end)
-	frame.MouseEnter:Connect(function()
-		stroke.Color = C.Safety
-	end)
-	frame.MouseLeave:Connect(function()
-		stroke.Color = C.SteelDark
-	end)
-	cards[def.id] = { frame = frame, vp = vp, def = def, fav = fav }
+	filtered = Registry.search(search.Text, category ~= "Favourites" and category or nil, favs, category == "Favourites")
+	grid.CanvasPosition = Vector2.new(0, 0)
+	countLabel.Text = string.format("%d shown  ·  %d items implemented  ·  target %d", #filtered, Registry.count().total, Registry.TargetCount)
+	task.defer(layoutCards)
 end
 
 function Catalog.build()
@@ -10243,12 +11071,9 @@ function Catalog.build()
 	UIKit.padding(search, 12, 0, 12, 0)
 	UIKit.stroke(search, C.SteelDark, 1, 0)
 	search:GetPropertyChangedSignal("Text"):Connect(rebuild)
-	grid = UIKit.new("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(1, 0, 1, -46), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 4, ScrollBarImageColor3 = C.Steel, Parent = mid })
-	UIKit.new("UIGridLayout", { CellSize = UDim2.new(0, 150, 0, 126), CellPadding = UDim2.new(0, 8, 0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid })
-	grid:GetPropertyChangedSignal("CanvasPosition"):Connect(updateThumbs)
-	for i, def in ipairs(Registry.list) do
-		makeCard(def, i)
-	end
+	grid = UIKit.new("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(1, 0, 1, -46), CanvasSize = UDim2.new(), ScrollBarThickness = 4, ScrollBarImageColor3 = C.Steel, Parent = mid })
+	grid:GetPropertyChangedSignal("CanvasPosition"):Connect(layoutCards)
+	grid:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutCards)
 
 	-- detail
 	local dp = UIKit.panel(panel, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 44), Size = UDim2.new(0, 348, 1, -44) })
@@ -10275,7 +11100,7 @@ function Catalog.build()
 		end
 		local on = not State.favorites[selected.id]
 		State.favorites[selected.id] = on or nil
-		cards[selected.id].fav.Visible = on
+		layoutCards()
 		detail.fav.Text = on and "★ FAVOURITE" or "☆ ADD TO FAVOURITES"
 		Net.call("Save", true, "Favorite", selected.id, on)
 		if category == "Favourites" then
@@ -10297,27 +11122,33 @@ function Catalog.build()
 		qty = math.min(40, qty + 1)
 		detail.qty.Text = tostring(qty)
 	end)
+	detail.modeRow = UIKit.segmented(detail.body, "Deliver by", { "Truck", "Rail" }, "Truck", function(v)
+		deliveryMode = v == "Rail" and "rail" or "truck"
+	end)
+	detail.modeRow.LayoutOrder = 10
+	detail.modeRow.Size = UDim2.new(1, -6, 0, 58)
+	detail.modeRow.Visible = false
 	detail.order = UIKit.button(detail.body, "REQUEST DELIVERY", { style = "primary", size = UDim2.new(1, -6, 0, 42) })
-	detail.order.LayoutOrder = 10
+	detail.order.LayoutOrder = 11
 	detail.order.MouseButton1Click:Connect(function()
 		if not selected then
 			return
 		end
-		local ok = Net.call("Delivery", false, "Request", selected.id, qty)
+		local ok = Net.call("Delivery", false, "Request", selected.id, qty, deliveryMode)
 		if ok then
 			State.fire("DeliveryRequested", selected.id, qty)
 			Catalog.toggle(false)
 		end
 	end)
 	detail.equip = UIKit.button(detail.body, "EQUIP", { size = UDim2.new(1, -6, 0, 38) })
-	detail.equip.LayoutOrder = 11
+	detail.equip.LayoutOrder = 12
 	detail.equip.MouseButton1Click:Connect(function()
 		if selected then
 			State.fire("SelectTool", selected.id)
 			Catalog.toggle(false)
 		end
 	end)
-	UIKit.label(detail.body, "Deliveries are free in this build: no money grind. Trucks park in the unloading bays with every piece strapped on the deck.", 11, F.Body, C.SteelDark, { LayoutOrder = 12, Size = UDim2.new(1, -6, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
+	UIKit.label(detail.body, "Deliveries are free in this build: no money grind. Trucks park in the unloading bays with every piece strapped on the deck.", 11, F.Body, C.SteelDark, { LayoutOrder = 13, Size = UDim2.new(1, -6, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
 
 	selectCat("All")
 	RunService.Heartbeat:Connect(function(dt)
@@ -10338,8 +11169,12 @@ function Catalog.toggle(open)
 	State.uiBlocking = open
 	State.fire("UIBlocking", open)
 	if open then
+		local hasRail = State.siteDef and State.siteDef.railSpots and #State.siteDef.railSpots > 0
+		detail.modeRow.Visible = hasRail == true and selected ~= nil and selected.deliverable
+		if not hasRail then
+			deliveryMode = "truck"
+		end
 		rebuild()
-		task.delay(0.05, updateThumbs)
 	else
 		search:ReleaseFocus()
 	end
@@ -10353,7 +11188,7 @@ return Catalog
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="LocalScript" referent="RBX0000001E">
+<Item class="LocalScript" referent="RBX0000001F">
 <Properties>
 <string name="Name">ClientMain</string>
 <ProtectedString name="Source"><![CDATA[-- STEELRISE client bootstrap: builds the interface, binds the current site,
@@ -10721,7 +11556,7 @@ end)
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001F">
+<Item class="ModuleScript" referent="RBX00000020">
 <Properties>
 <string name="Name">CraneClient</string>
 <ProtectedString name="Source"><![CDATA[-- Tower crane on the client.
@@ -11221,6 +12056,23 @@ local function simulate(dt)
 		local damping = op.assist and K.SwingDampingAssist or K.SwingDamping
 		local aRad = (v.trolley - oldV.trolley) / dt - (v.slew * v.slew) * st.trolley
 		local aTan = -((v.slew - oldV.slew) / dt) * st.trolley
+		-- wind pushes the hanging load (more at height and on big light pieces)
+		local site = State.site
+		local windMs = site and site:GetAttribute("WindSpeed") or 0
+		local windDir = site and site:GetAttribute("WindDir") or 0
+		if windMs > 0 then
+			local hookY = CraneMath.hookPos(cfg, st).Y
+			local exposure = math.clamp(hookY / 120, 0.3, 1.5)
+			local sail = 0.6
+			if hanging and loadDef then
+				local areaM2 = loadDef.sizeM.X * math.max(loadDef.sizeM.Y, loadDef.sizeM.Z)
+				sail = math.clamp(0.4 + areaM2 / math.max(loadDef.weightKg / 120, 0.5), 0.4, 3)
+			end
+			local push = K.WindForce * windMs * windMs * exposure * sail * (0.85 + 0.3 * math.noise(os.clock() * 0.7, windDir))
+			local wl = CraneMath.slewCf(cfg, st.slew):VectorToObjectSpace(Vector3.new(math.cos(windDir), 0, math.sin(windDir)))
+			aRad -= wl.X * push
+			aTan -= wl.Z * push
+		end
 		local steps = 4
 		local h = dt / steps
 		for _ = 1, steps do
@@ -11454,6 +12306,7 @@ local function updateOperatorHud(st, load, loadDef, hanging, locked, precision)
 		capKg = cap,
 		lmi = kg / math.max(cap, 1),
 		precision = precision,
+		windMs = State.site and State.site:GetAttribute("WindSpeed") or 0,
 	}
 	local hints = {}
 	if locked and load then
@@ -11660,7 +12513,7 @@ return CraneClient
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000020">
+<Item class="ModuleScript" referent="RBX00000021">
 <Properties>
 <string name="Name">FX</string>
 <ProtectedString name="Source"><![CDATA[-- Effects and positional audio for server-announced events (bolting,
@@ -11863,8 +12716,10 @@ local function updateAmbience(dt)
 	local cam = workspace.CurrentCamera
 	local height = cam and cam.CFrame.Position.Y or 0
 	local high = math.clamp((height - 30) / 120, 0, 1)
-	ambience.wind:set(playing and (0.6 + 0.4 * (1 - high)) or 0.3)
-	ambience.windHigh:set(playing and high or 0)
+	local windMs = State.site and State.site:GetAttribute("WindSpeed") or 6
+	local gust = math.clamp(windMs / 10, 0.3, 1.4)
+	ambience.wind:set(playing and (0.6 + 0.4 * (1 - high)) * gust or 0.3)
+	ambience.windHigh:set(playing and high * gust or 0)
 	ambience.site:set(playing and 0.8 or 0.4)
 	if ambience.city then
 		ambience.city:set(playing and 0.8 or 0.4)
@@ -11914,7 +12769,7 @@ return FX
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000021">
+<Item class="ModuleScript" referent="RBX00000022">
 <Properties>
 <string name="Name">Footsteps</string>
 <ProtectedString name="Source"><![CDATA[-- Surface-aware footsteps for the local character. Silent until step sounds
@@ -11988,7 +12843,7 @@ return Footsteps
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000022">
+<Item class="ModuleScript" referent="RBX00000023">
 <Properties>
 <string name="Name">HUD</string>
 <ProtectedString name="Source"><![CDATA[-- In-game interface: crosshair, contextual prompts, hold progress, placement
@@ -12203,9 +13058,14 @@ local function refreshTasks()
 				if #list > 3 then
 					table.insert(parts, "+" .. (#list - 3) .. " more")
 				end
-				table.insert(lines, string.format("Bay %d  ·  %s", bay, table.concat(parts, ", ")))
+				local label = t:GetAttribute("Kind") == "rail" and "Railcar" or "Bay"
+				table.insert(lines, string.format("%s %d  ·  %s", label, bay, table.concat(parts, ", ")))
 			elseif t:GetAttribute("DepartAt") == 0 then
-				table.insert(lines, string.format("Bay %d  ·  empty — E at the cab to release the truck", bay))
+				if t:GetAttribute("Kind") == "rail" then
+					table.insert(lines, string.format("Railcar %d  ·  empty — leaves on its own shortly", bay))
+				else
+					table.insert(lines, string.format("Bay %d  ·  empty — E at the cab to release the truck", bay))
+				end
 			end
 		end
 	end
@@ -12238,6 +13098,9 @@ function HUD.setCrane(d)
 	ui.craneRows.Slew.Text = string.format("%03d°", math.floor(d.slewDeg % 360))
 	ui.craneRows.Load.Text = d.loadName and (d.loadName .. "  " .. Util.fmtKg(d.loadKg)) or "— hook free —"
 	ui.craneRows.Capacity.Text = Util.fmtKg(d.capKg) .. " at radius"
+	local wind = d.windMs or 0
+	ui.craneRows.Wind.Text = string.format("%.1f m/s%s", wind, wind > Config.Crane.WindStopMs and "  — LIFTING STOPPED" or (wind > Config.Crane.WindWarnMs and "  — HIGH" or ""))
+	ui.craneRows.Wind.TextColor3 = wind > Config.Crane.WindStopMs and C.Invalid or (wind > Config.Crane.WindWarnMs and C.Safety or C.OffWhite)
 	local lmi = math.clamp(d.lmi or 0, 0, 1.2)
 	ui.lmiFill.Size = UDim2.new(math.min(lmi, 1), 0, 1, 0)
 	ui.lmiFill.BackgroundColor3 = lmi < 0.8 and C.Valid or (lmi < 0.95 and C.Safety or C.Invalid)
@@ -12391,6 +13254,16 @@ local function buildPause()
 	UIKit.label(site, "BLUEPRINT GUIDE", 13, F.Bold, C.Safety, { LayoutOrder = 10 })
 	ui.bpRow = UIKit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 38), LayoutOrder = 11, Parent = site })
 	UIKit.list(ui.bpRow, Enum.FillDirection.Horizontal, 6)
+	UIKit.label(site, "TIME OF DAY (HOST)", 13, F.Bold, C.Safety, { LayoutOrder = 12 })
+	local tod = UIKit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), LayoutOrder = 13, Parent = site })
+	UIKit.list(tod, Enum.FillDirection.Horizontal, 6)
+	for i, t in ipairs({ { "Morning", 8.2 }, { "Midday", 12.5 }, { "Afternoon", 16.3 }, { "Dusk", 19.0 }, { "Night", 22.5 } }) do
+		local b = UIKit.button(tod, t[1], { size = UDim2.new(0, 110, 1, 0), textSize = 13 })
+		b.LayoutOrder = i
+		b.MouseButton1Click:Connect(function()
+			Net.call("Site", false, "TimeOfDay", t[2])
+		end)
+	end
 	local bottom = UIKit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 44), LayoutOrder = 20, Parent = site })
 	local menuBtn = UIKit.button(bottom, "RETURN TO MAIN MENU", { style = "danger", size = UDim2.new(0, 260, 1, 0) })
 	menuBtn.MouseButton1Click:Connect(function()
@@ -12517,7 +13390,7 @@ function HUD.build()
 	UIKit.label(ui.crane, "TOWER CRANE", 15, F.Display, C.Safety, { LayoutOrder = 1 })
 	ui.craneMode = UIKit.label(ui.crane, "", 11, F.Mono, C.Muted, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 14) })
 	ui.craneRows = {}
-	for i, row in ipairs({ "Radius", "Height", "Slew", "Load", "Capacity" }) do
+	for i, row in ipairs({ "Radius", "Height", "Slew", "Load", "Capacity", "Wind" }) do
 		local r = UIKit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 2 + i, Parent = ui.crane })
 		UIKit.label(r, string.upper(row), 12, F.Bold, C.Muted, { Size = UDim2.new(0, 90, 1, 0) })
 		ui.craneRows[row] = UIKit.label(r, "", 14, F.Mono, C.OffWhite, { Position = UDim2.new(0, 90, 0, 0), Size = UDim2.new(1, -90, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })
@@ -12588,7 +13461,7 @@ return HUD
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000023">
+<Item class="ModuleScript" referent="RBX00000024">
 <Properties>
 <string name="Name">Interaction</string>
 <ProtectedString name="Source"><![CDATA[-- On-foot interaction: what the crosshair is on, contextual prompts, picking
@@ -13029,7 +13902,7 @@ return Interaction
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000024">
+<Item class="ModuleScript" referent="RBX00000025">
 <Properties>
 <string name="Name">MainMenu</string>
 <ProtectedString name="Source"><![CDATA[-- Main menu: Play, Continue Construction, Site Selection, Settings, Controls,
@@ -13540,7 +14413,7 @@ return MainMenu
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000025">
+<Item class="ModuleScript" referent="RBX00000026">
 <Properties>
 <string name="Name">Net</string>
 <ProtectedString name="Source"><![CDATA[-- Safe wrappers around the STEELRISE remotes.
@@ -13584,7 +14457,7 @@ return Net
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000026">
+<Item class="ModuleScript" referent="RBX00000027">
 <Properties>
 <string name="Name">Placement</string>
 <ProtectedString name="Source"><![CDATA[-- Hand placement of carried components: a transparent ghost snaps to grid or
@@ -13823,7 +14696,7 @@ return Placement
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000027">
+<Item class="ModuleScript" referent="RBX00000028">
 <Properties>
 <string name="Name">Pour</string>
 <ProtectedString name="Source"><![CDATA[-- Concrete placement with the pump hose: previews the slab for the aimed
@@ -13969,7 +14842,7 @@ return Pour
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000028">
+<Item class="ModuleScript" referent="RBX00000029">
 <Properties>
 <string name="Name">Settings</string>
 <ProtectedString name="Source"><![CDATA[-- Applies player settings (graphics, audio, controls) locally and builds the
@@ -14165,7 +15038,7 @@ return Settings
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000029">
+<Item class="ModuleScript" referent="RBX0000002A">
 <Properties>
 <string name="Name">State</string>
 <ProtectedString name="Source"><![CDATA[-- Client-side shared state and a tiny event bus between controllers.
@@ -14209,7 +15082,7 @@ return State
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000002A">
+<Item class="ModuleScript" referent="RBX0000002B">
 <Properties>
 <string name="Name">TrailerAnim</string>
 <ProtectedString name="Source"><![CDATA[-- Drive-in / drive-out animation for delivery trucks. The server places a
@@ -14310,6 +15183,7 @@ function TrailerAnim.init()
 			end
 			local arriveAt = model:GetAttribute("ArriveAt") or 0
 			local departAt = model:GetAttribute("DepartAt") or 0
+			local dist = model:GetAttribute("AnimDist") or DIST
 			local engineLevel = 0.45
 			if departAt > 0 then
 				if a.phase ~= "depart" then
@@ -14318,7 +15192,7 @@ function TrailerAnim.init()
 					Audio.play("TruckAirBrake", model.PrimaryPart, 0.6)
 				end
 				local p = math.clamp((t - departAt) / D.DepartSeconds, 0, 1)
-				moveAll(a, -easeIn(p) * DIST)
+				moveAll(a, -easeIn(p) * dist)
 				engineLevel = 1
 			elseif arriveAt > 0 and t < arriveAt + D.ArriveSeconds then
 				if a.phase ~= "arrive" then
@@ -14329,7 +15203,7 @@ function TrailerAnim.init()
 					end
 				end
 				local p = math.clamp((t - arriveAt) / D.ArriveSeconds, 0, 1)
-				moveAll(a, (1 - easeOut(p)) * DIST)
+				moveAll(a, (1 - easeOut(p)) * dist)
 				engineLevel = 1 - p * 0.5
 			elseif a.phase == "arrive" then
 				moveAll(a, 0)
@@ -14358,7 +15232,7 @@ return TrailerAnim
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000002B">
+<Item class="ModuleScript" referent="RBX0000002C">
 <Properties>
 <string name="Name">Tutorial</string>
 <ProtectedString name="Source"><![CDATA[-- Short playable tutorial on the Empty Land site: unload, rig, lift, land,
@@ -14513,7 +15387,7 @@ return Tutorial
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000002C">
+<Item class="ModuleScript" referent="RBX0000002D">
 <Properties>
 <string name="Name">UIKit</string>
 <ProtectedString name="Source"><![CDATA[-- Interface building blocks in the STEELRISE style: charcoal panels, steel
@@ -14908,7 +15782,7 @@ return UIKit
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000002D">
+<Item class="ModuleScript" referent="RBX0000002E">
 <Properties>
 <string name="Name">View</string>
 <ProtectedString name="Source"><![CDATA[-- First/third-person view switching and the shared aim ray.
@@ -14983,7 +15857,7 @@ return View
 </Item>
 </Item>
 </Item>
-<Item class="Workspace" referent="RBX00000031">
+<Item class="Workspace" referent="RBX00000032">
 <Properties>
 <string name="Name">Workspace</string>
 <bool name="StreamingEnabled">true</bool>
@@ -14991,13 +15865,13 @@ return View
 <int name="StreamingTargetRadius">1024</int>
 </Properties>
 </Item>
-<Item class="Lighting" referent="RBX00000032">
+<Item class="Lighting" referent="RBX00000033">
 <Properties>
 <string name="Name">Lighting</string>
 <token name="Technology">4</token>
 </Properties>
 </Item>
-<Item class="SoundService" referent="RBX00000033">
+<Item class="SoundService" referent="RBX00000034">
 <Properties>
 <string name="Name">SoundService</string>
 </Properties>

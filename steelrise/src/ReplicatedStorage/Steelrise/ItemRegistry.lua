@@ -116,18 +116,24 @@ end
 ---------------------------------------------------------------------------
 
 local BEAMS = {
+	{ name = "W8×18", d = 0.207, bf = 0.133, tf = 0.0084, tw = 0.0058, kgm = 26.8 },
 	{ name = "W10×26", d = 0.262, bf = 0.147, tf = 0.0112, tw = 0.0066, kgm = 38.7 },
 	{ name = "W12×26", d = 0.310, bf = 0.165, tf = 0.0097, tw = 0.0058, kgm = 38.7 },
+	{ name = "W14×22", d = 0.349, bf = 0.127, tf = 0.0085, tw = 0.0058, kgm = 32.7 },
 	{ name = "W16×31", d = 0.403, bf = 0.140, tf = 0.0112, tw = 0.0070, kgm = 46.1 },
 	{ name = "W18×35", d = 0.450, bf = 0.152, tf = 0.0108, tw = 0.0076, kgm = 52.1 },
 	{ name = "W21×44", d = 0.526, bf = 0.165, tf = 0.0114, tw = 0.0089, kgm = 65.5 },
 	{ name = "W24×55", d = 0.599, bf = 0.178, tf = 0.0128, tw = 0.0100, kgm = 81.8 },
+	{ name = "W27×84", d = 0.678, bf = 0.253, tf = 0.0163, tw = 0.0117, kgm = 125.0 },
+	{ name = "W30×99", d = 0.753, bf = 0.266, tf = 0.0170, tw = 0.0132, kgm = 147.0 },
 }
 
 local COLUMNS = {
+	{ name = "W8×31", d = 0.203, bf = 0.203, tf = 0.0110, tw = 0.0072, kgm = 46.1 },
 	{ name = "W10×49", d = 0.253, bf = 0.254, tf = 0.0142, tw = 0.0086, kgm = 72.9 },
 	{ name = "W12×65", d = 0.308, bf = 0.305, tf = 0.0154, tw = 0.0099, kgm = 96.7 },
 	{ name = "W14×90", d = 0.356, bf = 0.369, tf = 0.0180, tw = 0.0112, kgm = 134.0 },
+	{ name = "W14×120", d = 0.368, bf = 0.373, tf = 0.0239, tw = 0.0150, kgm = 179.0 },
 }
 
 Registry.BeamProfiles = BEAMS
@@ -522,7 +528,7 @@ end
 -- Footings
 ---------------------------------------------------------------------------
 
-for _, size in ipairs({ 1.5, 2.0 }) do
+for _, size in ipairs({ 1.5, 2.0, 2.5, 3.0 }) do
 	add({
 		id = "FT-PRECAST-" .. idLen(size),
 		name = string.format("Precast Pad Footing %.1f m with Anchor Rods", size),
@@ -585,7 +591,7 @@ add({
 	proxyColor = GALV,
 })
 
-for _, H in ipairs({ 2.0, 1.0 }) do
+for _, H in ipairs({ 2.0, 1.0, 0.5, 1.5, 3.0 }) do
 	local rosettes = {}
 	local sockets = { { type = "ScafStdTop", cf = CF(0, H, 0) } }
 	for k = 1, math.floor(H / 0.5 + 0.5) do
@@ -668,7 +674,19 @@ ledgerDef("SC-TOE-1090", "Scaffold Toe Board 1.09 m", G.ScaffoldBayShort, "ScafT
 		b:box("Board", V(len - 0.1, 0.15, 0.025), CF(0, 0.135, 0), Color3.fromRGB(176, 140, 92), M.WoodPlanks)
 	end, { "Scaffold", "ScaffoldToeBoard" })
 
-for _, spec in ipairs({ { G.ScaffoldBayLong, "2570" }, { G.ScaffoldBayShort, "1090" } }) do
+-- the other standard ring-lock bay lengths
+for _, len in ipairs({ 0.73, 1.57, 2.07, 3.07 }) do
+	local tag = tostring(math.floor(len * 1000 + 0.5))
+	ledgerDef("SC-LEDGER-" .. tag, string.format("Scaffold Ledger %.2f m", len), len, "ScafLedgerEnd",
+		string.format("Horizontal ring-lock ledger for a %.2f m bay; wedges hammered into the rosettes.", len))
+	ledgerDef("SC-TOE-" .. tag, string.format("Scaffold Toe Board %.2f m", len), len, "ScafToeEnd",
+		string.format("Timber toe board for a %.2f m bay edge.", len),
+		function(b, l)
+			b:box("Board", V(l - 0.1, 0.15, 0.025), CF(0, 0.135, 0), Color3.fromRGB(176, 140, 92), M.WoodPlanks)
+		end, { "Scaffold", "ScaffoldToeBoard" })
+end
+
+for _, spec in ipairs({ { G.ScaffoldBayLong, "2570" }, { G.ScaffoldBayShort, "1090" }, { 2.07, "2070" }, { 3.07, "3070" } }) do
 	local bay, tag = spec[1], spec[2]
 	local Ld = math.sqrt(bay * bay + G.ScaffoldLift * G.ScaffoldLift)
 	add({
@@ -701,7 +719,7 @@ for _, spec in ipairs({ { G.ScaffoldBayLong, "2570" }, { G.ScaffoldBayShort, "10
 	})
 end
 
-for _, spec in ipairs({ { G.ScaffoldBayLong, G.ScaffoldBayShort, "2570" }, { G.ScaffoldBayShort, G.ScaffoldBayShort, "1090" } }) do
+for _, spec in ipairs({ { G.ScaffoldBayLong, G.ScaffoldBayShort, "2570" }, { G.ScaffoldBayShort, G.ScaffoldBayShort, "1090" }, { 2.07, G.ScaffoldBayShort, "2070" }, { 3.07, G.ScaffoldBayShort, "3070" } }) do
 	local a, w, tag = spec[1], spec[2], spec[3]
 	local planks = math.max(1, math.floor((w - 0.05) / 0.32))
 	local deckW = planks * 0.32
@@ -1425,6 +1443,8 @@ require(script.Parent.ItemsBuilding)({
 	panelPlugs = panelPlugs,
 	panelFasteners = panelFasteners,
 })
+
+require(script.Parent.ItemsSite)({ add = add, CF = CF, V = V, C = C, M = M })
 
 ---------------------------------------------------------------------------
 -- Tools (hotbar). Models are used for the hand-held visual and catalog.

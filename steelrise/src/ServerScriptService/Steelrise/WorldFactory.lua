@@ -109,6 +109,10 @@ end
 -- Lighting
 ---------------------------------------------------------------------------
 
+function WorldFactory.isNight(clock)
+	return clock >= 18.3 or clock < 6.6
+end
+
 function WorldFactory.applyLighting(site)
 	local L = site.lighting or {}
 	Lighting.ClockTime = L.clock or 12
@@ -423,15 +427,16 @@ function WorldFactory.buildSurroundings(site, folder)
 		local x = k * m(30)
 		local pole = cyl(folder, "LampPost", m(8), m(0.2), CF(x, m(4), roadZ - m(7.5)) * CFrame.Angles(0, 0, math.pi / 2), C.SteelDark, M.Metal)
 		local head = P(folder, "LampHead", V(m(0.6), m(0.2), m(1.4)), CF(x, m(8), roadZ - m(6.9)), C.SteelDark, M.Metal, { nc = true })
-		if (site.lighting.clock or 12) > 17 or (site.lighting.clock or 12) < 7 then
-			local l = Instance.new("SpotLight")
-			l.Face = Enum.NormalId.Bottom
-			l.Range = 40
-			l.Angle = 110
-			l.Brightness = 2
-			l.Color = Color3.fromRGB(255, 214, 160)
-			l.Parent = head
-		end
+		-- street lights follow the time of day (SiteService.setClock toggles them)
+		local l = Instance.new("SpotLight")
+		l.Name = "NightLight"
+		l.Face = Enum.NormalId.Bottom
+		l.Range = 40
+		l.Angle = 110
+		l.Brightness = 2
+		l.Color = Color3.fromRGB(255, 214, 160)
+		l.Enabled = WorldFactory.isNight(site.lighting.clock or 12)
+		l.Parent = head
 		pole.CastShadow = true
 	end
 

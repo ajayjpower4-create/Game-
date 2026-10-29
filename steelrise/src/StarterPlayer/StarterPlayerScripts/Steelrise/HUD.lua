@@ -210,9 +210,14 @@ local function refreshTasks()
 				if #list > 3 then
 					table.insert(parts, "+" .. (#list - 3) .. " more")
 				end
-				table.insert(lines, string.format("Bay %d  ·  %s", bay, table.concat(parts, ", ")))
+				local label = t:GetAttribute("Kind") == "rail" and "Railcar" or "Bay"
+				table.insert(lines, string.format("%s %d  ·  %s", label, bay, table.concat(parts, ", ")))
 			elseif t:GetAttribute("DepartAt") == 0 then
-				table.insert(lines, string.format("Bay %d  ·  empty — E at the cab to release the truck", bay))
+				if t:GetAttribute("Kind") == "rail" then
+					table.insert(lines, string.format("Railcar %d  ·  empty — leaves on its own shortly", bay))
+				else
+					table.insert(lines, string.format("Bay %d  ·  empty — E at the cab to release the truck", bay))
+				end
 			end
 		end
 	end
@@ -245,6 +250,9 @@ function HUD.setCrane(d)
 	ui.craneRows.Slew.Text = string.format("%03d°", math.floor(d.slewDeg % 360))
 	ui.craneRows.Load.Text = d.loadName and (d.loadName .. "  " .. Util.fmtKg(d.loadKg)) or "— hook free —"
 	ui.craneRows.Capacity.Text = Util.fmtKg(d.capKg) .. " at radius"
+	local wind = d.windMs or 0
+	ui.craneRows.Wind.Text = string.format("%.1f m/s%s", wind, wind > Config.Crane.WindStopMs and "  — LIFTING STOPPED" or (wind > Config.Crane.WindWarnMs and "  — HIGH" or ""))
+	ui.craneRows.Wind.TextColor3 = wind > Config.Crane.WindStopMs and C.Invalid or (wind > Config.Crane.WindWarnMs and C.Safety or C.OffWhite)
 	local lmi = math.clamp(d.lmi or 0, 0, 1.2)
 	ui.lmiFill.Size = UDim2.new(math.min(lmi, 1), 0, 1, 0)
 	ui.lmiFill.BackgroundColor3 = lmi < 0.8 and C.Valid or (lmi < 0.95 and C.Safety or C.Invalid)
@@ -398,6 +406,16 @@ local function buildPause()
 	UIKit.label(site, "BLUEPRINT GUIDE", 13, F.Bold, C.Safety, { LayoutOrder = 10 })
 	ui.bpRow = UIKit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 38), LayoutOrder = 11, Parent = site })
 	UIKit.list(ui.bpRow, Enum.FillDirection.Horizontal, 6)
+	UIKit.label(site, "TIME OF DAY (HOST)", 13, F.Bold, C.Safety, { LayoutOrder = 12 })
+	local tod = UIKit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), LayoutOrder = 13, Parent = site })
+	UIKit.list(tod, Enum.FillDirection.Horizontal, 6)
+	for i, t in ipairs({ { "Morning", 8.2 }, { "Midday", 12.5 }, { "Afternoon", 16.3 }, { "Dusk", 19.0 }, { "Night", 22.5 } }) do
+		local b = UIKit.button(tod, t[1], { size = UDim2.new(0, 110, 1, 0), textSize = 13 })
+		b.LayoutOrder = i
+		b.MouseButton1Click:Connect(function()
+			Net.call("Site", false, "TimeOfDay", t[2])
+		end)
+	end
 	local bottom = UIKit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 44), LayoutOrder = 20, Parent = site })
 	local menuBtn = UIKit.button(bottom, "RETURN TO MAIN MENU", { style = "danger", size = UDim2.new(0, 260, 1, 0) })
 	menuBtn.MouseButton1Click:Connect(function()
@@ -524,7 +542,7 @@ function HUD.build()
 	UIKit.label(ui.crane, "TOWER CRANE", 15, F.Display, C.Safety, { LayoutOrder = 1 })
 	ui.craneMode = UIKit.label(ui.crane, "", 11, F.Mono, C.Muted, { LayoutOrder = 2, Size = UDim2.new(1, 0, 0, 14) })
 	ui.craneRows = {}
-	for i, row in ipairs({ "Radius", "Height", "Slew", "Load", "Capacity" }) do
+	for i, row in ipairs({ "Radius", "Height", "Slew", "Load", "Capacity", "Wind" }) do
 		local r = UIKit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 20), LayoutOrder = 2 + i, Parent = ui.crane })
 		UIKit.label(r, string.upper(row), 12, F.Bold, C.Muted, { Size = UDim2.new(0, 90, 1, 0) })
 		ui.craneRows[row] = UIKit.label(r, "", 14, F.Mono, C.OffWhite, { Position = UDim2.new(0, 90, 0, 0), Size = UDim2.new(1, -90, 1, 0), TextTruncate = Enum.TextTruncate.AtEnd })

@@ -1,4 +1,4 @@
-# STEELRISE: Construction Simulator — Roblox (Phase 1)
+# STEELRISE: Construction Simulator — Roblox (Phases 1–4)
 
 A hands-on steel-construction game for Roblox PC. You receive materials on
 flatbed trucks, release the ratchet straps, rig pieces to a working tower
@@ -12,11 +12,13 @@ materials, so the place runs with **no uploaded assets**. No audio IDs are
 invented: every sound slot is wired up but silent until you supply audio
 (see [`docs/AUDIO.md`](docs/AUDIO.md)).
 
-> **What I could not do from here:** create or attach a `.rbxl` place file,
-> run Roblox Studio, or reach create.roblox.com (blocked by this session's
-> network policy). The code was written against the Roblox engine API as I
-> know it and checked with a Lua parser and an undefined-global scan only.
-> **It has not been run in Studio yet** — see *Status* below.
+> **How this was tested:** Roblox Studio can't run here, so every script is
+> run in `tools/sim` — a Lua mock of the Roblox engine with strict property
+> types — which boots the server, loads all eight sites, saves and continues,
+> orders truck and rail deliveries, drives the crane, carries, pours and
+> trowels a slab, and clicks through loading screen → menu → Play. Models are
+> checked with a small software renderer. Engine-specific behaviour (physics,
+> streaming, DataStores, real rendering) still needs a Studio pass.
 
 ---
 
@@ -106,14 +108,14 @@ runtime, no HttpService calls (JSON helpers only), no asset uploads.
 | Mouse | Look and aim (first person) · cursor aim (third person) |
 | V | First / third-person view |
 | E | Interact: pick up, release strap, enter crane cab, release empty truck |
-| LMB | Place carried item · **hold** to fasten with the equipped tool |
+| LMB | Place carried item · **hold** to fasten with the equipped tool · **hold** to pour with the pump hose |
 | R · Z / C | Rotate 90° · fine rotate (15° in free placement) |
 | T | Free placement (props and equipment only) |
 | Arrow keys (+Shift) | Nudge in free placement, 0.1 m (0.5 m) |
 | G | Drop carried item |
 | Hold X | Dismantle the aimed component (needs its tool) |
 | F | Switch equipment on/off (light tower, generator, welder, power board) |
-| 1 – 5 | Hands · impact wrench · scaffold hammer · welder · crane radio remote |
+| 1 – 7 | Hands · impact wrench · scaffold hammer · welder · crane radio remote · concrete pump hose · trowel |
 | Tab | Catalog & deliveries |
 | B | Blueprint ghosts on/off |
 | J | Task panel |
@@ -262,40 +264,58 @@ train are Phase 2+ (below).
 
 ---
 
-## 5. Status — Phase 1
+## 5. Status
 
-### Implemented (code complete)
-* Loading screen with six real stages (engine, server handshake, asset
-  preload with per-asset callbacks and failure count, site streaming via
-  `RequestStreamAroundAsync`, catalog index, menu ready), timeouts on every
-  stage, procedural cinematic background, fade into the menu.
-* Main menu (Play, Continue, Site Selection with live 3D previews of every
-  site's starting stage, Settings, Controls, Credits) over an orbiting camera
-  of the live site.
+### Phase 1 — core loop
+* Loading screen with six real stages, timeouts on every stage, procedural
+  cinematic background, fade into the menu.
+* Main menu with live 3D previews of every site's starting stage.
 * Full loop: catalog → delivery → strapped load → release → carry or crane →
-  snap/align → land → fasten (impact wrench bolts, hammered wedges, welds
-  with restrained sparks) → unhook. Dismantling with dependency checks.
-* Tower crane with cab, radio remote, three cameras, sway, load chart, LMI,
-  collision stops, assist, recovery.
-* Placement preview with validity colours and specific reasons; grid,
-  connection snapping, rotation, fine rotation, free placement + nudge.
-* Modular scaffold with climbable ladder.
-* Blueprint ghosts + task panel with next task and progress; deliveries list.
-* Saves: 3 slots + autosave, settings, favourites; session fallback.
-* Settings: graphics preset (Low/Balanced/High/Ultra), shadows,
-  post-processing, particles, FOV, sensitivity, third-person default, assist
-  default, seven volume groups.
-* Short playable tutorial on Empty Land (advances on real events).
-* Co-op structure: one host per server, others join; server-validated
-  materials, placements, crane control (single operator), saves; no
-  duplicated cargo (one model per piece through every state).
+  snap/align → land → fasten → unhook; dismantling with dependency checks.
+* Tower crane with cab, radio remote, three cameras, sway, load chart,
+  collision stops, alignment assist, recovery.
+* Placement preview with specific failure reasons; modular scaffold;
+  blueprint ghosts and task panel; 3 save slots + autosave; settings;
+  tutorial; co-op structure with server validation.
 
-### Catalog count
-**119 items implemented** (92 installable components, 6 functional
-equipment, 16 decorative props, 5 tools) across all 11 categories, each with
-a model and behaviour. Size variants are real geometry changes (profiles,
-lengths, storey heights, bay widths) — no recolours. **Target 500; 381 to go**
-(see *Remaining work*). The menu footer and catalog show the live count.
+### Phase 2 — vehicles, crane, interface
+* New detailed long-hood tractor and 53 ft flatbed (chrome grille, twin
+  headlights, fenders, air cleaners, stacks, sleeper, fuel tanks, mirrors,
+  planked deck, rub rails, strap winches, air-ride tandem, landing gear) with
+  wheels that spin while driving in and out.
+* New tower crane model: angle-chord mast with K-lacing, joint plates and
+  rest platforms, load-chart board, slewing platform with motors, framed cab,
+  jib with walkway and section pins, counter-jib with winch, electrical house
+  and hung counterweights, trolley with maintenance basket, hook block with
+  swivel and capacity plate.
+* Chat window setting: **Small** (default), Normal or Hidden.
+
+### Phase 3 — building content
+* **Concrete:** pump hose (6) pours a slab over a fully welded deck bay; the
+  trowel (7) finishes four marks and the slab cures from dark to light grey.
+* **Roofing:** insulated roof deck on the top floor, parapets, roof hatch,
+  skylight.
+* **Envelope:** wall panels with personnel doors, window bands, overhead
+  doors, precast, thin brick and louvres, plus the curtain wall.
+* **Interiors:** demountable partitions (solid / door / glazed) on the
+  finished floor; steel stair flights.
+* **Balconies** on apartment floors; **MEP** plant (rooftop units, AHU,
+  switchboard, transformer, standby generator, fire pump, etc.).
+* Blueprints include slabs, roof deck, parapets and balconies.
+
+### Phase 4 — logistics, catalog, weather
+* **Rail deliveries** on the Industrial site: choose *Rail* in the catalog;
+  a locomotive brings strapped flatcars onto the siding (two spots); unload
+  them with the crane; empty cars leave on their own.
+* **Catalog: 546 items** (479 installable, 18 functional equipment, 42
+  decorative, 7 tools) — more W-shapes, a 3.0 m bay, 3.0 m and 4.8 m storeys,
+  larger footings, every standard ring-lock scaffold size, rigging gear,
+  machinery, safety equipment and site furnishings. Size variants are real
+  geometry changes, never recolours. The grid is virtualised (only on-screen
+  cards exist) with a bounded thumbnail cache.
+* **Wind:** gusty per-site wind pushes hanging loads (more at height and on
+  big light pieces); the crane panel shows it; no new lifts above 15 m/s.
+* **Time of day** (site menu, host): morning → night; street lights follow.
 
 ### Temporary / procedural assets
 * All models are engine parts with built-in materials (Metal, DiamondPlate,
@@ -305,7 +325,7 @@ lengths, storey heights, bay widths) — no recolours. **Target 500; 381 to go**
 * Sky is the default Roblox sky + dynamic `Clouds`; the loading background is
   drawn with UI frames.
 * **Audio is silent** apart from Roblox's default character sounds until you
-  fill `AudioRegistry.lua` — 37 slots listed in [`docs/AUDIO.md`](docs/AUDIO.md).
+  fill `AudioRegistry.lua` — 39 slots listed in [`docs/AUDIO.md`](docs/AUDIO.md).
 
 ### Untested (needs a Studio pass)
 Nothing here has been executed in Roblox. Expect a round of tuning on:
@@ -313,7 +333,8 @@ crane feel (speeds, damping, collision box sizes), carry hold offsets,
 first-person mouse release on overlays (uses `Modal` buttons), ViewportFrame
 framing, terrain surface heights for footings (validation tolerance 0.15
 studs), trailer packing visuals, DataStore behaviour, streaming radius with
-the 100 m high-rise crane, and UI scale at unusual resolutions.
+the 100 m high-rise crane, UI scale at unusual resolutions, wind strength,
+the chat window size (TextChatService only), and the train approach speed.
 
 ### Performance target
 Target: **60 FPS at 1080p** on a mid-range PC — Intel Core i5-10400 or
@@ -384,27 +405,13 @@ Heaviest starting site (Office 5 / High-Rise) is roughly 5–7k parts.
 
 ---
 
-## 7. Remaining work (roadmap)
+## 7. Remaining work
 
-**Phase 2 — buildings & content**
-* Concrete slab pours on deck (formwork edge, pour, cure states), precast
-  hollow-core planks, stairs/stair towers, roof deck + membrane + parapets.
-* Doors and window systems for walls, apartment interior partitions (metal
-  studs + board), balconies (cantilever steel + slab), MEP rough-ins.
-* Column splice plates and moment connections as separate plates; bolt
-  boxes consumed by bolting (optional inventory mode).
-* Expand the catalog to ≥500 (more profiles W8–W40, HSS sizes, angles and
-  channels, plates in thicknesses, precast pieces, MEP runs, rigging gear,
-  machinery such as telehandler/forklift/scissor lift as operable vehicles,
-  more site furniture). Virtualise the catalog grid for 500+ cards.
-* Second crane option (luffing jib for tight downtown lots), mobile crane.
+* Operable vehicles (telehandler, forklift, mobile crane) — currently
+  parked props.
+* Ground-floor slab-on-grade pours (partitions work from level 2 up).
 * Completed-floor consolidation (merge finished floors into fewer parts).
-
-**Phase 3 — logistics & polish**
-* Freight train on the Industrial site's siding (cars with strapped loads,
-  unloaded with the same strap/crane/hand systems).
-* Licensed audio pass; meshes/textures per `docs/ASSETS.md`; MaterialVariants
-  for weathered steel, concrete and plywood.
-* Wind affecting sway and crane limits at height, day/night with work lights.
-* Full co-op roles (signalman, ground crew), per-player saves on shared
-  servers, measured performance pass with the MicroProfiler.
+* Licensed audio (all 39 slots are wired and silent); meshes, textures and
+  MaterialVariants per `docs/ASSETS.md`.
+* Full co-op roles, per-player saves on shared servers, and a measured
+  performance pass in Studio with the MicroProfiler.

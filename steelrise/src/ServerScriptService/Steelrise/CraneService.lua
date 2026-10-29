@@ -291,6 +291,10 @@ function CraneService.attach(player, componentId)
 	if (hook - target).Magnitude > K.AttachRange + 1.5 + spread * 0.25 then
 		return false, "Bring the hook over the rigging points first."
 	end
+	local wind = Services.Site.current.folder:GetAttribute("WindSpeed") or 0
+	if wind > K.WindStopMs then
+		return false, string.format("Wind %.0f m/s — above the %d m/s lifting limit. Wait for it to drop.", wind, K.WindStopMs)
+	end
 	local kg = def.weightKg + K.RiggingKg
 	local cap = CraneMath.capacityKg(rec.cfg, rec.st.trolley)
 	if kg > cap then

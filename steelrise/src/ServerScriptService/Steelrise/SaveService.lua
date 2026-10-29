@@ -165,6 +165,7 @@ function SaveService.snapshot()
 		v = 1,
 		site = site.id,
 		blueprint = site.blueprint,
+		clock = site.folder:GetAttribute("Clock"),
 		savedAt = os.time(),
 		progress = { installed = site.folder:GetAttribute("BPInstalled") or 0, total = site.folder:GetAttribute("BPTotal") or 0 },
 		components = comps,

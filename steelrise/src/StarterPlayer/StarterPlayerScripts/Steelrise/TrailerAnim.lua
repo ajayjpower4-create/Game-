@@ -96,6 +96,7 @@ function TrailerAnim.init()
 			end
 			local arriveAt = model:GetAttribute("ArriveAt") or 0
 			local departAt = model:GetAttribute("DepartAt") or 0
+			local dist = model:GetAttribute("AnimDist") or DIST
 			local engineLevel = 0.45
 			if departAt > 0 then
 				if a.phase ~= "depart" then
@@ -104,7 +105,7 @@ function TrailerAnim.init()
 					Audio.play("TruckAirBrake", model.PrimaryPart, 0.6)
 				end
 				local p = math.clamp((t - departAt) / D.DepartSeconds, 0, 1)
-				moveAll(a, -easeIn(p) * DIST)
+				moveAll(a, -easeIn(p) * dist)
 				engineLevel = 1
 			elseif arriveAt > 0 and t < arriveAt + D.ArriveSeconds then
 				if a.phase ~= "arrive" then
@@ -115,7 +116,7 @@ function TrailerAnim.init()
 					end
 				end
 				local p = math.clamp((t - arriveAt) / D.ArriveSeconds, 0, 1)
-				moveAll(a, (1 - easeOut(p)) * DIST)
+				moveAll(a, (1 - easeOut(p)) * dist)
 				engineLevel = 1 - p * 0.5
 			elseif a.phase == "arrive" then
 				moveAll(a, 0)

@@ -1,6 +1,7 @@
--- Searchable catalog over the item registry: categories, favourites, lazy
--- 3D thumbnails (only cards scrolled into view get a model, and the oldest
--- are released once the cache is full) and physical delivery requests.
+-- Searchable catalog over the item registry: categories, favourites, a
+-- virtualised card grid (only the rows on screen exist, card frames are
+-- reused) with lazily built 3D thumbnails in a bounded cache, and physical
+-- delivery requests by truck or, on rail-served sites, by rail.
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,9 +25,14 @@ local category = "All"
 local favoritesOnly = false
 local selected = nil
 local qty = 1
-local cards = {} -- id -> { frame, vp, model, lastSeen }
-local built = 0
-local MAX_THUMBS = 48
+local filtered = {} -- defs matching the current search
+local pool = {} -- reusable card frames (only enough for the visible rows)
+local thumbs = {} -- id -> preview model (bounded cache)
+local thumbOrder = {}
+local MAX_THUMBS = 64
+local CELL_W, CELL_H, GAP = 150, 126, 8
+local deliveryMode = "truck"
+local setDetail -- defined below; cards call it
 
 local CLASS_COLOR = {
 	Installable = C.Safety,
@@ -43,54 +49,119 @@ local function thumbModel(def)
 	return nil
 end
 
-local function releaseThumb(c)
-	if c.model then
-		c.model:Destroy()
-		c.model = nil
-		built -= 1
+-- Preview model for an item, cached; the oldest unused previews are freed.
+local function thumbFor(def, inUse)
+	local m = thumbs[def.id]
+	if m then
+		return m
 	end
+	m = thumbModel(def)
+	if not m then
+		return nil
+	end
+	thumbs[def.id] = m
+	table.insert(thumbOrder, def.id)
+	local i = 1
+	while #thumbOrder > MAX_THUMBS and i <= #thumbOrder do
+		local id = thumbOrder[i]
+		if not inUse[id] then
+			if thumbs[id] then
+				thumbs[id]:Destroy()
+			end
+			thumbs[id] = nil
+			table.remove(thumbOrder, i)
+		else
+			i += 1
+		end
+	end
+	return m
 end
 
-local function updateThumbs()
-	if not root.Visible then
+local function newCard()
+	local frame = UIKit.new("TextButton", { AutoButtonColor = false, Text = "", BackgroundColor3 = C.CharcoalLight, BorderSizePixel = 0, Size = UDim2.new(0, CELL_W, 0, CELL_H), Parent = grid })
+	UIKit.corner(frame, 5)
+	local stroke = UIKit.stroke(frame, C.SteelDark, 1, 0)
+	local vp = UIKit.new("ViewportFrame", {
+		BackgroundColor3 = Color3.fromRGB(44, 48, 54),
+		BorderSizePixel = 0,
+		Size = UDim2.new(1, -8, 0, 86),
+		Position = UDim2.new(0, 4, 0, 4),
+		Ambient = Color3.fromRGB(130, 132, 138),
+		LightColor = Color3.fromRGB(255, 246, 232),
+		LightDirection = Vector3.new(-0.5, -1, -0.6),
+		Parent = frame,
+	})
+	UIKit.corner(vp, 4)
+	local bar = UIKit.new("Frame", { BorderSizePixel = 0, Size = UDim2.new(0, 3, 0, 86), Position = UDim2.new(0, 4, 0, 4), Parent = frame })
+	bar.ZIndex = 2
+	local label = UIKit.label(frame, "", 12, F.Medium, C.OffWhite, { Position = UDim2.new(0, 6, 0, 92), Size = UDim2.new(1, -12, 0, 30), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top })
+	local fav = UIKit.label(frame, "★", 14, F.Bold, C.Safety, { Position = UDim2.new(1, -20, 0, 6), Size = UDim2.new(0, 16, 0, 16) })
+	fav.ZIndex = 3
+	local card = { frame = frame, vp = vp, bar = bar, label = label, fav = fav }
+	frame.MouseButton1Click:Connect(function()
+		if card.def then
+			setDetail(card.def)
+		end
+	end)
+	frame.MouseEnter:Connect(function()
+		stroke.Color = C.Safety
+	end)
+	frame.MouseLeave:Connect(function()
+		stroke.Color = C.SteelDark
+	end)
+	return card
+end
+
+-- Lays out only the rows that are on screen (plus one), reusing card frames.
+local function layoutCards()
+	if not root or not root.Visible then
 		return
 	end
-	local winPos, winSize = grid.AbsolutePosition, grid.AbsoluteSize
-	local now = os.clock()
-	for _, c in pairs(cards) do
-		local p, s = c.frame.AbsolutePosition, c.frame.AbsoluteSize
-		local visible = c.frame.Visible and p.Y + s.Y > winPos.Y - 100 and p.Y < winPos.Y + winSize.Y + 100
-		if visible then
-			c.lastSeen = now
-			if not c.model and built < MAX_THUMBS + 12 then
-				c.model = thumbModel(c.def)
-				if c.model then
-					built += 1
-					c.model.Parent = c.vp
-					UIKit.frameModel(c.vp, c.model, 35, 24, 0.95)
+	local width = math.max(grid.AbsoluteSize.X, CELL_W)
+	local cols = math.max(1, math.floor((width + GAP) / (CELL_W + GAP)))
+	local rows = math.ceil(#filtered / cols)
+	grid.CanvasSize = UDim2.new(0, 0, 0, rows * (CELL_H + GAP))
+	local firstRow = math.max(0, math.floor(grid.CanvasPosition.Y / (CELL_H + GAP)))
+	local rowCount = math.ceil(math.max(grid.AbsoluteSize.Y, CELL_H) / (CELL_H + GAP)) + 1
+	local first = firstRow * cols + 1
+	local last = math.min(#filtered, (firstRow + rowCount) * cols)
+	local inUse = {}
+	for i = first, last do
+		inUse[filtered[i].id] = true
+	end
+	local n = 0
+	for i = first, last do
+		n += 1
+		local card = pool[n] or newCard()
+		pool[n] = card
+		local def = filtered[i]
+		local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
+		card.frame.Position = UDim2.new(0, col * (CELL_W + GAP), 0, row * (CELL_H + GAP))
+		card.frame.Visible = true
+		card.fav.Visible = State.favorites[def.id] == true
+		if card.def ~= def then
+			card.def = def
+			card.label.Text = def.name
+			card.bar.BackgroundColor3 = CLASS_COLOR[def.class] or C.Steel
+			for _, ch in ipairs(card.vp:GetChildren()) do
+				if ch:IsA("Model") then
+					ch.Parent = nil
 				end
+			end
+			local m = thumbFor(def, inUse)
+			if m then
+				m.Parent = card.vp
+				UIKit.frameModel(card.vp, m, 35, 24, 0.95)
 			end
 		end
 	end
-	if built > MAX_THUMBS then
-		local list = {}
-		for _, c in pairs(cards) do
-			if c.model then
-				table.insert(list, c)
-			end
-		end
-		table.sort(list, function(a, b)
-			return (a.lastSeen or 0) < (b.lastSeen or 0)
-		end)
-		for i = 1, built - MAX_THUMBS do
-			if list[i] and now - (list[i].lastSeen or 0) > 0.5 then
-				releaseThumb(list[i])
-			end
-		end
+	for k = n + 1, #pool do
+		pool[k].frame.Visible = false
+		pool[k].def = nil
 	end
 end
 
-local function setDetail(def)
+setDetail = function(def)
 	selected = def
 	qty = 1
 	for _, c in ipairs(detail.vp:GetChildren()) do
@@ -141,6 +212,7 @@ local function setDetail(def)
 	detail.desc.Text = def.description or ""
 	detail.fav.Text = State.favorites[def.id] and "★ FAVOURITE" or "☆ ADD TO FAVOURITES"
 	detail.qtyRow.Visible = def.deliverable
+	detail.modeRow.Visible = def.deliverable and State.siteDef ~= nil and State.siteDef.railSpots ~= nil
 	detail.order.Visible = def.deliverable
 	detail.equip.Visible = def.kind == "Tool"
 	detail.qty.Text = tostring(qty)
@@ -148,49 +220,10 @@ end
 
 local function rebuild()
 	local favs = State.favorites
-	local list = Registry.search(search.Text, category ~= "Favourites" and category or nil, favs, category == "Favourites")
-	local keep = {}
-	for i, def in ipairs(list) do
-		keep[def.id] = i
-	end
-	for id, c in pairs(cards) do
-		c.frame.Visible = keep[id] ~= nil
-		c.frame.LayoutOrder = keep[id] or 0
-	end
-	countLabel.Text = string.format("%d shown  ·  %d items implemented  ·  target %d", #list, Registry.count().total, Registry.TargetCount)
-	task.defer(updateThumbs)
-end
-
-local function makeCard(def, order)
-	local frame = UIKit.new("TextButton", { AutoButtonColor = false, Text = "", BackgroundColor3 = C.CharcoalLight, BorderSizePixel = 0, LayoutOrder = order, Parent = grid })
-	UIKit.corner(frame, 5)
-	local stroke = UIKit.stroke(frame, C.SteelDark, 1, 0)
-	local vp = UIKit.new("ViewportFrame", {
-		BackgroundColor3 = Color3.fromRGB(44, 48, 54),
-		BorderSizePixel = 0,
-		Size = UDim2.new(1, -8, 0, 86),
-		Position = UDim2.new(0, 4, 0, 4),
-		Ambient = Color3.fromRGB(130, 132, 138),
-		LightColor = Color3.fromRGB(255, 246, 232),
-		LightDirection = Vector3.new(-0.5, -1, -0.6),
-		Parent = frame,
-	})
-	UIKit.corner(vp, 4)
-	local bar = UIKit.new("Frame", { BackgroundColor3 = CLASS_COLOR[def.class] or C.Steel, BorderSizePixel = 0, Size = UDim2.new(0, 3, 0, 86), Position = UDim2.new(0, 4, 0, 4), Parent = frame })
-	bar.ZIndex = 2
-	UIKit.label(frame, def.name, 12, F.Medium, C.OffWhite, { Position = UDim2.new(0, 6, 0, 92), Size = UDim2.new(1, -12, 0, 30), TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top })
-	local fav = UIKit.label(frame, "★", 14, F.Bold, C.Safety, { Position = UDim2.new(1, -20, 0, 6), Size = UDim2.new(0, 16, 0, 16), Visible = State.favorites[def.id] == true })
-	fav.ZIndex = 3
-	frame.MouseButton1Click:Connect(function()
-		setDetail(def)
-	end)
-	frame.MouseEnter:Connect(function()
-		stroke.Color = C.Safety
-	end)
-	frame.MouseLeave:Connect(function()
-		stroke.Color = C.SteelDark
-	end)
-	cards[def.id] = { frame = frame, vp = vp, def = def, fav = fav }
+	filtered = Registry.search(search.Text, category ~= "Favourites" and category or nil, favs, category == "Favourites")
+	grid.CanvasPosition = Vector2.new(0, 0)
+	countLabel.Text = string.format("%d shown  ·  %d items implemented  ·  target %d", #filtered, Registry.count().total, Registry.TargetCount)
+	task.defer(layoutCards)
 end
 
 function Catalog.build()
@@ -260,12 +293,9 @@ function Catalog.build()
 	UIKit.padding(search, 12, 0, 12, 0)
 	UIKit.stroke(search, C.SteelDark, 1, 0)
 	search:GetPropertyChangedSignal("Text"):Connect(rebuild)
-	grid = UIKit.new("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(1, 0, 1, -46), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 4, ScrollBarImageColor3 = C.Steel, Parent = mid })
-	UIKit.new("UIGridLayout", { CellSize = UDim2.new(0, 150, 0, 126), CellPadding = UDim2.new(0, 8, 0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid })
-	grid:GetPropertyChangedSignal("CanvasPosition"):Connect(updateThumbs)
-	for i, def in ipairs(Registry.list) do
-		makeCard(def, i)
-	end
+	grid = UIKit.new("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.new(0, 0, 0, 46), Size = UDim2.new(1, 0, 1, -46), CanvasSize = UDim2.new(), ScrollBarThickness = 4, ScrollBarImageColor3 = C.Steel, Parent = mid })
+	grid:GetPropertyChangedSignal("CanvasPosition"):Connect(layoutCards)
+	grid:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutCards)
 
 	-- detail
 	local dp = UIKit.panel(panel, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 44), Size = UDim2.new(0, 348, 1, -44) })
@@ -292,7 +322,7 @@ function Catalog.build()
 		end
 		local on = not State.favorites[selected.id]
 		State.favorites[selected.id] = on or nil
-		cards[selected.id].fav.Visible = on
+		layoutCards()
 		detail.fav.Text = on and "★ FAVOURITE" or "☆ ADD TO FAVOURITES"
 		Net.call("Save", true, "Favorite", selected.id, on)
 		if category == "Favourites" then
@@ -314,27 +344,33 @@ function Catalog.build()
 		qty = math.min(40, qty + 1)
 		detail.qty.Text = tostring(qty)
 	end)
+	detail.modeRow = UIKit.segmented(detail.body, "Deliver by", { "Truck", "Rail" }, "Truck", function(v)
+		deliveryMode = v == "Rail" and "rail" or "truck"
+	end)
+	detail.modeRow.LayoutOrder = 10
+	detail.modeRow.Size = UDim2.new(1, -6, 0, 58)
+	detail.modeRow.Visible = false
 	detail.order = UIKit.button(detail.body, "REQUEST DELIVERY", { style = "primary", size = UDim2.new(1, -6, 0, 42) })
-	detail.order.LayoutOrder = 10
+	detail.order.LayoutOrder = 11
 	detail.order.MouseButton1Click:Connect(function()
 		if not selected then
 			return
 		end
-		local ok = Net.call("Delivery", false, "Request", selected.id, qty)
+		local ok = Net.call("Delivery", false, "Request", selected.id, qty, deliveryMode)
 		if ok then
 			State.fire("DeliveryRequested", selected.id, qty)
 			Catalog.toggle(false)
 		end
 	end)
 	detail.equip = UIKit.button(detail.body, "EQUIP", { size = UDim2.new(1, -6, 0, 38) })
-	detail.equip.LayoutOrder = 11
+	detail.equip.LayoutOrder = 12
 	detail.equip.MouseButton1Click:Connect(function()
 		if selected then
 			State.fire("SelectTool", selected.id)
 			Catalog.toggle(false)
 		end
 	end)
-	UIKit.label(detail.body, "Deliveries are free in this build: no money grind. Trucks park in the unloading bays with every piece strapped on the deck.", 11, F.Body, C.SteelDark, { LayoutOrder = 12, Size = UDim2.new(1, -6, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
+	UIKit.label(detail.body, "Deliveries are free in this build: no money grind. Trucks park in the unloading bays with every piece strapped on the deck.", 11, F.Body, C.SteelDark, { LayoutOrder = 13, Size = UDim2.new(1, -6, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
 
 	selectCat("All")
 	RunService.Heartbeat:Connect(function(dt)
@@ -355,8 +391,12 @@ function Catalog.toggle(open)
 	State.uiBlocking = open
 	State.fire("UIBlocking", open)
 	if open then
+		local hasRail = State.siteDef and State.siteDef.railSpots and #State.siteDef.railSpots > 0
+		detail.modeRow.Visible = hasRail == true and selected ~= nil and selected.deliverable
+		if not hasRail then
+			deliveryMode = "truck"
+		end
 		rebuild()
-		task.delay(0.05, updateThumbs)
 	else
 		search:ReleaseFocus()
 	end

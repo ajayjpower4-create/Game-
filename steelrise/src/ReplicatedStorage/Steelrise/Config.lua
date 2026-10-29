@@ -93,13 +93,14 @@ Config.Geo = {
 	FootingTop = 0.80, -- top of a precast footing above grade
 	ScaffoldBayLong = 2.57,
 	ScaffoldBayShort = 1.09,
+	ScaffoldBays = { 0.73, 1.09, 1.57, 2.07, 2.57, 3.07 }, -- standard ring-lock bay lengths
 	ScaffoldLift = 2.0,
 	ScaffoldJack = 0.30, -- base-jack node height above the ground
 	SnapTolerance = 0.08, -- studs
 }
 
-Config.Bays = { 4.5, 6.0, 7.5, 9.0 }
-Config.FloorHeights = { 3.6, 4.2, 4.5 }
+Config.Bays = { 3.0, 4.5, 6.0, 7.5, 9.0 }
+Config.FloorHeights = { 3.0, 3.6, 4.2, 4.5, 4.8 }
 
 Config.Grid = {
 	Ground = 0.5, -- metres, default ground grid
@@ -132,6 +133,9 @@ Config.Crane = {
 	StreamRate = 15, -- Hz, operator -> server
 	AttributeRate = 12, -- Hz, server -> everyone
 	RemoteRange = 600, -- studs from the mast for the radio remote
+	WindWarnMs = 12, -- crane panel warning
+	WindStopMs = 15, -- no new lifts above this
+	WindForce = 0.0035, -- pendulum push per (m/s)² at full exposure
 }
 
 -- Capacity chart: full capacity inside FullRadius, then falls off with the

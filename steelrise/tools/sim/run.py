@@ -50,7 +50,7 @@ rs.IsStudio = function() return true end
 rs.BindToRenderStep = function() end
 local http = svc("HttpService")
 local guid = 0
-http.GenerateGUID = function() guid = guid + 1; return string.format("guid-%06d", guid) end
+http.GenerateGUID = function() guid = guid + 1; return string.format("%08x-%04x-0000-0000-%012d", (guid * 2654435761) % 4294967296, guid % 65536, guid) end
 http.JSONEncode = function(self, t) return "json" end
 http.JSONDecode = function(self, s) return {} end
 local ds = svc("DataStoreService")
@@ -62,11 +62,75 @@ local debris = M.services.Debris
 debris.AddItem = function() end
 
 -- workspace queries: flat ground at y = 0 counts as Terrain
+-- ray vs oriented boxes of real parts, plus a ground plane for Terrain
+local function rayBox(part, o, d)
+  local cf = part.CFrame
+  local lo = cf:PointToObjectSpace(o)
+  local ld = cf:VectorToObjectSpace(d)
+  local h = part.Size / 2
+  -- like Roblox, a ray that starts inside a part does not hit it
+  if math.abs(lo.X) < part.Size.X / 2 and math.abs(lo.Y) < part.Size.Y / 2 and math.abs(lo.Z) < part.Size.Z / 2 then return nil end
+  local tmin, tmax = 0, 1
+  local nAxis, nSign = nil, 1
+  for i, k in ipairs({ "X", "Y", "Z" }) do
+    local oo, dd, hh = lo[k], ld[k], h[k]
+    if math.abs(dd) < 1e-9 then
+      if oo < -hh or oo > hh then return nil end
+    else
+      local t1, t2 = (-hh - oo) / dd, (hh - oo) / dd
+      local s = -1
+      if t1 > t2 then t1, t2 = t2, t1; s = 1 end
+      if t1 > tmin then tmin = t1; nAxis = k; nSign = s * (dd > 0 and 1 or -1) * -1 end
+      if t2 < tmax then tmax = t2 end
+      if tmin > tmax then return nil end
+    end
+  end
+  return tmin
+end
 workspace.Raycast = function(self, origin, dir, params)
-  if dir.Y < 0 and origin.Y >= 0 and origin.Y + dir.Y <= 0 then
+  local list, include = {}, true
+  if params then
+    include = params.FilterType == Enum.RaycastFilterType.Include or params.FilterType == nil
+    list = params.FilterDescendantsInstances or {}
+  end
+  local function excluded(p)
+    for _, e in ipairs(list) do if p == e or p:IsDescendantOf(e) then return true end end
+    return false
+  end
+  local candidates = {}
+  local useTerrain = not include
+  if include then
+    for _, root in ipairs(list) do
+      if root == terrain then useTerrain = true
+      else for _, d in ipairs(root:GetDescendants()) do if d:IsA("BasePart") then table.insert(candidates, d) end end end
+    end
+  else
+    for _, d in ipairs(workspace:GetDescendants()) do if d:IsA("BasePart") and not excluded(d) then table.insert(candidates, d) end end
+  end
+  local best, bestT = nil, math.huge
+  local a, b = origin, origin + dir
+  local lo = Vector3.new(math.min(a.X, b.X), math.min(a.Y, b.Y), math.min(a.Z, b.Z))
+  local hi = Vector3.new(math.max(a.X, b.X), math.max(a.Y, b.Y), math.max(a.Z, b.Z))
+  for _, p in ipairs(candidates) do
+    local pp = rawget(p, "_p")
+    local c = pp.CFrame and pp.CFrame.p or { 0, 0, 0 }
+    local r = pp.Size and pp.Size.Magnitude / 2 or 4
+    local near = c[1] + r >= lo.X and c[1] - r <= hi.X and c[2] + r >= lo.Y and c[2] - r <= hi.Y and c[3] + r >= lo.Z and c[3] - r <= hi.Z
+    if near and pp.CanQuery ~= false and (pp.Transparency or 0) < 1.01 then
+      local t = rayBox(p, origin, dir)
+      if t and t < bestT then best, bestT = p, t end
+    end
+  end
+  if useTerrain and dir.Y < 0 and origin.Y >= 0 and origin.Y + dir.Y <= 0 then
     local t = -origin.Y / dir.Y
-    local pos = origin + dir * t
-    return { Instance = terrain, Position = Vector3.new(pos.X, 0, pos.Z), Normal = Vector3.yAxis, Distance = (dir * t).Magnitude, Material = Enum.Material.Ground }
+    if t < bestT then
+      local pos = origin + dir * t
+      return { Instance = terrain, Position = Vector3.new(pos.X, 0, pos.Z), Normal = Vector3.yAxis, Distance = (dir * t).Magnitude, Material = Enum.Material.Ground }
+    end
+  end
+  if best then
+    local pos = origin + dir * bestT
+    return { Instance = best, Position = pos, Normal = Vector3.yAxis, Distance = (dir * bestT).Magnitude, Material = best.Material }
   end
   return nil
 end

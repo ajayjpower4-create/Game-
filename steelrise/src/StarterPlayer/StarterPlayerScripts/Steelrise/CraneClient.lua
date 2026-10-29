@@ -495,6 +495,23 @@ local function simulate(dt)
 		local damping = op.assist and K.SwingDampingAssist or K.SwingDamping
 		local aRad = (v.trolley - oldV.trolley) / dt - (v.slew * v.slew) * st.trolley
 		local aTan = -((v.slew - oldV.slew) / dt) * st.trolley
+		-- wind pushes the hanging load (more at height and on big light pieces)
+		local site = State.site
+		local windMs = site and site:GetAttribute("WindSpeed") or 0
+		local windDir = site and site:GetAttribute("WindDir") or 0
+		if windMs > 0 then
+			local hookY = CraneMath.hookPos(cfg, st).Y
+			local exposure = math.clamp(hookY / 120, 0.3, 1.5)
+			local sail = 0.6
+			if hanging and loadDef then
+				local areaM2 = loadDef.sizeM.X * math.max(loadDef.sizeM.Y, loadDef.sizeM.Z)
+				sail = math.clamp(0.4 + areaM2 / math.max(loadDef.weightKg / 120, 0.5), 0.4, 3)
+			end
+			local push = K.WindForce * windMs * windMs * exposure * sail * (0.85 + 0.3 * math.noise(os.clock() * 0.7, windDir))
+			local wl = CraneMath.slewCf(cfg, st.slew):VectorToObjectSpace(Vector3.new(math.cos(windDir), 0, math.sin(windDir)))
+			aRad -= wl.X * push
+			aTan -= wl.Z * push
+		end
 		local steps = 4
 		local h = dt / steps
 		for _ = 1, steps do
@@ -728,6 +745,7 @@ local function updateOperatorHud(st, load, loadDef, hanging, locked, precision)
 		capKg = cap,
 		lmi = kg / math.max(cap, 1),
 		precision = precision,
+		windMs = State.site and State.site:GetAttribute("WindSpeed") or 0,
 	}
 	local hints = {}
 	if locked and load then
