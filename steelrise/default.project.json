@@ -1,0 +1,50 @@
+{
+  "name": "STEELRISE",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedFirst": {
+      "$className": "ReplicatedFirst",
+      "LoadingScreen": {
+        "$path": "src/ReplicatedFirst/LoadingScreen.client.lua"
+      }
+    },
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Steelrise": {
+        "$path": "src/ReplicatedStorage/Steelrise"
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "Steelrise": {
+        "$path": "src/ServerScriptService/Steelrise"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "Steelrise": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts/Steelrise"
+        }
+      }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "StreamingEnabled": true,
+        "StreamingMinRadius": 256,
+        "StreamingTargetRadius": 1024
+      }
+    },
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "Technology": "Future"
+      }
+    },
+    "SoundService": {
+      "$className": "SoundService"
+    }
+  }
+}

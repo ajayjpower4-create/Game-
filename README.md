@@ -167,3 +167,10 @@ report says so on screen — every screen still works offline.
 
 Nothing in this report is real. It is a simulator for practicing and drafting,
 not a substitute for an inspection by a licensed inspector.
+
+## STEELRISE: Construction Simulator (Roblox)
+
+A separate Roblox PC project lives in [`steelrise/`](steelrise/README.md):
+Luau scripts plus a Rojo project file for a hands-on steel-construction game
+(deliveries on flatbeds, a working tower crane, bolting/welding, scaffolding,
+eight sites, saves). See its README for setup, controls and status.
