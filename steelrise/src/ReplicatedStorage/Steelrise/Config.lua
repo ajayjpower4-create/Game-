@@ -184,6 +184,7 @@ Config.DefaultSettings = {
 	thirdPerson = false,
 	mouseSensitivity = 1.0,
 	assist = true,
+	chat = "Small",
 	tutorialDone = false,
 	volumes = { Master = 0.8, Machinery = 0.8, Tools = 0.8, Impacts = 0.8, Ambience = 0.6, Footsteps = 0.7, UI = 0.6 },
 }

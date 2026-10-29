@@ -42,7 +42,24 @@ local function cargoOf(site, id)
 	return out
 end
 
+-- Roll every wheel by the distance travelled since the last frame.
+local function spinWheels(a, travelled)
+	local wheels = a.model:FindFirstChild("Wheels")
+	if not wheels or travelled == 0 then
+		return
+	end
+	for _, w in ipairs(wheels:GetChildren()) do
+		local r = w:GetAttribute("Radius")
+		if r and r > 0 and w.PrimaryPart then
+			w:PivotTo(w:GetPivot() * CFrame.Angles(travelled / r, 0, 0))
+		end
+	end
+end
+TrailerAnim.spinWheels = spinWheels
+
 local function moveAll(a, offset)
+	spinWheels(a, offset - (a.lastOffset or offset))
+	a.lastOffset = offset
 	local cf = a.final * CFrame.new(offset, 0, 0)
 	a.model:PivotTo(cf)
 	local rel = cf * a.final:Inverse()

@@ -344,6 +344,11 @@ task.spawn(function()
 	if State.menuInfo then
 		MainMenu.refresh(State.menuInfo)
 	end
+	-- the chat configuration objects can appear a moment after join
+	Settings.applyChat(State.settings.chat or "Small")
+	task.delay(3, function()
+		Settings.applyChat(State.settings.chat or "Small")
+	end)
 	State.mode = "Menu"
 	player:SetAttribute("SR_MenuReady", true)
 	while not player:GetAttribute("SR_LoaderDone") do

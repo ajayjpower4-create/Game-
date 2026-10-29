@@ -16,8 +16,40 @@ local Net = require(script.Parent.Net)
 local C = Config.Colors
 local Settings = {}
 
+-- Roblox chat window size. Works with TextChatService (the default chat);
+-- silently does nothing if the experience uses the legacy chat.
+local CHAT_SIZES = {
+	Small = { w = 0.6, h = 0.5, text = 13, bg = 0.55 },
+	Normal = { w = 1.0, h = 1.0, text = 15, bg = 0.3 },
+}
+
+function Settings.applyChat(mode)
+	pcall(function()
+		local TextChatService = game:GetService("TextChatService")
+		local win = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
+		local bar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
+		local size = CHAT_SIZES[mode]
+		if win then
+			win.Enabled = mode ~= "Hidden"
+			if size then
+				win.WidthScale = size.w
+				win.HeightScale = size.h
+				win.TextSize = size.text
+				win.BackgroundTransparency = size.bg
+			end
+		end
+		if bar then
+			bar.Enabled = mode ~= "Hidden"
+			if size then
+				bar.TextSize = size.text
+			end
+		end
+	end)
+end
+
 function Settings.apply()
 	local s = State.settings
+	Settings.applyChat(s.chat or "Small")
 	local preset = Config.Graphics.Presets[s.graphics] or Config.Graphics.Presets.Balanced
 	local post = s.post and preset.post
 	for _, name in ipairs({ "SR_Bloom", "SR_SunRays", "SR_Grade" }) do
@@ -131,6 +163,12 @@ function Settings.buildPanel(parent)
 		State.crane.assist = v
 		changed()
 	end).LayoutOrder = nxt()
+
+	local chat = UIKit.segmented(scroll, "Chat window", { "Small", "Normal", "Hidden" }, s.chat or "Small", function(v)
+		s.chat = v
+		changed()
+	end)
+	chat.LayoutOrder = nxt()
 
 	section(scroll, "AUDIO", nxt())
 	for _, g in ipairs(Config.AudioGroups) do

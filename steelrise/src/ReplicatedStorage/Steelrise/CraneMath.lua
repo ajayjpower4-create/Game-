@@ -21,8 +21,8 @@ CraneMath.JibBottomY = 2.0
 CraneMath.JibHeight = 4.5
 CraneMath.JibWidth = 3.6
 CraneMath.MastWidth = 4.8
-CraneMath.CabOffset = Vector3.new(1.2, -1.4, 4.4) -- cab centre, beside the jib root
-CraneMath.CabEye = Vector3.new(1.8, -0.4, 4.4) -- operator eye point inside the cab
+CraneMath.CabOffset = Vector3.new(1.2, -1.4, 5.0) -- cab centre, beside the jib root
+CraneMath.CabEye = Vector3.new(1.8, -0.4, 5.0) -- operator eye point inside the cab
 CraneMath.HookBlockHeight = 3.0 -- hook point to the top of the block
 
 function CraneMath.config(craneDef)

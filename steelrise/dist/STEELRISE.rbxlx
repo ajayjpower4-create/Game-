@@ -1568,6 +1568,7 @@ Config.DefaultSettings = {
 	thirdPerson = false,
 	mouseSensitivity = 1.0,
 	assist = true,
+	chat = "Small",
 	tutorialDone = false,
 	volumes = { Master = 0.8, Machinery = 0.8, Tools = 0.8, Impacts = 0.8, Ambience = 0.6, Footsteps = 0.7, UI = 0.6 },
 }
@@ -1602,8 +1603,8 @@ CraneMath.JibBottomY = 2.0
 CraneMath.JibHeight = 4.5
 CraneMath.JibWidth = 3.6
 CraneMath.MastWidth = 4.8
-CraneMath.CabOffset = Vector3.new(1.2, -1.4, 4.4) -- cab centre, beside the jib root
-CraneMath.CabEye = Vector3.new(1.8, -0.4, 4.4) -- operator eye point inside the cab
+CraneMath.CabOffset = Vector3.new(1.2, -1.4, 5.0) -- cab centre, beside the jib root
+CraneMath.CabEye = Vector3.new(1.8, -0.4, 5.0) -- operator eye point inside the cab
 CraneMath.HookBlockHeight = 3.0 -- hook point to the top of the block
 
 function CraneMath.config(craneDef)
@@ -4499,11 +4500,11 @@ return Util
 </Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX00000017">
+<Item class="ServerScriptService" referent="RBX00000019">
 <Properties>
 <string name="Name">ServerScriptService</string>
 </Properties>
-<Item class="Folder" referent="RBX00000016">
+<Item class="Folder" referent="RBX00000018">
 <Properties>
 <string name="Name">Steelrise</string>
 </Properties>
@@ -5207,6 +5208,530 @@ return ComponentService
 </Item>
 <Item class="ModuleScript" referent="RBX0000000F">
 <Properties>
+<string name="Name">CraneFactory</string>
+<ProtectedString name="Source"><![CDATA[-- Flat-top tower crane, modelled on modern 8–10 t city cranes.
+--
+-- Contract used by CraneService / CraneClient (do not rename):
+--   Model "TowerCrane_<id>" with attribute CraneId and children
+--     Static  : foundation, mast, ladder, CraneAccess / CraneAccessTop parts
+--     Slew    : moves as one (PrimaryPart "Root" at the slewing pivot, jib
+--               along local +X); WinchDrum (attr Sound), CabDoor (attr CraneInteract)
+--     Trolley : PrimaryPart "Root" at the sheave point (CraneMath.TrolleyY)
+--     Hook    : PrimaryPart "Root" at the hook bowl (CraneMath.hookCf)
+--     Cables  : Fall1, Fall2 (reshaped every frame by clients)
+-- All dimensions in studs unless m() is used (3 studs = 1 m).
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Steelrise")
+local Config = require(Shared.Config)
+local CraneMath = require(Shared.CraneMath)
+
+local S = Config.S
+local C = Config.Colors
+local M = Enum.Material
+local V = Vector3.new
+local CF = CFrame.new
+
+local CraneFactory = {}
+
+local YELLOW = Color3.fromRGB(242, 182, 16)
+local YELLOW_DARK = Color3.fromRGB(206, 150, 10)
+local GREY = Color3.fromRGB(72, 76, 82)
+local DARK = Color3.fromRGB(34, 36, 40)
+local WHITE = Color3.fromRGB(232, 232, 228)
+local GLASS = Color3.fromRGB(120, 150, 165)
+local GRATE = Color3.fromRGB(96, 100, 104)
+local CONCRETE = Color3.fromRGB(156, 154, 148)
+local ROPE = Color3.fromRGB(46, 46, 48)
+
+local function m(x)
+	return x * S
+end
+
+local function P(parent, name, size, cf, color, material, flags)
+	local p = Instance.new((flags and flags.wedge) and "WedgePart" or "Part")
+	p.Name = name
+	p.Anchored = true
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Material = material or M.Metal
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.CanTouch = false
+	if flags then
+		if flags.nc then
+			p.CanCollide = false
+		end
+		if flags.ns then
+			p.CastShadow = false
+		end
+		if flags.nq then
+			p.CanQuery = false
+		end
+		if flags.tr then
+			p.Transparency = flags.tr
+		end
+		if flags.refl then
+			p.Reflectance = flags.refl
+		end
+		if flags.shape and not flags.wedge then
+			p.Shape = flags.shape
+		end
+	end
+	p.Parent = parent
+	return p
+end
+
+local function cyl(parent, name, length, dia, cf, color, material, flags)
+	local f = {}
+	for k, v in pairs(flags or {}) do
+		f[k] = v
+	end
+	f.shape = Enum.PartType.Cylinder
+	return P(parent, name, V(length, dia, dia), cf, color, material, f)
+end
+
+local function lookAlong(pos, dir)
+	local up = Vector3.yAxis
+	if math.abs(dir.Unit.Y) > 0.98 then
+		up = Vector3.xAxis
+	end
+	return CFrame.lookAt(pos, pos + dir, up)
+end
+
+-- square bar between two points
+local function bar(parent, name, a, b, w, color, material, flags)
+	local len = (b - a).Magnitude
+	return P(parent, name, V(w, w, len), lookAlong((a + b) / 2, b - a), color, material, flags)
+end
+
+-- round tube between two points
+local function tube(parent, name, a, b, dia, color, material, flags)
+	local len = (b - a).Magnitude
+	return cyl(parent, name, len, dia, lookAlong((a + b) / 2, b - a) * CFrame.Angles(0, math.pi / 2, 0), color, material, flags)
+end
+
+local function sign(part, face, text, bg, fg)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 24
+	gui.LightInfluence = 1
+	gui.Parent = part
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundColor3 = bg
+	t.TextColor3 = fg
+	t.Font = Enum.Font.GothamBlack
+	t.TextScaled = true
+	t.Text = text
+	t.Parent = gui
+	return gui
+end
+
+---------------------------------------------------------------------------
+-- Static: foundation and mast
+---------------------------------------------------------------------------
+
+local function buildStatic(model, cfg)
+	local static = Instance.new("Model")
+	static.Name = "Static"
+	static.Parent = model
+	local base = cfg.base
+	local Wm = CraneMath.MastWidth
+	local half = Wm / 2 - 0.3
+
+	-- foundation block with chamfer and four cast-in fixing angles
+	P(static, "Foundation", V(m(7), m(0.6), m(7)), CF(base + V(0, m(0.3), 0)), CONCRETE, M.Concrete)
+	P(static, "FoundationTop", V(m(6.6), m(0.06), m(6.6)), CF(base + V(0, m(0.63), 0)), Color3.fromRGB(146, 144, 138), M.Concrete, { nc = true })
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			local c = base + V(sx * half, 0, sz * half)
+			P(static, "FixingAngle", V(1.1, m(1.1), 1.1), CF(c + V(0, m(0.65) + m(0.55), 0)), YELLOW_DARK, M.Metal)
+			P(static, "FixingPlate", V(2.2, 0.25, 2.2), CF(c + V(0, m(0.66), 0)), DARK, M.Metal, { nc = true })
+			for _, bx in ipairs({ -0.75, 0.75 }) do
+				for _, bz in ipairs({ -0.75, 0.75 }) do
+					cyl(static, "AnchorNut", 0.25, 0.3, CF(c + V(bx, m(0.66) + 0.2, bz)) * CFrame.Angles(0, 0, math.pi / 2), DARK, M.Metal, { nc = true, ns = true })
+				end
+			end
+		end
+	end
+
+	-- mast: angle-section chords, Z-laced faces, joint plates every section
+	local mastBottom = base.Y + m(1.2)
+	local mastTop = cfg.pivot.Y - 1.0
+	local mastH = mastTop - mastBottom
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			local cx, cz = base.X + sx * half, base.Z + sz * half
+			-- an angle = two plates at right angles
+			P(static, "ChordA", V(0.6, mastH, 0.16), CF(cx - sx * 0.22, mastBottom + mastH / 2, cz), YELLOW, M.Metal)
+			P(static, "ChordB", V(0.16, mastH, 0.6), CF(cx, mastBottom + mastH / 2, cz - sz * 0.22), YELLOW, M.Metal)
+		end
+	end
+	local section = m(3)
+	local nSec = math.max(1, math.floor(mastH / section + 0.5))
+	section = mastH / nSec
+	local corners = { V(-half, 0, -half), V(half, 0, -half), V(half, 0, half), V(-half, 0, half) }
+	for k = 0, nSec - 1 do
+		local y0 = mastBottom + k * section
+		local y1 = y0 + section
+		for f = 1, 4 do
+			local a, b = corners[f], corners[f % 4 + 1]
+			local entry = (k == 0 and f == 1)
+			local function at(v, y)
+				return V(base.X + v.X, y, base.Z + v.Z)
+			end
+			if not entry then
+				-- K-lacing: two diagonals meeting at mid-height of the far edge
+				local mid = (y0 + y1) / 2
+				bar(static, "Lacing", at(a, y0 + 0.4), at(b, mid), 0.24, YELLOW, M.Metal, { ns = true })
+				bar(static, "Lacing", at(b, mid), at(a, y1 - 0.4), 0.24, YELLOW, M.Metal, { ns = true })
+				bar(static, "Strut", at(b, mid) - (b - a) * 0.0, at(a, mid), 0.18, YELLOW, M.Metal, { ns = true })
+			end
+			bar(static, "Girt", at(a, y0 + 0.15), at(b, y0 + 0.15), 0.22, YELLOW, M.Metal, { ns = true, nc = entry })
+		end
+		-- bolted section joint: four fish plates
+		if k > 0 then
+			for _, c in ipairs(corners) do
+				P(static, "FishPlate", V(0.9, 0.9, 0.9), CF(base.X + c.X, y0, base.Z + c.Z), YELLOW_DARK, M.Metal, { nc = true, ns = true })
+			end
+		end
+		-- rest platform every fourth section (half grating, ladder side open)
+		if k > 0 and k % 4 == 0 then
+			P(static, "RestPlatform", V(Wm - 0.8, 0.15, (Wm - 0.8) / 2 - 1.1), CF(base.X, y0 + 0.2, base.Z + (Wm - 0.8) / 4 + 0.55), GRATE, M.DiamondPlate, { ns = true })
+		end
+	end
+	-- climbing ladder inside the mast (climbable)
+	local truss = Instance.new("TrussPart")
+	truss.Name = "MastLadder"
+	truss.Size = V(2, 2 * math.max(1, math.floor(mastH / 2)), 2)
+	truss.CFrame = CF(base.X, mastBottom + truss.Size.Y / 2, base.Z - 0.6)
+	truss.Color = Color3.fromRGB(196, 198, 202)
+	truss.Material = M.Metal
+	truss.Anchored = true
+	truss.Style = Enum.Style.AlternateSupports
+	truss.Parent = static
+
+	-- landing at the mast top (ring around the ladder opening)
+	local ringOuter = Wm + 2.4
+	local ringW = (ringOuter - 2.6) / 2
+	for _, s in ipairs({ -1, 1 }) do
+		P(static, "TopPlatform", V(ringW, 0.3, ringOuter), CF(base.X + s * (1.3 + ringW / 2), mastTop - 0.2, base.Z), GRATE, M.DiamondPlate)
+		P(static, "TopPlatform", V(2.6, 0.3, ringW), CF(base.X, mastTop - 0.2, base.Z + s * (1.3 + ringW / 2)), GRATE, M.DiamondPlate)
+		P(static, "TopRail", V(ringOuter, 0.18, 0.18), CF(base.X, mastTop + 3.2, base.Z + s * (ringOuter / 2)), YELLOW, M.Metal, { nc = true })
+		P(static, "TopRail", V(0.18, 0.18, ringOuter), CF(base.X + s * (ringOuter / 2), mastTop + 3.2, base.Z), YELLOW, M.Metal, { nc = true })
+		for _, t in ipairs({ -1, 1 }) do
+			P(static, "TopPost", V(0.18, 3.4, 0.18), CF(base.X + s * ringOuter / 2, mastTop + 1.5, base.Z + t * ringOuter / 2), YELLOW, M.Metal, { nc = true, ns = true })
+		end
+	end
+	local topAccess = P(static, "CraneAccessTop", V(Wm + 2, 5, Wm + 2), CF(base.X, mastTop + 2.4, base.Z), YELLOW, M.Metal, { tr = 1, nc = true })
+	topAccess:SetAttribute("CraneInteract", "Access")
+	cyl(static, "SlewRing", 0.8, Wm + 1.0, CF(cfg.pivot - V(0, 0.6, 0)) * CFrame.Angles(0, 0, math.pi / 2), DARK, M.Metal, { nc = true })
+
+	-- access gate, safety sign and load chart at the base
+	local gateZ = -(Wm / 2 + 1.2)
+	local access = P(static, "CraneAccess", V(Wm + 1, m(2.4), 1), CF(base + V(0, m(0.65) + m(1.2), gateZ)), YELLOW, M.Metal, { tr = 0.85, nc = true })
+	access:SetAttribute("CraneInteract", "Access")
+	for _, s in ipairs({ -1, 1 }) do
+		P(static, "GatePost", V(0.25, m(2.2), 0.25), CF(base + V(s * (Wm / 2 + 0.6), m(0.65) + m(1.1), gateZ)), YELLOW, M.Metal, { ns = true })
+	end
+	P(static, "GateRail", V(Wm + 1.2, 0.2, 0.2), CF(base + V(0, m(0.65) + m(2.2), gateZ)), YELLOW, M.Metal, { nc = true, ns = true })
+	local gateSign = P(static, "AccessSign", V(2.6, 1.5, 0.1), CF(base + V(0, m(1.9), gateZ - 0.15)), C.Safety, M.SmoothPlastic, { nc = true })
+	sign(gateSign, Enum.NormalId.Front, "CRANE ACCESS\nAUTHORISED OPERATORS", C.Safety, C.Charcoal)
+	local chart = P(static, "LoadChart", V(2.6, 2.0, 0.1), CF(base + V(Wm / 2 + 0.9, m(1.8), 0)) * CFrame.Angles(0, -math.pi / 2, 0), WHITE, M.SmoothPlastic, { nc = true })
+	local lines = { string.format("LOAD CHART  %d t", math.floor(cfg.maxKg / 1000 + 0.5)) }
+	for _, r in ipairs({ cfg.fullRadiusM, 30, 40, 50, 60 }) do
+		if m(r) <= cfg.maxR + 1 then
+			table.insert(lines, string.format("%2d m  %5.1f t", r, Config.craneCapacityKg(cfg, m(r)) / 1000))
+		end
+	end
+	sign(chart, Enum.NormalId.Front, table.concat(lines, "\n"), WHITE, C.Charcoal)
+	return static
+end
+
+---------------------------------------------------------------------------
+-- Slewing assembly: platform, cab, jib, counter-jib
+---------------------------------------------------------------------------
+
+local function buildSlew(model, cfg)
+	local slew = Instance.new("Model")
+	slew.Name = "Slew"
+	slew.Parent = model
+	local frame = CF(cfg.pivot)
+	local function sp(name, size, localCf, color, material, flags)
+		return P(slew, name, size, frame * localCf, color, material, flags)
+	end
+	local function sbar(name, a, b, w, color, flags)
+		return bar(slew, name, frame * a, frame * b, w, color or YELLOW, M.Metal, flags)
+	end
+	local root = sp("Root", V(0.4, 0.4, 0.4), CF(), YELLOW, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
+	slew.PrimaryPart = root
+	local Wm = CraneMath.MastWidth
+	local jy, jh, jw = CraneMath.JibBottomY, CraneMath.JibHeight, CraneMath.JibWidth
+
+	-- slewing ring, platform and machinery
+	cyl(slew, "Turntable", 1.0, Wm + 0.8, frame * CF(0, 0.3, 0) * CFrame.Angles(0, 0, math.pi / 2), YELLOW, M.Metal, { nc = true })
+	cyl(slew, "RingGear", 0.35, Wm + 1.1, frame * CF(0, -0.05, 0) * CFrame.Angles(0, 0, math.pi / 2), DARK, M.Metal, { nc = true, ns = true })
+	sp("SlewPlatform", V(Wm + 2.2, 1.4, Wm + 1.4), CF(0, 1.2, 0), YELLOW, M.Metal, { nc = true })
+	sp("PlatformDeck", V(Wm + 3.4, 0.15, Wm + 3.0), CF(0, 1.98, 0), GRATE, M.DiamondPlate, { nc = true })
+	for _, sz in ipairs({ -1, 1 }) do
+		cyl(slew, "SlewMotor", 1.6, 0.9, frame * CF(-1.4, 2.8, sz * 1.6) * CFrame.Angles(0, 0, math.pi / 2), GREY, M.Metal, { nc = true })
+		sp("SlewGearbox", V(1.0, 0.7, 1.0), CF(-1.4, 1.95, sz * 1.6), DARK, M.Metal, { nc = true, ns = true })
+	end
+	sp("ElectricalBox", V(1.6, 2.4, 1.0), CF(-2.0, 3.2, -0.2), WHITE, M.Metal, { nc = true })
+	-- jib root / heel pins
+	for _, sz in ipairs({ -1, 1 }) do
+		sp("JibHeel", V(2.4, 2.2, 0.5), CF(2.2, jy + 0.6, sz * jw / 2), YELLOW_DARK, M.Metal, { nc = true })
+		cyl(slew, "HeelPin", 0.9, 0.5, frame * CF(2.2, jy + 0.4, sz * jw / 2) * CFrame.Angles(0, math.pi / 2, 0), GREY, M.Metal, { nc = true, ns = true })
+	end
+	-- anemometer and beacon on a mast above the platform
+	sp("AnemometerMast", V(0.18, 7, 0.18), CF(0.5, jy + jh + 2.5, -1.2), YELLOW, M.Metal, { nc = true, ns = true })
+	sp("AnemometerArm", V(1.2, 0.08, 0.08), CF(0.5, jy + jh + 6.0, -1.2), GREY, M.Metal, { nc = true, ns = true })
+	for _, dx in ipairs({ -0.6, 0.6 }) do
+		P(slew, "Cup", V(0.3, 0.3, 0.3), frame * CF(0.5 + dx, jy + jh + 6.0, -1.2), WHITE, M.SmoothPlastic, { nc = true, ns = true, shape = Enum.PartType.Ball })
+	end
+	local topLight = sp("TopBeacon", V(0.45, 0.45, 0.45), CF(0.5, jy + jh + 6.3, -1.2), Color3.fromRGB(255, 40, 30), M.Neon, { nc = true, ns = true })
+	topLight.Shape = Enum.PartType.Ball
+
+	-- jib: triangular lattice with walkway, section pins and tip
+	local jibStart, jibEnd = 2.4, cfg.jib
+	local jl = jibEnd - jibStart
+	for _, sz in ipairs({ -1, 1 }) do
+		-- bottom chords are the trolley rails: a box with a running flange
+		sp("JibChord", V(jl, 0.55, 0.55), CF(jibStart + jl / 2, jy, sz * jw / 2), YELLOW, M.Metal, { nc = true })
+		sp("RailFlange", V(jl, 0.12, 0.9), CF(jibStart + jl / 2, jy + 0.33, sz * jw / 2), YELLOW_DARK, M.Metal, { nc = true, ns = true })
+	end
+	sp("JibTopChord", V(jl, 0.5, 0.5), CF(jibStart + jl / 2, jy + jh, 0), YELLOW, M.Metal, { nc = true })
+	sp("Walkway", V(jl - 1, 0.1, 0.9), CF(jibStart + jl / 2, jy - 0.35, -jw / 2 - 0.75), GRATE, M.DiamondPlate, { nc = true, ns = true })
+	sp("WalkwayRail", V(jl - 1, 0.1, 0.1), CF(jibStart + jl / 2, jy + 2.4, -jw / 2 - 1.15), YELLOW, M.Metal, { nc = true, ns = true })
+	local bayLen = 9
+	local nb = math.floor(jl / bayLen)
+	for k = 0, nb - 1 do
+		local x0 = jibStart + k * bayLen
+		local xm = x0 + bayLen / 2
+		local x1 = x0 + bayLen
+		for _, sz in ipairs({ -1, 1 }) do
+			sbar("JibLace", V(x0, jy + 0.2, sz * jw / 2), V(xm, jy + jh - 0.1, 0), 0.24, YELLOW, { nc = true, ns = true })
+			sbar("JibLace", V(xm, jy + jh - 0.1, 0), V(x1, jy + 0.2, sz * jw / 2), 0.24, YELLOW, { nc = true, ns = true })
+		end
+		sbar("JibTie", V(x0, jy, -jw / 2), V(x0, jy, jw / 2), 0.2, YELLOW, { nc = true, ns = true })
+		sbar("JibPlanBrace", V(x0, jy, -jw / 2), V(x1, jy, jw / 2), 0.16, YELLOW, { nc = true, ns = true })
+		if k % 3 == 0 and k > 0 then
+			for _, sz in ipairs({ -1, 1 }) do
+				sp("SectionPin", V(0.7, 0.9, 0.9), CF(x0, jy, sz * jw / 2), YELLOW_DARK, M.Metal, { nc = true, ns = true })
+			end
+			sp("SectionPinTop", V(0.7, 0.8, 0.8), CF(x0, jy + jh, 0), YELLOW_DARK, M.Metal, { nc = true, ns = true })
+		end
+		-- walkway handrail posts
+		sp("RailPost", V(0.1, 2.5, 0.1), CF(x0, jy + 1.15, -jw / 2 - 1.15), YELLOW, M.Metal, { nc = true, ns = true })
+	end
+	sp("JibTip", V(0.8, jh + 0.6, jw + 0.6), CF(jibEnd, jy + jh / 2, 0), YELLOW, M.Metal, { nc = true })
+	sp("TipBuffer", V(0.6, 0.6, jw), CF(jibEnd - 0.7, jy - 0.1, 0), DARK, M.SmoothPlastic, { nc = true, ns = true })
+	local tipLight = sp("AviationLight", V(0.5, 0.5, 0.5), CF(jibEnd, jy + jh + 0.6, 0), Color3.fromRGB(255, 40, 30), M.Neon, { nc = true, ns = true })
+	tipLight.Shape = Enum.PartType.Ball
+	-- trolley drive rope and hoist rope running along the jib
+	tube(slew, "TrolleyRope", frame * V(jibStart + 0.5, jy - 0.15, 0.35), frame * V(jibEnd - 0.8, jy - 0.15, 0.35), 0.07, ROPE, M.Metal, { nc = true, ns = true, nq = true })
+	tube(slew, "HoistRope", frame * V(-8, jy + 2.6, 0), frame * V(jibEnd - 0.8, jy - 0.15, -0.35), 0.08, ROPE, M.Metal, { nc = true, ns = true, nq = true })
+
+	-- counter-jib: twin girders, walkway, winch, electrics, counterweights
+	local cl = cfg.counter
+	for _, sz in ipairs({ -1, 1 }) do
+		sp("CounterGirder", V(cl, 1.4, 0.7), CF(-cl / 2 - 1.5, jy + 0.5, sz * 1.9), YELLOW, M.Metal, { nc = true })
+		sp("Handrail", V(cl, 0.15, 0.15), CF(-cl / 2 - 1.5, jy + 3.6, sz * 2.75), YELLOW, M.Metal, { nc = true, ns = true })
+		sp("MidRail", V(cl, 0.1, 0.1), CF(-cl / 2 - 1.5, jy + 2.4, sz * 2.75), YELLOW, M.Metal, { nc = true, ns = true })
+		local posts = math.max(2, math.floor(cl / 5))
+		for k = 0, posts do
+			sp("RailPost", V(0.15, 2.4, 0.15), CF(-2 - k * (cl - 2) / posts, jy + 2.4, sz * 2.75), YELLOW, M.Metal, { nc = true, ns = true })
+		end
+		sbar("CounterTie", V(-1.5, jy + 3.2, sz * 1.9), V(-cl * 0.6, jy + 1.2, sz * 1.9), 0.25, YELLOW, { nc = true, ns = true })
+	end
+	for k = 0, math.floor(cl / 3) do
+		sp("CounterCross", V(0.3, 0.3, 3.8), CF(-1.5 - k * 3, jy - 0.1, 0), YELLOW, M.Metal, { nc = true, ns = true })
+	end
+	sp("CounterWalkway", V(cl, 0.15, 5.0), CF(-cl / 2 - 1.5, jy + 1.25, 0), GRATE, M.DiamondPlate, { nc = true })
+	-- hoist winch: motor, gearbox, drum with rope wraps, brake
+	local wx = -7.5
+	cyl(slew, "WinchMotor", 2.2, 1.4, frame * CF(wx, jy + 2.2, -1.6) * CFrame.Angles(0, math.pi / 2, 0), GREY, M.Metal, { nc = true })
+	sp("WinchGearbox", V(1.6, 1.6, 1.0), CF(wx, jy + 2.2, -0.15), DARK, M.Metal, { nc = true })
+	local drum = cyl(slew, "WinchDrum", 2.6, 1.7, frame * CF(wx, jy + 2.2, 1.7) * CFrame.Angles(0, math.pi / 2, 0), YELLOW_DARK, M.Metal, { nc = true })
+	drum:SetAttribute("Sound", "Hoist")
+	cyl(slew, "DrumRope", 2.2, 1.85, frame * CF(wx, jy + 2.2, 1.7) * CFrame.Angles(0, math.pi / 2, 0), ROPE, M.Metal, { nc = true, ns = true })
+	for _, dz in ipairs({ 0.3, 3.1 }) do
+		cyl(slew, "DrumFlange", 0.15, 2.2, frame * CF(wx, jy + 2.2, dz) * CFrame.Angles(0, math.pi / 2, 0), YELLOW, M.Metal, { nc = true, ns = true })
+	end
+	sp("WinchFrame", V(3.0, 0.4, 5.2), CF(wx, jy + 1.35, 0.4), DARK, M.Metal, { nc = true, ns = true })
+	sp("ElectricHouse", V(3.0, 2.6, 2.4), CF(-12.5, jy + 2.6, -0.9), WHITE, M.Metal, { nc = true })
+	sp("HouseDoor", V(1.0, 2.0, 0.05), CF(-12.5, jy + 2.4, -2.13), Color3.fromRGB(200, 200, 196), M.Metal, { nc = true, ns = true })
+	sp("HouseRoof", V(3.2, 0.15, 2.6), CF(-12.5, jy + 3.95, -0.9), GREY, M.Metal, { nc = true, ns = true })
+	-- counterweights: concrete slabs hung from the tail with steel straps
+	local slabs = 5
+	local slabT = 1.0
+	local tailX = -cl - 1.5
+	for k = 0, slabs - 1 do
+		local x = tailX + 0.6 + k * (slabT + 0.08)
+		sp("Counterweight", V(slabT, m(2.4), 4.6), CF(x, jy - m(0.55), 0), CONCRETE, M.Concrete, { nc = true })
+		sp("LiftEye", V(0.3, 0.4, 0.15), CF(x, jy + m(0.67), 1.6), DARK, M.Metal, { nc = true, ns = true })
+	end
+	for _, sz in ipairs({ -1, 1 }) do
+		sp("WeightStrap", V(slabs * 1.1 + 0.4, 0.3, 0.12), CF(tailX + 0.6 + (slabs - 1) * 0.54, jy + 0.9, sz * 2.35), DARK, M.Metal, { nc = true, ns = true })
+	end
+	sp("TailRail", V(0.15, 0.15, 5.6), CF(tailX - 0.2, jy + 3.6, 0), YELLOW, M.Metal, { nc = true, ns = true })
+	-- branding plates on the counter-jib railing
+	for _, sz in ipairs({ -1, 1 }) do
+		local brand = sp("Brand", V(cl * 0.42, 1.6, 0.12), CF(-cl / 2 - 1.5, jy + 3.0, sz * 2.85), C.Charcoal, M.Metal, { nc = true, ns = true })
+		sign(brand, sz > 0 and Enum.NormalId.Back or Enum.NormalId.Front, "STEELRISE", C.Charcoal, YELLOW)
+	end
+
+	-- operator cab: framed glazing, roof AC, wiper, access platform
+	local co = CraneMath.CabOffset
+	local cabCf = frame * CF(co)
+	local function cp(name, size, localCf, color, material, flags)
+		return P(slew, name, size, cabCf * localCf, color, material, flags)
+	end
+	cp("CabFloor", V(3.8, 0.25, 3.2), CF(0, -2.25, 0), DARK, M.DiamondPlate, { nc = true })
+	cp("CabRoof", V(4.0, 0.3, 3.4), CF(0, 2.25, 0), WHITE, M.Metal, { nc = true })
+	cp("CabBack", V(0.2, 4.4, 3.2), CF(-1.9, 0, 0), WHITE, M.Metal, { nc = true })
+	cp("CabSideIn", V(3.8, 4.4, 0.2), CF(0, 0, -1.6), WHITE, M.Metal, { nc = true })
+	cp("CabSideLow", V(3.8, 1.3, 0.2), CF(0, -1.55, 1.6), WHITE, M.Metal, { nc = true })
+	local side = cp("CabSideGlass", V(3.2, 2.7, 0.06), CF(0.1, 0.7, 1.6), GLASS, M.Glass, { nc = true, tr = 0.45, refl = 0.15, ns = true })
+	side.CanQuery = false
+	local front = cp("CabFrontGlass", V(0.06, 4.0, 3.0), CF(1.9, 0, 0) * CFrame.Angles(0, 0, math.rad(-8)), GLASS, M.Glass, { nc = true, tr = 0.5, refl = 0.12, ns = true })
+	front.CanQuery = false
+	cp("CabFloorGlass", V(1.4, 0.06, 2.6), CF(1.1, -2.1, 0), GLASS, M.Glass, { nc = true, tr = 0.55, ns = true, nq = true })
+	-- window frames
+	for _, z in ipairs({ -1.55, 0, 1.55 }) do
+		cp("FrontFrame", V(0.15, 4.0, 0.12), CF(1.92, 0, z) * CFrame.Angles(0, 0, math.rad(-8)), DARK, M.Metal, { nc = true, ns = true })
+	end
+	cp("FrontSill", V(0.2, 0.15, 3.2), CF(1.95, -1.95, 0), DARK, M.Metal, { nc = true, ns = true })
+	cp("FrontHead", V(0.2, 0.15, 3.2), CF(1.65, 1.95, 0), DARK, M.Metal, { nc = true, ns = true })
+	cp("SideMullion", V(0.12, 2.7, 0.12), CF(0.1, 0.7, 1.62), DARK, M.Metal, { nc = true, ns = true })
+	cp("Wiper", V(0.05, 1.6, 0.06), CF(2.02, -0.6, 0.4) * CFrame.Angles(math.rad(25), 0, 0), DARK, M.Metal, { nc = true, ns = true })
+	cp("RoofAC", V(1.2, 0.5, 1.0), CF(-0.9, 2.65, 0), WHITE, M.Metal, { nc = true })
+	cp("Seat", V(1.0, 0.3, 1.0), CF(0.1, -1.3, 0), C.Charcoal, M.Fabric, { nc = true })
+	cp("SeatBack", V(0.25, 1.4, 1.0), CF(-0.45, -0.6, 0), C.Charcoal, M.Fabric, { nc = true })
+	cp("ConsoleL", V(0.9, 0.7, 0.35), CF(0.5, -1.0, -0.8), C.Charcoal, M.SmoothPlastic, { nc = true })
+	cp("ConsoleR", V(0.9, 0.7, 0.35), CF(0.5, -1.0, 0.8), C.Charcoal, M.SmoothPlastic, { nc = true })
+	local screen = cp("Display", V(0.06, 0.5, 0.8), CF(1.5, -0.2, -0.9), Color3.fromRGB(20, 60, 80), M.Neon, { nc = true, ns = true })
+	screen.Transparency = 0.2
+	local door = cp("CabDoor", V(3.6, 4.0, 0.3), CF(0, 0, -1.75), YELLOW, M.Metal, { tr = 0.9, nc = true })
+	door:SetAttribute("CraneInteract", "Cab")
+	cp("CabWalk", V(3.4, 0.15, 2.0), CF(0, -2.3, -2.6), GRATE, M.DiamondPlate, { nc = true, ns = true })
+	return slew
+end
+
+---------------------------------------------------------------------------
+-- Trolley and hook block
+---------------------------------------------------------------------------
+
+local function buildTrolley(model, cfg, st)
+	local trolley = Instance.new("Model")
+	trolley.Name = "Trolley"
+	trolley.Parent = model
+	local tcf = CraneMath.trolleyCf(cfg, st)
+	local root = P(trolley, "Root", V(0.3, 0.3, 0.3), tcf, YELLOW, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
+	trolley.PrimaryPart = root
+	local jw = CraneMath.JibWidth
+	P(trolley, "Frame", V(3.4, 0.7, jw + 0.9), tcf * CF(0, 1.0, 0), YELLOW, M.Metal, { nc = true })
+	for _, sx in ipairs({ -1.3, 1.3 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			cyl(trolley, "Wheel", 0.35, 0.65, tcf * CF(sx, 1.85, sz * jw / 2) * CFrame.Angles(0, math.pi / 2, 0), DARK, M.Metal, { nc = true, ns = true })
+			P(trolley, "WheelBracket", V(0.9, 0.9, 0.15), tcf * CF(sx, 1.6, sz * (jw / 2 + 0.3)), YELLOW_DARK, M.Metal, { nc = true, ns = true })
+		end
+	end
+	for _, sx in ipairs({ -0.55, 0.55 }) do
+		cyl(trolley, "Sheave", 0.3, 1.0, tcf * CF(sx, 0.25, 0) * CFrame.Angles(0, math.pi / 2, 0), DARK, M.Metal, { nc = true, ns = true })
+		P(trolley, "SheaveGuard", V(1.1, 0.8, 0.12), tcf * CF(sx, 0.3, 0.25), YELLOW, M.Metal, { nc = true, ns = true })
+	end
+	-- maintenance basket hanging off one side
+	local bcf = tcf * CF(0, -0.8, -(jw / 2 + 1.4))
+	P(trolley, "BasketFloor", V(2.2, 0.1, 1.2), bcf * CF(0, -1.2, 0), GRATE, M.DiamondPlate, { nc = true, ns = true })
+	for _, sx in ipairs({ -1.05, 1.05 }) do
+		for _, sz in ipairs({ -0.55, 0.55 }) do
+			P(trolley, "BasketPost", V(0.1, 2.6, 0.1), bcf * CF(sx, 0, sz), YELLOW, M.Metal, { nc = true, ns = true })
+		end
+	end
+	P(trolley, "BasketRail", V(2.2, 0.1, 0.1), bcf * CF(0, 0, -0.55), YELLOW, M.Metal, { nc = true, ns = true })
+	P(trolley, "BasketRail", V(2.2, 0.1, 0.1), bcf * CF(0, 0, 0.55), YELLOW, M.Metal, { nc = true, ns = true })
+	return trolley
+end
+
+local function buildHook(model, cfg, st)
+	local hook = Instance.new("Model")
+	hook.Name = "Hook"
+	hook.Parent = model
+	local hcf = CraneMath.hookCf(cfg, st)
+	local root = P(hook, "Root", V(0.3, 0.3, 0.3), hcf, YELLOW, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
+	hook.PrimaryPart = root
+	-- block body with striped side plates and a capacity plate
+	P(hook, "Block", V(1.3, 2.0, 1.6), hcf * CF(0, 1.9, 0), YELLOW, M.Metal, { nc = true })
+	for _, sz in ipairs({ -1, 1 }) do
+		P(hook, "SidePlate", V(1.6, 2.3, 0.12), hcf * CF(0, 1.95, sz * 0.86), YELLOW, M.Metal, { nc = true })
+		for k = 0, 3 do
+			P(hook, "Stripe", V(0.3, 2.2, 0.03), hcf * CF(-0.6 + k * 0.4, 1.95, sz * 0.93) * CFrame.Angles(0, 0, math.rad(30)), k % 2 == 0 and C.Charcoal or YELLOW, M.SmoothPlastic, { nc = true, ns = true })
+		end
+	end
+	local plate = P(hook, "CapacityPlate", V(0.9, 0.45, 0.04), hcf * CF(0, 1.3, 0.95), WHITE, M.SmoothPlastic, { nc = true, ns = true })
+	sign(plate, Enum.NormalId.Back, string.format("SWL %d t", math.floor(cfg.maxKg / 1000 + 0.5)), WHITE, C.Charcoal)
+	for _, dz in ipairs({ -0.35, 0.35 }) do
+		cyl(hook, "BlockSheave", 0.25, 1.2, hcf * CF(0, 2.9, dz) * CFrame.Angles(0, math.pi / 2, 0), DARK, M.Metal, { nc = true, ns = true })
+	end
+	-- swivel, shank and forged hook with safety latch
+	cyl(hook, "Swivel", 0.35, 0.7, hcf * CF(0, 0.85, 0) * CFrame.Angles(0, 0, math.pi / 2), DARK, M.Metal, { nc = true })
+	cyl(hook, "Shank", 0.6, 0.38, hcf * CF(0, 0.45, 0) * CFrame.Angles(0, 0, math.pi / 2), GREY, M.Metal, { nc = true })
+	local bowl = { { -0.32, 0.1, -25 }, { -0.22, -0.25, -60 }, { 0.05, -0.38, 0 }, { 0.3, -0.25, 60 }, { 0.38, 0.05, 90 } }
+	for i, seg in ipairs(bowl) do
+		P(hook, "HookBowl" .. i, V(0.32, 0.26, 0.3), hcf * CF(seg[1], seg[2], 0) * CFrame.Angles(0, 0, math.rad(seg[3])), YELLOW, M.Metal, { nc = true })
+	end
+	P(hook, "HookBack", V(0.3, 0.55, 0.3), hcf * CF(-0.34, 0.32, 0), YELLOW, M.Metal, { nc = true })
+	P(hook, "Latch", V(0.06, 0.6, 0.08), hcf * CF(0.05, 0.2, 0) * CFrame.Angles(0, 0, math.rad(-40)), DARK, M.Metal, { nc = true, ns = true })
+	return hook
+end
+
+---------------------------------------------------------------------------
+
+function CraneFactory.build(craneDef, id)
+	local cfg = CraneMath.config(craneDef)
+	local model = Instance.new("Model")
+	model.Name = "TowerCrane_" .. id
+	model:SetAttribute("CraneId", id)
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	local st = CraneMath.defaultState(craneDef)
+
+	buildStatic(model, cfg)
+	local slew = buildSlew(model, cfg)
+	slew:PivotTo(CraneMath.slewCf(cfg, st.slew))
+	buildTrolley(model, cfg, st)
+	buildHook(model, cfg, st)
+
+	local cables = Instance.new("Folder")
+	cables.Name = "Cables"
+	cables.Parent = model
+	local tcf = CraneMath.trolleyCf(cfg, st)
+	local bcf = CraneMath.blockCf(cfg, st)
+	for k, dx in ipairs({ -0.45, 0.45 }) do
+		local a = (tcf * CF(dx, 0.2, 0)).Position
+		local b = (bcf * CF(dx, 2.9, 0)).Position
+		local c = tube(cables, "Fall" .. k, a, b, 0.1, ROPE, M.Metal, { nc = true, ns = true, nq = true })
+		c.CanQuery = false
+	end
+
+	CraneMath.writeAttributes(model, st)
+	model:SetAttribute("Operator", 0)
+	model:SetAttribute("LoadId", "")
+	model:SetAttribute("ResetSeq", 0)
+	model.PrimaryPart = slew.PrimaryPart
+	return model, cfg
+end
+
+return CraneFactory
+]]></ProtectedString>
+</Properties>
+</Item>
+<Item class="ModuleScript" referent="RBX00000010">
+<Properties>
 <string name="Name">CraneService</string>
 <ProtectedString name="Source"><![CDATA[-- Server authority for tower cranes.
 --
@@ -5805,7 +6330,7 @@ return CraneService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000010">
+<Item class="ModuleScript" referent="RBX00000011">
 <Properties>
 <string name="Name">DeliveryService</string>
 <ProtectedString name="Source"><![CDATA[-- Flatbed deliveries: trucks pull into unloading bays with every ordered
@@ -6257,7 +6782,7 @@ return DeliveryService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="Script" referent="RBX00000011">
+<Item class="Script" referent="RBX00000012">
 <Properties>
 <string name="Name">Main</string>
 <ProtectedString name="Source"><![CDATA[-- STEELRISE server bootstrap: creates remotes, wires services together and
@@ -6346,7 +6871,7 @@ print("[STEELRISE] server ready")
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000012">
+<Item class="ModuleScript" referent="RBX00000013">
 <Properties>
 <string name="Name">Packing</string>
 <ProtectedString name="Source"><![CDATA[-- Lays out a list of items on a rectangular bed (trailer deck or laydown yard)
@@ -6482,7 +7007,7 @@ return Packing
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000013">
+<Item class="ModuleScript" referent="RBX00000014">
 <Properties>
 <string name="Name">SaveService</string>
 <ProtectedString name="Source"><![CDATA[-- Saves and settings.
@@ -6736,7 +7261,7 @@ return SaveService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000014">
+<Item class="ModuleScript" referent="RBX00000015">
 <Properties>
 <string name="Name">SiteService</string>
 <ProtectedString name="Source"><![CDATA[-- Loads a site: terrain, lighting, environment, crane, the starting stage of
@@ -7214,7 +7739,511 @@ return SiteService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000015">
+<Item class="ModuleScript" referent="RBX00000016">
+<Properties>
+<string name="Name">VehicleFactory</string>
+<ProtectedString name="Source"><![CDATA[-- Delivery vehicles: a long-hood American tractor with a 53 ft steel-hauling
+-- flatbed, and freight railcars for rail-served sites.
+--
+-- Built in METRES in a local frame and converted to studs. The truck's frame:
+-- origin on the road under the middle of the trailer deck, deck along +X,
+-- tractor toward -X. Each wheel is its own small Model (PrimaryPart = tyre,
+-- axle along the tyre's X axis) inside a "Wheels" folder so clients can spin
+-- them while the truck drives.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Steelrise")
+local Config = require(Shared.Config)
+
+local S = Config.S
+local C = Config.Colors
+local M = Enum.Material
+local V = Vector3.new
+local CF = CFrame.new
+
+local VehicleFactory = {}
+
+local CHROME = Color3.fromRGB(206, 210, 214)
+local ALU = Color3.fromRGB(176, 180, 184)
+local FRAME = Color3.fromRGB(30, 31, 33)
+local TIRE = Color3.fromRGB(27, 27, 29)
+local GLASS = Color3.fromRGB(34, 44, 52)
+
+local function toStuds(cf)
+	local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
+	return CFrame.new(x * S, y * S, z * S, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+end
+
+-- Builder working in metres. flags: nc, ns, tr, refl, shape, nq, wedge
+local function newBuilder(model)
+	local b = {}
+	function b.part(name, size, cf, color, material, flags, parent)
+		local p = Instance.new((flags and flags.wedge) and "WedgePart" or "Part")
+		p.Name = name
+		p.Anchored = true
+		p.Size = V(math.max(size.X * S, 0.02), math.max(size.Y * S, 0.02), math.max(size.Z * S, 0.02))
+		p.CFrame = toStuds(cf)
+		p.Color = color
+		p.Material = material or M.SmoothPlastic
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		p.CanTouch = false
+		if flags then
+			if flags.nc then
+				p.CanCollide = false
+			end
+			if flags.ns then
+				p.CastShadow = false
+			end
+			if flags.tr then
+				p.Transparency = flags.tr
+			end
+			if flags.refl then
+				p.Reflectance = flags.refl
+			end
+			if flags.nq then
+				p.CanQuery = false
+			end
+			if flags.shape and not flags.wedge then
+				p.Shape = flags.shape
+			end
+		end
+		p.Parent = parent or model
+		return p
+	end
+	-- cylinder whose axis runs along local X of `cf`
+	function b.cylX(name, length, dia, cf, color, material, flags, parent)
+		local f = {}
+		for k, v in pairs(flags or {}) do
+			f[k] = v
+		end
+		f.shape = Enum.PartType.Cylinder
+		return b.part(name, V(length, dia, dia), cf, color, material, f, parent)
+	end
+	-- cylinder whose axis runs along world Y / Z
+	function b.cylY(name, length, dia, pos, color, material, flags, parent)
+		return b.cylX(name, length, dia, CF(pos) * CFrame.Angles(0, 0, math.pi / 2), color, material, flags, parent)
+	end
+	function b.cylZ(name, length, dia, pos, color, material, flags, parent)
+		return b.cylX(name, length, dia, CF(pos) * CFrame.Angles(0, math.pi / 2, 0), color, material, flags, parent)
+	end
+	return b
+end
+
+-- One wheel: tyre, rim, hub and lug ring as a spinning model.
+-- side = +1 for the right side (+Z), -1 for the left. dual = twin tyres.
+local function wheel(b, wheelsFolder, x, z, side, dual, dia, steer)
+	local w = Instance.new("Model")
+	w.Name = "Wheel"
+	w.Parent = wheelsFolder
+	local width = 0.29
+	local offsets = dual and { -0.16, 0.16 } or { 0 }
+	local tyre = nil
+	for i, o in ipairs(offsets) do
+		local t = b.cylZ(i == 1 and "Tyre" or "TyreInner", width, dia, V(x, dia / 2, z + side * o), TIRE, M.SmoothPlastic, nil, w)
+		if i == 1 then
+			tyre = t
+		end
+		-- tread grooves read as a slightly darker band
+		b.cylZ("Tread", width * 0.35, dia + 0.004, V(x, dia / 2, z + side * o), Color3.fromRGB(20, 20, 21), M.SmoothPlastic, { nc = true, ns = true }, w)
+	end
+	local outer = z + side * (offsets[#offsets] + width / 2)
+	local rimColor = steer and CHROME or ALU
+	b.cylZ("Rim", 0.03, dia * 0.6, V(x, dia / 2, outer + side * 0.006), rimColor, M.Metal, { nc = true, ns = true, refl = 0.25 }, w)
+	b.cylZ("RimLip", 0.02, dia * 0.66, V(x, dia / 2, outer + side * 0.001), CHROME, M.Metal, { nc = true, ns = true, refl = 0.3 }, w)
+	b.cylZ("Hub", 0.12, dia * 0.24, V(x, dia / 2, outer + side * 0.05), CHROME, M.Metal, { nc = true, ns = true, refl = 0.35 }, w)
+	b.cylZ("LugRing", 0.04, dia * 0.34, V(x, dia / 2, outer + side * 0.025), Color3.fromRGB(150, 152, 156), M.Metal, { nc = true, ns = true }, w)
+	for k = 0, 5 do
+		local a = k * math.pi / 3
+		b.part("Hand", V(0.06, 0.08, 0.012), CF(x + math.cos(a) * dia * 0.21, dia / 2 + math.sin(a) * dia * 0.21, outer + side * 0.012) * CFrame.Angles(0, 0, a), Color3.fromRGB(120, 124, 128), M.Metal, { nc = true, ns = true }, w)
+	end
+	w.PrimaryPart = tyre
+	w:SetAttribute("Radius", dia / 2 * S)
+	return w
+end
+
+---------------------------------------------------------------------------
+-- Truck + flatbed
+---------------------------------------------------------------------------
+
+local PAINTS = {
+	{ body = Color3.fromRGB(122, 16, 22), stripe = Color3.fromRGB(230, 230, 226) },
+	{ body = Color3.fromRGB(236, 236, 232), stripe = Color3.fromRGB(26, 52, 110) },
+	{ body = Color3.fromRGB(20, 40, 86), stripe = Color3.fromRGB(196, 198, 202) },
+	{ body = Color3.fromRGB(24, 24, 26), stripe = Color3.fromRGB(196, 150, 20) },
+	{ body = Color3.fromRGB(28, 78, 52), stripe = Color3.fromRGB(230, 230, 226) },
+}
+
+function VehicleFactory.buildTruck(bayCf, seed)
+	local rng = Random.new(seed or 1)
+	local paint = PAINTS[rng:NextInteger(1, #PAINTS)]
+	local model = Instance.new("Model")
+	model.Name = "Trailer"
+	local root = Instance.new("Part")
+	root.Name = "Root"
+	root.Size = V(0.4, 0.4, 0.4)
+	root.Transparency = 1
+	root.Anchored = true
+	root.CanCollide = false
+	root.CanQuery = false
+	root.CanTouch = false
+	root.CastShadow = false
+	root.CFrame = CF()
+	root.Parent = model
+	model.PrimaryPart = root
+	local b = newBuilder(model)
+	local wheels = Instance.new("Folder")
+	wheels.Name = "Wheels"
+	wheels.Parent = model
+
+	local D = Config.Delivery
+	local L, W, H = D.BedLength, D.BedWidth, D.BedHeight
+	local WD = 1.04 -- tyre diameter
+
+	------------------------------------------------------------------ trailer
+	-- deck: timber planks either side of an aluminium centre strip
+	local sideW = (W / 2 - 0.07) - 0.14
+	local pw = sideW / 2
+	for _, sz in ipairs({ -1, 1 }) do
+		for k = 0, 1 do
+			local zc = sz * (0.14 + pw * (k + 0.5))
+			b.part("DeckPlank", V(L - 0.1, 0.05, pw - 0.015), CF(0, H - 0.025, zc), Color3.fromRGB(124 + k * 6, 96, 68), M.WoodPlanks)
+		end
+	end
+	b.part("DeckCentre", V(L - 0.1, 0.052, 0.28), CF(0, H - 0.026, 0), ALU, M.DiamondPlate)
+	-- rub rails with stake pockets and marker lights
+	for _, sz in ipairs({ -1, 1 }) do
+		b.part("RubRail", V(L, 0.3, 0.07), CF(0, H - 0.15, sz * (W / 2 - 0.035)), ALU, M.Metal, { refl = 0.08 })
+		b.part("RailLip", V(L, 0.05, 0.1), CF(0, H - 0.29, sz * (W / 2 - 0.05)), ALU, M.Metal, { nc = true, ns = true })
+		local pockets = math.floor(L / 1.2)
+		for k = 1, pockets - 1 do
+			b.part("StakePocket", V(0.12, 0.13, 0.012), CF(-L / 2 + k * 1.2, H - 0.15, sz * (W / 2 + 0.002)), FRAME, M.Metal, { nc = true, ns = true })
+		end
+		for k = 0, 3 do
+			local m = b.part("Marker", V(0.08, 0.05, 0.02), CF(-L / 2 + 1 + k * (L - 2) / 3, H - 0.22, sz * (W / 2 + 0.01)), Color3.fromRGB(255, 150, 30), M.Neon, { nc = true, ns = true })
+			m.Transparency = 0.05
+		end
+		-- main beams (I-beams under the deck)
+		local bz = sz * 0.5
+		b.part("BeamTop", V(L - 0.4, 0.02, 0.18), CF(0.2, H - 0.32, bz), FRAME, M.Metal)
+		b.part("BeamWeb", V(L - 0.4, 0.42, 0.012), CF(0.2, H - 0.54, bz), FRAME, M.Metal)
+		b.part("BeamBottom", V(L - 0.4, 0.02, 0.16), CF(0.2, H - 0.76, bz), FRAME, M.Metal)
+	end
+	-- crossmembers
+	for k = 0, 15 do
+		b.part("Crossmember", V(0.06, 0.16, W - 0.2), CF(-L / 2 + 0.5 + k * (L - 1) / 15, H - 0.38, 0), FRAME, M.Metal, { nc = true, ns = true })
+	end
+	-- strap winches along the driver's side
+	for k = 0, 11 do
+		local x = -L / 2 + 0.9 + k * (L - 1.8) / 11
+		b.cylX("Winch", 0.16, 0.12, CF(x, H - 0.42, W / 2 - 0.12), Color3.fromRGB(70, 72, 76), M.Metal, { nc = true, ns = true })
+		b.part("WinchFace", V(0.03, 0.18, 0.18), CF(x + 0.09, H - 0.42, W / 2 - 0.12), Color3.fromRGB(150, 152, 156), M.Metal, { nc = true, ns = true })
+	end
+	-- landing gear
+	for _, sz in ipairs({ -1, 1 }) do
+		local x = -L / 2 + 3.4
+		b.part("LegOuter", V(0.13, H - 0.85, 0.13), CF(x, (H - 0.85) / 2 + 0.55, sz * 0.62), FRAME, M.Metal)
+		b.part("LegInner", V(0.09, 0.5, 0.09), CF(x, 0.3, sz * 0.62), Color3.fromRGB(120, 122, 124), M.Metal)
+		b.part("Foot", V(0.3, 0.05, 0.3), CF(x, 0.025, sz * 0.62), FRAME, M.Metal)
+	end
+	b.part("GearBrace", V(0.05, 0.05, 1.24), CF(-L / 2 + 3.4, 0.9, 0), FRAME, M.Metal, { nc = true })
+	b.part("Crank", V(0.03, 0.03, 0.4), CF(-L / 2 + 3.4, 0.95, W / 2 - 0.1), Color3.fromRGB(150, 152, 156), M.Metal, { nc = true, ns = true })
+	-- tandem axle, air-ride
+	local tAxles = { L / 2 - 2.4, L / 2 - 1.15 }
+	for _, ax in ipairs(tAxles) do
+		b.cylZ("Axle", W - 0.3, 0.12, V(ax, WD / 2, 0), FRAME, M.Metal, { nc = true, ns = true })
+		for _, sz in ipairs({ -1, 1 }) do
+			wheel(b, wheels, ax, sz * 0.88, sz, true, WD, false)
+			b.cylY("AirBag", 0.25, 0.28, V(ax + 0.3, H - 0.92, sz * 0.5), TIRE, M.SmoothPlastic, { nc = true, ns = true })
+			b.part("Hanger", V(0.1, 0.35, 0.08), CF(ax - 0.45, H - 0.95, sz * 0.5), FRAME, M.Metal, { nc = true, ns = true })
+		end
+	end
+	for _, sz in ipairs({ -1, 1 }) do
+		b.part("TrailerFender", V(2.5, 0.04, 0.6), CF((tAxles[1] + tAxles[2]) / 2, H - 0.32, sz * 0.95), FRAME, M.Metal, { nc = true, ns = true })
+		b.part("Mudflap", V(0.02, 0.6, 0.62), CF(L / 2 - 0.35, 0.55, sz * 0.88), TIRE, M.SmoothPlastic, { nc = true })
+	end
+	-- rear: ICC bumper, light bar, plate
+	b.part("ICCBar", V(0.12, 0.12, W - 0.3), CF(L / 2 - 0.2, 0.62, 0), FRAME, M.Metal, { refl = 0.05 })
+	b.part("ICCPost", V(0.08, 0.5, 0.08), CF(L / 2 - 0.25, 0.9, 0.7), FRAME, M.Metal, { nc = true })
+	b.part("ICCPost", V(0.08, 0.5, 0.08), CF(L / 2 - 0.25, 0.9, -0.7), FRAME, M.Metal, { nc = true })
+	b.part("RearSill", V(0.08, 0.3, W), CF(L / 2 - 0.04, H - 0.15, 0), ALU, M.Metal)
+	for _, sz in ipairs({ -1, 1 }) do
+		for k = 0, 1 do
+			local tl = b.cylX("TailLight", 0.03, 0.12, CF(L / 2 + 0.005, H - 0.18, sz * (W / 2 - 0.2 - k * 0.18)), Color3.fromRGB(210, 22, 22), M.Neon, { nc = true, ns = true })
+			tl.Transparency = 0.05
+		end
+	end
+	b.part("Reflector", V(0.012, 0.05, W - 0.6), CF(L / 2 - 0.13, 0.62, 0), Color3.fromRGB(220, 40, 30), M.SmoothPlastic, { nc = true, ns = true })
+	b.part("Plate", V(0.01, 0.15, 0.3), CF(L / 2 - 0.1, 0.42, -0.6), Color3.fromRGB(236, 236, 230), M.SmoothPlastic, { nc = true, ns = true })
+	b.part("KingpinPlate", V(1.4, 0.04, W - 0.4), CF(-L / 2 + 0.75, H - 0.77, 0), FRAME, M.Metal, { nc = true, ns = true })
+
+	------------------------------------------------------------------ tractor
+	local tx = -L / 2 -- front of the trailer
+	local body, stripe = paint.body, paint.stripe
+	-- frame rails
+	for _, sz in ipairs({ -1, 1 }) do
+		b.part("FrameRail", V(9.9, 0.27, 0.09), CF(tx - 3.3, 0.92, sz * 0.43), FRAME, M.Metal)
+	end
+	-- fifth wheel and deck plate
+	b.part("FifthWheel", V(1.0, 0.1, 1.1), CF(tx + 0.75, 1.2, 0), FRAME, M.Metal)
+	b.part("FifthWheelTop", V(0.9, 0.02, 1.0), CF(tx + 0.75, 1.26, 0), Color3.fromRGB(60, 60, 60), M.Metal, { nc = true, ns = true })
+	b.part("DeckPlate", V(1.6, 0.03, 1.3), CF(tx - 1.0, 1.1, 0), ALU, M.DiamondPlate)
+	-- drive tandem and steer axle
+	local drive = { tx + 0.1, tx + 1.4 }
+	for _, ax in ipairs(drive) do
+		b.cylZ("DriveAxle", 1.9, 0.18, V(ax, WD / 2, 0), FRAME, M.Metal, { nc = true, ns = true })
+		b.part("Diff", V(0.42, 0.42, 0.42), CF(ax, WD / 2, 0), FRAME, M.Metal, { nc = true, ns = true })
+		for _, sz in ipairs({ -1, 1 }) do
+			wheel(b, wheels, ax, sz * 0.86, sz, true, WD, false)
+		end
+	end
+	local steerX = tx - 7.45
+	b.cylZ("SteerAxle", 1.9, 0.14, V(steerX, WD / 2, 0), FRAME, M.Metal, { nc = true, ns = true })
+	for _, sz in ipairs({ -1, 1 }) do
+		wheel(b, wheels, steerX, sz * 0.98, sz, false, WD, true)
+		-- quarter fenders and mud flaps behind the drives
+		b.part("QuarterFender", V(1.2, 0.05, 0.62), CF((drive[1] + drive[2]) / 2 - 0.1, WD + 0.12, sz * 0.92) * CFrame.Angles(0, 0, 0), FRAME, M.Metal, { nc = true, ns = true })
+		b.part("DriveFlap", V(0.02, 0.62, 0.62), CF(drive[2] + 0.62, 0.55, sz * 0.92), TIRE, M.SmoothPlastic, { nc = true })
+		b.part("FlapWeight", V(0.022, 0.08, 0.6), CF(drive[2] + 0.63, 0.28, sz * 0.92), CHROME, M.Metal, { nc = true, ns = true, refl = 0.3 })
+	end
+	-- fuel tanks with straps, steps
+	for _, sz in ipairs({ -1, 1 }) do
+		local x = tx - 4.55
+		b.cylX("FuelTank", 1.55, 0.64, CF(x, 0.95, sz * 0.86), CHROME, M.Metal, { refl = 0.3 })
+		for _, dx in ipairs({ -0.5, 0.5 }) do
+			b.cylX("TankStrap", 0.05, 0.66, CF(x + dx, 0.95, sz * 0.86), FRAME, M.Metal, { nc = true, ns = true })
+		end
+		b.part("TankCap", V(0.1, 0.03, 0.1), CF(x + 0.55, 1.28, sz * 0.86), CHROME, M.Metal, { nc = true, ns = true })
+		-- cab step box ahead of the tank, two diamond-plate treads
+		b.part("StepBox", V(0.5, 0.62, 0.32), CF(tx - 5.6, 0.83, sz * 0.92), ALU, M.Metal, { refl = 0.15 })
+		b.part("Step", V(0.52, 0.04, 0.34), CF(tx - 5.6, 0.68, sz * 0.94), ALU, M.DiamondPlate, { nc = true })
+		b.part("Step", V(0.52, 0.04, 0.34), CF(tx - 5.6, 1.14, sz * 0.94), ALU, M.DiamondPlate, { nc = true })
+	end
+	-- cab (sleeper behind, day cab front)
+	local cabX0, cabX1 = tx - 6.0, tx - 4.25 -- cab front .. back
+	local slpX0, slpX1 = tx - 4.25, tx - 2.35
+	local floorY = 1.15
+	b.part("CabBody", V(cabX1 - cabX0, 1.55, 2.0), CF((cabX0 + cabX1) / 2, floorY + 0.775, 0), body, M.Metal, { refl = 0.06 })
+	b.part("CabRoof", V(cabX1 - cabX0 - 0.1, 0.14, 1.9), CF((cabX0 + cabX1) / 2 + 0.05, floorY + 1.62, 0), body, M.Metal, { refl = 0.06 })
+	b.part("Sleeper", V(slpX1 - slpX0, 2.1, 2.0), CF((slpX0 + slpX1) / 2, floorY + 1.05, 0), body, M.Metal, { refl = 0.06 })
+	b.part("SleeperRoof", V(slpX1 - slpX0 - 0.06, 0.1, 1.92), CF((slpX0 + slpX1) / 2, floorY + 2.15, 0), body, M.Metal, { refl = 0.06 })
+	-- wedge rises toward the sleeper (local +Z -> world +X)
+	b.part("RoofFairing", V(1.9, 0.5, 0.75), CF(cabX1 - 0.375, floorY + 1.94, 0) * CFrame.Angles(0, math.pi / 2, 0), body, M.Metal, { wedge = true })
+	-- windshield (split, raked) and visor
+	for _, sz in ipairs({ -1, 1 }) do
+		b.part("Windshield", V(0.04, 0.72, 0.9), CF(cabX0 - 0.02, floorY + 1.15, sz * 0.47) * CFrame.Angles(0, 0, math.rad(-10)), GLASS, M.Glass, { nc = true, refl = 0.3 })
+	end
+	b.part("CentrePost", V(0.06, 0.74, 0.06), CF(cabX0 - 0.01, floorY + 1.15, 0) * CFrame.Angles(0, 0, math.rad(-10)), body, M.Metal, { nc = true })
+	b.part("Visor", V(0.32, 0.05, 1.95), CF(cabX0 - 0.12, floorY + 1.58, 0) * CFrame.Angles(0, 0, math.rad(8)), body, M.Metal, { nc = true })
+	for k = -2, 2 do
+		b.part("CabLight", V(0.06, 0.05, 0.1), CF(cabX0 + 0.05, floorY + 1.71, k * 0.3), Color3.fromRGB(255, 160, 30), M.Neon, { nc = true, ns = true })
+	end
+	-- doors, side windows, sleeper window, stripes, mirrors
+	for _, sz in ipairs({ -1, 1 }) do
+		local face = sz * 1.0
+		b.part("DoorWindow", V(0.8, 0.55, 0.02), CF(cabX0 + 0.75, floorY + 1.15, face + sz * 0.005), GLASS, M.Glass, { nc = true, refl = 0.3 })
+		b.part("DoorSeam", V(0.02, 1.3, 0.012), CF(cabX0 + 1.25, floorY + 0.75, face + sz * 0.006), Color3.fromRGB(16, 16, 18), M.SmoothPlastic, { nc = true, ns = true })
+		b.part("DoorHandle", V(0.14, 0.03, 0.03), CF(cabX0 + 1.15, floorY + 0.8, face + sz * 0.02), CHROME, M.Metal, { nc = true, ns = true, refl = 0.3 })
+		b.part("SleeperWindow", V(0.4, 0.3, 0.02), CF(slpX0 + 0.55, floorY + 1.35, face + sz * 0.005), GLASS, M.Glass, { nc = true, refl = 0.3 })
+		b.part("StorageDoor", V(0.6, 0.45, 0.012), CF(slpX0 + 1.2, floorY + 0.3, face + sz * 0.006), body, M.Metal, { nc = true, ns = true })
+		b.part("Stripe", V(slpX1 - cabX0 - 0.1, 0.08, 0.01), CF((cabX0 + slpX1) / 2, floorY + 0.55, face + sz * 0.007), stripe, M.SmoothPlastic, { nc = true, ns = true })
+		b.part("MirrorArm", V(0.03, 0.03, 0.35), CF(cabX0 + 0.15, floorY + 1.0, sz * 1.17), CHROME, M.Metal, { nc = true, ns = true })
+		b.part("Mirror", V(0.05, 0.45, 0.2), CF(cabX0 + 0.12, floorY + 1.1, sz * 1.35), Color3.fromRGB(18, 18, 20), M.SmoothPlastic, { nc = true })
+		b.part("MirrorGlass", V(0.006, 0.4, 0.16), CF(cabX0 + 0.15, floorY + 1.1, sz * 1.35), Color3.fromRGB(150, 170, 185), M.Glass, { nc = true, ns = true, refl = 0.5 })
+		-- exhaust stack with heat shield
+		b.cylY("Stack", 3.0, 0.14, V(slpX1 + 0.12, 2.6, sz * 0.95), CHROME, M.Metal, { nc = true, refl = 0.35 })
+		b.cylY("HeatShield", 0.9, 0.2, V(slpX1 + 0.12, 2.0, sz * 0.95), ALU, M.DiamondPlate, { nc = true, ns = true })
+		b.part("StackTip", V(0.16, 0.04, 0.16), CF(slpX1 + 0.12, 4.12, sz * 0.95) * CFrame.Angles(0, 0, math.rad(25)), CHROME, M.Metal, { nc = true, ns = true })
+		-- air lines to the trailer
+		b.cylX("AirLine", 1.4, 0.03, CF(slpX1 + 0.75, 1.75, sz * 0.12) * CFrame.Angles(0, 0, math.rad(-20)), sz > 0 and Color3.fromRGB(180, 30, 30) or Color3.fromRGB(30, 60, 160), M.SmoothPlastic, { nc = true, ns = true })
+	end
+	-- long hood, fenders, grille, bumper, lights
+	local hoodX0, hoodX1 = tx - 8.25, cabX0
+	local hoodLen = hoodX1 - hoodX0
+	b.part("Hood", V(hoodLen, 0.7, 1.12), CF((hoodX0 + hoodX1) / 2, 1.62, 0), body, M.Metal, { refl = 0.06 })
+	b.part("HoodTop", V(hoodLen - 0.1, 0.1, 0.9), CF((hoodX0 + hoodX1) / 2 + 0.05, 2.0, 0), body, M.Metal, { refl = 0.06 })
+	b.part("Cowl", V(0.3, 0.25, 1.95), CF(hoodX1 - 0.15, 1.8, 0), body, M.Metal)
+	for _, sz in ipairs({ -1, 1 }) do
+		b.part("HoodShoulder", V(hoodLen - 0.1, 0.12, 0.12), CF((hoodX0 + hoodX1) / 2 + 0.05, 1.96, sz * 0.5) * CFrame.Angles(math.rad(sz * 35), 0, 0), body, M.Metal, { nc = true })
+		-- front fender: a solid crown over the steer tyre that sweeps down to
+		-- the bumper in front and to the cab step behind
+		local fz = sz * 0.84
+		b.part("FenderCrown", V(1.3, 0.3, 0.46), CF(steerX, WD + 0.13, fz), body, M.Metal, { refl = 0.06 })
+		-- wedges: local +Z is the tall end, rotate so it meets the crown
+		b.part("FenderNose", V(0.46, 0.3, 0.55), CF(steerX - 0.925, WD + 0.13, fz) * CFrame.Angles(0, math.pi / 2, 0), body, M.Metal, { wedge = true, nc = true })
+		b.part("FenderTail", V(0.46, 0.3, 0.7), CF(steerX + 1.0, WD + 0.13, fz) * CFrame.Angles(0, -math.pi / 2, 0), body, M.Metal, { wedge = true, nc = true })
+		b.part("FenderLiner", V(1.3, 0.04, 0.4), CF(steerX, WD - 0.03, fz), FRAME, M.SmoothPlastic, { nc = true, ns = true })
+		-- twin round headlights on the fender
+		for k = 0, 1 do
+			local hz = sz * (0.72 + k * 0.2)
+			b.cylX("HeadlightBucket", 0.16, 0.2, CF(hoodX0 + 0.25, WD + 0.38, hz), CHROME, M.Metal, { nc = true, ns = true, refl = 0.35 })
+			local lens = b.cylX("Headlight", 0.02, 0.17, CF(hoodX0 + 0.16, WD + 0.38, hz), Color3.fromRGB(250, 248, 236), M.Neon, { nc = true, ns = true })
+			lens.Transparency = 0.1
+		end
+		-- round air cleaner on the hood side
+		b.cylY("AirCleaner", 0.65, 0.45, V(hoodX1 - 0.45, 1.65, sz * 0.82), CHROME, M.Metal, { nc = true, refl = 0.3 })
+		b.cylZ("Intake", 0.25, 0.14, V(hoodX1 - 0.45, 1.85, sz * 0.66), CHROME, M.Metal, { nc = true, ns = true })
+		b.part("HoodVent", V(0.6, 0.18, 0.012), CF(hoodX0 + 1.2, 1.6, sz * 0.565), Color3.fromRGB(40, 40, 42), M.DiamondPlate, { nc = true, ns = true })
+	end
+	-- grille: chrome surround with horizontal bars and an emblem
+	local gx = hoodX0 - 0.02
+	b.part("GrilleSurround", V(0.08, 1.05, 1.08), CF(gx, 1.55, 0), CHROME, M.Metal, { refl = 0.35 })
+	b.part("GrilleBack", V(0.02, 0.9, 0.92), CF(gx - 0.035, 1.55, 0), Color3.fromRGB(26, 26, 28), M.Metal, { nc = true, ns = true })
+	for k = 0, 8 do
+		b.part("GrilleBar", V(0.03, 0.025, 0.9), CF(gx - 0.045, 1.15 + k * 0.1, 0), CHROME, M.Metal, { nc = true, ns = true, refl = 0.35 })
+	end
+	b.part("Emblem", V(0.03, 0.1, 0.3), CF(gx - 0.05, 2.12, 0), CHROME, M.Metal, { nc = true, ns = true, refl = 0.4 })
+	b.part("Bumper", V(0.32, 0.36, 2.45), CF(gx - 0.2, 0.72, 0), CHROME, M.Metal, { refl = 0.35 })
+	b.part("BumperStep", V(0.2, 0.04, 2.3), CF(gx - 0.32, 0.92, 0), ALU, M.DiamondPlate, { nc = true, ns = true })
+	b.part("TowHook", V(0.08, 0.12, 0.12), CF(gx - 0.38, 0.6, 0.6), Color3.fromRGB(190, 40, 30), M.Metal, { nc = true, ns = true })
+
+	-- sound source and interaction box
+	local engine = b.part("Engine", V(1, 0.6, 1), CF(hoodX0 + hoodLen / 2, 1.2, 0), FRAME, M.Metal, { nc = true, tr = 1, nq = true, ns = true })
+	engine:SetAttribute("Sound", "TruckIdle")
+	local interact = b.part("TruckInteract", V(cabX1 - hoodX0 + 0.3, 2.8, 2.6), CF((hoodX0 + slpX1) / 2, 1.8, 0), C.Steel, M.SmoothPlastic, { tr = 1, nc = true, ns = true })
+	interact:SetAttribute("TrailerInteract", "Cab")
+
+	model:PivotTo(bayCf)
+	return model, H * S
+end
+
+---------------------------------------------------------------------------
+-- Freight railcars (phase 4: rail deliveries)
+---------------------------------------------------------------------------
+
+-- Bulkhead flatcar, deck along +X. Origin on the rail head under the deck
+-- centre. Returns model and deck height (studs).
+function VehicleFactory.buildFlatcar(cf, seed)
+	local model = Instance.new("Model")
+	model.Name = "Flatcar"
+	local root = Instance.new("Part")
+	root.Name = "Root"
+	root.Size = V(0.4, 0.4, 0.4)
+	root.Transparency = 1
+	root.Anchored = true
+	root.CanCollide = false
+	root.CanQuery = false
+	root.CanTouch = false
+	root.CFrame = CF()
+	root.Parent = model
+	model.PrimaryPart = root
+	local b = newBuilder(model)
+	local wheels = Instance.new("Folder")
+	wheels.Name = "Wheels"
+	wheels.Parent = model
+	local L, W, H = 18.0, 2.9, 1.25
+	local car = Color3.fromRGB(70, 40, 30)
+	b.part("Deck", V(L, 0.08, W), CF(0, H - 0.04, 0), Color3.fromRGB(110, 86, 62), M.WoodPlanks)
+	b.part("CentreSill", V(L, 0.55, 0.5), CF(0, H - 0.36, 0), car, M.Metal)
+	for _, sz in ipairs({ -1, 1 }) do
+		b.part("SideSill", V(L, 0.3, 0.08), CF(0, H - 0.2, sz * (W / 2 - 0.04)), car, M.Metal)
+		for k = 0, 12 do
+			b.part("StakePocket", V(0.1, 0.12, 0.012), CF(-L / 2 + 0.9 + k * (L - 1.8) / 12, H - 0.2, sz * (W / 2 + 0.002)), Color3.fromRGB(40, 24, 18), M.Metal, { nc = true, ns = true })
+		end
+	end
+	for _, sx in ipairs({ -1, 1 }) do
+		-- bulkhead
+		b.part("Bulkhead", V(0.12, 2.4, W), CF(sx * (L / 2 - 0.06), H + 1.2, 0), car, M.Metal)
+		for k = 0, 3 do
+			b.part("BulkheadRib", V(0.14, 0.08, W), CF(sx * (L / 2 - 0.06), H + 0.4 + k * 0.6, 0), Color3.fromRGB(56, 32, 24), M.Metal, { nc = true, ns = true })
+		end
+		-- trucks (bogies)
+		local bx = sx * (L / 2 - 2.2)
+		b.part("Bolster", V(0.5, 0.3, 2.4), CF(bx, 0.75, 0), Color3.fromRGB(36, 36, 38), M.Metal)
+		for _, dx in ipairs({ -0.9, 0.9 }) do
+			b.cylZ("WheelAxle", 1.6, 0.14, V(bx + dx, 0.46, 0), Color3.fromRGB(46, 46, 48), M.Metal, { nc = true, ns = true })
+			for _, sz in ipairs({ -1, 1 }) do
+				local w = Instance.new("Model")
+				w.Name = "Wheel"
+				w.Parent = wheels
+				local t = b.cylZ("RailWheel", 0.14, 0.92, V(bx + dx, 0.46, sz * 0.72), Color3.fromRGB(58, 52, 48), M.Metal, nil, w)
+				b.cylZ("Flange", 0.03, 1.0, V(bx + dx, 0.46, sz * 0.64), Color3.fromRGB(58, 52, 48), M.Metal, { nc = true, ns = true }, w)
+				w.PrimaryPart = t
+				w:SetAttribute("Radius", 0.46 * S)
+			end
+		end
+		for _, sz in ipairs({ -1, 1 }) do
+			b.part("SideFrame", V(2.4, 0.3, 0.12), CF(bx, 0.5, sz * 0.86), Color3.fromRGB(36, 36, 38), M.Metal, { nc = true })
+			b.cylY("Spring", 0.3, 0.16, V(bx, 0.72, sz * 0.86), Color3.fromRGB(70, 70, 72), M.Metal, { nc = true, ns = true })
+		end
+		b.part("Coupler", V(0.6, 0.2, 0.25), CF(sx * (L / 2 + 0.3), 0.85, 0), Color3.fromRGB(36, 36, 38), M.Metal)
+	end
+	local reporting = b.part("Reporting", V(3, 0.25, 0.01), CF(0, H - 0.2, W / 2 + 0.01), Color3.fromRGB(230, 230, 226), M.SmoothPlastic, { nc = true, ns = true })
+	reporting.Transparency = 0.1
+	model:PivotTo(cf)
+	return model, H * S, L * S
+end
+
+-- Diesel-electric road switcher. Origin on the rail head at mid-length.
+function VehicleFactory.buildLocomotive(cf)
+	local model = Instance.new("Model")
+	model.Name = "Locomotive"
+	local root = Instance.new("Part")
+	root.Name = "Root"
+	root.Size = V(0.4, 0.4, 0.4)
+	root.Transparency = 1
+	root.Anchored = true
+	root.CanCollide = false
+	root.CanQuery = false
+	root.CanTouch = false
+	root.CFrame = CF()
+	root.Parent = model
+	model.PrimaryPart = root
+	local b = newBuilder(model)
+	local wheels = Instance.new("Folder")
+	wheels.Name = "Wheels"
+	wheels.Parent = model
+	local L = 17.0
+	local paint = Color3.fromRGB(230, 170, 20)
+	local dark = Color3.fromRGB(36, 38, 40)
+	b.part("Frame", V(L, 0.45, 3.0), CF(0, 1.35, 0), dark, M.Metal)
+	b.part("LongHood", V(10.5, 2.4, 2.4), CF(2.3, 2.8, 0), paint, M.Metal, { refl = 0.05 })
+	b.part("Cab", V(3.2, 3.0, 3.0), CF(-4.55, 3.1, 0), paint, M.Metal, { refl = 0.05 })
+	b.part("CabRoof", V(3.3, 0.15, 3.05), CF(-4.55, 4.65, 0), dark, M.Metal)
+	b.part("ShortHood", V(2.2, 1.9, 2.2), CF(-7.25, 2.55, 0), paint, M.Metal)
+	for _, sz in ipairs({ -1, 1 }) do
+		b.part("CabWindow", V(1.2, 0.8, 0.02), CF(-4.3, 3.9, sz * 1.51), GLASS, M.Glass, { nc = true, refl = 0.3 })
+		b.part("Walkway", V(L - 1, 0.04, 0.3), CF(0, 1.6, sz * 1.35), dark, M.DiamondPlate, { nc = true })
+		b.part("Handrail", V(L - 1.5, 0.05, 0.05), CF(0, 2.6, sz * 1.48), paint, M.Metal, { nc = true, ns = true })
+		b.part("Stripe", V(L - 0.5, 0.15, 0.012), CF(0, 1.45, sz * 1.505), Color3.fromRGB(20, 20, 22), M.SmoothPlastic, { nc = true, ns = true })
+	end
+	b.part("Windshield", V(0.02, 0.9, 2.4), CF(-6.16, 3.9, 0), GLASS, M.Glass, { nc = true, refl = 0.3 })
+	for k = 0, 3 do
+		b.part("Radiator", V(0.9, 0.05, 1.8), CF(5.5 + (k % 2) * 1.0, 4.02, 0), dark, M.DiamondPlate, { nc = true, ns = true })
+	end
+	b.cylY("ExhaustStack", 0.4, 0.3, V(1.0, 4.15, 0), dark, M.Metal, { nc = true, ns = true })
+	local hl = b.cylX("Headlight", 0.03, 0.3, CF(-8.37, 3.2, 0), Color3.fromRGB(250, 248, 236), M.Neon, { nc = true, ns = true })
+	hl.Transparency = 0.1
+	for _, sx in ipairs({ -1, 1 }) do
+		local bx = sx * 5.6
+		b.part("TruckFrame", V(3.6, 0.5, 2.4), CF(bx, 0.85, 0), dark, M.Metal)
+		for _, dx in ipairs({ -1.3, 0, 1.3 }) do
+			for _, sz in ipairs({ -1, 1 }) do
+				local w = Instance.new("Model")
+				w.Name = "Wheel"
+				w.Parent = wheels
+				local t = b.cylZ("RailWheel", 0.14, 1.02, V(bx + dx, 0.51, sz * 0.72), Color3.fromRGB(58, 52, 48), M.Metal, nil, w)
+				w.PrimaryPart = t
+				w:SetAttribute("Radius", 0.51 * S)
+			end
+		end
+		b.part("Pilot", V(0.3, 0.6, 3.0), CF(sx * (L / 2 + 0.1), 1.1, 0), dark, M.Metal)
+		b.part("Coupler", V(0.6, 0.2, 0.25), CF(sx * (L / 2 + 0.5), 0.85, 0), dark, M.Metal)
+	end
+	local fuel = b.part("FuelTank", V(5, 0.8, 2.4), CF(0.5, 0.75, 0), dark, M.Metal)
+	fuel.CastShadow = true
+	local engine = b.part("Engine", V(1, 1, 1), CF(2, 2.5, 0), dark, M.Metal, { nc = true, tr = 1, nq = true, ns = true })
+	engine:SetAttribute("Sound", "TruckIdle")
+	model:PivotTo(cf)
+	return model, L * S
+end
+
+return VehicleFactory
+]]></ProtectedString>
+</Properties>
+</Item>
+<Item class="ModuleScript" referent="RBX00000017">
 <Properties>
 <string name="Name">WorldFactory</string>
 <ProtectedString name="Source"><![CDATA[-- Server-side builders for site environments, the tower crane and the
@@ -7788,225 +8817,7 @@ end
 ---------------------------------------------------------------------------
 
 function WorldFactory.buildCrane(craneDef, id)
-	local cfg = CraneMath.config(craneDef)
-	local model = Instance.new("Model")
-	model.Name = "TowerCrane_" .. id
-	model:SetAttribute("CraneId", id)
-	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-
-	local Y = C.CraneYellow
-	local base = cfg.base
-	local Wm = CraneMath.MastWidth
-	local half = Wm / 2 - 0.25
-
-	-- Static: foundation + mast lattice + climbing ladder
-	local static = Instance.new("Model")
-	static.Name = "Static"
-	static.Parent = model
-	P(static, "Foundation", V(m(7), m(0.6), m(7)), CF(base + V(0, m(0.3), 0)), Color3.fromRGB(150, 148, 142), M.Concrete)
-	for _, sx in ipairs({ -1, 1 }) do
-		for _, sz in ipairs({ -1, 1 }) do
-			P(static, "FixingAngle", V(1.2, m(1), 1.2), CF(base + V(sx * half, m(0.6) + m(0.5), sz * half)), Y, M.Metal)
-		end
-	end
-	local mastBottom = base.Y + m(1.1)
-	local mastTop = cfg.pivot.Y - 1.0
-	local mastH = mastTop - mastBottom
-	for _, sx in ipairs({ -1, 1 }) do
-		for _, sz in ipairs({ -1, 1 }) do
-			P(static, "Chord", V(0.5, mastH, 0.5), CF(base.X + sx * half, mastBottom + mastH / 2, base.Z + sz * half), Y, M.Metal)
-		end
-	end
-	local section = m(3)
-	local nSec = math.floor(mastH / section)
-	for k = 0, nSec - 1 do
-		local y0 = mastBottom + k * section
-		local y1 = y0 + section
-		local corners = {
-			V(-half, 0, -half),
-			V(half, 0, -half),
-			V(half, 0, half),
-			V(-half, 0, half),
-		}
-		for f = 1, 4 do
-			local a = corners[f]
-			local b = corners[f % 4 + 1]
-			local skipEntry = (k == 0 and f == 1)
-			if not skipEntry then
-				local flip = (k % 2 == 0)
-				local p0 = base + (flip and a or b) + V(0, y0 - base.Y, 0)
-				local p1 = base + (flip and b or a) + V(0, y1 - base.Y, 0)
-				bar(static, "Diagonal", p0, p1, 0.22, Y, M.Metal, { ns = true })
-			end
-			bar(static, "Horizontal", base + a + V(0, y0 - base.Y, 0), base + b + V(0, y0 - base.Y, 0), 0.2, Y, M.Metal, { ns = true, nc = skipEntry })
-		end
-	end
-	local truss = Instance.new("TrussPart")
-	truss.Name = "MastLadder"
-	truss.Size = V(2, 2 * math.floor(mastH / 2), 2)
-	truss.CFrame = CF(base.X, mastBottom + truss.Size.Y / 2, base.Z)
-	truss.Color = C.Galvanized
-	truss.Material = M.Metal
-	truss.Anchored = true
-	truss.Style = Enum.Style.AlternateSupports
-	truss.Parent = static
-	-- top rest platform (where the ladder arrives) and the slewing ring
-	-- landing ring around the ladder opening
-	local ringW = (Wm + 2.4 - 2.6) / 2
-	for _, sx in ipairs({ -1, 1 }) do
-		P(static, "TopPlatform", V(ringW, 0.3, Wm + 2.4), CF(base.X + sx * (1.3 + ringW / 2), mastTop - 0.2, base.Z), C.SteelDark, M.DiamondPlate)
-		P(static, "TopPlatform", V(2.6, 0.3, ringW), CF(base.X, mastTop - 0.2, base.Z + sx * (1.3 + ringW / 2)), C.SteelDark, M.DiamondPlate)
-	end
-	local topAccess = P(static, "CraneAccessTop", V(Wm + 2, 5, Wm + 2), CF(base.X, mastTop + 2.4, base.Z), Y, M.Metal, { tr = 1, nc = true })
-	topAccess:SetAttribute("CraneInteract", "Access")
-	for _, sz in ipairs({ -1, 1 }) do
-		P(static, "TopRail", V(Wm + 2.4, 0.15, 0.15), CF(base.X, mastTop + 3.2, base.Z + sz * (Wm / 2 + 1.1)), Y, M.Metal, { nc = true })
-	end
-	cyl(static, "SlewRing", 0.8, Wm + 1.0, CF(cfg.pivot - V(0, 0.6, 0)) * CFrame.Angles(0, 0, math.pi / 2), C.SteelDark, M.Metal, { nc = true })
-	local access = P(static, "CraneAccess", V(Wm + 1, m(2.4), 1), CF(base + V(0, m(0.6) + m(1.2), -(Wm / 2 + 1))), Y, M.Metal, { tr = 0.85, nc = true })
-	access:SetAttribute("CraneInteract", "Access")
-	local gateSign = P(static, "AccessSign", V(2.4, 1.4, 0.1), CF(base + V(0, m(1.8), -(Wm / 2 + 1.6))), C.Safety, M.SmoothPlastic, { nc = true })
-	surfaceText(gateSign, Enum.NormalId.Front, "CRANE ACCESS\nAUTHORISED OPERATORS", C.Safety, C.Charcoal)
-
-	-- Slewing assembly (moved as one model by the renderer)
-	local slew = Instance.new("Model")
-	slew.Name = "Slew"
-	slew.Parent = model
-	local root = P(slew, "Root", V(0.4, 0.4, 0.4), CF(cfg.pivot), Y, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
-	slew.PrimaryPart = root
-	local frame = CF(cfg.pivot)
-	local function sp(name, size, localCf, color, material, flags)
-		return P(slew, name, size, frame * localCf, color, material, flags)
-	end
-	cyl(slew, "Turntable", 1.0, Wm + 0.6, frame * CF(0, 0.3, 0) * CFrame.Angles(0, 0, math.pi / 2), Y, M.Metal, { nc = true })
-	sp("SlewUnit", V(Wm + 1, 1.6, Wm), CF(0, 1.4, 0), Y, M.Metal, { nc = true })
-	-- jib (triangular lattice)
-	local jy, jh, jw = CraneMath.JibBottomY, CraneMath.JibHeight, CraneMath.JibWidth
-	local jibStart, jibEnd = 2.4, cfg.jib
-	local jl = jibEnd - jibStart
-	for _, sz in ipairs({ -1, 1 }) do
-		sp("JibChord", V(jl, 0.5, 0.5), CF(jibStart + jl / 2, jy, sz * jw / 2), Y, M.Metal, { nc = true })
-	end
-	sp("JibTopChord", V(jl, 0.45, 0.45), CF(jibStart + jl / 2, jy + jh, 0), Y, M.Metal, { nc = true })
-	local bayLen = 9
-	local nb = math.floor(jl / bayLen)
-	for k = 0, nb - 1 do
-		local x0 = jibStart + k * bayLen
-		local xm = x0 + bayLen / 2
-		local x1 = x0 + bayLen
-		for _, sz in ipairs({ -1, 1 }) do
-			local bot0 = frame * V(x0, jy, sz * jw / 2)
-			local top = frame * V(xm, jy + jh, 0)
-			local bot1 = frame * V(x1, jy, sz * jw / 2)
-			bar(slew, "JibLace", bot0, top, 0.2, Y, M.Metal, { nc = true, ns = true })
-			bar(slew, "JibLace", top, bot1, 0.2, Y, M.Metal, { nc = true, ns = true })
-		end
-		sp("JibTie", V(0.18, 0.18, jw), CF(x0, jy, 0), Y, M.Metal, { nc = true, ns = true })
-	end
-	sp("JibTip", V(0.6, jh, jw + 0.4), CF(jibEnd, jy + jh / 2, 0), Y, M.Metal, { nc = true })
-	local beacon = sp("AviationLight", V(0.5, 0.5, 0.5), CF(jibEnd, jy + jh + 0.4, 0), Color3.fromRGB(255, 40, 30), M.Neon, { nc = true, ns = true })
-	beacon.Shape = Enum.PartType.Ball
-	-- counter-jib with walkway, winch, counterweights
-	local cl = cfg.counter
-	for _, sz in ipairs({ -1, 1 }) do
-		sp("CounterGirder", V(cl, 1.2, 0.8), CF(-cl / 2 - 1.5, jy + 0.6, sz * 1.8), Y, M.Metal, { nc = true })
-		sp("Handrail", V(cl, 0.15, 0.15), CF(-cl / 2 - 1.5, jy + 3.4, sz * 2.4), Y, M.Metal, { nc = true, ns = true })
-		local posts = math.floor(cl / 6)
-		for k = 0, posts do
-			sp("RailPost", V(0.15, 2.2, 0.15), CF(-2 - k * (cl - 2) / posts, jy + 2.3, sz * 2.4), Y, M.Metal, { nc = true, ns = true })
-		end
-	end
-	sp("Walkway", V(cl, 0.2, 3.2), CF(-cl / 2 - 1.5, jy + 1.2, 0), C.SteelDark, M.DiamondPlate, { nc = true })
-	sp("WinchHousing", V(3.2, 2.4, 2.6), CF(-6, jy + 2.4, 0), Color3.fromRGB(70, 74, 80), M.Metal, { nc = true })
-	local drum = cyl(slew, "WinchDrum", 2.4, 1.6, frame * CF(-9.2, jy + 2.1, 0) * CFrame.Angles(0, math.pi / 2, 0), C.SteelDark, M.Metal, { nc = true })
-	drum:SetAttribute("Sound", "Hoist")
-	sp("Cabinet", V(1.6, 2.2, 1.2), CF(-12, jy + 2.3, 1.2), Color3.fromRGB(210, 210, 206), M.Metal, { nc = true })
-	for k = 0, 3 do
-		sp("Counterweight", V(1.0, m(2.2), 4.4), CF(-cl - 0.5 + k * 1.05, jy - m(0.4), 0), Color3.fromRGB(150, 150, 146), M.Concrete, { nc = true })
-	end
-	local brand = sp("Brand", V(cl * 0.7, 3.2, 0.2), CF(-cl / 2 - 1.5, jy + 1.6, 2.35), C.Charcoal, M.Metal, { nc = true })
-	surfaceText(brand, Enum.NormalId.Back, "STEELRISE", C.Charcoal, C.Safety)
-	local brandB = sp("BrandB", V(cl * 0.7, 3.2, 0.2), CF(-cl / 2 - 1.5, jy + 1.6, -2.35), C.Charcoal, M.Metal, { nc = true })
-	surfaceText(brandB, Enum.NormalId.Front, "STEELRISE", C.Charcoal, C.Safety)
-	-- operator cab
-	local co = CraneMath.CabOffset
-	local cabCf = frame * CF(co)
-	local function cp(name, size, localCf, color, material, flags)
-		return P(slew, name, size, cabCf * localCf, color, material, flags)
-	end
-	cp("CabFloor", V(3.6, 0.2, 3.0), CF(0, -2.2, 0), C.SteelDark, M.DiamondPlate, { nc = true })
-	cp("CabRoof", V(3.8, 0.25, 3.2), CF(0, 2.2, 0), C.OffWhite, M.Metal, { nc = true })
-	cp("CabBack", V(0.2, 4.4, 3.0), CF(-1.8, 0, 0), C.OffWhite, M.Metal, { nc = true })
-	cp("CabSideIn", V(3.6, 4.4, 0.2), CF(0, 0, -1.5), C.OffWhite, M.Metal, { nc = true })
-	cp("CabSideOutLow", V(3.6, 1.4, 0.2), CF(0, -1.5, 1.5), C.OffWhite, M.Metal, { nc = true })
-	local glass = cp("CabSideGlass", V(3.2, 2.8, 0.06), CF(0, 0.7, 1.5), C.Glass, M.Glass, { nc = true, tr = 0.55, refl = 0.12, ns = true })
-	glass.CanQuery = false
-	local front = cp("CabFrontGlass", V(0.06, 4.0, 2.8), CF(1.8, 0, 0), C.Glass, M.Glass, { nc = true, tr = 0.6, refl = 0.1, ns = true })
-	front.CanQuery = false
-	cp("CabFloorGlass", V(1.2, 0.06, 2.6), CF(1.2, -2.1, 0), C.Glass, M.Glass, { nc = true, tr = 0.6, ns = true, nq = true })
-	cp("Seat", V(1.0, 0.3, 1.0), CF(0.1, -1.3, 0), C.Charcoal, M.Fabric, { nc = true })
-	cp("SeatBack", V(0.25, 1.4, 1.0), CF(-0.45, -0.6, 0), C.Charcoal, M.Fabric, { nc = true })
-	cp("ConsoleL", V(0.9, 0.7, 0.35), CF(0.5, -1.0, -0.8), C.Charcoal, M.SmoothPlastic, { nc = true })
-	cp("ConsoleR", V(0.9, 0.7, 0.35), CF(0.5, -1.0, 0.8), C.Charcoal, M.SmoothPlastic, { nc = true })
-	local screen = cp("Display", V(0.06, 0.5, 0.8), CF(1.5, -0.2, -0.9), Color3.fromRGB(20, 60, 80), M.Neon, { nc = true, ns = true })
-	screen.Transparency = 0.2
-	local door = cp("CabDoor", V(3.6, 4.0, 0.3), CF(0, 0, -1.65), Y, M.Metal, { tr = 0.9, nc = true })
-	door:SetAttribute("CraneInteract", "Cab")
-	sp("CabWalk", V(3.2, 0.2, 2.8), CF(0, -1.0 - 2.2 + 1.4, 2.2), C.SteelDark, M.DiamondPlate, { nc = true })
-
-	-- Trolley
-	local trolley = Instance.new("Model")
-	trolley.Name = "Trolley"
-	trolley.Parent = model
-	local st = CraneMath.defaultState(craneDef)
-	local tcf = CraneMath.trolleyCf(cfg, st)
-	local troot = P(trolley, "Root", V(0.3, 0.3, 0.3), tcf, Y, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
-	trolley.PrimaryPart = troot
-	P(trolley, "Frame", V(3.2, 0.6, jw + 0.6), tcf * CF(0, 1.0, 0), Y, M.Metal, { nc = true })
-	for _, sx in ipairs({ -1.2, 1.2 }) do
-		for _, sz in ipairs({ -1, 1 }) do
-			cyl(trolley, "Wheel", 0.3, 0.6, tcf * CF(sx, 1.75, sz * jw / 2) * CFrame.Angles(0, math.pi / 2, 0), C.SteelDark, M.Metal, { nc = true, ns = true })
-		end
-	end
-	for _, sx in ipairs({ -0.5, 0.5 }) do
-		cyl(trolley, "Sheave", 0.25, 0.9, tcf * CF(sx, 0.2, 0) * CFrame.Angles(0, math.pi / 2, 0), C.SteelDark, M.Metal, { nc = true, ns = true })
-	end
-
-	-- Hook block
-	local hook = Instance.new("Model")
-	hook.Name = "Hook"
-	hook.Parent = model
-	local hcf = CraneMath.hookCf(cfg, st)
-	local hroot = P(hook, "Root", V(0.3, 0.3, 0.3), hcf, Y, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
-	hook.PrimaryPart = hroot
-	P(hook, "Block", V(1.3, 2.0, 1.9), hcf * CF(0, 1.9, 0), Y, M.Metal, { nc = true })
-	for k = 0, 3 do
-		for _, sz in ipairs({ -1, 1 }) do
-			P(hook, "Stripe", V(0.32, 1.9, 0.04), hcf * CF(-0.48 + k * 0.32, 1.9, sz * 0.97) * CFrame.Angles(0, 0, math.rad(30)), k % 2 == 0 and C.Charcoal or Y, M.SmoothPlastic, { nc = true, ns = true })
-		end
-	end
-	cyl(hook, "BlockSheave", 1.4, 1.1, hcf * CF(0, 2.9, 0) * CFrame.Angles(0, math.pi / 2, 0), C.SteelDark, M.Metal, { nc = true, ns = true })
-	cyl(hook, "Shank", 0.7, 0.35, hcf * CF(0, 0.6, 0) * CFrame.Angles(0, 0, math.pi / 2), C.SteelDark, M.Metal, { nc = true })
-	P(hook, "HookBack", V(0.3, 0.8, 0.3), hcf * CF(-0.32, 0.05, 0), Y, M.Metal, { nc = true })
-	P(hook, "HookBowl", V(0.9, 0.3, 0.3), hcf * CF(0, -0.32, 0), Y, M.Metal, { nc = true })
-	P(hook, "HookTip", V(0.3, 0.45, 0.3), hcf * CF(0.32, -0.1, 0), Y, M.Metal, { nc = true })
-	P(hook, "Latch", V(0.06, 0.6, 0.08), hcf * CF(0.0, 0.15, 0) * CFrame.Angles(0, 0, math.rad(-35)), C.SteelDark, M.Metal, { nc = true, ns = true })
-
-	-- Hoist falls (two parts falls, reshaped by the renderer)
-	local cables = Instance.new("Folder")
-	cables.Name = "Cables"
-	cables.Parent = model
-	for k = 1, 2 do
-		local c = cyl(cables, "Fall" .. k, 1, 0.09, CF(), Color3.fromRGB(40, 40, 42), M.Metal, { nc = true, ns = true, nq = true })
-		c.CanQuery = false
-	end
-
-	CraneMath.writeAttributes(model, st)
-	model:SetAttribute("Operator", 0)
-	model:SetAttribute("LoadId", "")
-	model:SetAttribute("ResetSeq", 0)
-	model.PrimaryPart = root
-	return model, cfg
+	return require(script.Parent.CraneFactory).build(craneDef, id)
 end
 
 ---------------------------------------------------------------------------
@@ -8016,71 +8827,7 @@ end
 -- Local frame: origin at road level under the middle of the bed, bed along +X,
 -- tractor toward -X. Returns the model and the bed-top height in studs.
 function WorldFactory.buildTrailer(bayCf, rngSeed)
-	local rng = Random.new(rngSeed or 1)
-	local model = Instance.new("Model")
-	model.Name = "Trailer"
-	local root = P(model, "Root", V(0.4, 0.4, 0.4), CF(), C.Steel, M.Metal, { tr = 1, nc = true, nq = true, ns = true })
-	model.PrimaryPart = root
-	local D = Config.Delivery
-	local L, W, H = m(D.BedLength), m(D.BedWidth), m(D.BedHeight)
-	-- deck and frame
-	P(model, "Deck", V(L, m(0.06), W), CF(0, H - m(0.03), 0), Color3.fromRGB(122, 96, 70), M.WoodPlanks)
-	for _, sz in ipairs({ -1, 1 }) do
-		P(model, "SideRail", V(L, m(0.25), m(0.08)), CF(0, H - m(0.14), sz * (W / 2 - m(0.04))), C.SteelDark, M.Metal)
-		P(model, "MainBeam", V(L - m(1), m(0.45), m(0.14)), CF(m(0.5), H - m(0.45), sz * m(0.45)), C.SteelDark, M.Metal)
-		for k = 0, 7 do
-			P(model, "StakePocket", V(m(0.12), m(0.14), m(0.06)), CF(-L / 2 + m(1) + k * m(2), H - m(0.28), sz * (W / 2 + m(0.02))), C.SteelDark, M.Metal, { nc = true, ns = true })
-		end
-		P(model, "Mudflap", V(m(0.02), m(0.6), m(0.6)), CF(L / 2 - m(0.4), m(0.45), sz * m(0.9)), C.Rubber, M.SmoothPlastic, { nc = true })
-		local tl = P(model, "TailLight", V(m(0.05), m(0.12), m(0.25)), CF(L / 2 + m(0.02), H - m(0.3), sz * m(1.0)), Color3.fromRGB(200, 20, 20), M.Neon, { nc = true, ns = true })
-		tl.Transparency = 0.1
-	end
-	P(model, "RearBumper", V(m(0.15), m(0.15), W - m(0.2)), CF(L / 2 - m(0.1), m(0.75), 0), C.SteelDark, M.Metal, { nc = true })
-	P(model, "LandingGear", V(m(0.15), H - m(0.6), m(1.8)), CF(-L / 2 + m(3.2), (H - m(0.6)) / 2 + m(0.1), 0), C.SteelDark, M.Metal, { nc = true })
-	local tireDia, tireW = m(1.0), m(0.28)
-	local function wheelSet(x, dual)
-		for _, sz in ipairs({ -1, 1 }) do
-			local offs = dual and { 0.78, 1.08 } or { 1.0 }
-			for _, o in ipairs(offs) do
-				cyl(model, "Tire", tireW, tireDia, CF(x, tireDia / 2, sz * m(o)) * CFrame.Angles(0, math.pi / 2, 0), C.Rubber, M.SmoothPlastic, { ns = false })
-			end
-			cyl(model, "Hub", m(0.05), m(0.5), CF(x, tireDia / 2, sz * m(dual and 1.23 or 1.15)) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(190, 192, 196), M.Metal, { nc = true, ns = true })
-		end
-	end
-	for _, ax in ipairs({ 4.9, 6.2, 7.4 }) do
-		wheelSet(m(ax), true)
-	end
-	-- tractor (conventional long-hood)
-	local paint = ({ Color3.fromRGB(120, 18, 22), Color3.fromRGB(236, 236, 232), Color3.fromRGB(22, 44, 92), Color3.fromRGB(26, 26, 28) })[rng:NextInteger(1, 4)]
-	local tx = -L / 2
-	P(model, "TractorFrame", V(m(7.4), m(0.35), m(1.0)), CF(tx - m(3.2), m(0.95), 0), C.SteelDark, M.Metal)
-	P(model, "FifthWheel", V(m(1.2), m(0.15), m(1.4)), CF(tx + m(0.4), m(1.25), 0), C.Rubber, M.Metal, { nc = true })
-	wheelSet(tx - m(0.6), true)
-	wheelSet(tx - m(1.9), true)
-	wheelSet(tx - m(7.3), false)
-	local sleeper = P(model, "Sleeper", V(m(1.6), m(2.4), m(2.4)), CF(tx - m(3.6), m(2.35), 0), paint, M.Metal, { refl = 0.05 })
-	sleeper.CastShadow = true
-	P(model, "Cab", V(m(1.6), m(2.0), m(2.4)), CF(tx - m(5.2), m(2.15), 0), paint, M.Metal, { refl = 0.05 })
-	P(model, "Windshield", V(m(0.05), m(0.85), m(2.1)), CF(tx - m(6.0), m(2.65), 0) * CFrame.Angles(0, 0, math.rad(-12)), Color3.fromRGB(40, 52, 60), M.Glass, { nc = true, refl = 0.25 })
-	for _, sz in ipairs({ -1, 1 }) do
-		P(model, "SideWindow", V(m(0.9), m(0.7), m(0.03)), CF(tx - m(5.3), m(2.65), sz * m(1.21)), Color3.fromRGB(40, 52, 60), M.Glass, { nc = true, refl = 0.25 })
-		P(model, "Mirror", V(m(0.08), m(0.4), m(0.18)), CF(tx - m(6.1), m(2.6), sz * m(1.45)), C.SteelDark, M.Metal, { nc = true, ns = true })
-		cyl(model, "Exhaust", m(2.6), m(0.16), CF(tx - m(4.35), m(2.8), sz * m(1.05)) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(200, 202, 206), M.Metal, { nc = true, refl = 0.2 })
-		cyl(model, "FuelTank", m(1.3), m(0.6), CF(tx - m(4.6), m(0.95), sz * m(0.95)), Color3.fromRGB(196, 198, 202), M.Metal, { nc = true, refl = 0.15 })
-		P(model, "Headlight", V(m(0.05), m(0.2), m(0.35)), CF(tx - m(8.2), m(1.35), sz * m(0.8)), Color3.fromRGB(240, 240, 230), M.Neon, { nc = true, ns = true })
-	end
-	P(model, "Hood", V(m(2.2), m(1.3), m(2.0)), CF(tx - m(7.1), m(1.55), 0), paint, M.Metal, { refl = 0.05 })
-	P(model, "Grille", V(m(0.08), m(1.2), m(1.2)), CF(tx - m(8.2), m(1.55), 0), Color3.fromRGB(200, 202, 206), M.DiamondPlate, { nc = true, refl = 0.2 })
-	P(model, "Bumper", V(m(0.3), m(0.35), m(2.4)), CF(tx - m(8.35), m(0.75), 0), Color3.fromRGB(200, 202, 206), M.Metal, { refl = 0.2 })
-	for k = -2, 2 do
-		P(model, "Marker", V(m(0.08), m(0.06), m(0.12)), CF(tx - m(5.95), m(3.2), k * m(0.35)), Color3.fromRGB(255, 160, 30), M.Neon, { nc = true, ns = true })
-	end
-	local engine = P(model, "Engine", V(m(1), m(0.6), m(1)), CF(tx - m(7.1), m(1.2), 0), C.SteelDark, M.Metal, { nc = true, tr = 1, nq = true, ns = true })
-	engine:SetAttribute("Sound", "TruckIdle")
-	local cabInteract = P(model, "TruckInteract", V(m(2), m(3), m(2.6)), CF(tx - m(5), m(1.8), 0), C.Steel, M.SmoothPlastic, { tr = 1, nc = true, ns = true })
-	cabInteract:SetAttribute("TrailerInteract", "Cab")
-	model:PivotTo(bayCf)
-	return model, H
+	return require(script.Parent.VehicleFactory).buildTruck(bayCf, rngSeed)
 end
 
 return WorldFactory
@@ -8089,19 +8836,19 @@ return WorldFactory
 </Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX0000002C">
+<Item class="StarterPlayer" referent="RBX0000002E">
 <Properties>
 <string name="Name">StarterPlayer</string>
 </Properties>
-<Item class="StarterPlayerScripts" referent="RBX0000002B">
+<Item class="StarterPlayerScripts" referent="RBX0000002D">
 <Properties>
 <string name="Name">StarterPlayerScripts</string>
 </Properties>
-<Item class="Folder" referent="RBX0000002A">
+<Item class="Folder" referent="RBX0000002C">
 <Properties>
 <string name="Name">Steelrise</string>
 </Properties>
-<Item class="ModuleScript" referent="RBX00000018">
+<Item class="ModuleScript" referent="RBX0000001A">
 <Properties>
 <string name="Name">Audio</string>
 <ProtectedString name="Source"><![CDATA[-- Client audio: mix groups with separate volumes, varied one-shots and
@@ -8263,7 +9010,7 @@ return Audio
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000019">
+<Item class="ModuleScript" referent="RBX0000001B">
 <Properties>
 <string name="Name">Blueprint</string>
 <ProtectedString name="Source"><![CDATA[-- Blueprint ghosts: translucent outlines of what still has to be built on
@@ -8391,7 +9138,7 @@ return Blueprint
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001A">
+<Item class="ModuleScript" referent="RBX0000001C">
 <Properties>
 <string name="Name">Catalog</string>
 <ProtectedString name="Source"><![CDATA[-- Searchable catalog over the item registry: categories, favourites, lazy
@@ -8766,7 +9513,7 @@ return Catalog
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="LocalScript" referent="RBX0000001B">
+<Item class="LocalScript" referent="RBX0000001D">
 <Properties>
 <string name="Name">ClientMain</string>
 <ProtectedString name="Source"><![CDATA[-- STEELRISE client bootstrap: builds the interface, binds the current site,
@@ -9115,6 +9862,11 @@ task.spawn(function()
 	if State.menuInfo then
 		MainMenu.refresh(State.menuInfo)
 	end
+	-- the chat configuration objects can appear a moment after join
+	Settings.applyChat(State.settings.chat or "Small")
+	task.delay(3, function()
+		Settings.applyChat(State.settings.chat or "Small")
+	end)
 	State.mode = "Menu"
 	player:SetAttribute("SR_MenuReady", true)
 	while not player:GetAttribute("SR_LoaderDone") do
@@ -9125,7 +9877,7 @@ end)
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001C">
+<Item class="ModuleScript" referent="RBX0000001E">
 <Properties>
 <string name="Name">CraneClient</string>
 <ProtectedString name="Source"><![CDATA[-- Tower crane on the client.
@@ -10064,7 +10816,7 @@ return CraneClient
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001D">
+<Item class="ModuleScript" referent="RBX0000001F">
 <Properties>
 <string name="Name">FX</string>
 <ProtectedString name="Source"><![CDATA[-- Effects and positional audio for server-announced events (bolting,
@@ -10311,7 +11063,7 @@ return FX
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001E">
+<Item class="ModuleScript" referent="RBX00000020">
 <Properties>
 <string name="Name">Footsteps</string>
 <ProtectedString name="Source"><![CDATA[-- Surface-aware footsteps for the local character. Silent until step sounds
@@ -10385,7 +11137,7 @@ return Footsteps
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001F">
+<Item class="ModuleScript" referent="RBX00000021">
 <Properties>
 <string name="Name">HUD</string>
 <ProtectedString name="Source"><![CDATA[-- In-game interface: crosshair, contextual prompts, hold progress, placement
@@ -10985,7 +11737,7 @@ return HUD
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000020">
+<Item class="ModuleScript" referent="RBX00000022">
 <Properties>
 <string name="Name">Interaction</string>
 <ProtectedString name="Source"><![CDATA[-- On-foot interaction: what the crosshair is on, contextual prompts, picking
@@ -11425,7 +12177,7 @@ return Interaction
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000021">
+<Item class="ModuleScript" referent="RBX00000023">
 <Properties>
 <string name="Name">MainMenu</string>
 <ProtectedString name="Source"><![CDATA[-- Main menu: Play, Continue Construction, Site Selection, Settings, Controls,
@@ -11936,7 +12688,7 @@ return MainMenu
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000022">
+<Item class="ModuleScript" referent="RBX00000024">
 <Properties>
 <string name="Name">Net</string>
 <ProtectedString name="Source"><![CDATA[-- Safe wrappers around the STEELRISE remotes.
@@ -11980,7 +12732,7 @@ return Net
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000023">
+<Item class="ModuleScript" referent="RBX00000025">
 <Properties>
 <string name="Name">Placement</string>
 <ProtectedString name="Source"><![CDATA[-- Hand placement of carried components: a transparent ghost snaps to grid or
@@ -12219,7 +12971,7 @@ return Placement
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000024">
+<Item class="ModuleScript" referent="RBX00000026">
 <Properties>
 <string name="Name">Settings</string>
 <ProtectedString name="Source"><![CDATA[-- Applies player settings (graphics, audio, controls) locally and builds the
@@ -12240,8 +12992,40 @@ local Net = require(script.Parent.Net)
 local C = Config.Colors
 local Settings = {}
 
+-- Roblox chat window size. Works with TextChatService (the default chat);
+-- silently does nothing if the experience uses the legacy chat.
+local CHAT_SIZES = {
+	Small = { w = 0.6, h = 0.5, text = 13, bg = 0.55 },
+	Normal = { w = 1.0, h = 1.0, text = 15, bg = 0.3 },
+}
+
+function Settings.applyChat(mode)
+	pcall(function()
+		local TextChatService = game:GetService("TextChatService")
+		local win = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
+		local bar = TextChatService:FindFirstChildOfClass("ChatInputBarConfiguration")
+		local size = CHAT_SIZES[mode]
+		if win then
+			win.Enabled = mode ~= "Hidden"
+			if size then
+				win.WidthScale = size.w
+				win.HeightScale = size.h
+				win.TextSize = size.text
+				win.BackgroundTransparency = size.bg
+			end
+		end
+		if bar then
+			bar.Enabled = mode ~= "Hidden"
+			if size then
+				bar.TextSize = size.text
+			end
+		end
+	end)
+end
+
 function Settings.apply()
 	local s = State.settings
+	Settings.applyChat(s.chat or "Small")
 	local preset = Config.Graphics.Presets[s.graphics] or Config.Graphics.Presets.Balanced
 	local post = s.post and preset.post
 	for _, name in ipairs({ "SR_Bloom", "SR_SunRays", "SR_Grade" }) do
@@ -12356,6 +13140,12 @@ function Settings.buildPanel(parent)
 		changed()
 	end).LayoutOrder = nxt()
 
+	local chat = UIKit.segmented(scroll, "Chat window", { "Small", "Normal", "Hidden" }, s.chat or "Small", function(v)
+		s.chat = v
+		changed()
+	end)
+	chat.LayoutOrder = nxt()
+
 	section(scroll, "AUDIO", nxt())
 	for _, g in ipairs(Config.AudioGroups) do
 		local row = UIKit.slider(scroll, g == "Master" and "Master volume" or g, s.volumes[g] or 0.8, 0, 1, 0.05, function(v)
@@ -12377,7 +13167,7 @@ return Settings
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000025">
+<Item class="ModuleScript" referent="RBX00000027">
 <Properties>
 <string name="Name">State</string>
 <ProtectedString name="Source"><![CDATA[-- Client-side shared state and a tiny event bus between controllers.
@@ -12421,7 +13211,7 @@ return State
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000026">
+<Item class="ModuleScript" referent="RBX00000028">
 <Properties>
 <string name="Name">TrailerAnim</string>
 <ProtectedString name="Source"><![CDATA[-- Drive-in / drive-out animation for delivery trucks. The server places a
@@ -12468,7 +13258,24 @@ local function cargoOf(site, id)
 	return out
 end
 
+-- Roll every wheel by the distance travelled since the last frame.
+local function spinWheels(a, travelled)
+	local wheels = a.model:FindFirstChild("Wheels")
+	if not wheels or travelled == 0 then
+		return
+	end
+	for _, w in ipairs(wheels:GetChildren()) do
+		local r = w:GetAttribute("Radius")
+		if r and r > 0 and w.PrimaryPart then
+			w:PivotTo(w:GetPivot() * CFrame.Angles(travelled / r, 0, 0))
+		end
+	end
+end
+TrailerAnim.spinWheels = spinWheels
+
 local function moveAll(a, offset)
+	spinWheels(a, offset - (a.lastOffset or offset))
+	a.lastOffset = offset
 	local cf = a.final * CFrame.new(offset, 0, 0)
 	a.model:PivotTo(cf)
 	local rel = cf * a.final:Inverse()
@@ -12553,7 +13360,7 @@ return TrailerAnim
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000027">
+<Item class="ModuleScript" referent="RBX00000029">
 <Properties>
 <string name="Name">Tutorial</string>
 <ProtectedString name="Source"><![CDATA[-- Short playable tutorial on the Empty Land site: unload, rig, lift, land,
@@ -12708,7 +13515,7 @@ return Tutorial
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000028">
+<Item class="ModuleScript" referent="RBX0000002A">
 <Properties>
 <string name="Name">UIKit</string>
 <ProtectedString name="Source"><![CDATA[-- Interface building blocks in the STEELRISE style: charcoal panels, steel
@@ -13103,7 +13910,7 @@ return UIKit
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000029">
+<Item class="ModuleScript" referent="RBX0000002B">
 <Properties>
 <string name="Name">View</string>
 <ProtectedString name="Source"><![CDATA[-- First/third-person view switching and the shared aim ray.
@@ -13178,7 +13985,7 @@ return View
 </Item>
 </Item>
 </Item>
-<Item class="Workspace" referent="RBX0000002D">
+<Item class="Workspace" referent="RBX0000002F">
 <Properties>
 <string name="Name">Workspace</string>
 <bool name="StreamingEnabled">true</bool>
@@ -13186,13 +13993,13 @@ return View
 <int name="StreamingTargetRadius">1024</int>
 </Properties>
 </Item>
-<Item class="Lighting" referent="RBX0000002E">
+<Item class="Lighting" referent="RBX00000030">
 <Properties>
 <string name="Name">Lighting</string>
 <token name="Technology">4</token>
 </Properties>
 </Item>
-<Item class="SoundService" referent="RBX0000002F">
+<Item class="SoundService" referent="RBX00000031">
 <Properties>
 <string name="Name">SoundService</string>
 </Properties>
