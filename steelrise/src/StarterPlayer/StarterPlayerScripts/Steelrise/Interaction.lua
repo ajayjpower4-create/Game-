@@ -27,8 +27,8 @@ local busy = false
 local markers = {}
 local markerFolder
 
-local HOLD_TIME = { Bolt = 0.55, Wedge = 0.35, Weld = 0.9, Dismantle = 1.2 }
-local TOOL_NAME = { Bolt = "impact wrench (2)", Wedge = "scaffold hammer (3)", Weld = "welder (4)" }
+local HOLD_TIME = { Bolt = 0.55, Wedge = 0.35, Weld = 0.9, Screed = 0.8, Dismantle = 1.2 }
+local TOOL_NAME = { Bolt = "impact wrench (2)", Wedge = "scaffold hammer (3)", Weld = "welder (4)", Screed = "trowel (7)" }
 
 local function active()
 	return State.mode == "Play" and not State.uiBlocking and not State.crane.operating
@@ -139,7 +139,8 @@ local function buildPrompt()
 			if ft and ft == need then
 				local f = nearestFastener(rec, target.pos, ft)
 				if f then
-					table.insert(list, { key = "Hold LMB", text = (ft == "Weld" and "Weld" or (ft == "Wedge" and "Drive wedge" or "Tighten bolt")), sub = def.name .. "  ·  " .. progress })
+					local verb = ({ Weld = "Weld", Wedge = "Drive wedge", Screed = "Trowel finish", Bolt = "Tighten bolt" })[ft] or "Fasten"
+					table.insert(list, { key = "Hold LMB", text = verb, sub = def.name .. "  ·  " .. progress })
 				else
 					table.insert(list, { text = "Aim at a yellow connection marker", sub = def.name .. "  ·  " .. progress, disabled = true })
 				end

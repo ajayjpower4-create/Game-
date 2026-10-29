@@ -521,6 +521,14 @@ function ComponentService.onInstalled(model)
 	if lug then
 		lug:Destroy()
 	end
+	-- finished concrete cures from wet dark grey to light grey
+	if def.tags.Slab then
+		local concrete = model:FindFirstChild("Concrete")
+		if concrete then
+			concrete.Color = Color3.fromRGB(176, 174, 168)
+			concrete.Reflectance = 0
+		end
+	end
 	markWorldDirty()
 	fire("Installed", model, nil)
 	if Services.Site then
@@ -547,7 +555,7 @@ function ComponentService.fasten(player, id, index)
 	end
 	local tool = Registry.get(ComponentService.equipped(player))
 	if not tool or tool.fastens ~= f.type then
-		local need = ({ Bolt = "the impact wrench (2)", Wedge = "the scaffold hammer (3)", Weld = "the welder (4)" })[f.type]
+		local need = ({ Bolt = "the impact wrench (2)", Wedge = "the scaffold hammer (3)", Weld = "the welder (4)", Screed = "the trowel (7)" })[f.type]
 		return false, "Wrong tool — this needs " .. (need or f.type) .. "."
 	end
 	local hrp = hrpOf(player)
@@ -592,7 +600,7 @@ function ComponentService.dismantle(player, id)
 	if #def.fasteners > 0 then
 		local tool = Registry.get(ComponentService.equipped(player))
 		if not tool or tool.fastens ~= def.fasteners[1].type then
-			local need = ({ Bolt = "impact wrench (2)", Wedge = "scaffold hammer (3)", Weld = "welder (4)" })[def.fasteners[1].type]
+			local need = ({ Bolt = "impact wrench (2)", Wedge = "scaffold hammer (3)", Weld = "welder (4)", Screed = "trowel (7)" })[def.fasteners[1].type]
 			return false, "Equip the " .. (need or "right tool") .. " to undo its connections."
 		end
 	end
@@ -612,6 +620,36 @@ function ComponentService.dismantle(player, id)
 	fire("Dismantled", model, player)
 	Services.Site.onComponentRemoved(model)
 	return true
+end
+
+---------------------------------------------------------------------------
+-- Concrete: the pump hose places a slab over a fully decked bay
+---------------------------------------------------------------------------
+
+function ComponentService.pour(player, itemId, cf)
+	if ComponentService.equipped(player) ~= "TL-POUR" then
+		return false, "Equip the concrete pump hose (6)."
+	end
+	local def = Registry.get(itemId or "")
+	if not def or def.kind ~= "Slab" or typeof(cf) ~= "CFrame" then
+		return false, "Nothing to pour there."
+	end
+	local hrp = hrpOf(player)
+	if not hrp then
+		return false, "No character."
+	end
+	local d = (Vector3.new(hrp.Position.X, cf.Position.Y, hrp.Position.Z) - cf.Position).Magnitude
+	if d > math.max(def.size.X, def.size.Z) / 2 + Config.Reach.Place or math.abs(hrp.Position.Y - cf.Position.Y) > 12 then
+		return false, "Out of reach — stand on or next to the bay you're pouring."
+	end
+	local ok, why, info = BuildRules.validate(ComponentService.world(), def, cf, { excludeModels = { player.Character } })
+	if not ok then
+		return false, why
+	end
+	local model = ComponentService.spawn(itemId, cf, "Placed", { supportedBy = table.concat(info.supports, ",") })
+	fx("Pour", cf.Position, def.id)
+	fire("Poured", model, player)
+	return true, "Concrete placed — finish it with the trowel (7) at the four marks."
 end
 
 ---------------------------------------------------------------------------
@@ -685,6 +723,8 @@ function ComponentService.build(player, action, a, b)
 		return ComponentService.fasten(player, a, tonumber(b) or 0)
 	elseif action == "Dismantle" then
 		return ComponentService.dismantle(player, a)
+	elseif action == "Pour" then
+		return ComponentService.pour(player, a, b)
 	end
 	return false, "Unknown action."
 end

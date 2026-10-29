@@ -472,10 +472,10 @@ function HUD.build()
 	ui.placeHints = UIKit.label(ui.place, "", 12, F.Mono, C.Muted, { Position = UDim2.new(0, 16, 0, 50), Size = UDim2.new(1, -24, 0, 18), TextTruncate = Enum.TextTruncate.AtEnd })
 
 	-- hotbar
-	local bar = UIKit.new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -24), Size = UDim2.new(0, 5 * 76, 0, 66), BackgroundTransparency = 1, Parent = gui })
+	local bar = UIKit.new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -24), Size = UDim2.new(0, #Registry.ToolOrder * 76, 0, 66), BackgroundTransparency = 1, Parent = gui })
 	UIKit.list(bar, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
 	ui.slots = {}
-	local shortNames = { ["TL-HANDS"] = "HANDS", ["TL-IMPACT"] = "WRENCH", ["TL-HAMMER"] = "HAMMER", ["TL-WELDER"] = "WELDER", ["TL-REMOTE"] = "REMOTE" }
+	local shortNames = { ["TL-HANDS"] = "HANDS", ["TL-IMPACT"] = "WRENCH", ["TL-HAMMER"] = "HAMMER", ["TL-WELDER"] = "WELDER", ["TL-REMOTE"] = "REMOTE", ["TL-POUR"] = "POUR", ["TL-TROWEL"] = "TROWEL" }
 	for i, id in ipairs(Registry.ToolOrder) do
 		local slot = UIKit.new("TextButton", { AutoButtonColor = false, Text = "", BackgroundColor3 = C.Panel, BackgroundTransparency = 0.1, BorderSizePixel = 0, Size = UDim2.new(0, 68, 0, 66), LayoutOrder = i, Parent = bar })
 		UIKit.corner(slot, 6)

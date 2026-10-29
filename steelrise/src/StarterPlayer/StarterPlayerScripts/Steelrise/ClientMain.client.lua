@@ -33,6 +33,7 @@ local Blueprint = require(here.Blueprint)
 local FX = require(here.FX)
 local Footsteps = require(here.Footsteps)
 local Tutorial = require(here.Tutorial)
+local Pour = require(here.Pour)
 
 local player = Players.LocalPlayer
 
@@ -70,6 +71,7 @@ Blueprint.init()
 FX.init()
 Footsteps.init()
 Tutorial.init()
+Pour.init()
 
 Remotes.get("Notify").OnClientEvent:Connect(function(text, kind)
 	HUD.notify(text, kind)
@@ -297,6 +299,8 @@ local TOOL_KEYS = {
 	[Enum.KeyCode.Three] = 3,
 	[Enum.KeyCode.Four] = 4,
 	[Enum.KeyCode.Five] = 5,
+	[Enum.KeyCode.Six] = 6,
+	[Enum.KeyCode.Seven] = 7,
 }
 
 UserInputService.InputBegan:Connect(function(input, gp)

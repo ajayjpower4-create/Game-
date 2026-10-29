@@ -259,7 +259,7 @@ Sites.Defs = {
 		entryM = V(80, 0, -46),
 		spawnM = V(34, 0, -36),
 		laydownM = { center = V(-26, 0, -26), size = V(20, 0, 12) },
-		grid = { originM = V(-15, 0, -2), nx = 5, nz = 2, bayX = 6.0, bayZ = 6.0, floorH = 3.6, floors = 6, column = "W12×65", beam = "W16×31", deck = true, braces = { { "x", 0, 0 }, { "x", 4, 2 } }, facade = "mixed" },
+		grid = { originM = V(-15, 0, -2), nx = 5, nz = 2, bayX = 6.0, bayZ = 6.0, floorH = 3.6, floors = 6, column = "W12×65", beam = "W16×31", deck = true, braces = { { "x", 0, 0 }, { "x", 4, 2 } }, facade = "mixed", balconies = true },
 		stage = function(e)
 			if e.phase == "footing" then
 				return true
@@ -395,10 +395,13 @@ function Sites.layout(grid)
 			end
 		end
 		-- deck sheets spanning X in every bay
+		-- the top level is the roof: insulated roof deck, no concrete
+		local isRoof = k == grid.floors
 		if grid.deck then
-			local deckId = Registry.find("deck", grid.bayX)
+			local deckId = isRoof and ("RF-DECK-" .. tostring(math.floor(grid.bayX * 1000 + 0.5))) or Registry.find("deck", grid.bayX)
 			local W = G.DeckWidth * S
 			local n = math.floor(bz / W + 0.5)
+			local slabId = "SL-CIP-" .. math.floor(grid.bayX * 1000 + 0.5) .. "-" .. math.floor(grid.bayZ * 1000 + 0.5)
 			for i = 0, grid.nx - 1 do
 				for j = 0, grid.nz - 1 do
 					local a = gp(i, j)
@@ -406,6 +409,9 @@ function Sites.layout(grid)
 						local pos = V(a.X + bx / 2, top, a.Z + (t + 0.5) * W)
 						local e = { phase = "deck", level = k, i = i, j = j, dir = tostring(t), item = deckId, cf = CFrame.new(pos), group = "deck:" .. k .. ":" .. i .. ":" .. j }
 						push(e)
+					end
+					if not isRoof and Registry.get(slabId) then
+						push({ phase = "slab", level = k, i = i, j = j, item = slabId, cf = CFrame.new(a.X + bx / 2, top + G.DeckDepth * S, a.Z + bz / 2) })
 					end
 				end
 			end
@@ -454,12 +460,60 @@ function Sites.layout(grid)
 				end
 			end
 		end
+		-- roof parapets on the top level, balconies on residential floors
+		local rc = G.CladOffset * S
+		local edgeFaces = {
+			{ side = "-Z", n = V(0, 0, -1), along = "x", fixed = 0 },
+			{ side = "+Z", n = V(0, 0, 1), along = "x", fixed = grid.nz },
+			{ side = "-X", n = V(-1, 0, 0), along = "z", fixed = 0 },
+			{ side = "+X", n = V(1, 0, 0), along = "z", fixed = grid.nx },
+		}
+		local function edgeSpan(f, t, y, item, phase, extra)
+			local a, b
+			if f.along == "x" then
+				a, b = gp(t, f.fixed), gp(t + 1, f.fixed)
+			else
+				a, b = gp(f.fixed, t), gp(f.fixed, t + 1)
+			end
+			local sa = V(a.X, y, a.Z) + f.n * rc
+			local sb = V(b.X, y, b.Z) + f.n * rc
+			if (sb - sa):Cross(Vector3.yAxis):Dot(f.n) < 0 then
+				sa, sb = sb, sa
+			end
+			local def = Registry.get(item)
+			if def then
+				local pA, pB = def.plugs[1].cfS.Position, def.plugs[2].cfS.Position
+				local ii, jj = t, f.fixed
+				if f.along == "z" then
+					ii, jj = f.fixed, t
+				end
+				push({ phase = phase, level = k, i = ii, j = jj, side = f.side, dir = extra, item = item, cf = BuildRules.spanCf(pA, pB, sa, sb) })
+			end
+		end
+		if isRoof then
+			for _, f in ipairs(edgeFaces) do
+				local count = f.along == "x" and grid.nx or grid.nz
+				local bayLen = f.along == "x" and grid.bayX or grid.bayZ
+				for t = 0, count - 1 do
+					edgeSpan(f, t, top + G.SlabTop * S, "RF-PARAPET-" .. math.floor(bayLen * 1000 + 0.5), "parapet")
+				end
+			end
+		end
+		if grid.balconies and k >= 2 then
+			local f = edgeFaces[2]
+			for t = 0, grid.nx - 1 do
+				if (t + k) % 2 == 0 then
+					local style = (t % 4 == 0) and "STEEL" or "GLASS"
+					edgeSpan(f, t, base, "BL-CANT-" .. math.floor(grid.bayX * 1000 + 0.5) .. "-" .. style, "balcony")
+				end
+			end
+		end
 	end
 	return entries
 end
 
 -- Build order used for the task panel and "next work package" deliveries.
-Sites.PhaseOrder = { footing = 1, column = 2, beam = 3, gusset = 4, brace = 5, deck = 6, facade = 7 }
+Sites.PhaseOrder = { footing = 1, column = 2, beam = 3, gusset = 4, brace = 5, deck = 6, slab = 7, facade = 8, balcony = 9, parapet = 10 }
 
 function Sites.sortEntries(entries)
 	table.sort(entries, function(a, b)
@@ -500,8 +554,21 @@ function Sites.stageEntries(site)
 		return {}
 	end
 	local out = {}
-	for _, e in ipairs(Sites.layout(site.grid)) do
-		if site.stage(e) then
+	local entries = Sites.layout(site.grid)
+	-- floors whose deck is in the starting stage get their concrete too,
+	-- except the newest decked floor (still being worked on)
+	local topDeck = 0
+	for _, e in ipairs(entries) do
+		if e.phase == "deck" and site.stage(e) then
+			topDeck = math.max(topDeck, e.level)
+		end
+	end
+	for _, e in ipairs(entries) do
+		if e.phase == "slab" then
+			if e.level < topDeck then
+				table.insert(out, e)
+			end
+		elseif site.stage(e) then
 			table.insert(out, e)
 		end
 	end

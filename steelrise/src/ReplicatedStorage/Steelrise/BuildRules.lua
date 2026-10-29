@@ -24,6 +24,8 @@ BuildRules.SocketNames = {
 	ScafNode = "a scaffold base jack",
 	ScafStdTop = "the top of a scaffold upright",
 	ScafRosette = "a rosette on a scaffold upright",
+	ParapetSeat = "the roof edge line of two columns",
+	PartitionSeat = "a column on the finished floor",
 }
 
 BuildRules.SupportStates = { Placed = true, Installed = true }
@@ -400,6 +402,35 @@ function BuildRules.validate(world, def, cf, opts)
 			end
 			table.insert(info.supports, rec.id)
 		end
+	elseif def.kind == "Slab" then
+		if cf.UpVector.Y < 0.999 then
+			return false, "Slabs are poured level.", info
+		end
+		local hx, hz = def.size.X / 2 - 0.9, def.size.Z / 2 - 0.9
+		local seen = {}
+		for i = 0, 3 do
+			for j = 0, 3 do
+				local o = cf * Vector3.new(-hx + 2 * hx * i / 3, 0.6, -hz + 2 * hz * j / 3)
+				local hit = world:raycast(o, Vector3.new(0, -1.5, 0), opts.excludeModels)
+				local r = hit and world:record(hit.Instance)
+				if r and r.def.tags.Slab then
+					return false, "This bay has already been poured.", info
+				end
+				if not r or not r.def.tags.Deck or r.def.tags.Roof then
+					return false, "Missing deck under the pour — lay every sheet in this bay first.", info
+				end
+				if r.state ~= "Installed" then
+					return false, "Weld all the deck sheets in this bay before pouring.", info
+				end
+				if math.abs(hit.Position.Y - cf.Position.Y) > 0.15 then
+					return false, "Pour level doesn't match the deck.", info
+				end
+				if not seen[r.id] then
+					seen[r.id] = true
+					table.insert(info.supports, r.id)
+				end
+			end
+		end
 	elseif def.kind == "Rest" then
 		if cf.UpVector.Y < 0.999 then
 			return false, "It has to stand upright.", info
@@ -710,6 +741,39 @@ function BuildRules.solve(world, def, aim, opts)
 	return nil, "This item can't be placed."
 end
 
+-- Finds the slab pour for the bay containing the aimed deck sheet.
+-- Returns def, cf or nil, nil, reason.
+function BuildRules.solveSlab(world, aim)
+	world:index()
+	local rec = aim.hit and world:record(aim.hit)
+	if not rec or not rec.def.tags.Deck or rec.def.tags.Roof then
+		if rec and rec.def.tags.Slab then
+			return nil, nil, "Already poured."
+		end
+		return nil, nil, "Aim at the metal deck of a floor bay."
+	end
+	local deckCf = rec.cf
+	local s = Vector3.new(deckCf.XVector.X, 0, deckCf.XVector.Z).Unit
+	local probe = deckCf * Vector3.new(rec.def.size.X / 2 - 0.09, 0.6, 0)
+	local hit = world:raycast(probe, Vector3.new(0, -1.6, 0))
+	local beam = hit and world:record(hit.Instance)
+	if not beam or not beam.def.tags.Beam then
+		return nil, nil, "That deck sheet isn't bearing on a beam."
+	end
+	local ax = Vector3.new(beam.cf.XVector.X, 0, beam.cf.XVector.Z).Unit
+	local bayZ = beam.def.bayM
+	local bayX = rec.def.sizeM.X
+	local id = "SL-CIP-" .. math.floor(bayX * 1000 + 0.5) .. "-" .. math.floor(bayZ * 1000 + 0.5)
+	local def = Registry.get(id)
+	if not def then
+		return nil, nil, "No slab size for this bay."
+	end
+	local centre = beam.cf.Position
+	local p = deckCf.Position + ax * ((centre - deckCf.Position):Dot(ax))
+	local top = deckCf.Position.Y + Config.Geo.DeckDepth * S
+	return def, CFrame.fromMatrix(Vector3.new(p.X, top, p.Z), s, UP, s:Cross(UP))
+end
+
 -- Ids of the components an item at `cf` connects to or bears on (any state).
 -- Used to rebuild support links for pre-built site stages.
 function BuildRules.supportsOf(world, def, cf, selfId)
@@ -737,6 +801,25 @@ function BuildRules.supportsOf(world, def, cf, selfId)
 			local rec = hit and world:record(hit.Instance)
 			if rec then
 				add(rec.id)
+			end
+		end
+	elseif def.kind == "Slab" then
+		-- skip the slab itself, which sits right on top of its deck
+		local exclude = {}
+		for _, m in ipairs(world.components:GetChildren()) do
+			if m:GetAttribute("ComponentId") == selfId then
+				table.insert(exclude, m)
+			end
+		end
+		local hx, hz = def.size.X / 2 - 0.9, def.size.Z / 2 - 0.9
+		for i = 0, 3 do
+			for j = 0, 3 do
+				local o = cf * Vector3.new(-hx + 2 * hx * i / 3, 0.6, -hz + 2 * hz * j / 3)
+				local hit = world:raycast(o, Vector3.new(0, -1.5, 0), exclude)
+				local rec = hit and world:record(hit.Instance)
+				if rec and rec.def.tags.Deck then
+					add(rec.id)
+				end
 			end
 		end
 	elseif def.kind == "Rest" then

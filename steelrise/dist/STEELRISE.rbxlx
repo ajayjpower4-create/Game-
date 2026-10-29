@@ -527,11 +527,11 @@ gui:Destroy()
 </Properties>
 </Item>
 </Item>
-<Item class="ReplicatedStorage" referent="RBX0000000D">
+<Item class="ReplicatedStorage" referent="RBX0000000E">
 <Properties>
 <string name="Name">ReplicatedStorage</string>
 </Properties>
-<Item class="Folder" referent="RBX0000000C">
+<Item class="Folder" referent="RBX0000000D">
 <Properties>
 <string name="Name">Steelrise</string>
 </Properties>
@@ -570,6 +570,8 @@ local AudioRegistry = {
 	ImpactWrench = { group = "Tools", ids = {}, volume = 0.75, min = 6, max = 160, pitchVar = 0.06 },
 	HammerWedge = { group = "Tools", ids = {}, volume = 0.7, min = 6, max = 160, pitchVar = 0.12 },
 	WeldArc = { group = "Tools", ids = {}, volume = 0.55, min = 6, max = 120, pitchVar = 0.05 },
+	ConcretePour = { group = "Tools", ids = {}, volume = 0.7, min = 8, max = 160, pitchVar = 0.05 },
+	PowerTrowel = { group = "Tools", ids = {}, volume = 0.6, min = 6, max = 120, pitchVar = 0.08 },
 
 	-- Vehicles & machines
 	TruckIdle = { group = "Machinery", ids = {}, loop = true, volume = 0.5, min = 12, max = 220 },
@@ -633,6 +635,8 @@ BuildRules.SocketNames = {
 	ScafNode = "a scaffold base jack",
 	ScafStdTop = "the top of a scaffold upright",
 	ScafRosette = "a rosette on a scaffold upright",
+	ParapetSeat = "the roof edge line of two columns",
+	PartitionSeat = "a column on the finished floor",
 }
 
 BuildRules.SupportStates = { Placed = true, Installed = true }
@@ -1009,6 +1013,35 @@ function BuildRules.validate(world, def, cf, opts)
 			end
 			table.insert(info.supports, rec.id)
 		end
+	elseif def.kind == "Slab" then
+		if cf.UpVector.Y < 0.999 then
+			return false, "Slabs are poured level.", info
+		end
+		local hx, hz = def.size.X / 2 - 0.9, def.size.Z / 2 - 0.9
+		local seen = {}
+		for i = 0, 3 do
+			for j = 0, 3 do
+				local o = cf * Vector3.new(-hx + 2 * hx * i / 3, 0.6, -hz + 2 * hz * j / 3)
+				local hit = world:raycast(o, Vector3.new(0, -1.5, 0), opts.excludeModels)
+				local r = hit and world:record(hit.Instance)
+				if r and r.def.tags.Slab then
+					return false, "This bay has already been poured.", info
+				end
+				if not r or not r.def.tags.Deck or r.def.tags.Roof then
+					return false, "Missing deck under the pour — lay every sheet in this bay first.", info
+				end
+				if r.state ~= "Installed" then
+					return false, "Weld all the deck sheets in this bay before pouring.", info
+				end
+				if math.abs(hit.Position.Y - cf.Position.Y) > 0.15 then
+					return false, "Pour level doesn't match the deck.", info
+				end
+				if not seen[r.id] then
+					seen[r.id] = true
+					table.insert(info.supports, r.id)
+				end
+			end
+		end
 	elseif def.kind == "Rest" then
 		if cf.UpVector.Y < 0.999 then
 			return false, "It has to stand upright.", info
@@ -1319,6 +1352,39 @@ function BuildRules.solve(world, def, aim, opts)
 	return nil, "This item can't be placed."
 end
 
+-- Finds the slab pour for the bay containing the aimed deck sheet.
+-- Returns def, cf or nil, nil, reason.
+function BuildRules.solveSlab(world, aim)
+	world:index()
+	local rec = aim.hit and world:record(aim.hit)
+	if not rec or not rec.def.tags.Deck or rec.def.tags.Roof then
+		if rec and rec.def.tags.Slab then
+			return nil, nil, "Already poured."
+		end
+		return nil, nil, "Aim at the metal deck of a floor bay."
+	end
+	local deckCf = rec.cf
+	local s = Vector3.new(deckCf.XVector.X, 0, deckCf.XVector.Z).Unit
+	local probe = deckCf * Vector3.new(rec.def.size.X / 2 - 0.09, 0.6, 0)
+	local hit = world:raycast(probe, Vector3.new(0, -1.6, 0))
+	local beam = hit and world:record(hit.Instance)
+	if not beam or not beam.def.tags.Beam then
+		return nil, nil, "That deck sheet isn't bearing on a beam."
+	end
+	local ax = Vector3.new(beam.cf.XVector.X, 0, beam.cf.XVector.Z).Unit
+	local bayZ = beam.def.bayM
+	local bayX = rec.def.sizeM.X
+	local id = "SL-CIP-" .. math.floor(bayX * 1000 + 0.5) .. "-" .. math.floor(bayZ * 1000 + 0.5)
+	local def = Registry.get(id)
+	if not def then
+		return nil, nil, "No slab size for this bay."
+	end
+	local centre = beam.cf.Position
+	local p = deckCf.Position + ax * ((centre - deckCf.Position):Dot(ax))
+	local top = deckCf.Position.Y + Config.Geo.DeckDepth * S
+	return def, CFrame.fromMatrix(Vector3.new(p.X, top, p.Z), s, UP, s:Cross(UP))
+end
+
 -- Ids of the components an item at `cf` connects to or bears on (any state).
 -- Used to rebuild support links for pre-built site stages.
 function BuildRules.supportsOf(world, def, cf, selfId)
@@ -1346,6 +1412,25 @@ function BuildRules.supportsOf(world, def, cf, selfId)
 			local rec = hit and world:record(hit.Instance)
 			if rec then
 				add(rec.id)
+			end
+		end
+	elseif def.kind == "Slab" then
+		-- skip the slab itself, which sits right on top of its deck
+		local exclude = {}
+		for _, m in ipairs(world.components:GetChildren()) do
+			if m:GetAttribute("ComponentId") == selfId then
+				table.insert(exclude, m)
+			end
+		end
+		local hx, hz = def.size.X / 2 - 0.9, def.size.Z / 2 - 0.9
+		for i = 0, 3 do
+			for j = 0, 3 do
+				local o = cf * Vector3.new(-hx + 2 * hx * i / 3, 0.6, -hz + 2 * hz * j / 3)
+				local hit = world:raycast(o, Vector3.new(0, -1.5, 0), exclude)
+				local rec = hit and world:record(hit.Instance)
+				if rec and rec.def.tags.Deck then
+					add(rec.id)
+				end
 			end
 		end
 	elseif def.kind == "Rest" then
@@ -1470,6 +1555,10 @@ Config.Geo = {
 	GussetTip = 0.26, -- brace seat distance from gusset back edge
 	DeckWidth = 0.75, -- every bay length is a multiple of this
 	DeckDepth = 0.075,
+	SlabTopping = 0.065, -- concrete above the deck ribs
+	SlabTop = 0.14, -- finished floor above top of steel (deck + topping)
+	PartitionClear = 0.79, -- partition height below the storey height (slab + beam zone)
+	ParapetHeight = 1.1,
 	FootingTop = 0.80, -- top of a precast footing above grade
 	ScaffoldBayLong = 2.57,
 	ScaffoldBayShort = 1.09,
@@ -1940,7 +2029,10 @@ local function columnSockets(L)
 		table.insert(sockets, { type = "GussetMount", cf = look(V(0, -L / 2 + G.GussetLow, 0) + d.v * G.SeatOffset, d.v) })
 		table.insert(sockets, { type = "GussetMount", cf = look(V(0, L / 2 - G.GussetHighFromTop, 0) + d.v * G.SeatOffset, d.v) })
 		table.insert(sockets, { type = "CladSeat", multi = true, cf = look(V(0, -L / 2, 0) + d.v * G.CladOffset, d.v) })
+		table.insert(sockets, { type = "ParapetSeat", multi = true, cf = look(V(0, L / 2 + G.SlabTop, 0) + d.v * G.CladOffset, d.v) })
 	end
+	-- partitions stand on the finished floor along the grid lines
+	table.insert(sockets, { type = "PartitionSeat", multi = true, cf = CF(0, -L / 2 + G.SlabTop, 0) })
 	return sockets
 end
 
@@ -3165,10 +3257,30 @@ add({
 })
 
 ---------------------------------------------------------------------------
+-- Building content (slabs, roofing, envelope, interiors, stairs, MEP)
+---------------------------------------------------------------------------
+
+require(script.Parent.ItemsBuilding)({
+	add = add,
+	look = look,
+	CF = CF,
+	V = V,
+	G = G,
+	C = C,
+	M = M,
+	S = S,
+	Config = Config,
+	idLen = idLen,
+	fmtLen = fmtLen,
+	panelPlugs = panelPlugs,
+	panelFasteners = panelFasteners,
+})
+
+---------------------------------------------------------------------------
 -- Tools (hotbar). Models are used for the hand-held visual and catalog.
 ---------------------------------------------------------------------------
 
-Registry.ToolOrder = { "TL-HANDS", "TL-IMPACT", "TL-HAMMER", "TL-WELDER", "TL-REMOTE" }
+Registry.ToolOrder = { "TL-HANDS", "TL-IMPACT", "TL-HAMMER", "TL-WELDER", "TL-REMOTE", "TL-POUR", "TL-TROWEL" }
 
 add({
 	id = "TL-HANDS",
@@ -3259,6 +3371,41 @@ add({
 	end,
 })
 
+add({
+	id = "TL-POUR",
+	name = "Concrete Pump Hose",
+	category = "Tools",
+	class = "Tool",
+	kind = "Tool",
+	hotkey = 6,
+	pours = true,
+	weightKg = 0,
+	sizeM = V(0.2, 0.2, 0.9),
+	description = "End hose of the line pump. Aim at a fully decked, welded bay and hold the mouse to place the slab concrete.",
+	build = function(b)
+		b:cylX("Hose", 0.8, 0.13, CF(0, 0, -0.1) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(30, 30, 32), M.SmoothPlastic)
+		b:cylX("Coupling", 0.1, 0.16, CF(0, 0, 0.32) * CFrame.Angles(0, math.pi / 2, 0), C.Galvanized, M.Metal)
+		b:box("Handle", V(0.04, 0.2, 0.04), CF(0, -0.12, 0.1), C.Safety, M.SmoothPlastic)
+	end,
+})
+
+add({
+	id = "TL-TROWEL",
+	name = "Bull Float & Trowel",
+	category = "Tools",
+	class = "Tool",
+	kind = "Tool",
+	hotkey = 7,
+	fastens = "Screed",
+	weightKg = 3,
+	sizeM = V(0.3, 0.1, 0.9),
+	description = "Finishes freshly poured concrete. Hold the mouse on each of the four finishing marks; the slab cures when all are done.",
+	build = function(b)
+		b:box("Float", V(0.28, 0.02, 0.6), CF(0, -0.05, -0.2), Color3.fromRGB(170, 176, 182), M.Metal)
+		b:box("Pole", V(0.03, 0.03, 0.7), CF(0, 0.05, 0.25) * CFrame.Angles(math.rad(-15), 0, 0), C.Safety, M.SmoothPlastic)
+	end,
+})
+
 ---------------------------------------------------------------------------
 -- Queries
 ---------------------------------------------------------------------------
@@ -3327,6 +3474,585 @@ return Registry
 </Properties>
 </Item>
 <Item class="ModuleScript" referent="RBX00000008">
+<Properties>
+<string name="Name">ItemsBuilding</string>
+<ProtectedString name="Source"><![CDATA[-- Phase 3 building content: cast-in-place slabs, roofing, wall panel
+-- variants with doors and windows, interior partitions, balconies, stairs
+-- and mechanical / electrical / plumbing equipment.
+--
+-- Called from ItemRegistry with its helpers (all definitions in METRES).
+
+return function(R)
+	local add, look, CF, V = R.add, R.look, R.CF, R.V
+	local G, C, M, S, Config = R.G, R.C, R.M, R.S, R.Config
+	local idLen, fmtLen = R.idLen, R.fmtLen
+	local panelPlugs, panelFasteners = R.panelPlugs, R.panelFasteners
+
+	local CONCRETE_WET = Color3.fromRGB(104, 102, 98)
+	local CONCRETE = Color3.fromRGB(176, 174, 168)
+	local DARK = Color3.fromRGB(44, 46, 50)
+	local PANEL = Color3.fromRGB(184, 189, 193)
+	local GYP = Color3.fromRGB(226, 224, 218)
+	local ALU = Color3.fromRGB(150, 156, 162)
+
+	local function anchors(w, d, h)
+		return {
+			{ type = "Bolt", pos = V(-w / 2 + 0.08, h or 0.02, -d / 2 + 0.08), normal = V(0, 1, 0) },
+			{ type = "Bolt", pos = V(w / 2 - 0.08, h or 0.02, -d / 2 + 0.08), normal = V(0, 1, 0) },
+			{ type = "Bolt", pos = V(-w / 2 + 0.08, h or 0.02, d / 2 - 0.08), normal = V(0, 1, 0) },
+			{ type = "Bolt", pos = V(w / 2 - 0.08, h or 0.02, d / 2 - 0.08), normal = V(0, 1, 0) },
+		}
+	end
+
+	---------------------------------------------------------------------------
+	-- Cast-in-place composite slab (poured with the pump hose, finished with
+	-- the trowel). One item per bay size; the slab IS the poured concrete.
+	---------------------------------------------------------------------------
+	for _, bx in ipairs(Config.Bays) do
+		for _, bz in ipairs(Config.Bays) do
+			add({
+				id = "SL-CIP-" .. idLen(bx) .. "-" .. idLen(bz),
+				name = string.format("Composite Slab Pour %.1f × %.1f m (140 mm)", bx, bz),
+				category = "Concrete & Foundations",
+				kind = "Slab",
+				originBottom = true,
+				deliverable = false,
+				tags = { "Slab", "Concrete", "Floor" },
+				overlapIgnore = { "Column", "Deck", "Beam" },
+				weightKg = 2400 * bx * bz * 0.1,
+				sizeM = V(bx, G.SlabTopping, bz),
+				description = string.format(
+					"Normal-weight concrete placed over a fully welded %.1f × %.1f m bay of metal deck with the pump hose (6), then floated and trowelled at four points (7). Cures from dark grey to light grey once finished.",
+					bx,
+					bz
+				),
+				build = function(b, def, opts)
+					local col = opts.installed and CONCRETE or CONCRETE_WET
+					local slab = b:box("Concrete", V(bx - 0.02, G.SlabTopping, bz - 0.02), CF(0, G.SlabTopping / 2, 0), col, M.Concrete)
+					if not opts.installed then
+						slab.Reflectance = 0.06
+					end
+				end,
+				fasteners = {
+					{ type = "Screed", pos = V(-bx / 4, G.SlabTopping, -bz / 4), normal = V(0, 1, 0) },
+					{ type = "Screed", pos = V(bx / 4, G.SlabTopping, -bz / 4), normal = V(0, 1, 0) },
+					{ type = "Screed", pos = V(-bx / 4, G.SlabTopping, bz / 4), normal = V(0, 1, 0) },
+					{ type = "Screed", pos = V(bx / 4, G.SlabTopping, bz / 4), normal = V(0, 1, 0) },
+				},
+				minFastenRelease = 0,
+				bayX = bx,
+				bayZ = bz,
+				proxyColor = CONCRETE,
+			})
+		end
+	end
+
+	---------------------------------------------------------------------------
+	-- Roofing: insulated roof deck, parapets, hatch and skylight
+	---------------------------------------------------------------------------
+	for _, bay in ipairs(Config.Bays) do
+		local W = G.DeckWidth
+		add({
+			id = "RF-DECK-" .. idLen(bay),
+			name = "Roof Deck with Insulation & Membrane — " .. fmtLen(bay),
+			category = "Walls & Roofing",
+			kind = "Surface",
+			originBottom = true,
+			tags = { "Deck", "Roof", "Floor" },
+			overlapIgnore = { "Column" },
+			weightKg = 22 * W * bay,
+			sizeM = V(bay, G.SlabTop, W),
+			description = "Type B roof deck sheet with tapered insulation board and a mechanically fastened single-ply membrane, spanning between two roof beams. Medium weight — carry it across the roof.",
+			build = function(b)
+				for k = -2, 2 do
+					b:box("Rib", V(bay, 0.06, 0.05), CF(0, 0.03, k * 0.15), C.Galvanized, M.Metal, { ns = true })
+				end
+				b:box("Insulation", V(bay, 0.06, W), CF(0, 0.09, 0), Color3.fromRGB(214, 196, 150), M.SmoothPlastic, { ns = true })
+				b:box("Membrane", V(bay, 0.02, W), CF(0, G.SlabTop - 0.01, 0), Color3.fromRGB(226, 228, 228), M.SmoothPlastic)
+				b:box("Seam", V(bay, 0.006, 0.05), CF(0, G.SlabTop + 0.002, W / 2 - 0.03), Color3.fromRGB(200, 202, 202), M.SmoothPlastic, { nc = true, ns = true })
+			end,
+			surface = { supportTags = { Beam = true }, tile = W },
+			fasteners = {
+				{ type = "Bolt", pos = V(-bay / 2 + 0.1, G.SlabTop, 0.2), normal = V(0, 1, 0) },
+				{ type = "Bolt", pos = V(bay / 2 - 0.1, G.SlabTop, -0.2), normal = V(0, 1, 0) },
+			},
+			minFastenRelease = 0,
+			proxyColor = Color3.fromRGB(226, 228, 228),
+		})
+		add({
+			id = "RF-PARAPET-" .. idLen(bay),
+			name = "Roof Parapet Panel 1.1 m — " .. fmtLen(bay),
+			category = "Walls & Roofing",
+			kind = "Span",
+			faceNormal = true,
+			tags = { "Parapet", "Facade", "Roof" },
+			weightKg = 18 * bay * G.ParapetHeight,
+			sizeM = V(bay - 0.02, G.ParapetHeight, 0.25),
+			boundsOffsetM = V(0, G.ParapetHeight / 2, 0.125),
+			description = "Insulated parapet panel with a pressed metal coping, hung on the outside of the roof edge between two columns. Doubles as the roof edge guard.",
+			build = function(b)
+				local w = bay - 0.02
+				b:box("Panel", V(w, G.ParapetHeight - 0.08, 0.1), CF(0, (G.ParapetHeight - 0.08) / 2, 0.05), PANEL, M.Metal)
+				b:box("Coping", V(w, 0.08, 0.32), CF(0, G.ParapetHeight - 0.04, 0.06), Color3.fromRGB(120, 124, 128), M.Metal)
+				b:box("Backer", V(w, G.ParapetHeight - 0.2, 0.04), CF(0, G.ParapetHeight / 2 - 0.05, -0.08), Color3.fromRGB(200, 200, 196), M.SmoothPlastic, { ns = true })
+			end,
+			plugs = {
+				{ type = "ParapetEnd", accepts = { "ParapetSeat" }, cf = CF(-bay / 2, 0, 0) },
+				{ type = "ParapetEnd", accepts = { "ParapetSeat" }, cf = CF(bay / 2, 0, 0) },
+			},
+			fasteners = {
+				{ type = "Bolt", pos = V(-bay / 2 + 0.25, 0.3, -0.02), normal = V(0, 0, -1) },
+				{ type = "Bolt", pos = V(bay / 2 - 0.25, 0.3, -0.02), normal = V(0, 0, -1) },
+			},
+			minFastenRelease = 2,
+			liftPoints = { V(-bay / 4, G.ParapetHeight, 0.05), V(bay / 4, G.ParapetHeight, 0.05) },
+			proxyColor = PANEL,
+		})
+	end
+
+	add({
+		id = "RF-HATCH",
+		name = "Roof Access Hatch 0.9 × 1.2 m",
+		category = "Windows & Doors",
+		kind = "Rest",
+		originBottom = true,
+		tags = { "Roof" },
+		rest = { grid = 0.05 },
+		allowFree = true,
+		weightKg = 68,
+		sizeM = V(1.2, 0.35, 0.9),
+		description = "Galvanised curb-mounted roof hatch with a gas-strut lid and safety rail post.",
+		build = function(b)
+			b:box("Curb", V(1.2, 0.3, 0.9), CF(0, 0.15, 0), C.Galvanized, M.Metal)
+			b:box("Lid", V(1.24, 0.05, 0.94), CF(0, 0.325, 0), Color3.fromRGB(150, 154, 158), M.Metal)
+			b:box("RailPost", V(0.05, 1.0, 0.05), CF(0.55, 0.8, 0.4), C.Safety, M.Metal, { nc = true, ns = true })
+		end,
+		fasteners = anchors(1.2, 0.9),
+		minFastenRelease = 0,
+		proxyColor = C.Galvanized,
+	})
+	add({
+		id = "RF-SKYLIGHT",
+		name = "Curb Skylight 1.2 × 1.2 m",
+		category = "Windows & Doors",
+		kind = "Rest",
+		originBottom = true,
+		tags = { "Roof", "Window" },
+		rest = { grid = 0.05 },
+		allowFree = true,
+		weightKg = 55,
+		sizeM = V(1.2, 0.45, 1.2),
+		description = "Domed polycarbonate skylight on an insulated curb.",
+		build = function(b)
+			b:box("Curb", V(1.2, 0.3, 1.2), CF(0, 0.15, 0), Color3.fromRGB(220, 220, 216), M.Metal)
+			b:box("Dome", V(1.1, 0.12, 1.1), CF(0, 0.36, 0), C.Glass, M.Glass, { tr = 0.35, refl = 0.2 })
+			b:box("DomeTop", V(0.8, 0.08, 0.8), CF(0, 0.44, 0), C.Glass, M.Glass, { tr = 0.35, refl = 0.2, nc = true })
+		end,
+		fasteners = anchors(1.2, 1.2),
+		minFastenRelease = 0,
+		proxyColor = C.Glass,
+	})
+
+	---------------------------------------------------------------------------
+	-- Wall panel variants (same hanging rules as the insulated panels)
+	---------------------------------------------------------------------------
+	local function wallVariant(code, label, desc, cat, kgPerM2, buildFn, onlyBays)
+		for _, bay in ipairs(Config.Bays) do
+			if not onlyBays or onlyBays[bay] then
+				for _, H in ipairs(Config.FloorHeights) do
+					local w, h = bay - 0.02, H - 0.02
+					add({
+						id = code .. "-" .. idLen(bay) .. "-" .. idLen(H),
+						name = label .. " — " .. fmtLen(bay) .. " × " .. fmtLen(H),
+						category = cat or "Walls & Roofing",
+						kind = "Span",
+						faceNormal = true,
+						tags = { "WallPanel", "Facade" },
+						weightKg = kgPerM2 * bay * H,
+						sizeM = V(w, h, 0.16),
+						boundsOffsetM = V(0, H / 2, 0.08),
+						description = desc,
+						build = function(b)
+							buildFn(b, w, h, H, bay)
+						end,
+						plugs = panelPlugs(bay),
+						fasteners = panelFasteners(bay, H),
+						minFastenRelease = 2,
+						liftPoints = { V(-bay / 4, H, 0.06), V(bay / 4, H, 0.06) },
+						rigging = "Bridle",
+						proxyColor = PANEL,
+					})
+				end
+			end
+		end
+	end
+
+	local function ribs(b, w, h, H, z, color)
+		local n = math.floor(w / 1.0)
+		for k = 0, n do
+			b:box("Rib", V(0.035, h, 0.025), CF(-w / 2 + 0.1 + k * (w - 0.2) / math.max(n, 1), H / 2, z), color, nil, { ns = true, nc = true })
+		end
+	end
+
+	wallVariant("WP-DOOR", "Metal Wall Panel with Personnel Door", "Insulated metal panel unit with a factory-fitted steel personnel door, frame, closer and canopy. Hangs on the outside face of two columns.", "Windows & Doors", 17, function(b, w, h, H)
+		local dw, dh = 1.0, 2.2
+		local dx = -w / 2 + 1.0
+		b:box("SkinLeft", V(dx - dw / 2 + w / 2, h, 0.08), CF((-w / 2 + dx - dw / 2) / 2, H / 2, 0.04), PANEL, M.Metal)
+		b:box("SkinRight", V(w / 2 - (dx + dw / 2), h, 0.08), CF((dx + dw / 2 + w / 2) / 2, H / 2, 0.04), PANEL, M.Metal)
+		b:box("SkinOver", V(dw, h - dh, 0.08), CF(dx, dh + (h - dh) / 2, 0.04), PANEL, M.Metal)
+		b:box("Door", V(dw - 0.08, dh - 0.04, 0.05), CF(dx, (dh - 0.04) / 2, 0.06), Color3.fromRGB(72, 92, 112), M.Metal)
+		b:box("Frame", V(dw + 0.1, 0.06, 0.12), CF(dx, dh, 0.06), DARK, M.Metal, { nc = true })
+		b:box("Handle", V(0.14, 0.03, 0.04), CF(dx + 0.35, 1.05, 0.1), Color3.fromRGB(200, 200, 200), M.Metal, { nc = true, ns = true })
+		b:box("Canopy", V(dw + 0.4, 0.05, 0.6), CF(dx, dh + 0.25, 0.35), DARK, M.Metal, { nc = true })
+		ribs(b, w, h, H, 0.0925, Color3.fromRGB(176, 181, 186))
+	end)
+	wallVariant("WP-WINBAND", "Metal Wall Panel with Window Band", "Insulated metal panel unit with a continuous ribbon window at desk height — the typical low-rise office elevation.", "Windows & Doors", 22, function(b, w, h, H)
+		b:box("SkinLow", V(w, 1.0, 0.08), CF(0, 0.5, 0.04), PANEL, M.Metal)
+		b:box("SkinHigh", V(w, h - 2.2, 0.08), CF(0, 2.2 + (h - 2.2) / 2, 0.04), PANEL, M.Metal)
+		local g = b:box("Glazing", V(w - 0.04, 1.2, 0.03), CF(0, 1.6, 0.05), C.Glass, M.Glass, { tr = 0.4, refl = 0.15 })
+		g.CastShadow = false
+		local n = math.max(1, math.floor(w / 1.5 + 0.5))
+		for k = 0, n do
+			b:box("Mullion", V(0.06, 1.24, 0.1), CF(-w / 2 + 0.03 + k * (w - 0.06) / n, 1.6, 0.06), DARK, M.Metal, { nc = true })
+		end
+		b:box("Sill", V(w, 0.06, 0.16), CF(0, 0.99, 0.08), DARK, M.Metal, { nc = true })
+	end)
+	wallVariant("WP-PRECAST", "Precast Concrete Wall Panel", "Architectural precast panel with sandblasted finish and horizontal reveals. Heavy — set it with the crane.", nil, 360, function(b, w, h, H)
+		b:box("Precast", V(w, h, 0.15), CF(0, H / 2, 0.075), Color3.fromRGB(196, 192, 182), M.Concrete)
+		for k = 1, 3 do
+			b:box("Reveal", V(w, 0.03, 0.01), CF(0, k * H / 4, 0.152), Color3.fromRGB(150, 146, 138), M.Concrete, { nc = true, ns = true })
+		end
+	end)
+	wallVariant("WP-BRICK", "Brick Veneer Wall Panel", "Thin-brick precast panel with a cast stone sill course — residential and civic elevations.", nil, 300, function(b, w, h, H)
+		b:box("Brick", V(w, h - 0.15, 0.14), CF(0, (h - 0.15) / 2 + 0.15, 0.07), Color3.fromRGB(150, 82, 62), M.Brick)
+		b:box("CastStone", V(w, 0.15, 0.16), CF(0, 0.075, 0.08), Color3.fromRGB(214, 206, 188), M.Concrete)
+	end)
+	wallVariant("WP-LOUVRE", "Louvre Wall Panel", "Extruded aluminium storm louvre for plant rooms and generator enclosures.", nil, 14, function(b, w, h, H)
+		b:box("Frame", V(w, h, 0.04), CF(0, H / 2, 0.02), DARK, M.Metal)
+		local n = math.floor(h / 0.15)
+		for k = 1, n - 1 do
+			b:box("Blade", V(w - 0.1, 0.03, 0.12), CF(0, k * h / n, 0.08) * CFrame.Angles(math.rad(-35), 0, 0), ALU, M.Metal, { nc = true, ns = true })
+		end
+	end)
+	wallVariant("WP-OHDOOR", "Metal Wall Panel with Overhead Door", "Insulated panel unit framing a 4 m wide sectional overhead door for deliveries and plant.", "Windows & Doors", 20, function(b, w, h, H)
+		local dw, dh = 4.0, math.min(H - 0.6, 3.6)
+		b:box("SkinLeft", V((w - dw) / 2, h, 0.08), CF(-w / 2 + (w - dw) / 4, H / 2, 0.04), PANEL, M.Metal)
+		b:box("SkinRight", V((w - dw) / 2, h, 0.08), CF(w / 2 - (w - dw) / 4, H / 2, 0.04), PANEL, M.Metal)
+		b:box("SkinOver", V(dw, h - dh, 0.08), CF(0, dh + (h - dh) / 2, 0.04), PANEL, M.Metal)
+		for k = 0, 5 do
+			b:box("DoorSection", V(dw - 0.06, dh / 6 - 0.02, 0.05), CF(0, k * dh / 6 + dh / 12, 0.05), Color3.fromRGB(210, 212, 214), M.Metal)
+		end
+		b:box("Hood", V(dw + 0.2, 0.3, 0.3), CF(0, dh + 0.15, 0.2), DARK, M.Metal, { nc = true })
+	end, { [6.0] = true, [7.5] = true, [9.0] = true })
+
+	---------------------------------------------------------------------------
+	-- Interior partitions (demountable, hand-carried) on the finished floor
+	---------------------------------------------------------------------------
+	local function partition(code, label, desc, buildFn)
+		for _, bay in ipairs(Config.Bays) do
+			for _, H in ipairs(Config.FloorHeights) do
+				local ph = H - G.PartitionClear
+				local w = bay - 0.42
+				add({
+					id = code .. "-" .. idLen(bay) .. "-" .. idLen(H),
+					name = label .. " — " .. fmtLen(bay) .. " bay, " .. fmtLen(H) .. " storey",
+					category = "Walls & Roofing",
+					kind = "Span",
+					tags = { "Partition", "Interior" },
+					overlapIgnore = { "Slab" },
+					weightKg = 70,
+					weightClass = "Medium",
+					sizeM = V(w, ph, 0.12),
+					boundsOffsetM = V(0, ph / 2, 0),
+					description = desc,
+					build = function(b)
+						buildFn(b, w, ph)
+					end,
+					plugs = {
+						{ type = "PartitionEnd", accepts = { "PartitionSeat" }, cf = CF(-bay / 2, 0, 0) },
+						{ type = "PartitionEnd", accepts = { "PartitionSeat" }, cf = CF(bay / 2, 0, 0) },
+					},
+					fasteners = {
+						{ type = "Bolt", pos = V(-w / 2 + 0.1, 0.03, 0.07), normal = V(0, 0, 1) },
+						{ type = "Bolt", pos = V(w / 2 - 0.1, 0.03, 0.07), normal = V(0, 0, 1) },
+					},
+					minFastenRelease = 0,
+					symmetric180 = true,
+					proxyColor = GYP,
+				})
+			end
+		end
+	end
+	partition("PT-SOLID", "Demountable Partition (solid)", "Aluminium-framed demountable partition with gypsum faces, spanning between two columns along a grid line. Seats on the finished slab.", function(b, w, ph)
+		b:box("Track", V(w, 0.05, 0.12), CF(0, 0.025, 0), ALU, M.Metal)
+		b:box("Board", V(w, ph - 0.1, 0.1), CF(0, ph / 2, 0), GYP, M.SmoothPlastic)
+		b:box("Head", V(w, 0.05, 0.12), CF(0, ph - 0.025, 0), ALU, M.Metal)
+	end)
+	partition("PT-DOOR", "Demountable Partition with Door", "Demountable partition with a hung timber door set and lever handles.", function(b, w, ph)
+		local dw, dh = 0.95, 2.15
+		b:box("Track", V(w, 0.05, 0.12), CF(0, 0.025, 0), ALU, M.Metal)
+		b:box("BoardL", V(w / 2 - dw / 2, ph - 0.1, 0.1), CF(-w / 4 - dw / 4, ph / 2, 0), GYP, M.SmoothPlastic)
+		b:box("BoardR", V(w / 2 - dw / 2, ph - 0.1, 0.1), CF(w / 4 + dw / 4, ph / 2, 0), GYP, M.SmoothPlastic)
+		b:box("BoardOver", V(dw, ph - dh - 0.05, 0.1), CF(0, dh + (ph - dh) / 2, 0), GYP, M.SmoothPlastic)
+		b:box("Door", V(dw - 0.06, dh - 0.02, 0.045), CF(0, dh / 2, 0.02), Color3.fromRGB(150, 110, 72), M.Wood, { nc = true })
+		b:box("Lever", V(0.12, 0.02, 0.03), CF(0.32, 1.05, 0.06), ALU, M.Metal, { nc = true, ns = true })
+		b:box("Head", V(w, 0.05, 0.12), CF(0, ph - 0.025, 0), ALU, M.Metal)
+	end)
+	partition("PT-GLAZED", "Glazed Office Partition", "Full-height frameless glazed partition with aluminium head and floor tracks.", function(b, w, ph)
+		b:box("Track", V(w, 0.05, 0.12), CF(0, 0.025, 0), ALU, M.Metal)
+		local g = b:box("Glass", V(w - 0.02, ph - 0.1, 0.02), CF(0, ph / 2, 0), C.Glass, M.Glass, { tr = 0.55, refl = 0.15 })
+		g.CastShadow = false
+		local n = math.max(1, math.floor(w / 1.2 + 0.5))
+		for k = 1, n - 1 do
+			b:box("Joint", V(0.02, ph - 0.1, 0.03), CF(-w / 2 + k * w / n, ph / 2, 0), ALU, M.Metal, { nc = true, ns = true })
+		end
+		b:box("Head", V(w, 0.05, 0.12), CF(0, ph - 0.025, 0), ALU, M.Metal)
+		b:box("Manifestation", V(w - 0.1, 0.06, 0.022), CF(0, 1.2, 0), Color3.fromRGB(240, 240, 240), M.SmoothPlastic, { nc = true, ns = true })
+	end)
+
+	---------------------------------------------------------------------------
+	-- Balconies: precast cantilever slab with railing, hung at floor level
+	---------------------------------------------------------------------------
+	for _, bay in ipairs(Config.Bays) do
+		for _, style in ipairs({ { "GLASS", "glass balustrade" }, { "STEEL", "steel picket railing" } }) do
+			local w = bay - 0.1
+			local depth = 1.6
+			add({
+				id = "BL-CANT-" .. idLen(bay) .. "-" .. style[1],
+				name = string.format("Cantilever Balcony %.1f m with %s", bay, style[2]),
+				category = "Walls & Roofing",
+				kind = "Span",
+				faceNormal = true,
+				tags = { "Balcony", "Facade" },
+				weightKg = 2400 * w * depth * 0.2 + 120,
+				sizeM = V(w, 1.3, depth),
+				boundsOffsetM = V(0, 0.55, 0.2 + depth / 2),
+				description = "Precast balcony slab on thermally broken cantilever brackets bolted to the floor edge between two columns, with " .. style[2] .. ".",
+				build = function(b)
+					local z0 = 0.2
+					b:box("Slab", V(w, 0.2, depth), CF(0, G.SlabTop - 0.1, z0 + depth / 2), Color3.fromRGB(196, 192, 184), M.Concrete)
+					b:box("Drip", V(w, 0.04, 0.04), CF(0, G.SlabTop - 0.22, z0 + depth - 0.03), Color3.fromRGB(170, 166, 158), M.Concrete, { nc = true, ns = true })
+					for _, sx in ipairs({ -1, 1 }) do
+						b:box("Bracket", V(0.15, 0.25, 0.4), CF(sx * (w / 2 - 0.4), G.SlabTop - 0.32, z0 + 0.1), DARK, M.Metal, { nc = true, ns = true })
+					end
+					local railY = G.SlabTop + 0.55
+					if style[1] == "GLASS" then
+						local g = b:box("Glass", V(w - 0.1, 1.0, 0.02), CF(0, railY, z0 + depth - 0.08), C.Glass, M.Glass, { tr = 0.45, refl = 0.2 })
+						g.CastShadow = false
+						for _, sx in ipairs({ -1, 1 }) do
+							local sg = b:box("SideGlass", V(0.02, 1.0, depth - 0.15), CF(sx * (w / 2 - 0.05), railY, z0 + depth / 2), C.Glass, M.Glass, { tr = 0.45, refl = 0.2 })
+							sg.CastShadow = false
+						end
+						b:box("Handrail", V(w - 0.1, 0.05, 0.06), CF(0, railY + 0.52, z0 + depth - 0.08), ALU, M.Metal, { nc = true })
+					else
+						b:box("Handrail", V(w - 0.1, 0.06, 0.06), CF(0, railY + 0.52, z0 + depth - 0.08), DARK, M.Metal)
+						b:box("BottomRail", V(w - 0.1, 0.04, 0.04), CF(0, G.SlabTop + 0.1, z0 + depth - 0.08), DARK, M.Metal, { nc = true, ns = true })
+						local n = math.floor((w - 0.1) / 0.12)
+						for k = 0, n, 2 do
+							b:box("Picket", V(0.02, 0.95, 0.02), CF(-w / 2 + 0.05 + k * (w - 0.1) / n, railY, z0 + depth - 0.08), DARK, M.Metal, { nc = true, ns = true })
+						end
+					end
+				end,
+				plugs = panelPlugs(bay),
+				fasteners = {
+					{ type = "Bolt", pos = V(-bay / 2 + 0.45, G.SlabTop - 0.2, 0.3), normal = V(0, 1, 0) },
+					{ type = "Bolt", pos = V(bay / 2 - 0.45, G.SlabTop - 0.2, 0.3), normal = V(0, 1, 0) },
+				},
+				minFastenRelease = 2,
+				liftPoints = { V(-bay / 4, G.SlabTop, 0.95), V(bay / 4, G.SlabTop, 0.95) },
+				proxyColor = Color3.fromRGB(196, 192, 184),
+			})
+		end
+	end
+
+	---------------------------------------------------------------------------
+	-- Steel stairs (one storey per flight). A hidden ramp gives smooth walking.
+	---------------------------------------------------------------------------
+	for _, H in ipairs(Config.FloorHeights) do
+		for _, width in ipairs({ 1.0, 1.2 }) do
+			local run = H / math.tan(math.rad(37))
+			local steps = math.floor(H / 0.18 + 0.5)
+			add({
+				id = "ST-FLIGHT-" .. idLen(H) .. "-" .. idLen(width),
+				name = string.format("Steel Stair Flight %.1f m rise, %.1f m wide", H, width),
+				category = "Structural Steel",
+				kind = "Rest",
+				originBottom = true,
+				tags = { "Stair", "Steel" },
+				rest = { grid = 0.1 },
+				allowFree = true,
+				weightKg = 160 * H + 60 * width,
+				sizeM = V(run + 0.3, H, width + 0.1),
+				boundsOffsetM = V(run / 2, H / 2, 0),
+				description = string.format(
+					"Channel-stringer stair with checker-plate treads and handrails rising %.1f m over %.1f m. Leave a deck opening above it and anchor it to the floor.",
+					H,
+					run
+				),
+				build = function(b)
+					local ang = math.atan2(H, run)
+					local len = math.sqrt(H * H + run * run)
+					for _, sz in ipairs({ -1, 1 }) do
+						b:box("Stringer", V(len, 0.25, 0.06), CF(run / 2, H / 2, sz * (width / 2)) * CFrame.Angles(0, 0, ang), C.PrimerGray, M.Metal, { nc = true })
+						b:box("Handrail", V(len, 0.05, 0.05), CF(run / 2, H / 2 + 0.95, sz * (width / 2 + 0.02)) * CFrame.Angles(0, 0, ang), C.Safety, M.Metal, { nc = true, ns = true })
+						for k = 0, 3 do
+							local t = (k + 0.5) / 4
+							b:box("RailPost", V(0.04, 0.95, 0.04), CF(run * t, H * t + 0.47, sz * (width / 2 + 0.02)), C.Safety, M.Metal, { nc = true, ns = true })
+						end
+					end
+					for k = 1, steps do
+						local x = (k - 0.5) * run / steps
+						local y = k * H / steps - 0.02
+						b:box("Tread", V(run / steps + 0.03, 0.03, width), CF(x, y, 0), C.SteelDark, M.DiamondPlate, { nc = true })
+					end
+					-- smooth walking surface (invisible)
+					local ramp = b:wedge("WalkRamp", V(width, H, run), CF(run / 2, H / 2, 0) * CFrame.Angles(0, math.pi / 2, 0), C.SteelDark, M.SmoothPlastic, { tr = 1, ns = true })
+					ramp.CanQuery = false
+				end,
+				fasteners = {
+					{ type = "Bolt", pos = V(0.1, 0.02, -width / 2 + 0.05), normal = V(0, 1, 0) },
+					{ type = "Bolt", pos = V(0.1, 0.02, width / 2 - 0.05), normal = V(0, 1, 0) },
+				},
+				minFastenRelease = 0,
+				liftPoints = { V(run * 0.25, H * 0.25 + 0.3, 0), V(run * 0.75, H * 0.75 + 0.3, 0) },
+				proxyColor = C.PrimerGray,
+			})
+		end
+	end
+
+	---------------------------------------------------------------------------
+	-- Mechanical, electrical and plumbing equipment (anchored with 4 bolts)
+	---------------------------------------------------------------------------
+	local function equipment(id, name, cat, kg, size, desc, buildFn, functional)
+		add({
+			id = id,
+			name = name,
+			category = cat,
+			kind = "Rest",
+			originBottom = true,
+			tags = { "MEP" },
+			rest = { grid = 0.1 },
+			allowFree = true,
+			functional = functional,
+			weightKg = kg,
+			sizeM = size,
+			description = desc,
+			build = buildFn,
+			fasteners = anchors(size.X, size.Z),
+			minFastenRelease = 0,
+			liftPoints = { V(-size.X / 4, size.Y, 0), V(size.X / 4, size.Y, 0) },
+			proxyColor = Color3.fromRGB(200, 202, 204),
+		})
+	end
+	local MEP = "Electrical, Plumbing & HVAC"
+	for _, rtu in ipairs({ { 5, 2.4, 1.4, 1.1, 640 }, { 10, 3.4, 1.8, 1.3, 1250 }, { 20, 5.0, 2.3, 1.6, 2300 } }) do
+		local tons, L, W, H, kg = table.unpack(rtu)
+		equipment("ME-RTU-" .. tons, string.format("Rooftop Packaged Unit %d ton", tons), MEP, kg, V(L, H, W),
+			string.format("%d ton packaged heating/cooling unit on a roof curb. Lift it onto the roof with the crane and anchor it.", tons),
+			function(b)
+				b:box("Curb", V(L, 0.3, W), CF(0, 0.15, 0), C.Galvanized, M.Metal)
+				b:box("Cabinet", V(L, H - 0.3, W), CF(0, 0.3 + (H - 0.3) / 2, 0), Color3.fromRGB(214, 214, 208), M.Metal)
+				b:box("CoilGrille", V(L * 0.4, H * 0.5, 0.02), CF(L * 0.25, H * 0.55, W / 2 + 0.01), DARK, M.DiamondPlate, { nc = true, ns = true })
+				local n = tons >= 10 and 2 or 1
+				for k = 1, n do
+					b:cylY("Fan", 0.1, W * 0.6, V(-L / 2 + k * L / (n + 1), H + 0.05, 0), DARK, M.Metal, { nc = true })
+				end
+			end)
+	end
+	equipment("ME-AHU", "Air Handling Unit 10 000 m³/h", MEP, 1900, V(4.0, 2.0, 1.8), "Modular indoor air handler with filter, coil and fan sections.", function(b)
+		for k = 0, 3 do
+			b:box("Section", V(0.98, 1.9, 1.8), CF(-1.5 + k, 1.0, 0), Color3.fromRGB(190, 196, 200), M.Metal)
+		end
+		b:box("Base", V(4.0, 0.1, 1.8), CF(0, 0.05, 0), DARK, M.Metal)
+		b:box("Duct", V(0.8, 0.8, 0.6), CF(1.6, 2.4, 0), C.Galvanized, M.Metal)
+	end)
+	equipment("ME-CONDENSER", "Air-Cooled Condensing Unit", MEP, 420, V(1.6, 1.4, 1.0), "Split-system condensing unit with a top-discharge fan.", function(b)
+		b:box("Body", V(1.6, 1.3, 1.0), CF(0, 0.75, 0), Color3.fromRGB(220, 220, 216), M.Metal)
+		b:box("Coil", V(1.5, 1.0, 0.02), CF(0, 0.75, 0.51), DARK, M.DiamondPlate, { nc = true, ns = true })
+		b:cylY("Fan", 0.1, 0.8, V(0, 1.45, 0), DARK, M.Metal, { nc = true })
+	end)
+	equipment("ME-EXHFAN", "Roof Exhaust Fan (mushroom)", MEP, 85, V(1.0, 0.9, 1.0), "Centrifugal upblast exhaust fan on a roof curb.", function(b)
+		b:box("Curb", V(1.0, 0.35, 1.0), CF(0, 0.175, 0), C.Galvanized, M.Metal)
+		b:cylY("Hood", 0.4, 0.95, V(0, 0.6, 0), C.Galvanized, M.Metal)
+		b:cylY("Cap", 0.1, 1.0, V(0, 0.85, 0), C.Galvanized, M.Metal)
+	end)
+	equipment("EL-SWITCHBOARD", "Main Switchboard 2000 A", MEP, 1100, V(3.2, 2.3, 0.8), "Free-standing low-voltage switchboard with metering section. Switch it on with F.", function(b)
+		for k = 0, 3 do
+			local cab = b:box("Cabinet" .. k, V(0.78, 2.2, 0.8), CF(-1.2 + k * 0.8, 1.15, 0), Color3.fromRGB(206, 208, 204), M.Metal)
+			if k == 0 then
+				cab.Name = "Lamp1"
+			end
+			b:box("Door", V(0.7, 2.0, 0.02), CF(-1.2 + k * 0.8, 1.15, -0.41), Color3.fromRGB(196, 198, 194), M.Metal, { nc = true, ns = true })
+		end
+		local lens = b:box("Lens1", V(0.06, 0.06, 0.01), CF(-1.2, 2.0, -0.42), Color3.fromRGB(60, 220, 90), M.Glass, { nc = true, ns = true })
+		lens:SetAttribute("Lens", true)
+		local light = Instance.new("PointLight")
+		light.Name = "Flood"
+		light.Range = 6
+		light.Brightness = 1
+		light.Color = Color3.fromRGB(80, 255, 120)
+		light.Enabled = false
+		light.Parent = b.model:FindFirstChild("Lamp1")
+		b:box("Plinth", V(3.2, 0.1, 0.8), CF(0, 0.05, 0), DARK, M.Metal)
+	end, "Light")
+	equipment("EL-TRANSFORMER", "Pad-Mounted Transformer 1500 kVA", MEP, 4800, V(2.2, 1.9, 2.0), "Utility pad-mount transformer in a tamper-resistant green enclosure.", function(b)
+		b:box("Pad", V(2.4, 0.2, 2.2), CF(0, 0.1, 0), CONCRETE, M.Concrete)
+		b:box("Tank", V(2.0, 1.6, 1.8), CF(0, 1.0, 0), Color3.fromRGB(70, 102, 72), M.Metal)
+		for k = -3, 3 do
+			b:box("Fin", V(0.04, 1.2, 0.3), CF(k * 0.28, 1.0, 1.05), Color3.fromRGB(62, 94, 64), M.Metal, { nc = true, ns = true })
+		end
+	end)
+	equipment("EL-GENSET-STANDBY", "Standby Generator 500 kW (enclosed)", MEP, 6500, V(5.5, 2.4, 1.9), "Permanent standby diesel generator in a weatherproof enclosure. F to test-run.", function(b)
+		b:box("Base", V(5.5, 0.4, 1.9), CF(0, 0.2, 0), DARK, M.Metal)
+		b:box("Enclosure", V(5.4, 2.0, 1.8), CF(0, 1.4, 0), Color3.fromRGB(196, 198, 194), M.Metal)
+		b:box("Louvre", V(1.0, 1.4, 0.02), CF(2.2, 1.4, 0.91), DARK, M.DiamondPlate, { nc = true, ns = true })
+		b:cylY("Muffler", 0.6, 0.3, V(-1.8, 2.7, 0), C.SteelDark, M.Metal, { nc = true })
+	end, "Engine")
+	equipment("PL-WATERHEATER", "Commercial Water Heater 400 L", MEP, 320, V(0.9, 2.0, 0.9), "Gas-fired storage water heater with flue and relief valve.", function(b)
+		b:cylY("Tank", 1.8, 0.85, V(0, 0.95, 0), Color3.fromRGB(70, 110, 160), M.Metal)
+		b:cylY("Flue", 0.4, 0.2, V(0, 2.05, 0), C.Galvanized, M.Metal, { nc = true })
+	end)
+	equipment("PL-FIREPUMP", "Fire Pump Skid 750 gpm", MEP, 1700, V(3.0, 1.4, 1.2), "Horizontal split-case fire pump with electric driver and controller.", function(b)
+		b:box("Skid", V(3.0, 0.15, 1.2), CF(0, 0.075, 0), DARK, M.Metal)
+		b:cylX("Motor", 1.0, 0.7, CF(-0.8, 0.6, 0), Color3.fromRGB(200, 40, 34), M.Metal)
+		b:box("PumpCase", V(0.9, 0.8, 0.8), CF(0.5, 0.55, 0), Color3.fromRGB(200, 40, 34), M.Metal)
+		b:cylX("Suction", 0.6, 0.3, CF(0.5, 0.55, 0.6) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(200, 40, 34), M.Metal, { nc = true })
+		b:box("Controller", V(0.6, 1.2, 0.3), CF(1.2, 0.75, -0.4), Color3.fromRGB(200, 40, 34), M.Metal)
+	end)
+	equipment("PL-BACKFLOW", "Backflow Preventer Assembly", MEP, 260, V(2.0, 1.2, 0.6), "Reduced-pressure backflow assembly with isolation valves on a stand.", function(b)
+		b:cylX("Body", 1.8, 0.25, CF(0, 0.9, 0), Color3.fromRGB(60, 120, 200), M.Metal)
+		for _, x in ipairs({ -0.7, 0.7 }) do
+			b:box("Stand", V(0.08, 0.8, 0.5), CF(x, 0.4, 0), DARK, M.Metal)
+			b:cylY("Valve", 0.35, 0.12, V(x * 0.8, 1.15, 0), Color3.fromRGB(200, 40, 34), M.Metal, { nc = true })
+		end
+	end)
+	equipment("ME-CABLETRAY-3", "Ladder Cable Tray Section 3 m", MEP, 18, V(3.0, 0.15, 0.6), "Galvanised ladder-type cable tray section on floor stands for risers and plant rooms.", function(b)
+		for _, sz in ipairs({ -1, 1 }) do
+			b:box("SideRail", V(3.0, 0.1, 0.03), CF(0, 0.1, sz * 0.285), C.Galvanized, M.Metal)
+		end
+		for k = 0, 9 do
+			b:box("Rung", V(0.03, 0.02, 0.57), CF(-1.35 + k * 0.3, 0.06, 0), C.Galvanized, M.Metal, { nc = true, ns = true })
+		end
+	end)
+	equipment("ME-DUCT-RISER", "Ductwork Riser Section 600 × 400", MEP, 40, V(0.6, 3.0, 0.4), "Galvanised rectangular duct riser section with flanged joints.", function(b)
+		b:box("Duct", V(0.6, 3.0, 0.4), CF(0, 1.5, 0), C.Galvanized, M.Metal)
+		for _, y in ipairs({ 0.05, 2.95 }) do
+			b:box("Flange", V(0.66, 0.06, 0.46), CF(0, y, 0), C.Galvanized, M.Metal, { nc = true, ns = true })
+		end
+	end)
+	equipment("PL-PIPESPOOL", "Pipe Spool Rack (steel pipe)", MEP, 900, V(3.2, 1.2, 1.2), "Fabricated steel pipe spools strapped to a skid, ready to hoist to the floor.", function(b)
+		b:box("Skid", V(3.2, 0.12, 1.2), CF(0, 0.06, 0), C.Timber, M.Wood)
+		for i = 0, 2 do
+			for j = 0, 2 do
+				b:cylX("Pipe", 3.0, 0.3, CF(0, 0.3 + i * 0.32, -0.36 + j * 0.36), Color3.fromRGB(70, 74, 78), M.Metal)
+			end
+		end
+	end)
+end
+]]></ProtectedString>
+</Properties>
+</Item>
+<Item class="ModuleScript" referent="RBX00000009">
 <Properties>
 <string name="Name">ModelFactory</string>
 <ProtectedString name="Source"><![CDATA[-- Procedural geometry for every catalog item.
@@ -3596,6 +4322,13 @@ function Factory.addFasteners(model, def, mask)
 			p.Size = Vector3.new(0.16, 0.16, 0.06)
 			p.Color = Color3.fromRGB(58, 56, 54)
 			p.Material = M.Metal
+		elseif f.type == "Screed" then
+			-- trowelled swirl: a flat smooth disc on the slab surface
+			p.Shape = Enum.PartType.Cylinder
+			p.Size = Vector3.new(0.04, 4.5, 4.5)
+			local_cf = local_cf * CFrame.Angles(0, math.pi / 2, 0)
+			p.Color = Color3.fromRGB(196, 194, 188)
+			p.Material = M.SmoothPlastic
 		elseif f.type == "Wedge" then
 			p.Size = Vector3.new(0.06, 0.22, 0.12)
 			p.Color = C.SteelDark
@@ -3646,7 +4379,7 @@ return Factory
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000009">
+<Item class="ModuleScript" referent="RBX0000000A">
 <Properties>
 <string name="Name">Remotes</string>
 <ProtectedString name="Source"><![CDATA[-- Single place that defines every network endpoint.
@@ -3729,7 +4462,7 @@ return Remotes
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000000A">
+<Item class="ModuleScript" referent="RBX0000000B">
 <Properties>
 <string name="Name">Sites</string>
 <ProtectedString name="Source"><![CDATA[-- Site definitions and the deterministic building layout generator.
@@ -3993,7 +4726,7 @@ Sites.Defs = {
 		entryM = V(80, 0, -46),
 		spawnM = V(34, 0, -36),
 		laydownM = { center = V(-26, 0, -26), size = V(20, 0, 12) },
-		grid = { originM = V(-15, 0, -2), nx = 5, nz = 2, bayX = 6.0, bayZ = 6.0, floorH = 3.6, floors = 6, column = "W12×65", beam = "W16×31", deck = true, braces = { { "x", 0, 0 }, { "x", 4, 2 } }, facade = "mixed" },
+		grid = { originM = V(-15, 0, -2), nx = 5, nz = 2, bayX = 6.0, bayZ = 6.0, floorH = 3.6, floors = 6, column = "W12×65", beam = "W16×31", deck = true, braces = { { "x", 0, 0 }, { "x", 4, 2 } }, facade = "mixed", balconies = true },
 		stage = function(e)
 			if e.phase == "footing" then
 				return true
@@ -4129,10 +4862,13 @@ function Sites.layout(grid)
 			end
 		end
 		-- deck sheets spanning X in every bay
+		-- the top level is the roof: insulated roof deck, no concrete
+		local isRoof = k == grid.floors
 		if grid.deck then
-			local deckId = Registry.find("deck", grid.bayX)
+			local deckId = isRoof and ("RF-DECK-" .. tostring(math.floor(grid.bayX * 1000 + 0.5))) or Registry.find("deck", grid.bayX)
 			local W = G.DeckWidth * S
 			local n = math.floor(bz / W + 0.5)
+			local slabId = "SL-CIP-" .. math.floor(grid.bayX * 1000 + 0.5) .. "-" .. math.floor(grid.bayZ * 1000 + 0.5)
 			for i = 0, grid.nx - 1 do
 				for j = 0, grid.nz - 1 do
 					local a = gp(i, j)
@@ -4140,6 +4876,9 @@ function Sites.layout(grid)
 						local pos = V(a.X + bx / 2, top, a.Z + (t + 0.5) * W)
 						local e = { phase = "deck", level = k, i = i, j = j, dir = tostring(t), item = deckId, cf = CFrame.new(pos), group = "deck:" .. k .. ":" .. i .. ":" .. j }
 						push(e)
+					end
+					if not isRoof and Registry.get(slabId) then
+						push({ phase = "slab", level = k, i = i, j = j, item = slabId, cf = CFrame.new(a.X + bx / 2, top + G.DeckDepth * S, a.Z + bz / 2) })
 					end
 				end
 			end
@@ -4188,12 +4927,60 @@ function Sites.layout(grid)
 				end
 			end
 		end
+		-- roof parapets on the top level, balconies on residential floors
+		local rc = G.CladOffset * S
+		local edgeFaces = {
+			{ side = "-Z", n = V(0, 0, -1), along = "x", fixed = 0 },
+			{ side = "+Z", n = V(0, 0, 1), along = "x", fixed = grid.nz },
+			{ side = "-X", n = V(-1, 0, 0), along = "z", fixed = 0 },
+			{ side = "+X", n = V(1, 0, 0), along = "z", fixed = grid.nx },
+		}
+		local function edgeSpan(f, t, y, item, phase, extra)
+			local a, b
+			if f.along == "x" then
+				a, b = gp(t, f.fixed), gp(t + 1, f.fixed)
+			else
+				a, b = gp(f.fixed, t), gp(f.fixed, t + 1)
+			end
+			local sa = V(a.X, y, a.Z) + f.n * rc
+			local sb = V(b.X, y, b.Z) + f.n * rc
+			if (sb - sa):Cross(Vector3.yAxis):Dot(f.n) < 0 then
+				sa, sb = sb, sa
+			end
+			local def = Registry.get(item)
+			if def then
+				local pA, pB = def.plugs[1].cfS.Position, def.plugs[2].cfS.Position
+				local ii, jj = t, f.fixed
+				if f.along == "z" then
+					ii, jj = f.fixed, t
+				end
+				push({ phase = phase, level = k, i = ii, j = jj, side = f.side, dir = extra, item = item, cf = BuildRules.spanCf(pA, pB, sa, sb) })
+			end
+		end
+		if isRoof then
+			for _, f in ipairs(edgeFaces) do
+				local count = f.along == "x" and grid.nx or grid.nz
+				local bayLen = f.along == "x" and grid.bayX or grid.bayZ
+				for t = 0, count - 1 do
+					edgeSpan(f, t, top + G.SlabTop * S, "RF-PARAPET-" .. math.floor(bayLen * 1000 + 0.5), "parapet")
+				end
+			end
+		end
+		if grid.balconies and k >= 2 then
+			local f = edgeFaces[2]
+			for t = 0, grid.nx - 1 do
+				if (t + k) % 2 == 0 then
+					local style = (t % 4 == 0) and "STEEL" or "GLASS"
+					edgeSpan(f, t, base, "BL-CANT-" .. math.floor(grid.bayX * 1000 + 0.5) .. "-" .. style, "balcony")
+				end
+			end
+		end
 	end
 	return entries
 end
 
 -- Build order used for the task panel and "next work package" deliveries.
-Sites.PhaseOrder = { footing = 1, column = 2, beam = 3, gusset = 4, brace = 5, deck = 6, facade = 7 }
+Sites.PhaseOrder = { footing = 1, column = 2, beam = 3, gusset = 4, brace = 5, deck = 6, slab = 7, facade = 8, balcony = 9, parapet = 10 }
 
 function Sites.sortEntries(entries)
 	table.sort(entries, function(a, b)
@@ -4234,8 +5021,21 @@ function Sites.stageEntries(site)
 		return {}
 	end
 	local out = {}
-	for _, e in ipairs(Sites.layout(site.grid)) do
-		if site.stage(e) then
+	local entries = Sites.layout(site.grid)
+	-- floors whose deck is in the starting stage get their concrete too,
+	-- except the newest decked floor (still being worked on)
+	local topDeck = 0
+	for _, e in ipairs(entries) do
+		if e.phase == "deck" and site.stage(e) then
+			topDeck = math.max(topDeck, e.level)
+		end
+	end
+	for _, e in ipairs(entries) do
+		if e.phase == "slab" then
+			if e.level < topDeck then
+				table.insert(out, e)
+			end
+		elseif site.stage(e) then
 			table.insert(out, e)
 		end
 	end
@@ -4369,7 +5169,7 @@ return Sites
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000000B">
+<Item class="ModuleScript" referent="RBX0000000C">
 <Properties>
 <string name="Name">Util</string>
 <ProtectedString name="Source"><![CDATA[-- Small shared helpers.
@@ -4500,15 +5300,15 @@ return Util
 </Item>
 </Item>
 </Item>
-<Item class="ServerScriptService" referent="RBX00000019">
+<Item class="ServerScriptService" referent="RBX0000001A">
 <Properties>
 <string name="Name">ServerScriptService</string>
 </Properties>
-<Item class="Folder" referent="RBX00000018">
+<Item class="Folder" referent="RBX00000019">
 <Properties>
 <string name="Name">Steelrise</string>
 </Properties>
-<Item class="ModuleScript" referent="RBX0000000E">
+<Item class="ModuleScript" referent="RBX0000000F">
 <Properties>
 <string name="Name">ComponentService</string>
 <ProtectedString name="Source"><![CDATA[-- Owns every physical material/component instance on the site and its
@@ -5034,6 +5834,14 @@ function ComponentService.onInstalled(model)
 	if lug then
 		lug:Destroy()
 	end
+	-- finished concrete cures from wet dark grey to light grey
+	if def.tags.Slab then
+		local concrete = model:FindFirstChild("Concrete")
+		if concrete then
+			concrete.Color = Color3.fromRGB(176, 174, 168)
+			concrete.Reflectance = 0
+		end
+	end
 	markWorldDirty()
 	fire("Installed", model, nil)
 	if Services.Site then
@@ -5060,7 +5868,7 @@ function ComponentService.fasten(player, id, index)
 	end
 	local tool = Registry.get(ComponentService.equipped(player))
 	if not tool or tool.fastens ~= f.type then
-		local need = ({ Bolt = "the impact wrench (2)", Wedge = "the scaffold hammer (3)", Weld = "the welder (4)" })[f.type]
+		local need = ({ Bolt = "the impact wrench (2)", Wedge = "the scaffold hammer (3)", Weld = "the welder (4)", Screed = "the trowel (7)" })[f.type]
 		return false, "Wrong tool — this needs " .. (need or f.type) .. "."
 	end
 	local hrp = hrpOf(player)
@@ -5105,7 +5913,7 @@ function ComponentService.dismantle(player, id)
 	if #def.fasteners > 0 then
 		local tool = Registry.get(ComponentService.equipped(player))
 		if not tool or tool.fastens ~= def.fasteners[1].type then
-			local need = ({ Bolt = "impact wrench (2)", Wedge = "scaffold hammer (3)", Weld = "welder (4)" })[def.fasteners[1].type]
+			local need = ({ Bolt = "impact wrench (2)", Wedge = "scaffold hammer (3)", Weld = "welder (4)", Screed = "trowel (7)" })[def.fasteners[1].type]
 			return false, "Equip the " .. (need or "right tool") .. " to undo its connections."
 		end
 	end
@@ -5125,6 +5933,36 @@ function ComponentService.dismantle(player, id)
 	fire("Dismantled", model, player)
 	Services.Site.onComponentRemoved(model)
 	return true
+end
+
+---------------------------------------------------------------------------
+-- Concrete: the pump hose places a slab over a fully decked bay
+---------------------------------------------------------------------------
+
+function ComponentService.pour(player, itemId, cf)
+	if ComponentService.equipped(player) ~= "TL-POUR" then
+		return false, "Equip the concrete pump hose (6)."
+	end
+	local def = Registry.get(itemId or "")
+	if not def or def.kind ~= "Slab" or typeof(cf) ~= "CFrame" then
+		return false, "Nothing to pour there."
+	end
+	local hrp = hrpOf(player)
+	if not hrp then
+		return false, "No character."
+	end
+	local d = (Vector3.new(hrp.Position.X, cf.Position.Y, hrp.Position.Z) - cf.Position).Magnitude
+	if d > math.max(def.size.X, def.size.Z) / 2 + Config.Reach.Place or math.abs(hrp.Position.Y - cf.Position.Y) > 12 then
+		return false, "Out of reach — stand on or next to the bay you're pouring."
+	end
+	local ok, why, info = BuildRules.validate(ComponentService.world(), def, cf, { excludeModels = { player.Character } })
+	if not ok then
+		return false, why
+	end
+	local model = ComponentService.spawn(itemId, cf, "Placed", { supportedBy = table.concat(info.supports, ",") })
+	fx("Pour", cf.Position, def.id)
+	fire("Poured", model, player)
+	return true, "Concrete placed — finish it with the trowel (7) at the four marks."
 end
 
 ---------------------------------------------------------------------------
@@ -5198,6 +6036,8 @@ function ComponentService.build(player, action, a, b)
 		return ComponentService.fasten(player, a, tonumber(b) or 0)
 	elseif action == "Dismantle" then
 		return ComponentService.dismantle(player, a)
+	elseif action == "Pour" then
+		return ComponentService.pour(player, a, b)
 	end
 	return false, "Unknown action."
 end
@@ -5206,7 +6046,7 @@ return ComponentService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000000F">
+<Item class="ModuleScript" referent="RBX00000010">
 <Properties>
 <string name="Name">CraneFactory</string>
 <ProtectedString name="Source"><![CDATA[-- Flat-top tower crane, modelled on modern 8–10 t city cranes.
@@ -5730,7 +6570,7 @@ return CraneFactory
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000010">
+<Item class="ModuleScript" referent="RBX00000011">
 <Properties>
 <string name="Name">CraneService</string>
 <ProtectedString name="Source"><![CDATA[-- Server authority for tower cranes.
@@ -6330,7 +7170,7 @@ return CraneService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000011">
+<Item class="ModuleScript" referent="RBX00000012">
 <Properties>
 <string name="Name">DeliveryService</string>
 <ProtectedString name="Source"><![CDATA[-- Flatbed deliveries: trucks pull into unloading bays with every ordered
@@ -6782,7 +7622,7 @@ return DeliveryService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="Script" referent="RBX00000012">
+<Item class="Script" referent="RBX00000013">
 <Properties>
 <string name="Name">Main</string>
 <ProtectedString name="Source"><![CDATA[-- STEELRISE server bootstrap: creates remotes, wires services together and
@@ -6871,7 +7711,7 @@ print("[STEELRISE] server ready")
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000013">
+<Item class="ModuleScript" referent="RBX00000014">
 <Properties>
 <string name="Name">Packing</string>
 <ProtectedString name="Source"><![CDATA[-- Lays out a list of items on a rectangular bed (trailer deck or laydown yard)
@@ -7007,7 +7847,7 @@ return Packing
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000014">
+<Item class="ModuleScript" referent="RBX00000015">
 <Properties>
 <string name="Name">SaveService</string>
 <ProtectedString name="Source"><![CDATA[-- Saves and settings.
@@ -7261,7 +8101,7 @@ return SaveService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000015">
+<Item class="ModuleScript" referent="RBX00000016">
 <Properties>
 <string name="Name">SiteService</string>
 <ProtectedString name="Source"><![CDATA[-- Loads a site: terrain, lighting, environment, crane, the starting stage of
@@ -7739,7 +8579,7 @@ return SiteService
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000016">
+<Item class="ModuleScript" referent="RBX00000017">
 <Properties>
 <string name="Name">VehicleFactory</string>
 <ProtectedString name="Source"><![CDATA[-- Delivery vehicles: a long-hood American tractor with a 53 ft steel-hauling
@@ -8243,7 +9083,7 @@ return VehicleFactory
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000017">
+<Item class="ModuleScript" referent="RBX00000018">
 <Properties>
 <string name="Name">WorldFactory</string>
 <ProtectedString name="Source"><![CDATA[-- Server-side builders for site environments, the tower crane and the
@@ -8836,19 +9676,19 @@ return WorldFactory
 </Item>
 </Item>
 </Item>
-<Item class="StarterPlayer" referent="RBX0000002E">
+<Item class="StarterPlayer" referent="RBX00000030">
 <Properties>
 <string name="Name">StarterPlayer</string>
 </Properties>
-<Item class="StarterPlayerScripts" referent="RBX0000002D">
+<Item class="StarterPlayerScripts" referent="RBX0000002F">
 <Properties>
 <string name="Name">StarterPlayerScripts</string>
 </Properties>
-<Item class="Folder" referent="RBX0000002C">
+<Item class="Folder" referent="RBX0000002E">
 <Properties>
 <string name="Name">Steelrise</string>
 </Properties>
-<Item class="ModuleScript" referent="RBX0000001A">
+<Item class="ModuleScript" referent="RBX0000001B">
 <Properties>
 <string name="Name">Audio</string>
 <ProtectedString name="Source"><![CDATA[-- Client audio: mix groups with separate volumes, varied one-shots and
@@ -9010,7 +9850,7 @@ return Audio
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001B">
+<Item class="ModuleScript" referent="RBX0000001C">
 <Properties>
 <string name="Name">Blueprint</string>
 <ProtectedString name="Source"><![CDATA[-- Blueprint ghosts: translucent outlines of what still has to be built on
@@ -9138,7 +9978,7 @@ return Blueprint
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001C">
+<Item class="ModuleScript" referent="RBX0000001D">
 <Properties>
 <string name="Name">Catalog</string>
 <ProtectedString name="Source"><![CDATA[-- Searchable catalog over the item registry: categories, favourites, lazy
@@ -9513,7 +10353,7 @@ return Catalog
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="LocalScript" referent="RBX0000001D">
+<Item class="LocalScript" referent="RBX0000001E">
 <Properties>
 <string name="Name">ClientMain</string>
 <ProtectedString name="Source"><![CDATA[-- STEELRISE client bootstrap: builds the interface, binds the current site,
@@ -9551,6 +10391,7 @@ local Blueprint = require(here.Blueprint)
 local FX = require(here.FX)
 local Footsteps = require(here.Footsteps)
 local Tutorial = require(here.Tutorial)
+local Pour = require(here.Pour)
 
 local player = Players.LocalPlayer
 
@@ -9588,6 +10429,7 @@ Blueprint.init()
 FX.init()
 Footsteps.init()
 Tutorial.init()
+Pour.init()
 
 Remotes.get("Notify").OnClientEvent:Connect(function(text, kind)
 	HUD.notify(text, kind)
@@ -9815,6 +10657,8 @@ local TOOL_KEYS = {
 	[Enum.KeyCode.Three] = 3,
 	[Enum.KeyCode.Four] = 4,
 	[Enum.KeyCode.Five] = 5,
+	[Enum.KeyCode.Six] = 6,
+	[Enum.KeyCode.Seven] = 7,
 }
 
 UserInputService.InputBegan:Connect(function(input, gp)
@@ -9877,7 +10721,7 @@ end)
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001E">
+<Item class="ModuleScript" referent="RBX0000001F">
 <Properties>
 <string name="Name">CraneClient</string>
 <ProtectedString name="Source"><![CDATA[-- Tower crane on the client.
@@ -10816,7 +11660,7 @@ return CraneClient
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000001F">
+<Item class="ModuleScript" referent="RBX00000020">
 <Properties>
 <string name="Name">FX</string>
 <ProtectedString name="Source"><![CDATA[-- Effects and positional audio for server-announced events (bolting,
@@ -10945,6 +11789,13 @@ local HANDLERS = {
 		Audio.play("TruckAirBrake", pos)
 	end,
 	TruckArrive = function() end,
+	Pour = function(pos)
+		Audio.play("ConcretePour", pos)
+		dust(pos)
+	end,
+	Screed = function(pos)
+		Audio.play("PowerTrowel", pos)
+	end,
 	Toggle = function(pos)
 		Audio.play("UIClick", pos)
 	end,
@@ -11063,7 +11914,7 @@ return FX
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000020">
+<Item class="ModuleScript" referent="RBX00000021">
 <Properties>
 <string name="Name">Footsteps</string>
 <ProtectedString name="Source"><![CDATA[-- Surface-aware footsteps for the local character. Silent until step sounds
@@ -11137,7 +11988,7 @@ return Footsteps
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000021">
+<Item class="ModuleScript" referent="RBX00000022">
 <Properties>
 <string name="Name">HUD</string>
 <ProtectedString name="Source"><![CDATA[-- In-game interface: crosshair, contextual prompts, hold progress, placement
@@ -11614,10 +12465,10 @@ function HUD.build()
 	ui.placeHints = UIKit.label(ui.place, "", 12, F.Mono, C.Muted, { Position = UDim2.new(0, 16, 0, 50), Size = UDim2.new(1, -24, 0, 18), TextTruncate = Enum.TextTruncate.AtEnd })
 
 	-- hotbar
-	local bar = UIKit.new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -24), Size = UDim2.new(0, 5 * 76, 0, 66), BackgroundTransparency = 1, Parent = gui })
+	local bar = UIKit.new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -24), Size = UDim2.new(0, #Registry.ToolOrder * 76, 0, 66), BackgroundTransparency = 1, Parent = gui })
 	UIKit.list(bar, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
 	ui.slots = {}
-	local shortNames = { ["TL-HANDS"] = "HANDS", ["TL-IMPACT"] = "WRENCH", ["TL-HAMMER"] = "HAMMER", ["TL-WELDER"] = "WELDER", ["TL-REMOTE"] = "REMOTE" }
+	local shortNames = { ["TL-HANDS"] = "HANDS", ["TL-IMPACT"] = "WRENCH", ["TL-HAMMER"] = "HAMMER", ["TL-WELDER"] = "WELDER", ["TL-REMOTE"] = "REMOTE", ["TL-POUR"] = "POUR", ["TL-TROWEL"] = "TROWEL" }
 	for i, id in ipairs(Registry.ToolOrder) do
 		local slot = UIKit.new("TextButton", { AutoButtonColor = false, Text = "", BackgroundColor3 = C.Panel, BackgroundTransparency = 0.1, BorderSizePixel = 0, Size = UDim2.new(0, 68, 0, 66), LayoutOrder = i, Parent = bar })
 		UIKit.corner(slot, 6)
@@ -11737,7 +12588,7 @@ return HUD
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000022">
+<Item class="ModuleScript" referent="RBX00000023">
 <Properties>
 <string name="Name">Interaction</string>
 <ProtectedString name="Source"><![CDATA[-- On-foot interaction: what the crosshair is on, contextual prompts, picking
@@ -11769,8 +12620,8 @@ local busy = false
 local markers = {}
 local markerFolder
 
-local HOLD_TIME = { Bolt = 0.55, Wedge = 0.35, Weld = 0.9, Dismantle = 1.2 }
-local TOOL_NAME = { Bolt = "impact wrench (2)", Wedge = "scaffold hammer (3)", Weld = "welder (4)" }
+local HOLD_TIME = { Bolt = 0.55, Wedge = 0.35, Weld = 0.9, Screed = 0.8, Dismantle = 1.2 }
+local TOOL_NAME = { Bolt = "impact wrench (2)", Wedge = "scaffold hammer (3)", Weld = "welder (4)", Screed = "trowel (7)" }
 
 local function active()
 	return State.mode == "Play" and not State.uiBlocking and not State.crane.operating
@@ -11881,7 +12732,8 @@ local function buildPrompt()
 			if ft and ft == need then
 				local f = nearestFastener(rec, target.pos, ft)
 				if f then
-					table.insert(list, { key = "Hold LMB", text = (ft == "Weld" and "Weld" or (ft == "Wedge" and "Drive wedge" or "Tighten bolt")), sub = def.name .. "  ·  " .. progress })
+					local verb = ({ Weld = "Weld", Wedge = "Drive wedge", Screed = "Trowel finish", Bolt = "Tighten bolt" })[ft] or "Fasten"
+					table.insert(list, { key = "Hold LMB", text = verb, sub = def.name .. "  ·  " .. progress })
 				else
 					table.insert(list, { text = "Aim at a yellow connection marker", sub = def.name .. "  ·  " .. progress, disabled = true })
 				end
@@ -12177,7 +13029,7 @@ return Interaction
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000023">
+<Item class="ModuleScript" referent="RBX00000024">
 <Properties>
 <string name="Name">MainMenu</string>
 <ProtectedString name="Source"><![CDATA[-- Main menu: Play, Continue Construction, Site Selection, Settings, Controls,
@@ -12497,7 +13349,7 @@ MainMenu.ControlRows = {
 	{ "G", "Drop carried item" },
 	{ "Hold X", "Dismantle the aimed component (with its tool)" },
 	{ "F", "Switch equipment on / off" },
-	{ "1 – 5", "Hands · impact wrench · hammer · welder · crane remote" },
+	{ "1 – 7", "Hands · wrench · hammer · welder · crane remote · pump hose · trowel" },
 	{ "Tab", "Catalog & deliveries" },
 	{ "B", "Blueprint ghosts on / off" },
 	{ "J", "Task panel" },
@@ -12688,7 +13540,7 @@ return MainMenu
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000024">
+<Item class="ModuleScript" referent="RBX00000025">
 <Properties>
 <string name="Name">Net</string>
 <ProtectedString name="Source"><![CDATA[-- Safe wrappers around the STEELRISE remotes.
@@ -12732,7 +13584,7 @@ return Net
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000025">
+<Item class="ModuleScript" referent="RBX00000026">
 <Properties>
 <string name="Name">Placement</string>
 <ProtectedString name="Source"><![CDATA[-- Hand placement of carried components: a transparent ghost snaps to grid or
@@ -12971,7 +13823,153 @@ return Placement
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000026">
+<Item class="ModuleScript" referent="RBX00000027">
+<Properties>
+<string name="Name">Pour</string>
+<ProtectedString name="Source"><![CDATA[-- Concrete placement with the pump hose: previews the slab for the aimed
+-- deck bay (green/red with the reason) and pours it while the mouse is held.
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Steelrise")
+local Config = require(Shared.Config)
+local Factory = require(Shared.ModelFactory)
+local BuildRules = require(Shared.BuildRules)
+
+local State = require(script.Parent.State)
+local HUD = require(script.Parent.HUD)
+local Net = require(script.Parent.Net)
+local View = require(script.Parent.View)
+
+local Pour = {}
+local player = Players.LocalPlayer
+local POUR_TIME = 2.5
+
+local ghost, ghostDef, highlight
+local target = nil -- { def, cf, valid, reason }
+local holdStart = nil
+local busy = false
+local acc = 0
+local shown = false
+
+local function active()
+	return State.mode == "Play" and State.tool == "TL-POUR" and not State.uiBlocking and not State.crane.operating and not State.carrying
+end
+
+local function clearGhost()
+	if ghost then
+		ghost:Destroy()
+	end
+	ghost, ghostDef, highlight = nil, nil, nil
+end
+
+local function update(dt)
+	if not active() then
+		if shown then
+			shown = false
+			clearGhost()
+			target = nil
+			holdStart = nil
+			HUD.setHold(nil)
+			if not State.carrying then
+				HUD.setPlacement(nil)
+			end
+		end
+		return
+	end
+	shown = true
+	acc += dt
+	if acc >= 1 / 20 then
+		acc = 0
+		local hit = View.cast(Config.Reach.Place + 20)
+		local def, cf, reason
+		if hit then
+			def, cf, reason = BuildRules.solveSlab(State.world, { point = hit.Position, hit = hit.Instance })
+		else
+			reason = "Aim at the metal deck of a floor bay."
+		end
+		local valid = false
+		if def and cf then
+			local ok, why = BuildRules.validate(State.world, def, cf, { excludeModels = { player.Character } })
+			valid, reason = ok, why
+			if ghostDef ~= def then
+				clearGhost()
+				ghost = Factory.build(def, cf, { ghost = true, preview = true })
+				ghostDef = def
+				highlight = Instance.new("Highlight")
+				highlight.FillTransparency = 0.6
+				highlight.OutlineTransparency = 0.1
+				highlight.Parent = ghost
+				ghost.Parent = workspace.CurrentCamera
+			end
+			ghost:PivotTo(cf + Vector3.new(0, 0.05, 0))
+			highlight.FillColor = valid and Config.Colors.Valid or Config.Colors.Invalid
+			highlight.OutlineColor = highlight.FillColor
+			target = { def = def, cf = cf, valid = valid, reason = reason }
+		else
+			clearGhost()
+			target = nil
+		end
+		HUD.setPlacement({
+			title = def and ("Pour: " .. def.name) or "Concrete pump hose",
+			valid = valid,
+			okText = "Bay ready — hold the left mouse button to pour",
+			reason = reason,
+			hints = "Hold LMB pour · 7 trowel to finish · 1 hands",
+		})
+	end
+	if holdStart then
+		if not target or not target.valid then
+			holdStart = nil
+			HUD.setHold(nil)
+			return
+		end
+		local a = (os.clock() - holdStart) / POUR_TIME
+		HUD.setHold(a)
+		if a >= 1 and not busy then
+			holdStart = nil
+			HUD.setHold(nil)
+			busy = true
+			local t = target
+			task.spawn(function()
+				Net.call("Build", false, "Pour", t.def.id, t.cf)
+				busy = false
+			end)
+		end
+	end
+end
+
+function Pour.init()
+	UserInputService.InputBegan:Connect(function(input, gp)
+		if gp or not active() then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if target and target.valid then
+				holdStart = os.clock()
+				State.fire("LocalPourStart", target.cf.Position)
+			elseif target then
+				State.notify(target.reason or "Can't pour here.", "warn")
+			end
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 and holdStart then
+			holdStart = nil
+			HUD.setHold(nil)
+		end
+	end)
+	RunService.RenderStepped:Connect(update)
+end
+
+return Pour
+]]></ProtectedString>
+</Properties>
+</Item>
+<Item class="ModuleScript" referent="RBX00000028">
 <Properties>
 <string name="Name">Settings</string>
 <ProtectedString name="Source"><![CDATA[-- Applies player settings (graphics, audio, controls) locally and builds the
@@ -13167,7 +14165,7 @@ return Settings
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000027">
+<Item class="ModuleScript" referent="RBX00000029">
 <Properties>
 <string name="Name">State</string>
 <ProtectedString name="Source"><![CDATA[-- Client-side shared state and a tiny event bus between controllers.
@@ -13211,7 +14209,7 @@ return State
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000028">
+<Item class="ModuleScript" referent="RBX0000002A">
 <Properties>
 <string name="Name">TrailerAnim</string>
 <ProtectedString name="Source"><![CDATA[-- Drive-in / drive-out animation for delivery trucks. The server places a
@@ -13360,7 +14358,7 @@ return TrailerAnim
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX00000029">
+<Item class="ModuleScript" referent="RBX0000002B">
 <Properties>
 <string name="Name">Tutorial</string>
 <ProtectedString name="Source"><![CDATA[-- Short playable tutorial on the Empty Land site: unload, rig, lift, land,
@@ -13515,7 +14513,7 @@ return Tutorial
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000002A">
+<Item class="ModuleScript" referent="RBX0000002C">
 <Properties>
 <string name="Name">UIKit</string>
 <ProtectedString name="Source"><![CDATA[-- Interface building blocks in the STEELRISE style: charcoal panels, steel
@@ -13910,7 +14908,7 @@ return UIKit
 ]]></ProtectedString>
 </Properties>
 </Item>
-<Item class="ModuleScript" referent="RBX0000002B">
+<Item class="ModuleScript" referent="RBX0000002D">
 <Properties>
 <string name="Name">View</string>
 <ProtectedString name="Source"><![CDATA[-- First/third-person view switching and the shared aim ray.
@@ -13985,7 +14983,7 @@ return View
 </Item>
 </Item>
 </Item>
-<Item class="Workspace" referent="RBX0000002F">
+<Item class="Workspace" referent="RBX00000031">
 <Properties>
 <string name="Name">Workspace</string>
 <bool name="StreamingEnabled">true</bool>
@@ -13993,13 +14991,13 @@ return View
 <int name="StreamingTargetRadius">1024</int>
 </Properties>
 </Item>
-<Item class="Lighting" referent="RBX00000030">
+<Item class="Lighting" referent="RBX00000032">
 <Properties>
 <string name="Name">Lighting</string>
 <token name="Technology">4</token>
 </Properties>
 </Item>
-<Item class="SoundService" referent="RBX00000031">
+<Item class="SoundService" referent="RBX00000033">
 <Properties>
 <string name="Name">SoundService</string>
 </Properties>

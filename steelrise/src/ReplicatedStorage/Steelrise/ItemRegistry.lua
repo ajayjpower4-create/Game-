@@ -179,7 +179,10 @@ local function columnSockets(L)
 		table.insert(sockets, { type = "GussetMount", cf = look(V(0, -L / 2 + G.GussetLow, 0) + d.v * G.SeatOffset, d.v) })
 		table.insert(sockets, { type = "GussetMount", cf = look(V(0, L / 2 - G.GussetHighFromTop, 0) + d.v * G.SeatOffset, d.v) })
 		table.insert(sockets, { type = "CladSeat", multi = true, cf = look(V(0, -L / 2, 0) + d.v * G.CladOffset, d.v) })
+		table.insert(sockets, { type = "ParapetSeat", multi = true, cf = look(V(0, L / 2 + G.SlabTop, 0) + d.v * G.CladOffset, d.v) })
 	end
+	-- partitions stand on the finished floor along the grid lines
+	table.insert(sockets, { type = "PartitionSeat", multi = true, cf = CF(0, -L / 2 + G.SlabTop, 0) })
 	return sockets
 end
 
@@ -1404,10 +1407,30 @@ add({
 })
 
 ---------------------------------------------------------------------------
+-- Building content (slabs, roofing, envelope, interiors, stairs, MEP)
+---------------------------------------------------------------------------
+
+require(script.Parent.ItemsBuilding)({
+	add = add,
+	look = look,
+	CF = CF,
+	V = V,
+	G = G,
+	C = C,
+	M = M,
+	S = S,
+	Config = Config,
+	idLen = idLen,
+	fmtLen = fmtLen,
+	panelPlugs = panelPlugs,
+	panelFasteners = panelFasteners,
+})
+
+---------------------------------------------------------------------------
 -- Tools (hotbar). Models are used for the hand-held visual and catalog.
 ---------------------------------------------------------------------------
 
-Registry.ToolOrder = { "TL-HANDS", "TL-IMPACT", "TL-HAMMER", "TL-WELDER", "TL-REMOTE" }
+Registry.ToolOrder = { "TL-HANDS", "TL-IMPACT", "TL-HAMMER", "TL-WELDER", "TL-REMOTE", "TL-POUR", "TL-TROWEL" }
 
 add({
 	id = "TL-HANDS",
@@ -1495,6 +1518,41 @@ add({
 		b:cylY("StickL", 0.06, 0.015, V(-0.05, 0.07, 0), C.Charcoal, M.SmoothPlastic)
 		b:cylY("StickR", 0.06, 0.015, V(0.05, 0.07, 0), C.Charcoal, M.SmoothPlastic)
 		b:box("EStop", V(0.03, 0.02, 0.03), CF(0.08, 0.055, -0.05), Color3.fromRGB(210, 30, 30), M.SmoothPlastic)
+	end,
+})
+
+add({
+	id = "TL-POUR",
+	name = "Concrete Pump Hose",
+	category = "Tools",
+	class = "Tool",
+	kind = "Tool",
+	hotkey = 6,
+	pours = true,
+	weightKg = 0,
+	sizeM = V(0.2, 0.2, 0.9),
+	description = "End hose of the line pump. Aim at a fully decked, welded bay and hold the mouse to place the slab concrete.",
+	build = function(b)
+		b:cylX("Hose", 0.8, 0.13, CF(0, 0, -0.1) * CFrame.Angles(0, math.pi / 2, 0), Color3.fromRGB(30, 30, 32), M.SmoothPlastic)
+		b:cylX("Coupling", 0.1, 0.16, CF(0, 0, 0.32) * CFrame.Angles(0, math.pi / 2, 0), C.Galvanized, M.Metal)
+		b:box("Handle", V(0.04, 0.2, 0.04), CF(0, -0.12, 0.1), C.Safety, M.SmoothPlastic)
+	end,
+})
+
+add({
+	id = "TL-TROWEL",
+	name = "Bull Float & Trowel",
+	category = "Tools",
+	class = "Tool",
+	kind = "Tool",
+	hotkey = 7,
+	fastens = "Screed",
+	weightKg = 3,
+	sizeM = V(0.3, 0.1, 0.9),
+	description = "Finishes freshly poured concrete. Hold the mouse on each of the four finishing marks; the slab cures when all are done.",
+	build = function(b)
+		b:box("Float", V(0.28, 0.02, 0.6), CF(0, -0.05, -0.2), Color3.fromRGB(170, 176, 182), M.Metal)
+		b:box("Pole", V(0.03, 0.03, 0.7), CF(0, 0.05, 0.25) * CFrame.Angles(math.rad(-15), 0, 0), C.Safety, M.SmoothPlastic)
 	end,
 })
 

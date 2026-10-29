@@ -315,7 +315,7 @@ MainMenu.ControlRows = {
 	{ "G", "Drop carried item" },
 	{ "Hold X", "Dismantle the aimed component (with its tool)" },
 	{ "F", "Switch equipment on / off" },
-	{ "1 – 5", "Hands · impact wrench · hammer · welder · crane remote" },
+	{ "1 – 7", "Hands · wrench · hammer · welder · crane remote · pump hose · trowel" },
 	{ "Tab", "Catalog & deliveries" },
 	{ "B", "Blueprint ghosts on / off" },
 	{ "J", "Task panel" },

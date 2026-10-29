@@ -265,6 +265,13 @@ function Factory.addFasteners(model, def, mask)
 			p.Size = Vector3.new(0.16, 0.16, 0.06)
 			p.Color = Color3.fromRGB(58, 56, 54)
 			p.Material = M.Metal
+		elseif f.type == "Screed" then
+			-- trowelled swirl: a flat smooth disc on the slab surface
+			p.Shape = Enum.PartType.Cylinder
+			p.Size = Vector3.new(0.04, 4.5, 4.5)
+			local_cf = local_cf * CFrame.Angles(0, math.pi / 2, 0)
+			p.Color = Color3.fromRGB(196, 194, 188)
+			p.Material = M.SmoothPlastic
 		elseif f.type == "Wedge" then
 			p.Size = Vector3.new(0.06, 0.22, 0.12)
 			p.Color = C.SteelDark

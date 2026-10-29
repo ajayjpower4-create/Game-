@@ -124,6 +124,13 @@ local HANDLERS = {
 		Audio.play("TruckAirBrake", pos)
 	end,
 	TruckArrive = function() end,
+	Pour = function(pos)
+		Audio.play("ConcretePour", pos)
+		dust(pos)
+	end,
+	Screed = function(pos)
+		Audio.play("PowerTrowel", pos)
+	end,
 	Toggle = function(pos)
 		Audio.play("UIClick", pos)
 	end,

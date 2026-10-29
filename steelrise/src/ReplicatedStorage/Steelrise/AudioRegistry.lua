@@ -30,6 +30,8 @@ local AudioRegistry = {
 	ImpactWrench = { group = "Tools", ids = {}, volume = 0.75, min = 6, max = 160, pitchVar = 0.06 },
 	HammerWedge = { group = "Tools", ids = {}, volume = 0.7, min = 6, max = 160, pitchVar = 0.12 },
 	WeldArc = { group = "Tools", ids = {}, volume = 0.55, min = 6, max = 120, pitchVar = 0.05 },
+	ConcretePour = { group = "Tools", ids = {}, volume = 0.7, min = 8, max = 160, pitchVar = 0.05 },
+	PowerTrowel = { group = "Tools", ids = {}, volume = 0.6, min = 6, max = 120, pitchVar = 0.08 },
 
 	-- Vehicles & machines
 	TruckIdle = { group = "Machinery", ids = {}, loop = true, volume = 0.5, min = 12, max = 220 },

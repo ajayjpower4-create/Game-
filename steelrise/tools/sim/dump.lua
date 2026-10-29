@@ -32,6 +32,37 @@ elseif what == "train" then
 	local car = VF.buildFlatcar(CFrame.new(0, 0, 0), 1)
 	for _, p in ipairs(ser(loco)) do table.insert(parts, p) end
 	for _, p in ipairs(ser(car)) do table.insert(parts, p) end
+elseif what:sub(1, 6) == "items:" then
+	local Factory = require(game.ReplicatedStorage.Steelrise.ModelFactory)
+	local Registry = require(game.ReplicatedStorage.Steelrise.ItemRegistry)
+	local x = 0
+	for id in what:sub(7):gmatch("[^,]+") do
+		local def = Registry.get(id)
+		local m = Factory.build(def, CFrame.new(x + def.size.X / 2, 0, 0), { installed = true })
+		for _, p in ipairs(ser(m)) do table.insert(parts, p) end
+		x = x + def.size.X + 6
+	end
+	table.insert(parts, '{"cls":"Part","shape":"Block","mat":"Ground","size":[600,0.2,600],"cf":[0,-0.1,0,1,0,0,0,1,0,0,0,1],"color":[0.55,0.55,0.52],"tr":0}')
+elseif what:sub(1, 5) == "full:" then
+	-- a finished building: every blueprint member installed
+	local main
+	for _, d in ipairs(game.ServerScriptService:GetDescendants()) do if d.Name == "Main" then main = d end end
+	M.runScript(main)
+	local Site = require(SS.SiteService)
+	local Comp = require(SS.ComponentService)
+	local id = what:sub(6)
+	Site.load(id, nil, nil)
+	local site = Sites.get(id)
+	local staged = {}
+	for _, e in ipairs(Sites.stageEntries(site)) do staged[e.key] = true end
+	for _, e in ipairs(Sites.layout(site.grid)) do
+		if not staged[e.key] then Comp.spawn(e.item, e.cf, "Installed", {}) end
+	end
+	local folder = workspace.SteelriseSite
+	local keep = Instance.new("Folder")
+	folder.Components.Parent = keep
+	parts = ser(keep)
+	table.insert(parts, '{"cls":"Part","shape":"Block","mat":"Ground","size":[900,0.2,900],"cf":[0,-0.1,0,1,0,0,0,1,0,0,0,1],"color":[0.45,0.42,0.36],"tr":0}')
 elseif what:sub(1, 5) == "site:" then
 	local main
 	for _, d in ipairs(game.ServerScriptService:GetDescendants()) do if d.Name == "Main" then main = d end end
