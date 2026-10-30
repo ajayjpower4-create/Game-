@@ -223,6 +223,18 @@ export function validate(world, def, cf, opts = {}) {
       if (rec.state !== "Installed") return fail($fmt("Supporting %s isn't fastened yet.", rec.def.name), info);
       info.supports.push(rec.id);
     }
+  } else if (def.kind === "Slab" && def.grade) {
+    if (cf.yVec.y < 0.999) return fail("Slabs are poured level.", info);
+    const hx = def.size.x / 2 - 1.0, hz = def.size.z / 2 - 1.0;
+    for (let i = 0; i <= 3; i++) {
+      for (let j = 0; j <= 3; j++) {
+        const o = cf.point(v(-hx + (2 * hx * i) / 3, 0.5, -hz + (2 * hz * j) / 3));
+        const hit = ray(o, v(0, -1, 0));
+        const r = hit && world.record(hit);
+        if (r && r.def.tags.Slab) return fail("This bay has already been poured.", info);
+        if (!hit || !hit.terrain || Math.abs(hit.pos.y - cf.y) > 0.05) return fail("Slab-on-grade needs open, level ground across the whole bay.", info);
+      }
+    }
   } else if (def.kind === "Slab") {
     if (cf.yVec.y < 0.999) return fail("Slabs are poured level.", info);
     const hx = def.size.x / 2 - 0.3, hz = def.size.z / 2 - 0.3;
@@ -480,6 +492,7 @@ export function solve(world, def, aim, opts = {}) {
 // returns { def, cf } or { reason }
 export function solveSlab(world, aim) {
   index(world);
+  if (aim.hit && aim.hit.terrain) return solveGradeSlab(world, aim.point);
   const rec = aim.hit && world.record(aim.hit);
   if (!rec || !rec.def.tags.Deck || rec.def.tags.Roof) {
     if (rec && rec.def.tags.Slab) return { reason: "Already poured." };
@@ -501,6 +514,24 @@ export function solveSlab(world, aim) {
   const p = deckCf.pos.add(ax.mul(centre.sub(deckCf.pos).dot(ax)));
   const top = deckCf.y + Config.Geo.DeckDepth;
   return { def, cf: CF.fromMatrix(v(p.x, top, p.z), s, UP, s.cross(UP)) };
+}
+
+// Ground-floor slab for the blueprint bay containing a point on the ground
+// (or a 6 × 6 m pour centred on it when there is no blueprint).
+function solveGradeSlab(world, p) {
+  const grid = world.blueprintGrid;
+  let bx = 6, bz = 6, cx = Math.round(p.x * 2) / 2, cz = Math.round(p.z * 2) / 2;
+  if (grid) {
+    const i = Math.floor((p.x - grid.originM.x) / grid.bayX), j = Math.floor((p.z - grid.originM.z) / grid.bayZ);
+    if (i < 0 || j < 0 || i >= grid.nx || j >= grid.nz) return { reason: "Aim at the ground inside a bay of the building grid (or a floor deck)." };
+    bx = grid.bayX;
+    bz = grid.bayZ;
+    cx = grid.originM.x + (i + 0.5) * bx;
+    cz = grid.originM.z + (j + 0.5) * bz;
+  }
+  const def = Registry.get("SL-SOG-" + Math.floor(bx * 1000 + 0.5) + "-" + Math.floor(bz * 1000 + 0.5));
+  if (!def) return { reason: "No slab size for this bay." };
+  return { def, cf: CF.at(cx, 0, cz) };
 }
 
 // Ids of components an item at `cf` connects to or bears on (any state).

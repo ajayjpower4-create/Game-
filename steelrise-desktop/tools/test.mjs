@@ -101,7 +101,41 @@ g2.loadSite(save.site, save);
 check(g2.world.records().length === g.world.records().length, "save restores every component");
 check(g2.site.progress.installed === 25, "save restores progress");
 
-// 4. delivery ordering
+// 4. slab-on-grade between the footings
+import * as Rules from "../src/sim/buildRules.js";
+{
+  const gr = g.siteDef.grid;
+  const p = v(gr.originM.x + gr.bayX * 1.5, 0, gr.originM.z + gr.bayZ * 0.5);
+  const s = Rules.solveSlab(g.world, { point: p, hit: { terrain: true, pos: p } });
+  check(s.def && s.def.id.startsWith("SL-SOG-"), "slab-on-grade solves for a bay");
+  g.components.equip("TL-POUR");
+  g.player.teleport(p.add(v(1, 0, 1)));
+  check(g.components.pour(s.def, s.cf).ok, "pour slab-on-grade");
+  const slab = g.world.records().find((c) => c.def.id === s.def.id);
+  g.components.equip("TL-TROWEL");
+  slab.def.fasteners.forEach((f, i) => g.components.fasten(slab, i));
+  check(slab.state === "Installed", "slab-on-grade finishes with the trowel");
+}
+
+// 5. telehandler: pick up, lift, drive, set down
+{
+  const t = g.telehandler;
+  check(t && !t.blocked(t.frame()), "telehandler parks clear");
+  if (g.crane.operating) g.crane.exit();
+  check(t.enter().ok, "climb into the telehandler");
+  const item = g.world.records().find((c) => c.state === "Loose" && c.def.weightKg < 1000);
+  item.cf = g.components.restingPose(item, t.frame().point(v(3.6, 0, 0)), 0);
+  g.components.move(item, item.cf);
+  check(t.pickUp().ok, "telehandler picks up a load");
+  for (let i = 0; i < 120; i++) g.update(1 / 60, {}, { boomUp: true });
+  check(item.cf.y > 1, "load lifts on the forks");
+  for (let i = 0; i < 240; i++) g.update(1 / 60, {}, { boomDown: true });
+  check(t.setDown().ok, "telehandler sets the load down");
+  check(item.state === "Loose", "load is loose again");
+  check(t.exit().ok, "leave the telehandler");
+}
+
+// 6. delivery ordering
 check(g.delivery.request("BM-W18x35-7500", 4).ok, "order beams by truck");
 g.loadSite("Office4");
 check(g.delivery.request("BM-W21x44-9000", 6, "rail").ok, "order beams by rail");

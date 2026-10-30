@@ -63,7 +63,7 @@ export class Interaction {
 
   active() {
     const g = this.g;
-    return g.mode === "Play" && !input.blocked && !(g.crane && g.crane.operating);
+    return g.mode === "Play" && !input.blocked && !(g.crane && g.crane.operating) && !(g.telehandler && g.telehandler.driving);
   }
   reach() {
     return Config.Reach.Interact;
@@ -120,6 +120,7 @@ export class Interaction {
     if (o.kind === "strap") return { ...base, kind: "Strap", strap: o.strap, trailer: o.trailer };
     if (o.kind === "crane" && hit.col && hit.col.interact) return { ...base, kind: "Crane" };
     if (o.kind === "trailer" && hit.col && hit.col.interact) return { ...base, kind: "Truck", trailer: o.trailer };
+    if (o.kind === "machine") return { ...base, kind: "Machine", machine: o.machine };
     if (o.kind === "comp") return { ...base, kind: "Component", rec: o };
     return null;
   }
@@ -154,6 +155,8 @@ export class Interaction {
       else list.push({ text: "Ratchet strap", sub: "Move closer to release", disabled: true });
     } else if (t.kind === "Crane") {
       list.push({ key: "E", text: "Climb into the crane cab", sub: "Or operate from the ground with the radio remote (5)" });
+    } else if (t.kind === "Machine") {
+      list.push({ key: "E", text: "Drive the telehandler", sub: "4 t capacity · lifts loose material on its forks" });
     } else if (t.kind === "Truck") {
       const tr = t.trailer;
       if (tr.empty) list.push({ key: "E", text: tr.kind === "rail" ? "Release the empty railcar" : "Release the empty truck", sub: "Frees the unloading bay" });
@@ -205,7 +208,8 @@ export class Interaction {
       else if (t.kind === "Crane") {
         const r = this.report(g.crane.enter("Cab"));
         if (r.ok) bus.emit("crane", "start", g.crane);
-      } else if (t.kind === "Truck" && t.trailer.empty) this.report(g.delivery.dismiss(t.trailer));
+      } else if (t.kind === "Machine") this.report(t.machine.enter());
+      else if (t.kind === "Truck" && t.trailer.empty) this.report(g.delivery.dismiss(t.trailer));
       else if (t.kind === "Component" && t.rec.state === "Loose" && Config.WeightClasses[t.rec.def.weightClass].carry) {
         const r = this.report(g.components.pickUp(t.rec));
         if (r.ok) bus.emit("sfx", "PickUp", t.rec.cf.pos);
@@ -377,12 +381,12 @@ export class Interaction {
     const g = this.g;
     const hit = this.cast(Config.Reach.Place + 6.7);
     let def = null, cf = null, reason = null, valid = false;
-    if (hit && !hit.terrain) {
+    if (hit) {
       const s = Rules.solveSlab(g.world, { point: hit.pos, hit });
       def = s.def;
       cf = s.cf;
       reason = s.reason;
-    } else reason = "Aim at the metal deck of a floor bay.";
+    } else reason = "Aim at the metal deck of a floor bay, or the ground inside a bay.";
     if (def && cf) {
       const r = Rules.validate(g.world, def, cf, {});
       valid = r.ok;

@@ -30,9 +30,9 @@ jobs:
         run: node tools/build.mjs --min
       - name: Package portable exe
         run: npx --yes electron-builder@25.1.8 --win portable --x64 --publish never
-      - name: Rename
+      - name: List output
         shell: bash
-        run: mv dist/*.exe dist/STEELRISE.exe && ls -la dist
+        run: ls -la dist
       - uses: actions/upload-artifact@v4
         with:
           name: STEELRISE-windows

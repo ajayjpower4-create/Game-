@@ -65,7 +65,7 @@ export class Game {
   }
 
   // fixed simulation step
-  update(dt, craneInput) {
+  update(dt, craneInput, machineInput) {
     if (!this.world) return;
     this.time += dt;
     this.site.update(dt);
@@ -74,6 +74,7 @@ export class Game {
       this.crane.update(dt, craneInput);
       this.crane.postUpdate();
     }
+    if (this.telehandler) this.telehandler.update(dt, machineInput);
     const pl = this.player;
     if (pl.carrying) {
       pl.carrying.cf = this.components.carryPose(pl.carrying);

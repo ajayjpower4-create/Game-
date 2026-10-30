@@ -123,6 +123,14 @@ export class Controller {
     const pl = g.player;
     const crane = g.crane;
     if (!g.world) return;
+    const mach = g.telehandler;
+    if (mach && mach.driving) {
+      pl.pos = mach.seatPos().sub(v(0, 0.9, 0));
+      pl.vel = v();
+      this.avatar.visible = false;
+      this.toolHolder.visible = false;
+      return;
+    }
     if (crane && crane.operating && crane.mode === "Cab") {
       const seat = crane.cabSeatCf();
       pl.pos = seat.pos.sub(v(0, 0.55, 0));

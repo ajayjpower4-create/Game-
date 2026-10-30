@@ -120,6 +120,8 @@ export class SiteView {
       });
     }
     this.crane = null;
+    this.machine = null;
+    this.dunnageGroup = null;
   }
 
   build() {
@@ -146,6 +148,7 @@ export class SiteView {
     }
     if (site.laydownDunnage) this.addDunnage();
     if (g.crane) this.buildCrane(g.crane);
+    if (g.telehandler) this.buildMachine(g.telehandler);
     for (const t of g.delivery.trailers.values()) this.onTrailer("spawn", t);
     for (const c of g.world.records()) this.syncComp(c);
     this.applyClock();
@@ -464,8 +467,27 @@ export class SiteView {
     for (const sl of this.streetLights) sl.intensity = night ? 120 : 0;
   }
 
+  buildMachine(m) {
+    const group = nodeToGroup(m.model);
+    this.root.add(group);
+    const wheels = m.model.find("Wheels").children.map((w) => ({ obj: w.object, base: w.cf, r: w.attrs.radius, front: w.attrs.front }));
+    this.machine = { m, group, wheels, boom: m.model.find("Boom").object, inner: m.model.find("Inner").object, carriage: m.model.find("Carriage").object };
+  }
+
+  updateMachine() {
+    const mv = this.machine;
+    if (!mv) return;
+    const m = mv.m;
+    cfToObject(mv.group, m.frame());
+    cfToObject(mv.boom, m.boomCf());
+    cfToObject(mv.inner, CF.at(m.ext, 0, 0));
+    cfToObject(mv.carriage, m.forkLocal());
+    for (const w of mv.wheels) cfToObject(w.obj, CF.at(w.base.x, w.base.y, w.base.z).mul(CF.angles(0, w.front ? m.steer : 0, 0)).mul(w.base.rot).mul(CF.angles(-m.wheelTravel / w.r, 0, 0)));
+  }
+
   update() {
     this.updateTrailers();
     this.updateCrane();
+    this.updateMachine();
   }
 }

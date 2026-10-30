@@ -14,6 +14,7 @@ import { FX } from "./render/fx.js";
 import { Controller } from "./player/controller.js";
 import { Interaction } from "./player/interaction.js";
 import { CraneControl } from "./player/craneControl.js";
+import { MachineControl } from "./player/machineControl.js";
 import { UI } from "./ui/ui.js";
 import { Catalog } from "./ui/catalog.js";
 import { Tutorial } from "./ui/tutorial.js";
@@ -57,6 +58,7 @@ class App {
       this.controller = new Controller(this.game, this.renderer);
       this.interaction = new Interaction(this.game, this.renderer, this.controller);
       this.craneControl = new CraneControl(this.game, this.renderer, this.controller);
+      this.machineControl = new MachineControl(this.game, this.renderer);
       this.catalog = new Catalog(ui);
       this.tutorial = new Tutorial(this);
       Audio.initAudio();
@@ -116,6 +118,7 @@ class App {
     const g = this.game;
     if (g.mode === "Play" && !first) {
       if (g.crane && g.crane.operating) g.crane.exit();
+      if (g.telehandler && g.telehandler.driving) g.telehandler.exit();
       if (g.player.carrying) g.components.dropCarried(true);
       await this.save(0, true);
     }
@@ -215,6 +218,7 @@ class App {
       }
       if (input.blocked) return;
       const crane = g.crane;
+      if (g.telehandler && g.telehandler.driving) return;
       if (code.startsWith("Digit")) {
         const n = Number(code.slice(5));
         const id = Registry.ToolOrder[n - 1];
@@ -263,7 +267,7 @@ class App {
       if (g.mode === "Play") {
         if (!input.blocked) {
           const crane = g.crane;
-          const camOwned = crane && crane.operating && crane.view !== "Player";
+          const camOwned = (crane && crane.operating && crane.view !== "Player") || (g.telehandler && g.telehandler.driving);
           if (!camOwned && (input.locked || input.button(2))) this.controller.look(mouse.dx, mouse.dy);
           if (!camOwned && mouse.wheel && this.controller.thirdPerson) this.controller.orbit = clamp(this.controller.orbit + mouse.wheel * 0.5, 1.5, 12);
         }
@@ -272,13 +276,15 @@ class App {
         this.acc = Math.min((this.acc || 0) + dt, 0.25);
         const step = 1 / 60;
         while (this.acc >= step) {
-          g.update(step, this.craneControl.inputState());
+          g.update(step, this.craneControl.inputState(), this.machineControl.inputState());
           this.controller.update(step);
           this.acc -= step;
         }
         this.interaction.update(dt);
         this.craneControl.update();
-        if (!this.craneControl.updateCamera(dt, input.blocked ? { dx: 0, dy: 0, wheel: 0 } : mouse)) this.controller.updateCamera(dt);
+        this.machineControl.update();
+        const m0 = input.blocked ? { dx: 0, dy: 0, wheel: 0 } : mouse;
+        if (!this.craneControl.updateCamera(dt, m0) && !this.machineControl.updateCamera(dt, m0)) this.controller.updateCamera(dt);
         this.tutorial.update();
         this.ui.setStatus();
         this.autosaveAcc += dt;
@@ -352,6 +358,11 @@ class App {
     }
     L.weld.set(tool === "Weld" ? 1 : 0, 1 + Math.random() * 0.1);
     L.impact.set(tool === "Bolt" ? 1 : 0, 1);
+    if (g.telehandler) {
+      if (!L.machine) L.machine = new Audio.Loop("Engine");
+      L.machine.setPos(g.telehandler.frame().pos);
+      L.machine.set(g.telehandler.engine || 0, 1.1 + (g.telehandler.engine || 0) * 0.4);
+    }
     // truck engines
     const seen = new Set();
     for (const t of g.delivery.trailers.values()) {

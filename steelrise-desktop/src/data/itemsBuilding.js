@@ -28,6 +28,20 @@ export default function (R) {
       }, fasteners: [{ type: "Screed", pos: v(-bx / 4, G.SlabTopping, -bz / 4), normal: v(0, 1, 0) }, { type: "Screed", pos: v(bx / 4, G.SlabTopping, -bz / 4), normal: v(0, 1, 0) }, { type: "Screed", pos: v(-bx / 4, G.SlabTopping, bz / 4), normal: v(0, 1, 0) }, { type: "Screed", pos: v(bx / 4, G.SlabTopping, bz / 4), normal: v(0, 1, 0) }], minFastenRelease: 0, bayX: bx, bayZ: bz, proxyColor: CONCRETE });
     }
   }
+  // slab-on-grade: ground-floor concrete poured on the compacted lot between
+  // the footings, also with the pump hose and trowel
+  const SOG = 0.15;
+  for (const bx of Config.Bays) {
+    for (const bz of Config.Bays) {
+      add({ id: "SL-SOG-" + idLen(bx) + "-" + idLen(bz), name: $fmt("Slab-on-Grade Pour %.1f × %.1f m (150 mm)", bx, bz), category: "Concrete & Foundations", kind: "Slab", grade: true, originBottom: true, deliverable: false, tags: ["Slab", "Concrete", "Floor", "Ground"], overlapIgnore: ["Column", "Footing", "Scaffold"], weightKg: 2400 * bx * bz * SOG, sizeM: v(bx, SOG, bz), description: $fmt("Ground-floor slab placed straight on the compacted lot inside a %.1f × %.1f m bay of the building grid with the pump hose (6), then floated and trowelled at four points (7). Aim at the ground inside the bay.", bx, bz), build: (b, def, opts) => {
+        const col = opts.installed ? CONCRETE : CONCRETE_WET;
+        const slab = b.box("Concrete", v(bx - 0.4, SOG, bz - 0.4), CF.at(0, SOG / 2, 0), col, "Concrete");
+        if (!opts.installed) slab.refl = 0.06;
+        for (const sx of [-1, 1]) b.box("EdgeForm", v(0.05, SOG + 0.03, bz - 0.4), CF.at(sx * (bx / 2 - 0.22), SOG / 2, 0), C.Timber, "Wood", { nc: true });
+        for (const sz of [-1, 1]) b.box("EdgeForm", v(bx - 0.4, SOG + 0.03, 0.05), CF.at(0, SOG / 2, sz * (bz / 2 - 0.22)), C.Timber, "Wood", { nc: true });
+      }, fasteners: [-1, 1].flatMap((sz) => [-1, 1].map((sx) => ({ type: "Screed", pos: v((sx * bx) / 4, SOG, (sz * bz) / 4), normal: v(0, 1, 0) }))), minFastenRelease: 0, bayX: bx, bayZ: bz, proxyColor: CONCRETE });
+    }
+  }
   for (const bay of Config.Bays) {
     let W = G.DeckWidth;
     add({ id: "RF-DECK-" + idLen(bay), name: "Roof Deck with Insulation & Membrane — " + fmtLen(bay), category: "Walls & Roofing", kind: "Surface", originBottom: true, tags: ["Deck", "Roof", "Floor"], overlapIgnore: ["Column"], weightKg: 22 * W * bay, sizeM: v(bay, G.SlabTop, W), description: "Type B roof deck sheet with tapered insulation board and a mechanically fastened single-ply membrane, spanning between two roof beams. Medium weight — carry it across the roof.", build: (b) => {

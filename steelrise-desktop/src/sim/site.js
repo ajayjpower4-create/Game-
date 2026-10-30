@@ -12,6 +12,7 @@ import { World } from "./world.js";
 import { Components } from "./components.js";
 import { Delivery } from "./delivery.js";
 import { Crane } from "./crane.js";
+import { Telehandler } from "./telehandler.js";
 import { pack } from "./packing.js";
 import { buildEnvironment, isNight } from "../world/env.js";
 import { bus } from "../core/events.js";
@@ -38,6 +39,8 @@ export class Site {
     const g = this.g;
     if (!g.world) return;
     if (g.crane) g.crane.dispose();
+    if (g.telehandler) g.telehandler.dispose();
+    g.telehandler = null;
     g.delivery.clearAll();
     g.components.clearAll();
     g.player.carrying = null;
@@ -82,6 +85,28 @@ export class Site {
       g.crane = new Crane(g, def.crane);
     });
     if (!g.crane) g.crane = new Crane(g, { ...def.crane });
+    step("telehandler", () => {
+      const ld = def.laydownM;
+      // park it next to the laydown yard, wherever there is room
+      const tries = [];
+      for (const r of [4, 7, 10]) for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) tries.push(v(ld.center.x + dx * (ld.size.x / 2 + r), 0, ld.center.z + dz * (ld.size.z / 2 + r)));
+      tries.push(def.spawnM.add(v(6, 0, 6)));
+      g.telehandler = new Telehandler(g, tries[0], 0);
+      for (const p of tries) {
+        for (const h of [0, Math.PI / 2]) {
+          g.telehandler.pos = p;
+          g.telehandler.heading = h;
+          g.telehandler.groundY = g.telehandler.groundAt(p);
+          if (!g.telehandler.blocked(g.telehandler.frame()) && Math.abs(p.x) < def.lotM.x / 2 - 3 && Math.abs(p.z) < def.lotM.z / 2 - 3) {
+            g.telehandler.updateColliders();
+            p.found = true;
+            break;
+          }
+        }
+        if (p.found) break;
+      }
+      if (save && save.telehandler) g.telehandler.restore(save.telehandler);
+    });
     step("materials", () => {
       if (save) {
         for (const c of save.components || []) {
@@ -161,6 +186,7 @@ export class Site {
     const grid = id ? blueprintGrid(this.def, id) : null;
     this.blueprint = grid ? id || "Site" : null;
     this.entries = grid ? sortEntries(layout(grid)) : null;
+    if (this.g.world) this.g.world.blueprintGrid = grid || null;
     this.recountProgress();
     bus.emit("site", "blueprint", this);
   }
@@ -234,6 +260,7 @@ export class Site {
       components: comps,
       trailers: g.delivery.serialize(),
       cranes: { 1: g.crane ? g.crane.serialize() : null },
+      telehandler: g.telehandler ? g.telehandler.serialize() : null,
       player: g.player.serialize(),
       installed: comps.filter((c) => c.s === "Installed").length,
     };

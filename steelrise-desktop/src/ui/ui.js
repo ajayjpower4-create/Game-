@@ -34,6 +34,7 @@ const TIPS = [
 const CONTROLS = [
   ["On foot", [["Move", "W A S D"], ["Sprint", "Shift"], ["Jump / let go of a ladder", "Space"], ["Look", "Mouse"], ["Interact / pick up / release strap", "E"], ["Switch equipment on/off", "F"], ["Fasten (hold on a marker)", "LMB"], ["Dismantle (hold)", "X"], ["Tools", "1 – 7"], ["First / third person", "V"], ["Catalog & deliveries", "Tab"], ["Pause / save", "Esc"]]],
   ["Carrying", [["Place piece", "LMB"], ["Rotate 90°", "R"], ["Fine rotate", "Z / C"], ["Free placement (props)", "T"], ["Nudge (free placement)", "Arrows"], ["Drop", "G"]]],
+  ["Telehandler", [["Drive / reverse", "W / S"], ["Steer", "A / D"], ["Boom up / down", "R / F"], ["Telescope out / in", "E / Q"], ["Pick up / set down", "G"], ["Land on connection", "Enter"], ["Camera", "V"], ["Leave", "X"]]],
   ["Tower crane", [["Slew left / right", "A / D"], ["Trolley out / in", "W / S"], ["Lower / raise hook", "F / R"], ["Rotate load", "Z / C"], ["Fine control", "Shift"], ["Hook / unhook / set down", "G"], ["Land on connection", "Enter"], ["Alignment assist", "H"], ["Camera (cab / hook / exterior)", "V"], ["Recover load (hold)", "Y"], ["Leave controls", "X"]]],
 ];
 
@@ -52,6 +53,7 @@ export class UI {
     bus.on("hold", (a) => this.setHold(a));
     bus.on("placement", (d) => this.setPlacement(d));
     bus.on("craneHud", (d) => this.setCrane(d));
+    bus.on("machineHud", (d) => this.setMachine(d));
     bus.on("progress", (p) => this.setProgress(p));
     bus.on("tool", (id) => this.setTool(id));
     bus.on("carry", (c) => this.setCarry(c));
@@ -406,6 +408,7 @@ export class UI {
       <div id="carry" class="hidden"></div>
       <div id="hotbar"></div>
       <div id="cranehud" class="hidden"></div>
+      <div id="machinehud" class="hidden"></div>
       <div id="flash" class="hidden"></div>
       <div id="tutorial" class="hidden interactive"><div class="h"><span class="step"></span><button>Skip tutorial</button></div><div class="tx"></div></div>
       <div id="clickhint" class="hidden">Click to look around · Esc for menu</div>
@@ -547,6 +550,29 @@ export class UI {
       <div class="guide ${d.guideReady ? "ready" : ""}">${esc(d.guide || "")}</div><div class="hint">${esc(d.hint)}</div>`;
     flash.classList.toggle("hidden", !d.flash);
     if (d.flash) flash.textContent = d.flash;
+  }
+  setMachine(d) {
+    const c = this.hud.querySelector("#machinehud");
+    if (!d) {
+      if (!c.classList.contains("hidden")) c.classList.add("hidden");
+      return;
+    }
+    c.classList.remove("hidden");
+    const lmi = d.loadKg / Math.max(d.cap, 1);
+    const col = lmi > 0.9 ? "var(--invalid)" : lmi > 0.75 ? "var(--safety)" : "var(--valid)";
+    c.innerHTML = `<div class="title">TELEHANDLER 4 t / 13 m</div>
+      <div class="row"><span>Speed</span><span>${d.speed.toFixed(0)} km/h</span></div>
+      <div class="row"><span>Boom</span><span>${d.boomDeg.toFixed(0)}°</span></div>
+      <div class="row"><span>Reach / fork height</span><span>${d.reach.toFixed(1)} m / ${d.height.toFixed(1)} m</span></div>
+      <div class="row"><span>Load</span><span>${d.load ? esc(d.load.length > 28 ? d.load.slice(0, 27) + "…" : d.load) : "—"}</span></div>
+      <div class="row"><span>Weight / capacity</span><span>${fmtKg(d.loadKg)} / ${fmtKg(d.cap)}</span></div>
+      <div class="lmi"><div style="width:${Math.min(100, lmi * 100)}%;background:${col}"></div></div>
+      <div class="hint">${esc(d.hint)}</div>`;
+    const flash = this.hud.querySelector("#flash");
+    if (d.flash) {
+      flash.classList.remove("hidden");
+      flash.textContent = d.flash;
+    }
   }
   setTutorial(text, index, total) {
     const t = this.hud.querySelector("#tutorial");

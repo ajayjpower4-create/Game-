@@ -288,7 +288,7 @@ export class Components {
     if (!comp || !this.world.comps.has(comp.id)) return no("That component no longer exists.");
     const def = comp.def;
     if (comp.state !== "Installed" && comp.state !== "Placed") return no("Nothing to dismantle.");
-    if (g.crane.holds(comp)) return no("The crane is still holding it — unhook first.");
+    if (g.crane.holds(comp) || (g.telehandler && g.telehandler.holds(comp))) return no("The crane or telehandler is still holding it — release it first.");
     if (this.distanceTo(comp, pl.rootPos()) > Config.Reach.Interact) return no("Out of reach.");
     if (def.fasteners.length > 0) {
       const tool = Registry.get(pl.tool);
