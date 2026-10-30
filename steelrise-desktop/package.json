@@ -29,10 +29,12 @@
       "build/**/*",
       "electron/**/*",
       "package.json",
-      "!build/**/*.map"
+      "!build/**/*.map",
+      "resources/icon.png"
     ],
     "win": {
-      "target": "portable"
+      "target": "portable",
+      "icon": "resources/icon.png"
     },
     "portable": {
       "artifactName": "STEELRISE.exe"

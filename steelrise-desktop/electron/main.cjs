@@ -17,6 +17,7 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: "#181a1d",
     title: "STEELRISE: Construction Simulator",
+    icon: path.join(__dirname, "..", "resources", "icon.png"),
     show: false,
     autoHideMenuBar: true,
     webPreferences: {

@@ -465,6 +465,10 @@ export class SiteView {
     this.r.setTimeOfDay(site.clock, L.latitude, L.tint, L.haze, L.density);
     const night = site.isNight();
     for (const sl of this.streetLights) sl.intensity = night ? 120 : 0;
+    // offices and flats around the site light up after dark
+    const fg = getMaterial("FacadeGlass");
+    fg.emissive.setHex(night ? 0x8a6a3a : 0x000000);
+    fg.emissiveIntensity = night ? 1.4 : 0;
   }
 
   buildMachine(m) {
