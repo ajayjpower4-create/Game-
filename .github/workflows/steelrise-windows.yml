@@ -40,8 +40,11 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: steelrise-v${{ github.run_number }}
-          name: STEELRISE build ${{ github.run_number }}
+          # run ids are unique across branches, so builds never overwrite each other
+          tag_name: steelrise-build-${{ github.run_id }}
+          target_commitish: ${{ github.sha }}
+          name: STEELRISE build ${{ github.run_number }} (${{ github.ref_name }})
+          make_latest: true
           body: |
             STEELRISE: Construction Simulator for Windows (64-bit).
             Download **STEELRISE.exe** and double-click it — no install needed.
