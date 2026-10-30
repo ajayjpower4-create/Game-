@@ -1,0 +1,22 @@
+{
+  "name": "steelrise",
+  "productName": "STEELRISE",
+  "version": "1.0.0",
+  "description": "STEELRISE: Construction Simulator — standalone desktop game",
+  "main": "electron/main.cjs",
+  "private": true,
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "start": "npm run build && electron .",
+    "test": "node tools/test.mjs",
+    "dist:win": "npm run build && node tools/package-win.mjs"
+  },
+  "devDependencies": {
+    "@electron/packager": "18.3.6",
+    "electron": "33.2.1",
+    "esbuild": "0.24.0",
+    "luaparse": "^0.3.1",
+    "three": "0.170.0"
+  },
+  "type": "module"
+}
