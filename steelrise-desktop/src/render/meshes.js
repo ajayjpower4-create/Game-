@@ -169,19 +169,20 @@ const trBucket = (tr) => (!tr ? 0 : tr >= 0.75 ? 0.8 : tr >= 0.45 ? 0.6 : tr >= 
 const reflBucket = (r) => (!r ? 0 : r >= 0.12 ? 0.15 : 0.06);
 
 // Groups parts into render buckets: [{ key, geometry, material, castShadow, lens }]
-export function bucketize(parts) {
+export function bucketize(parts, opts = {}) {
   const accs = new Map();
   for (const p of parts) {
     if (p.tr >= 1) continue;
     const lens = !!p.lens;
-    const glass = p.mat === "Glass";
+    const mat = opts.opaqueGlass && p.mat === "Glass" ? "FacadeGlass" : p.mat;
+    const glass = mat === "Glass";
     const tr = glass ? 0.3 : trBucket(p.tr);
     const refl = reflBucket(p.refl);
     const shadow = !p.ns && !glass && tr < 0.5;
-    const key = lens ? "lens" : `${p.mat}|${tr}|${refl}|${shadow ? 1 : 0}`;
+    const key = lens ? "lens" : `${mat}|${tr}|${refl}|${shadow ? 1 : 0}`;
     let a = accs.get(key);
     if (!a) {
-      a = { acc: new Acc(), mat: p.mat, tr, refl, shadow, lens };
+      a = { acc: new Acc(), mat, tr, refl, shadow, lens };
       accs.set(key, a);
     }
     addPart(a.acc, p);

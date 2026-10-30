@@ -43,6 +43,30 @@ export function nodeToGroup(node) {
   return g;
 }
 
+// soft irregular blob used for mud patches on the graded lot
+let splat = null;
+function splatTexture() {
+  if (splat) return splat;
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d");
+  const img = ctx.createImageData(256, 256);
+  for (let y = 0; y < 256; y++) {
+    for (let x = 0; x < 256; x++) {
+      const dx = x / 128 - 1, dy = y / 128 - 1;
+      const a = Math.atan2(dy, dx);
+      const r = Math.hypot(dx, dy) / (0.78 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 7));
+      const v = Math.max(0, Math.min(1, (1 - r) * 4)) * 255;
+      const i = (y * 256 + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  splat = new THREE.CanvasTexture(c);
+  return splat;
+}
+
 const FASTENER_GEOM = {
   Bolt: () => new THREE.CylinderGeometry(0.03, 0.03, 0.045, 6).rotateX(Math.PI / 2),
   Weld: () => new THREE.BoxGeometry(0.055, 0.055, 0.02),
@@ -108,7 +132,7 @@ export class SiteView {
       const e = groupFromBuckets(bucketize(env.env.b.parts), signMeshes(env.env.b.signs));
       e.name = "Environment";
       this.root.add(e);
-      const s = groupFromBuckets(bucketize(env.surroundings.b.parts), signMeshes(env.surroundings.b.signs));
+      const s = groupFromBuckets(bucketize(env.surroundings.b.parts, { opaqueGlass: true }), signMeshes(env.surroundings.b.signs));
       s.name = "Surroundings";
       this.root.add(s);
       // street lights (switched with the time of day)
@@ -141,8 +165,13 @@ export class SiteView {
       const geo = new THREE.PlaneGeometry(p.sx, p.sz, 1, 1).rotateX(-Math.PI / 2);
       const uv = geo.attributes.uv;
       const tile = 3;
-      for (let k = 0; k < uv.count; k++) uv.setXY(k, (uv.getX(k) * p.sx) / tile, (uv.getY(k) * p.sz) / tile);
-      const base = getMaterial(p.mat === "Concrete" ? "Concrete" : p.mat, 0, 0).clone();
+      if (p.mat !== "Mud") for (let k = 0; k < uv.count; k++) uv.setXY(k, (uv.getX(k) * p.sx) / tile, (uv.getY(k) * p.sz) / tile);
+      const base = getMaterial(p.mat, 0, 0).clone();
+      if (p.mat === "Mud") {
+        base.alphaMap = splatTexture();
+        base.transparent = true;
+        base.depthWrite = false;
+      }
       base.vertexColors = false;
       base.color = new THREE.Color().setRGB(...partRgb(p.color));
       base.polygonOffset = true;

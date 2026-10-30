@@ -18,5 +18,27 @@
     "luaparse": "^0.3.1",
     "three": "0.170.0"
   },
-  "type": "module"
+  "type": "module",
+  "build": {
+    "appId": "com.steelrise.game",
+    "productName": "STEELRISE",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "build/**/*",
+      "electron/**/*",
+      "package.json",
+      "!build/**/*.map"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "STEELRISE.exe"
+    },
+    "npmRebuild": false,
+    "asar": true
+  },
+  "author": "STEELRISE"
 }

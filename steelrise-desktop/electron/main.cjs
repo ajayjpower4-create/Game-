@@ -4,6 +4,8 @@ const { app, BrowserWindow, ipcMain, Menu } = require("electron");
 const path = require("path");
 const fs = require("fs");
 
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+
 const saveDir = () => path.join(app.getPath("userData"), "saves");
 const safeName = (name) => String(name).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
 

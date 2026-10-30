@@ -119,6 +119,7 @@ export class Crane {
     this.assist = this.g.settings.assist !== false;
     this.v = { slew: 0, trolley: 0, hoist: 0, rot: 0 };
     bus.emit("crane", "enter", this);
+    bus.emit("event", "CraneEntered", { mode });
     return ok(null, { mode });
   }
 
@@ -192,6 +193,7 @@ export class Crane {
     comp.holder = "crane";
     this.g.components.setState(comp, "Rigged");
     bus.emit("fx", "Rig", liftWorld, null);
+    bus.emit("event", "Rigged", { item: def.id });
     return ok();
   }
 
@@ -223,6 +225,7 @@ export class Crane {
     this.sv = { x: 0, z: 0 };
     this.v = { slew: 0, trolley: 0, hoist: 0, rot: 0 };
     bus.emit("fx", "Set", target.pos, def.id);
+    bus.emit("event", "Landed", { item: def.id });
     const need = def.minFastenRelease;
     if (need > 0) bus.emit("notify", $fmt("Landed. Fasten at least %d connection%s, then unhook (G).", need, need > 1 ? "s" : ""), "info");
     return ok();
@@ -251,6 +254,7 @@ export class Crane {
       }
       this.unrig();
       bus.emit("fx", "Unhook", comp.cf.pos, null);
+      bus.emit("event", "Unhooked", { item: def.id });
       return ok("Rigging released.");
     }
     const loadCf = this.riggedLoadCf();
@@ -262,6 +266,7 @@ export class Crane {
     comp.cf = pose;
     this.g.components.setState(comp, "Loose");
     bus.emit("fx", "Drop", pose.pos, def.id);
+    bus.emit("event", "Unhooked", { item: def.id });
     return ok("Load set down.");
   }
 

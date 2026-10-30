@@ -162,7 +162,7 @@ const SPECS = {
   Concrete: { tile: 2.5, metal: 0, rough: [0.78, 0.98], albedo: [0.78, 1.0], noise: "concrete", normal: 1.4 },
   Pavement: { tile: 3, metal: 0, rough: [0.8, 0.98], albedo: [0.8, 1.0], noise: "concrete", normal: 1.2 },
   Asphalt: { tile: 3, metal: 0, rough: [0.82, 1.0], albedo: [0.7, 1.0], noise: "gravel", normal: 2 },
-  Slate: { tile: 2.5, metal: 0, rough: [0.75, 0.95], albedo: [0.7, 1.0], noise: "gravel", normal: 2 },
+  Slate: { tile: 2.5, metal: 0, rough: [0.75, 0.95], albedo: [0.82, 1.0], noise: "gravel", normal: 1.4 },
   Pebble: { tile: 1.5, metal: 0, rough: [0.7, 0.95], albedo: [0.6, 1.0], noise: "gravel", normal: 3 },
   Ground: { tile: 4, metal: 0, rough: [0.85, 1.0], albedo: [0.7, 1.0], noise: "dirt", normal: 1.6 },
   Mud: { tile: 4, metal: 0, rough: [0.45, 0.9], albedo: [0.6, 1.0], noise: "dirt", normal: 1.2 },
@@ -175,6 +175,7 @@ const SPECS = {
   SmoothPlastic: { tile: 2, metal: 0, rough: [0.42, 0.55], albedo: [0.96, 1.0], noise: "fine", normal: 0 },
   Plastic: { tile: 2, metal: 0, rough: [0.45, 0.6], albedo: [0.94, 1.0], noise: "fine", normal: 0.3 },
   Glass: { glass: true },
+  FacadeGlass: { facade: true },
   Neon: { neon: true },
   Water: { water: true },
 };
@@ -229,6 +230,9 @@ export function getMaterial(mat, tr = 0, refl = 0) {
   let m;
   if (spec.glass) {
     m = new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.1, roughness: 0.04, transparent: true, opacity: Math.min(0.85, 0.32 + (1 - Math.max(tr, 0.3)) * 0.4), envMapIntensity: 1.6, depthWrite: false, side: THREE.DoubleSide });
+  } else if (spec.facade) {
+    m = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.85, roughness: 0.12, envMapIntensity: 1.1 });
+    m.color = new THREE.Color(0.55, 0.6, 0.65);
   } else if (spec.neon) {
     m = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   } else if (spec.water) {

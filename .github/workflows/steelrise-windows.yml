@@ -1,0 +1,49 @@
+# Builds STEELRISE as a single portable Windows .exe and publishes it as a
+# GitHub Release, so players download one file and double-click it.
+name: STEELRISE Windows build
+
+on:
+  push:
+    branches: [claude/steelrise-construction-game-kfyu7s, main]
+    paths: ["steelrise-desktop/**", ".github/workflows/steelrise-windows.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: steelrise-desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Test
+        run: npm test
+      - name: Bundle game
+        run: node tools/build.mjs --min
+      - name: Package portable exe
+        run: npx --yes electron-builder@25.1.8 --win portable --x64 --publish never
+      - name: Rename
+        shell: bash
+        run: mv dist/*.exe dist/STEELRISE.exe && ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: STEELRISE-windows
+          path: steelrise-desktop/dist/STEELRISE.exe
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: steelrise-v${{ github.run_number }}
+          name: STEELRISE build ${{ github.run_number }}
+          body: |
+            STEELRISE: Construction Simulator for Windows (64-bit).
+            Download **STEELRISE.exe** and double-click it — no install needed.
+            Saves are kept in %APPDATA%\STEELRISE\saves.
+          files: steelrise-desktop/dist/STEELRISE.exe

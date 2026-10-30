@@ -149,7 +149,7 @@ export class Renderer {
     this.lightLevel = day;
     const u = this.sky.material.uniforms;
     u.sunPosition.value.copy(dir);
-    u.turbidity.value = 3 + haze * 2.5;
+    u.turbidity.value = 1.6 + haze * 1.2;
     u.rayleigh.value = elev < 0.2 ? 2.4 : 1.3;
     const warm = clamp(1 - elev / 0.45, 0, 1);
     const sunCol = new THREE.Color(tint).lerp(new THREE.Color(0xffa25a), warm * 0.75);

@@ -287,6 +287,7 @@ export class Delivery {
       }
     }
     bus.emit("trailer", "strap", t);
+    bus.emit("event", "StrapReleased", {});
     return ok();
   }
 

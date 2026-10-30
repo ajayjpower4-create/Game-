@@ -11,6 +11,7 @@ import { input } from "../core/input.js";
 import { bus } from "../core/events.js";
 import { Registry } from "../data/items.js";
 import * as Rules from "../sim/buildRules.js";
+import { Physics } from "../world/physics.js";
 import { itemVariant } from "../render/siteView.js";
 import { getGhostMaterial } from "../render/materials.js";
 
@@ -85,14 +86,40 @@ export class Interaction {
     });
   }
 
+  // Forgiving aim for thin pieces (jacks, ledgers, braces): if the exact ray
+  // finds nothing usable, take the nearest loose/placed piece whose padded
+  // bounding box the ray passes through.
+  assistCast(hit) {
+    if (hit && hit.owner && hit.owner !== "terrain" && hit.owner.kind !== "env" && hit.owner.kind !== "sur") return hit;
+    const cam = this.r.camera;
+    const d = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+    const o = cam.position;
+    const maxT = hit ? hit.dist + 0.3 : 6;
+    const root = this.root();
+    let best = null, bestT = Math.min(maxT, 6);
+    for (const c of this.g.world.records()) {
+      if (c.state === "Carried" || c.cf.pos.dist(root) > 7) continue;
+      const def = c.def;
+      const box = { cf: c.cf.mul(CF.from(def.boundsOffset)), hx: def.size.x / 2 + 0.12, hy: def.size.y / 2 + 0.12, hz: def.size.z / 2 + 0.12 };
+      const t = Physics.rayObb(box, o.x, o.y, o.z, d.x, d.y, d.z, bestT, null);
+      if (t >= 0 && t < bestT) {
+        best = c;
+        bestT = t;
+      }
+    }
+    if (!best) return hit;
+    const pos = v(o.x + d.x * bestT, o.y + d.y * bestT, o.z + d.z * bestT);
+    return { pos, normal: v(0, 1, 0), col: null, owner: best, terrain: false, dist: bestT };
+  }
+
   resolve(hit) {
     if (!hit) return null;
     const o = hit.owner;
     const base = { pos: hit.pos, dist: hit.dist, hit };
     if (!o || o === "terrain") return null;
     if (o.kind === "strap") return { ...base, kind: "Strap", strap: o.strap, trailer: o.trailer };
-    if (o.kind === "crane" && hit.col.interact) return { ...base, kind: "Crane" };
-    if (o.kind === "trailer" && hit.col.interact) return { ...base, kind: "Truck", trailer: o.trailer };
+    if (o.kind === "crane" && hit.col && hit.col.interact) return { ...base, kind: "Crane" };
+    if (o.kind === "trailer" && hit.col && hit.col.interact) return { ...base, kind: "Truck", trailer: o.trailer };
     if (o.kind === "comp") return { ...base, kind: "Component", rec: o };
     return null;
   }
@@ -449,7 +476,7 @@ export class Interaction {
       bus.emit("placement", null);
     } else bus.emit("placement", null);
 
-    let t = this.resolve(this.cast(13.3));
+    let t = this.resolve(this.assistCast(this.cast(13.3)));
     if (t && t.dist > Config.Reach.Interact + 4) t = null;
     this.target = t;
     bus.emit("prompt", this.buildPrompt());

@@ -246,6 +246,7 @@ export class Components {
     comp.holder = "";
     this.commitPlacement(comp, cf, r.info);
     bus.emit("fx", "Set", cf.pos, def.id);
+    bus.emit("event", "Placed", { item: def.id });
     bus.emit("carry", null);
     return ok();
   }
@@ -256,6 +257,7 @@ export class Components {
   onInstalled(comp) {
     if (comp.state !== "Installed") this.setState(comp, "Installed");
     this.world.changed("installed", comp);
+    bus.emit("event", "Installed", { item: comp.def.id });
     this.g.site.onComponentInstalled(comp);
   }
 

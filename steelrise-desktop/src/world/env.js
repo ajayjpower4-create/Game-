@@ -82,8 +82,8 @@ function buildFencing(site, folder) {
   gateCentre = (((count > 0) && gateCentre / count) || 0);
   const gateW = m(14);
   const [southA, southB] = [v(-hx, 0, -hz), v(hx, 0, -hz)];
-  const gFrom = $sub($sub(gateCentre, $div(gateW, 2)), -hx);
-  const gTo = $add(gFrom, gateW);
+  let gFrom = $sub($sub(gateCentre, $div(gateW, 2)), -hx);
+  let gTo = $add(gFrom, gateW);
   if ((count === 0)) {
     [gFrom, gTo] = [$sub(hx, m(10)), $sub(hx, m(6))];
   }
@@ -314,7 +314,7 @@ const GROUND_COLOURS = {
   Pavement: rgb(150, 149, 142),
   Ground: rgb(118, 102, 78),
   Mud: rgb(78, 64, 50),
-  Slate: rgb(124, 122, 116),
+  Slate: rgb(100, 99, 95),
   Concrete: rgb(166, 163, 156),
   Asphalt: rgb(58, 60, 63),
 };
