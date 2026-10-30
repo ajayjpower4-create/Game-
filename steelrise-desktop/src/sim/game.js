@@ -67,6 +67,7 @@ export class Game {
   // fixed simulation step
   update(dt, craneInput, machineInput) {
     if (!this.world) return;
+    this.world.easy = this.settings.easyBuild !== false;
     this.time += dt;
     this.site.update(dt);
     this.delivery.update(dt);

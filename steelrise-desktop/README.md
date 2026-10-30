@@ -36,6 +36,13 @@ fullscreen.
   three cameras and hold-Y load recovery.
 - **Telehandler**: drive it, pick loose material on the forks, lift, carry,
   set down or land it on its connection.
+- **Easy building** (on by default, Settings → Controls): carry anything
+  straight off the truck — even heavy steel — and it snaps and attaches as
+  soon as you click; deck and roof sheets snap to the nearest beam. Turn it
+  off for the realistic flow (straps, crane-only heavy lifts, bolting).
+- **Pre-built scaffolding** along the front of every building, as high as
+  the frame, with platforms on every lift, guardrails and ladders (walk up
+  to a ladder, hold W to climb, keep W to step onto the platform).
 - **Hands-on building**: placement snaps to real connections and tells you
   exactly why a spot is invalid; bolt with the impact wrench, weld deck,
   hammer scaffold wedges, pour concrete with the pump hose and finish it with

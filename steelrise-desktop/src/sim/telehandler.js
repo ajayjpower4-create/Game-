@@ -271,6 +271,10 @@ export class Telehandler {
     this.speed = 0;
     bus.emit("fx", "Set", s.cf.pos, comp.def.id);
     bus.emit("event", "Landed", { item: comp.def.id });
+    if (this.g.components.easy()) {
+      this.release();
+      return ok(comp.def.name + " attached.");
+    }
     return ok(comp.def.minFastenRelease > 0 ? $fmt("Landed. Fasten at least %d connection%s, then back the forks out (G).", comp.def.minFastenRelease, comp.def.minFastenRelease > 1 ? "s" : "") : "Landed — G to back the forks out.");
   }
 

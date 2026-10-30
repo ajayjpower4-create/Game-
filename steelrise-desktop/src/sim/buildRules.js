@@ -313,8 +313,9 @@ export function solve(world, def, aim, opts = {}) {
     const plug = def.plugs[0];
     let ref = aim.point;
     if (opts.current) ref = opts.current.mul(plug.cf).pos;
-    let best = null, bestD = 1.167, wrong = null;
-    for (const s of query(world, ref, 1.167)) {
+    const snapR = world.easy && !opts.current ? 3 : 1.167;
+    let best = null, bestD = snapR, wrong = null;
+    for (const s of query(world, ref, snapR)) {
       const d = s.pos.dist(ref);
       if (plug.acceptSet[s.type]) {
         if (!s.occupiedBy && d < bestD) {
@@ -346,7 +347,7 @@ export function solve(world, def, aim, opts = {}) {
     const L = pB.dist(pA);
     let ref = aim.point;
     if (opts.current) ref = opts.current.point(pA.add(pB).mul(0.5));
-    const cands = query(world, ref, L / 2 + 1.333).filter((s) => def.plugs[0].acceptSet[s.type] && (s.multi || !s.occupiedBy));
+    const cands = query(world, ref, L / 2 + (world.easy && !opts.current ? 3.5 : 1.333)).filter((s) => def.plugs[0].acceptSet[s.type] && (s.multi || !s.occupiedBy));
     let best = null, bestScore = Infinity, sawPairDist = null;
     for (let i = 0; i < cands.length; i++) {
       for (let j = 0; j < cands.length; j++) {
@@ -409,6 +410,9 @@ export function solve(world, def, aim, opts = {}) {
     } else {
       rec = aim.hit && world.record(aim.hit);
       anchorPoint = aim.point;
+      // aiming at a neighbouring sheet, a column or near the steel: use the
+      // closest installed beam whose top flange is near the aim point
+      if (!rec || !rec.def.tags.Beam) rec = nearestBeam(world, aim.point, world.easy ? 4 : 1.5) || rec;
     }
     if (!rec || !rec.def.tags.Beam) return { cf: null, hint: "Aim at the top flange of an installed beam." };
     const beamCf = rec.cf;
@@ -486,6 +490,25 @@ export function solve(world, def, aim, opts = {}) {
     return { cf: CF.from(p).mul(CF.angles(0, yaw, 0)) };
   }
   return { cf: null, hint: "This item can't be placed." };
+}
+
+function nearestBeam(world, p, radius) {
+  let best = null, bestD = radius;
+  for (const r of world.records()) {
+    if (!r.def.tags.Beam || r.state !== "Installed") continue;
+    const ax = r.cf.xVec;
+    const top = r.cf.pos.add(v(0, r.def.sizeM.y / 2, 0));
+    const along = p.sub(top).dot(ax);
+    const half = r.def.size.x / 2 + Config.Geo.SeatOffset;
+    if (Math.abs(along) > half) continue;
+    const closest = top.add(ax.mul(along));
+    const d = closest.dist(p);
+    if (d < bestD) {
+      best = r;
+      bestD = d;
+    }
+  }
+  return best;
 }
 
 // Slab pour for the bay containing the aimed deck sheet.

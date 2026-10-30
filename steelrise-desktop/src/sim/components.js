@@ -48,6 +48,13 @@ export class Components {
   get world() {
     return this.g.world;
   }
+  // Easy building: carry anything, snap from further away, attach instantly
+  easy() {
+    return this.g.settings.easyBuild !== false;
+  }
+  placeReach() {
+    return this.easy() ? Config.Reach.EasyPlace : Config.Reach.Place;
+  }
 
   // opts: { id, fastened, supportedBy, restraint, trailer, on }
   spawn(itemId, cf, state, opts = {}) {
@@ -174,15 +181,17 @@ export class Components {
     const def = comp.def;
     if (pl.carrying) return no("You're already carrying something — place or drop it first (G).");
     if (g.crane && g.crane.operating) return no("Leave the crane controls first.");
-    if (comp.state === "Restrained") return no("Secured by cargo straps — release the strap first.");
-    if (comp.state !== "Loose") return no("Only loose materials can be picked up.");
+    const easy = this.easy();
+    if (comp.state === "Restrained" && !easy) return no("Secured by cargo straps — release the strap first.");
+    if (comp.state !== "Loose" && comp.state !== "Restrained") return no("Only loose materials can be picked up.");
     if (comp.trailerId && g.delivery.isArriving(comp.trailerId)) return no("The truck is still pulling in.");
     const wc = Config.WeightClasses[def.weightClass];
-    if (!wc.carry) return no($fmt("Too heavy to carry (%s) — use the crane.", fmtKg(def.weightKg)));
+    if (!wc.carry && !easy) return no($fmt("Too heavy to carry (%s) — use the crane, or turn on Easy building in Settings.", fmtKg(def.weightKg)));
     if (this.distanceTo(comp, pl.rootPos()) > Config.Reach.Interact) return no("Out of reach — move closer.");
     const blocker = this.stackedOnTop(comp);
     if (blocker) return no("Take the " + blocker + " off the top of the stack first.");
     comp.holder = "player";
+    comp.restraint = "";
     g.delivery.onRemovedFromTrailer(comp);
     comp.trailerId = "";
     pl.carrying = comp;
@@ -226,8 +235,8 @@ export class Components {
     const def = comp.def;
     comp.cf = cf;
     comp.supportedBy = [...(info.mates || []), ...(info.supports || [])];
-    const needs = def.fasteners.length > 0;
-    comp.fastened = "0".repeat(def.fasteners.length);
+    const needs = def.fasteners.length > 0 && !this.easy();
+    comp.fastened = (needs ? "0" : "1").repeat(def.fasteners.length);
     comp.restraint = "";
     comp.trailerId = "";
     this.setState(comp, needs ? "Placed" : "Installed");
@@ -240,7 +249,7 @@ export class Components {
     if (!comp) return no("You're not carrying anything.");
     const def = comp.def;
     if (free && !def.allowFree) return no("Free placement isn't available for structural members.");
-    const r = Rules.validate(this.world, def, cf, { exclude: [comp.id], excludeIds: [comp.id], actorPos: pl.rootPos(), reach: Config.Reach.Place });
+    const r = Rules.validate(this.world, def, cf, { exclude: [comp.id], excludeIds: [comp.id], actorPos: pl.rootPos(), reach: this.placeReach() });
     if (!r.ok) return no(r.reason);
     pl.carrying = null;
     comp.holder = "";
@@ -316,7 +325,8 @@ export class Components {
     if (d > Math.max(def.size.x, def.size.z) / 2 + Config.Reach.Place || Math.abs(root.y - cf.y) > 4) return no("Out of reach — stand on or next to the bay you're pouring.");
     const r = Rules.validate(this.world, def, cf, {});
     if (!r.ok) return no(r.reason);
-    this.spawn(def.id, cf, "Placed", { supportedBy: r.info.supports });
+    const slab = this.spawn(def.id, cf, this.easy() ? "Installed" : "Placed", { supportedBy: r.info.supports });
+    if (this.easy() && slab) this.onInstalled(slab);
     bus.emit("fx", "Pour", cf.pos, def.id);
     return ok("Concrete placed — finish it with the trowel (7) at the four marks.");
   }

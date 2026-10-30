@@ -58,7 +58,7 @@ export class World {
   // Everything solid overlapping an oriented box (placement checks).
   overlap(cf, size, excludeIds) {
     const out = [];
-    for (const c of this.physics.overlapBox(cf, size, (c) => c.solid || (c.owner && c.owner.kind === "comp"))) {
+    for (const c of this.physics.overlapBox(cf, size, (c) => c.solid)) {
       const o = c.owner;
       if (!o) continue;
       if (o.kind === "comp") {

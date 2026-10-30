@@ -164,10 +164,11 @@ export class Interaction {
     } else if (t.kind === "Component") {
       const rec = t.rec, def = rec.def;
       const sub = `${fmtKg(def.weightKg)}  ·  ${def.handling}`;
-      if (rec.state === "Restrained") list.push({ text: def.name, sub: "Secured by cargo straps — release the strap first", disabled: true });
-      else if (rec.state === "Loose") {
+      const easy = this.g.components.easy();
+      if (rec.state === "Restrained" && !easy) list.push({ text: def.name, sub: "Secured by cargo straps — release the strap first", disabled: true });
+      else if (rec.state === "Loose" || rec.state === "Restrained") {
         const wc = Config.WeightClasses[def.weightClass];
-        if (wc.carry && !carrying) list.push({ key: "E", text: "Pick up " + def.name, sub });
+        if ((wc.carry || easy) && !carrying) list.push({ key: "E", text: "Pick up " + def.name, sub: easy ? fmtKg(def.weightKg) + "  ·  place it on the building with left click" : sub });
         else if (!wc.carry) list.push({ text: def.name, sub: "Heavy — rig it with the crane (" + fmtKg(def.weightKg) + ")", disabled: true });
       } else if (rec.state === "Placed") {
         const need = def.fasteners[0] && def.fasteners[0].type;
@@ -210,7 +211,7 @@ export class Interaction {
         if (r.ok) bus.emit("crane", "start", g.crane);
       } else if (t.kind === "Machine") this.report(t.machine.enter());
       else if (t.kind === "Truck" && t.trailer.empty) this.report(g.delivery.dismiss(t.trailer));
-      else if (t.kind === "Component" && t.rec.state === "Loose" && Config.WeightClasses[t.rec.def.weightClass].carry) {
+      else if (t.kind === "Component" && (t.rec.state === "Loose" || t.rec.state === "Restrained") && (Config.WeightClasses[t.rec.def.weightClass].carry || g.components.easy())) {
         const r = this.report(g.components.pickUp(t.rec));
         if (r.ok) bus.emit("sfx", "PickUp", t.rec.cf.pos);
       }
@@ -350,7 +351,7 @@ export class Interaction {
     const g = this.g, pl = g.player, comp = pl.carrying;
     const P = this.placement;
     const def = comp.def;
-    const hit = this.cast(Config.Reach.Place + 4.7, new Set([comp.id]));
+    const hit = this.cast(g.components.placeReach() + 4.7, new Set([comp.id]));
     let cf = null, reason = null, valid = false;
     if (hit) {
       const aim = { point: hit.pos, hit: hit.terrain ? null : hit, normal: hit.normal };
@@ -360,7 +361,7 @@ export class Interaction {
     } else reason = "Aim at the ground or a connection.";
     let ghostCf = cf;
     if (cf) {
-      const r = Rules.validate(g.world, def, cf, { exclude: [comp.id], excludeIds: [comp.id], actorPos: pl.rootPos(), reach: Config.Reach.Place });
+      const r = Rules.validate(g.world, def, cf, { exclude: [comp.id], excludeIds: [comp.id], actorPos: pl.rootPos(), reach: g.components.placeReach() });
       valid = r.ok;
       reason = r.reason;
     } else if (hit) {

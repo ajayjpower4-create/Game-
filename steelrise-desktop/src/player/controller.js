@@ -146,7 +146,7 @@ export class Controller {
     const carrying = pl.carrying;
     const wc = carrying ? Config.WeightClasses[carrying.def.weightClass] : null;
     const sprint = m && m.held("ShiftLeft") && !carrying;
-    const speed = wc ? wc.walkSpeed : sprint ? Config.sprintSpeed : Config.walkSpeed;
+    const speed = wc ? (wc.carry ? wc.walkSpeed : Config.easyCarrySpeed) : sprint ? Config.sprintSpeed : Config.walkSpeed;
     const yaw = pl.yaw;
     const fwd = v(-Math.sin(yaw), 0, -Math.cos(yaw));
     const right = v(Math.cos(yaw), 0, -Math.sin(yaw));
@@ -158,7 +158,9 @@ export class Controller {
     const canClimb = !carrying || Config.WeightClasses[carrying.def.weightClass].climb;
     const climbVol = canClimb ? ph.climbAt(pl.pos.add(v(0, 0.9, 0)), RADIUS + 0.25) : null;
     let vel = pl.vel;
-    if (climbVol && (fwdIn !== 0 || pl.climbing) && !(m && m.held("Space"))) {
+    // after stepping off a ladder, ignore it until you walk away from it
+    if (!climbVol) this.offLadder = false;
+    if (climbVol && !this.offLadder && (fwdIn !== 0 || pl.climbing) && !(m && m.held("Space"))) {
       pl.climbing = fwdIn !== 0 || pl.climbing;
       vel = v(right.x * sideIn * 1.2, fwdIn * 2.4, right.z * sideIn * 1.2);
       // hug the ladder
@@ -167,6 +169,18 @@ export class Controller {
       if (toward.len > 0.45) vel = vel.add(toward.unit().mul(0.8));
       // top out onto the platform
       if (fwdIn > 0 && pl.pos.y + 0.9 > climbVol.max[1]) vel = vel.add(fwd.mul(1.5));
+      // step off sideways onto a deck / floor level with your feet
+      if (fwdIn > 0 && pl.pos.y > 0.5) {
+        const ahead = pl.pos.add(fwd.mul(0.9));
+        const gy = this.groundHeight(v(ahead.x, pl.pos.y, ahead.z), 0.4);
+        if (gy !== null && Math.abs(gy - pl.pos.y) < 0.4 && !this.physics().sphereContacts(ahead.x, gy + 0.9, ahead.z, RADIUS, this.filter).length) {
+          pl.pos = v(ahead.x, gy, ahead.z);
+          pl.climbing = false;
+          pl.onGround = true;
+          this.offLadder = true;
+          vel = v();
+        }
+      }
     } else {
       if (pl.climbing && m && m.held("Space")) vel = fwd.mul(-2.5).add(v(0, 2, 0));
       pl.climbing = false;

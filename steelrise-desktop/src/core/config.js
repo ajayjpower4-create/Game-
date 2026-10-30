@@ -44,7 +44,8 @@ export const Config = {
   jumpSpeed: 5.0,
   stepHeight: 0.42,
 
-  Reach: { Interact: 4.4, Place: 5.4, Fasten: 4.4, CraneCab: 6 },
+  Reach: { Interact: 4.4, Place: 5.4, Fasten: 4.4, CraneCab: 6, EasyPlace: 14 },
+  easyCarrySpeed: 2.6,
 
   Geo: {
     SeatOffset: 0.2,
@@ -134,6 +135,7 @@ export const Config = {
     mouseSensitivity: 1.0,
     assist: true,
     tutorialOn: true,
+    easyBuild: true,
     volumes: { Master: 0.8, Machinery: 0.8, Tools: 0.8, Impacts: 0.8, Ambience: 0.6, Footsteps: 0.7, UI: 0.6 },
   },
 };

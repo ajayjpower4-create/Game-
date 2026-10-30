@@ -227,6 +227,13 @@ export class Crane {
     bus.emit("fx", "Set", target.pos, def.id);
     bus.emit("event", "Landed", { item: def.id });
     const need = def.minFastenRelease;
+    if (this.g.components.easy()) {
+      // easy building: attached straight away, the hook lets go
+      this.unrig();
+      bus.emit("event", "Unhooked", { item: def.id });
+      bus.emit("notify", def.name + " attached.", "success");
+      return ok();
+    }
     if (need > 0) bus.emit("notify", $fmt("Landed. Fasten at least %d connection%s, then unhook (G).", need, need > 1 ? "s" : ""), "info");
     return ok();
   }

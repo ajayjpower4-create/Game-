@@ -277,6 +277,7 @@ export class UI {
     panel.appendChild(el(`<h3>CONTROLS</h3>`));
     slider("Mouse sensitivity", () => s.mouseSensitivity, (v) => (s.mouseSensitivity = v), 0.2, 3, 0.05, (v) => v.toFixed(2));
     toggle("Third-person camera", "thirdPerson");
+    toggle("Easy building (carry anything, attach instantly)", "easyBuild");
     toggle("Crane alignment assist", "assist");
     toggle("Tutorial on Empty Land", "tutorialOn");
     panel.appendChild(el(`<h3>AUDIO</h3>`));

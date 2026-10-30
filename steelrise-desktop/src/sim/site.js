@@ -14,6 +14,7 @@ import { Delivery } from "./delivery.js";
 import { Crane } from "./crane.js";
 import { Telehandler } from "./telehandler.js";
 import { pack } from "./packing.js";
+import { siteScaffold } from "./scaffold.js";
 import { buildEnvironment, isNight } from "../world/env.js";
 import { bus } from "../core/events.js";
 
@@ -119,6 +120,11 @@ export class Site {
       } else {
         const stage = [];
         for (const e of stageEntries(def)) {
+          const c = g.components.spawn(e.item, e.cf, "Installed", {});
+          if (c) stage.push(c);
+        }
+        // pre-erected scaffold along the street side of the building
+        for (const e of siteScaffold(def, stageEntries(def))) {
           const c = g.components.spawn(e.item, e.cf, "Installed", {});
           if (c) stage.push(c);
         }

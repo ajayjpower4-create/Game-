@@ -52,7 +52,7 @@ for (const def of Registry.list) {
 console.log(`catalog: ${counts.total} items (${counts.Installable} installable, ${counts.Equipment} equipment, ${counts.Decorative} props, ${counts.Tool} tools), ${parts} parts`);
 
 // 2. every site loads
-const g = new Game();
+const g = new Game({ easyBuild: false });
 for (const id of SiteOrder) {
   const r = g.loadSite(id);
   check(r.ok && r.failures.length === 0, id + " loads: " + JSON.stringify(r.failures));
@@ -96,7 +96,7 @@ check(col.state === "Installed", "column installed");
 check(crane.hookOrRelease().ok, "unhook");
 check(g.site.progress.installed === 25, "progress counts the column (" + g.site.progress.installed + ")");
 const save = JSON.parse(JSON.stringify(g.site.serialize()));
-const g2 = new Game();
+const g2 = new Game({ easyBuild: false });
 g2.loadSite(save.site, save);
 check(g2.world.records().length === g.world.records().length, "save restores every component");
 check(g2.site.progress.installed === 25, "save restores progress");
@@ -135,7 +135,55 @@ import * as Rules from "../src/sim/buildRules.js";
   check(t.exit().ok, "leave the telehandler");
 }
 
-// 6. delivery ordering
+// 6. easy building: carry anything straight off the truck and attach it
+{
+  const e = new Game({ easyBuild: true });
+  e.loadSite("Office2");
+  e.update(1 / 60, {}, {});
+  const entry = e.site.progress.nextEntry;
+  check(entry && entry.phase === "deck", "Office 2 next task is a deck sheet");
+  const order = e.delivery.request(entry.item, 2);
+  check(order.ok, "order deck sheets");
+  for (let i = 0; i < 600; i++) e.update(1 / 60, {}, {});
+  const sheet = e.world.records().filter((c) => c.def.id === entry.item && c.state === "Restrained").sort((a, b) => b.cf.y - a.cf.y)[0];
+  check(!!sheet, "deck sheet arrived strapped on the truck");
+  e.player.teleport(sheet.cf.pos.add(v(0, -sheet.cf.y, 2.2)));
+  check(e.components.pickUp(sheet).ok, "pick a strapped deck sheet straight off the truck");
+  // aim at the beam next to the target position (not exactly at the slot)
+  e.player.teleport(entry.cf.pos.add(v(0, -entry.cf.y, -3)));
+  const s = Rules.solve(e.world, sheet.def, { point: entry.cf.pos.add(v(0.4, 0.05, 0.3)), hit: null }, { excludeIds: new Set([sheet.id]) });
+  check(!!s.cf, "deck sheet snaps to the nearest beam: " + s.hint);
+  if (s.cf) {
+    const r = e.components.place(s.cf);
+    check(r.ok, "place deck sheet: " + r.msg);
+    check(sheet.state === "Installed", "deck sheet attached instantly");
+  }
+  // heavy beam by hand
+  const beams = e.world.records().filter((c) => c.def.tags.Beam && (c.state === "Restrained" || c.state === "Loose"));
+  if (beams.length) {
+    const b = beams.sort((a, c) => c.cf.y - a.cf.y)[0];
+    e.player.teleport(b.cf.pos.add(v(0, -b.cf.y, 2)));
+    check(e.components.pickUp(b).ok, "carry a heavy beam by hand in easy mode");
+  }
+}
+
+// 7. pre-built scaffold: every piece sits on its proper connection
+{
+  const s = new Game({ easyBuild: false });
+  for (const id of ["EmptyLand", "Office1", "HighRise"]) {
+    s.loadSite(id);
+    const sc = s.world.records().filter((c) => c.def.tags.Scaffold && c.state === "Installed");
+    check(sc.length > 100, id + " has a pre-built scaffold (" + sc.length + " pieces)");
+    let bad = 0;
+    for (const c of sc) {
+      if (c.def.id === "SC-LADDER-27") continue;
+      if (!Rules.validate(s.world, c.def, c.cf, { exclude: [c.id], excludeIds: [c.id] }).ok) bad++;
+    }
+    check(bad === 0, id + " scaffold pieces all valid (" + bad + " bad)");
+  }
+}
+
+// 8. delivery ordering
 check(g.delivery.request("BM-W18x35-7500", 4).ok, "order beams by truck");
 g.loadSite("Office4");
 check(g.delivery.request("BM-W21x44-9000", 6, "rail").ok, "order beams by rail");
