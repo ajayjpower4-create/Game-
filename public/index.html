@@ -54,7 +54,8 @@
         <button class="tool" data-tool="select" title="Select / Move (V)"><span class="ti">⬚</span><span>Select</span></button>
         <button class="tool" data-tool="rect" title="Draw room (R)"><span class="ti">▭</span><span>Room</span></button>
         <button class="tool" data-tool="poly" title="Polygon room (P)"><span class="ti">⬠</span><span>Shape</span></button>
-        <button class="tool" data-tool="erase" title="Delete room (E)"><span class="ti">✕</span><span>Delete</span></button>
+        <button class="tool" data-tool="text" title="Place text (T)"><span class="ti">T</span><span>Text</span></button>
+        <button class="tool" data-tool="erase" title="Delete (E)"><span class="ti">✕</span><span>Delete</span></button>
         <div class="tool-sep"></div>
         <button id="undo-btn" class="tool" title="Undo (Ctrl+Z)"><span class="ti">↶</span><span>Undo</span></button>
         <button id="redo-btn" class="tool" title="Redo (Ctrl+Y)"><span class="ti">↷</span><span>Redo</span></button>
@@ -87,11 +88,15 @@
         </div>
 
         <div class="panel-block" id="room-inspector">
-          <div class="panel-head"><h3>Room</h3></div>
-          <div id="no-selection" class="hint-text">Select a room to edit it, or draw a new one with the Room tool.</div>
+          <div class="panel-head"><h3 id="inspector-title">Room</h3></div>
+          <div id="no-selection" class="hint-text">Select something to edit it, or draw a room / place text with the tools on the left.</div>
           <div id="room-fields" hidden>
-            <label class="field-label">Name</label>
+            <label class="field-label" id="name-label">Name</label>
             <input id="room-name" class="text-input" placeholder="e.g. Kitchen" />
+            <div id="text-size-row" hidden>
+              <label class="field-label">Text size</label>
+              <input id="text-size" type="range" min="12" max="160" step="2" class="range-input" />
+            </div>
             <label class="field-label">Color</label>
             <div id="swatches" class="swatches"></div>
             <input id="room-color" type="color" class="color-input" />
@@ -104,7 +109,7 @@
         </div>
 
         <div class="panel-block">
-          <div class="panel-head"><h3>Rooms on this floor</h3></div>
+          <div class="panel-head"><h3>Items on this floor</h3></div>
           <ul id="room-list" class="room-list"></ul>
         </div>
       </aside>

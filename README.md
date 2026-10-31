@@ -28,6 +28,9 @@ or serve the folder with any static server).
      to the grid and is given its own color automatically.
    - **Shape tool (`P`)** — click to drop points for an irregular room; double-
      click, press Enter, or click the first point again to close it.
+   - **Text tool (`T`)** — click anywhere to drop a free-floating text label.
+     Type the text, pick any color, and set its size with the slider. Labels
+     aren't snapped to the grid, so you can place them exactly where you want.
 3. **Name and recolor.** Every new room gets a name and a color. Select it
    (`V`) to rename it, pick a new color from the palette, duplicate it, or
    delete it. Drag rooms to move them and drag the handles to resize.
@@ -39,6 +42,7 @@ or serve the folder with any static server).
 
 - 8 lot sizes, grid-snapped drawing
 - Rectangle and polygon room tools
+- Free-floating text labels in any color and size, placed anywhere
 - Auto-assigned colors + full palette / custom color picker
 - Move, resize, duplicate, delete rooms
 - Each room's floor area (in ft²) shown right in the room list — no clicking
@@ -71,6 +75,7 @@ with the **☰** button (top-right).
 | `V` | Select / move |
 | `R` | Draw room (rectangle) |
 | `P` | Draw shape (polygon) |
+| `T` | Place text label |
 | `E` | Delete tool |
 | `Delete` / `Backspace` | Delete selected room |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |

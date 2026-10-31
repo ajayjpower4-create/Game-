@@ -200,6 +200,10 @@
 
   // rect helpers (rooms of type 'rect' store x,y,w,h in world px)
   function roomBounds(r) {
+    if (r.type === 'text') {
+      const t = textBox(r);
+      return { x: r.x, y: r.y, w: t.w, h: t.h };
+    }
     if (r.type === 'poly') {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const p of r.points) {
@@ -209,6 +213,18 @@
       return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
     }
     return { x: r.x, y: r.y, w: r.w, h: r.h };
+  }
+
+  // measured bounding box of a text label, in world px
+  function textFont(sizePx) {
+    return `700 ${sizePx}px "Segoe UI", system-ui, sans-serif`;
+  }
+  function textBox(r) {
+    ctx.save();
+    ctx.font = textFont(r.size);
+    const w = ctx.measureText(r.text || 'Text').width;
+    ctx.restore();
+    return { w, h: r.size * 1.25 };
   }
 
   // true floor area of a room (rect = w×h, poly = shoelace), in grid cells²
@@ -223,12 +239,13 @@
     }
     return (r.w / CELL) * (r.h / CELL);
   }
-  // area rounded to whole square feet
-  const roomAreaSqft = (r) => Math.round(roomAreaCells(r) * SQFT_PER_CELL);
+  // area rounded to whole square feet (text labels have no area)
+  const roomAreaSqft = (r) => r.type === 'text' ? 0 : Math.round(roomAreaCells(r) * SQFT_PER_CELL);
 
   function pointInRoom(r, wx, wy) {
     if (r.type === 'poly') return pointInPoly(r.points, wx, wy);
-    return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h;
+    const b = roomBounds(r); // rect + text use their bounding box
+    return wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h;
   }
 
   function pointInPoly(pts, x, y) {
@@ -361,6 +378,7 @@
 
   function drawRoom(r) {
     const s = view.scale, ox = view.offX, oy = view.offY;
+    if (r.type === 'text') { drawText(r); return; }
     ctx.save();
     ctx.beginPath();
     if (r.type === 'poly') {
@@ -389,6 +407,20 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     wrapText(r.name || 'Room', cx, cy, b.w * s - 8, clamp(15 * s, 12, 18));
+    ctx.restore();
+  }
+
+  // free-floating text label (top-left anchored at r.x, r.y)
+  function drawText(r) {
+    const s = view.scale, ox = view.offX, oy = view.offY;
+    ctx.save();
+    ctx.font = textFont(Math.max(6, r.size * s));
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = r.color;
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 3;
+    ctx.fillText(r.text || 'Text', ox + r.x * s, oy + r.y * s);
     ctx.restore();
   }
 
@@ -551,6 +583,8 @@
       drag = { type: 'poly-cursor', cur: { x: sx, y: sy } };
       updatePolyUI();
       draw();
+    } else if (tool === 'text') {
+      addText(clamp(w.x, 0, worldW()), clamp(w.y, 0, worldH()));
     } else if (tool === 'erase') {
       const hit = roomAt(w.x, w.y);
       if (hit) { pushUndo(); deleteRoom(hit.id); }
@@ -596,8 +630,10 @@
         pushUndo();        // record state just before the first real move
         drag.moved = true;
       }
-      const nb = { x: snap(w.x - drag.dx), y: snap(w.y - drag.dy) };
-      moveRoomTo(drag.room, nb.x, nb.y);
+      const free = drag.room.type === 'text'; // text moves freely, rooms snap to grid
+      const nx = free ? (w.x - drag.dx) : snap(w.x - drag.dx);
+      const ny = free ? (w.y - drag.dy) : snap(w.y - drag.dy);
+      moveRoomTo(drag.room, nx, ny);
       draw();
     } else if (drag.type === 'resize') {
       applyResize(drag, snap(w.x), snap(w.y));
@@ -731,6 +767,7 @@
   function updateDims() {
     const r = selectedRoom(); if (!r) return;
     const el = $('room-dims'); if (!el) return;
+    if (r.type === 'text') { el.textContent = `Text · ${Math.round(r.size)} px`; return; }
     const b = roomBounds(r);
     const cw = Math.round(b.w / CELL), ch = Math.round(b.h / CELL);
     const sqft = roomAreaSqft(r).toLocaleString();
@@ -786,6 +823,22 @@
     }
   }
 
+  // place a free-floating text label (white by default, editable in the panel)
+  function addText(x, y) {
+    pushUndo();
+    const t = { id: uid(), type: 'text', x, y, text: 'Text', color: '#ffffff', size: 40 };
+    rooms().push(t);
+    selectRoom(t.id);
+    setTool('select');
+    renderRoomList();
+    renderFloors();
+    markDirty(); save();
+    if (!mqMobile.matches) {
+      // defer past the trailing click (which would otherwise blur the field)
+      setTimeout(() => { const ni = $('room-name'); if (ni) { ni.focus(); ni.select(); } }, 0);
+    }
+  }
+
   function deleteRoom(id) {
     const i = rooms().findIndex((r) => r.id === id);
     if (i < 0) return;
@@ -802,8 +855,12 @@
     pushUndo();
     const copy = JSON.parse(JSON.stringify(r));
     copy.id = uid();
-    copy.name = r.name + ' copy';
-    copy.color = nextColor();
+    if (copy.type === 'text') {
+      copy.text = (r.text || 'Text') + ' copy';
+    } else {
+      copy.name = r.name + ' copy';
+      copy.color = nextColor();
+    }
     moveRoomShift(copy, CELL, CELL);
     rooms().push(copy);
     selectRoom(copy.id);
@@ -913,11 +970,12 @@
     if (!rooms().length) {
       const li = document.createElement('li');
       li.className = 'hint-text';
-      li.textContent = 'No rooms yet on this floor.';
+      li.textContent = 'Nothing on this floor yet.';
       list.appendChild(li);
       return;
     }
     rooms().forEach((r) => {
+      const isText = r.type === 'text';
       const li = document.createElement('li');
       li.className = 'room-item' + (r.id === selectedId ? ' selected' : '');
       const sw = document.createElement('span');
@@ -925,10 +983,10 @@
       sw.style.background = r.color;
       const label = document.createElement('span');
       label.className = 'room-name-label';
-      label.textContent = r.name || 'Room';
+      label.textContent = isText ? (r.text || 'Text') : (r.name || 'Room');
       const area = document.createElement('span');
       area.className = 'room-area';
-      area.textContent = `${roomAreaSqft(r).toLocaleString()} ft²`;
+      area.textContent = isText ? 'text' : `${roomAreaSqft(r).toLocaleString()} ft²`;
       li.appendChild(sw); li.appendChild(label); li.appendChild(area);
       li.addEventListener('click', () => { setTool('select'); selectRoom(r.id); });
       list.appendChild(li);
@@ -940,15 +998,16 @@
     $('no-selection').hidden = !!r;
     $('room-fields').hidden = !r;
     if (!r) return;
-    $('room-name').value = r.name;
+    const isText = r.type === 'text';
+    $('inspector-title').textContent = isText ? 'Text' : 'Room';
+    $('name-label').textContent = isText ? 'Text' : 'Name';
+    $('room-name').placeholder = isText ? 'Your text' : 'e.g. Kitchen';
+    $('room-name').value = isText ? (r.text || '') : r.name;
+    $('text-size-row').hidden = !isText;
+    if (isText) $('text-size').value = r.size;
     $('room-color').value = r.color;
     renderSwatches(r.color);
-    const b = roomBounds(r);
-    const cw = Math.round(b.w / CELL), ch = Math.round(b.h / CELL);
-    const sqft = roomAreaSqft(r).toLocaleString();
-    $('room-dims').textContent = r.type === 'poly'
-      ? `Polygon · ${r.points.length} points · ${sqft} ft²`
-      : `${cw} × ${ch} cells · ${sqft} ft²`;
+    updateDims();
   }
 
   function renderSwatches(active) {
@@ -1106,6 +1165,13 @@
     g.stroke();
 
     for (const r of rooms()) {
+      if (r.type === 'text') {
+        g.font = textFont(r.size);
+        g.fillStyle = r.color;
+        g.textAlign = 'left'; g.textBaseline = 'top';
+        g.fillText(r.text || 'Text', r.x, r.y);
+        continue;
+      }
       g.beginPath();
       if (r.type === 'poly') {
         r.points.forEach((p, i) => i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y));
@@ -1192,8 +1258,13 @@
 
     $('room-name').addEventListener('input', (e) => {
       const r = selectedRoom(); if (!r) return;
-      r.name = e.target.value;
+      if (r.type === 'text') r.text = e.target.value; else r.name = e.target.value;
       renderRoomList(); draw(); markDirty(); save();
+    });
+    $('text-size').addEventListener('input', (e) => {
+      const r = selectedRoom(); if (!r || r.type !== 'text') return;
+      r.size = +e.target.value;
+      updateDims(); draw(); markDirty(); save();
     });
     $('room-color').addEventListener('input', (e) => setRoomColor(e.target.value));
     $('delete-room-btn').addEventListener('click', () => {
@@ -1237,6 +1308,7 @@
         case 'v': setTool('select'); break;
         case 'r': setTool('rect'); break;
         case 'p': setTool('poly'); break;
+        case 't': setTool('text'); break;
         case 'e': setTool('erase'); break;
         case 'delete': case 'backspace':
           if (selectedId) { pushUndo(); deleteRoom(selectedId); } break;
