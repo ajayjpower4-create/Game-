@@ -1,6 +1,7 @@
 import express from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { STATES, STATE_CODES } from './public/election/data.js';
 
@@ -22,6 +23,22 @@ app.get('/', page('hub.html'));
 app.get(['/election', '/election/'], page('election', 'index.html'));
 app.get(['/chat', '/chat/'], page('index.html'));
 app.get(['/inspection', '/inspection/'], page('inspection', 'index.html'));
+
+// The Police Form Maker page is written as page content only (it doubles as a
+// Claude artifact, which adds its own document shell), so wrap it here. The
+// trailing slash matters: the page loads its scripts by relative path.
+const policeShell = body => `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head><body>
+${body}
+</body></html>`;
+app.get('/police', (req, res) => {
+  // Express matches /police and /police/ to the same route, so check the slash here.
+  if (!req.path.endsWith('/')) return res.redirect(301, '/police/');
+  res.type('html').send(policeShell(readFileSync(join(__dirname, 'public', 'police', 'index.html'), 'utf8')));
+});
 
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
@@ -274,5 +291,6 @@ app.listen(PORT, () => {
   console.log(`Game hub at http://localhost:${PORT}`);
   console.log(`Political Election Simulator at http://localhost:${PORT}/election`);
   console.log(`Inspection Simulator at http://localhost:${PORT}/inspection`);
+  console.log(`Police Form Maker at http://localhost:${PORT}/police/`);
   console.log(`Swerve AI chat at http://localhost:${PORT}/chat`);
 });

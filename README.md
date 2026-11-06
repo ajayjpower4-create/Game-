@@ -14,6 +14,7 @@ npm start
 ```
 
 - Game hub: <http://localhost:3000/> — lists every game
+- Police Form Maker: <http://localhost:3000/police/>
 - Inspection Simulator: <http://localhost:3000/inspection>
 - Election game: <http://localhost:3000/election>
 - The original Swerve chatbot: <http://localhost:3000/chat>
@@ -167,3 +168,61 @@ report says so on screen — every screen still works offline.
 
 Nothing in this report is real. It is a simulator for practicing and drafting,
 not a substitute for an inspection by a licensed inspector.
+
+
+---
+
+# Police Form Maker
+
+A patrol-car style terminal (an MDT) for writing police paperwork. At
+`/police/`. Also published as a Claude artifact.
+
+## The forms
+
+**Incident report.** Case number, dates and times, beat and shift, location
+and location type, incident type, call source, priority, disposition, weapon,
+alcohol/drug and DV/gang flags — all dropdowns. Add as many involved persons
+(role, name, DOB, NCIC-style sex/race/hair/eyes codes, injury, medical,
+statement), vehicles and evidence items as you need. Tick the officer actions,
+pick the use of force, then write the narrative. *Write from my selections*
+drafts the opening paragraphs from everything you picked, and a phrase menu
+drops standard report language in at the cursor.
+
+**Citation.** Violator, vehicle, speed and conditions, court and appearance
+date. Violations come from the charge panel on the side: type a few words
+(*red light*, *speeding 15 school*, *dog off leash*), click the charge, done.
+823 traffic infractions and 303 other infractions (noise, parks, animals,
+boating, fish & game, fire code, fireworks, drones, business licensing…), each
+with a base fine. Offense number (1st/2nd/3rd+) multiplies the fine; equipment
+problems are flagged correctable. The total at the end adds the state
+surcharge and court fee (set both on the Officer setup page).
+
+**Arrest report.** Booking number, arrest type, full arrestee description
+with an optional booking photo, custody and Miranda details, and a probable
+cause declaration. 1,265 arrest charges, each with a class (felony or
+misdemeanor), max fine and max term; bail follows from those. Charge counts,
+attempt/conspiracy/accessory modifiers and sentencing enhancements roll up into
+total fines, max exposure and total bail.
+
+**Form creator.** Sets any form — or all three plus a cover sheet as a case
+packet — as finished paperwork: agency seal and header, form number, red
+serial number with a Code 39 barcode, boxed fields in typewriter type, ruled
+narrative, totals box, declarations and e-signatures. Pick court, violator or
+agency copy for the citation (officer notes stay off the violator copy). It
+lists any required box still empty and jumps you to it. *Copy as text* copies
+a plain-text version.
+
+Everything autosaves to the browser. The first visit opens on a filled-in
+example case (one DUI stop across all three forms); *Start blank* clears it.
+
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `public/police/index.html` | Page markup and styles (page content only — the server adds the document shell) |
+| `public/police/lists.js` | Every dropdown menu |
+| `public/police/charges.js` | The charge book: traffic, other infractions, arrest charges |
+| `public/police/app.js` | Forms, charge search, totals, narrative drafts, the paper renderer |
+
+The agency, codes and people are made up. Every generated form is marked as a
+simulated form for training and roleplay, not an official record.
