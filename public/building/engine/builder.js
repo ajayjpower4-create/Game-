@@ -55,8 +55,9 @@ export class Builder {
     if (!geo.attributes.uv) {
       geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
     }
+    // Vertex colours stay only for materials that draw them (people).
     for (const k of Object.keys(geo.attributes)) {
-      if (k !== 'position' && k !== 'normal' && k !== 'uv') geo.deleteAttribute(k);
+      if (k !== 'position' && k !== 'normal' && k !== 'uv' && !(k === 'color' && mat.vertexColors)) geo.deleteAttribute(k);
     }
     if (!this.parts.has(mat)) this.parts.set(mat, []);
     this.parts.get(mat).push(geo);

@@ -483,6 +483,11 @@ export function brickMat(hex = '#9c5b47') {
   return wall('brick', hex);
 }
 
+/** People: one material for every figure, coloured per vertex (skin, clothes, hair). */
+export function figure() {
+  return once('figure', () => std({ vertexColors: true, roughness: 0.78, metalness: 0 }));
+}
+
 export function fabric(hex) {
   return once(`fabric|${hex}`, () => std({ color: new THREE.Color(hex), roughness: 0.92, side: THREE.DoubleSide }));
 }

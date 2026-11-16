@@ -3,8 +3,7 @@
 
 import * as THREE from 'three';
 import { vehicleModel } from './vehicles.js';
-import { person } from './nature.js';
-import { Builder } from './builder.js';
+import { makeFigure, personSpec, rigFigure, walkPose, strideLength } from './people.js';
 import * as M from './materials.js';
 import { rng } from './textures.js';
 import { VEHICLE_COLORS } from '../catalog.js';
@@ -58,6 +57,7 @@ export class Life {
   setup(state, plan) {
     this.state = state;
     this.plan = plan;
+    for (const w of this.walkers) w.rig.dispose();
     for (const c of [...this.group.children]) { this.group.remove(c); c.dispose?.(); }
     this.cars = [];
     this.walkers = [];
@@ -113,14 +113,19 @@ export class Life {
       const cy = w.rect.y + w.rect.d / 2;
       routes.push([[cx, cy], [cx, Math.min(state.lot.depth - 30, cy + 90)], [plan.driveX - 30, state.lot.depth - 30]]);
     }
+    const crowd = state.mode === 'construct' ? ['worker', 'worker', 'foreman', 'worker'] : ['visitor', 'office', 'shopper', 'worker', 'student', 'visitor', 'office', 'visitor', 'guard'];
     for (let i = 0; i < 9; i++) {
       const route = routes[i % routes.length];
-      const B = new Builder();
-      person(B, i % 4 === 0 ? 'worker' : 'visitor', 500 + i * 13, 0, 0, 0);
-      const g = B.finish(new THREE.Group());
-      g.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+      const rig = rigFigure(makeFigure(personSpec(crowd[i % crowd.length], 500 + i * 13)));
+      const g = new THREE.Group();
+      g.add(rig.mesh);
+      // A soft patch of shade under the feet keeps a walker on the ground.
+      const blob = new THREE.Mesh(BLOB_GEO, blobMat());
+      blob.position.y = 0.03;
+      blob.userData.noPick = true;
+      g.add(blob);
       this.group.add(g);
-      this.walkers.push({ g, route, t: r(), speed: 4 + r() * 1.5, len: routeLength(route), dirSign: 1 });
+      this.walkers.push({ g, rig, route, t: r(), speed: 3.7 + r() * 1.3, len: routeLength(route), dirSign: 1, phase: r() * 6.28, stride: strideLength(rig.fig) });
     }
   }
 
@@ -159,7 +164,10 @@ export class Life {
       if (w.t > 1) { w.t = 1; w.dirSign = -1; }
       if (w.t < 0) { w.t = 0; w.dirSign = 1; }
       const [x, z, ang] = along(w.route, w.t);
-      w.g.position.set(x, 0.45 + Math.abs(Math.sin(t * 6 + w.len)) * 0.08, z);
+      // One stride cycle for every stride's length covered, so feet do not slide.
+      w.phase += (w.speed * dt / w.stride) * Math.PI * 2;
+      w.rig.pose(walkPose(w.phase));
+      w.g.position.set(x, 0.06, z);
       w.g.rotation.y = ang + (w.dirSign < 0 ? Math.PI : 0);
     }
     // Flags and spinning parts on the site.
@@ -258,6 +266,24 @@ export class Life {
       this.snow.geometry.attributes.position.needsUpdate = true;
     }
   }
+}
+
+const BLOB_GEO = new THREE.CircleGeometry(1.25, 20).rotateX(-Math.PI / 2);
+let BLOB = null;
+function blobMat() {
+  if (!BLOB) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+    grd.addColorStop(0, 'rgba(0,0,0,0.42)');
+    grd.addColorStop(0.6, 'rgba(0,0,0,0.16)');
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 64);
+    BLOB = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  }
+  return BLOB;
 }
 
 function routeLength(route) {

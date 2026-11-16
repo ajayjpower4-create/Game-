@@ -21,6 +21,7 @@ import { buildRun, squarePath } from './engine/runs.js';
 import { lotLayout, LOT_ANGLES, STALL_WIDTHS, DEALER_ORGANIZE, DEALER_FACING, dealerSettings } from './lots.js';
 import { CAR_MAKES, TRAILERS, TRAILER_BY_ID, TRUCK_BY_ID } from './vehiclelist.js';
 import { rigLength } from './engine/trucks.js';
+import { POSE_NAMES, STANDING, WORKING } from './engine/figures.js';
 import { GARDEN, GARDEN_GROUPS, COVERS, COVER_BY_ID, stamp as gardenStamp, coverStamp, erase as gardenErase } from './engine/garden.js';
 import * as THREE from 'three';
 
@@ -1039,7 +1040,21 @@ function propPanel(o) {
     ${spec.trailerKind ? `<p class="note">${fmt(spec.d)} ft long, 8.5 ft wide. Landing gear, sliding tandem on dual wheels, lamps and reflective tape. Back it up to a loading bay and it squares itself on. Or hitch one to any truck from the truck's own panel.</p>` : ''}
     ${spec.cover ? `<div class="field"><label>Ground cover</label><div class="chips">${COVERS.map((c) => `<button class="chip${(o.cover || 'mulch-brown') === c.id ? ' on' : ''}" data-act="set" data-key="cover" data-value="${c.id}">${esc(c.name)}</button>`).join('')}</div></div>` : ''}
     ${spec.stencil ? stencilFields(o) : spec.sign ? `<div class="divider"></div><h3>Sign</h3>${signFields('s', o.sign || {}, { bg: true, sub: !!spec.sub || o.type === 'billboard' || o.type === 'monument' })}${spec.hint ? `<p class="note">${esc(spec.hint)}</p>` : ''}` : ''}
+    ${spec.person ? personFields(o, spec) : ''}
     ${spec.cam ? camFields(o, spec) : ''}`;
+}
+
+/* A person: the pose they strike, and a button for somebody else altogether. */
+function personFields(o, spec) {
+  const again = `<button class="btn" data-act="reroll">🎲 ${spec.person === 'group' ? 'Different people' : 'Someone else'}</button>`;
+  if (spec.person === 'group' || spec.pose === 'flag') return `<div class="field">${again}</div>`;
+  const poses = spec.work ? WORKING : STANDING;
+  return `<div class="field"><label>Pose</label><div class="chips">
+      <button class="chip${!o.pose ? ' on' : ''}" data-act="set" data-key="pose" data-value="">Their own</button>
+      ${poses.map((id) => `<button class="chip${o.pose === id ? ' on' : ''}" data-act="set" data-key="pose" data-value="${id}">${POSE_NAMES[id]}</button>`).join('')}
+    </div></div>
+    <div class="field">${again}</div>
+    <p class="note">Every person is different — build, face, hair and clothes all come with them. Things a pose needs (a box, a clipboard, a shovel) come too.</p>`;
 }
 
 const TRAILER_PAINTS = [['#f2f3f4', 'White'], ['#c4c8cc', 'Silver'], ['#2a5b9b', 'Blue'], ['#8a3324', 'Rust red'], ['#2e6b3a', 'Green'], ['#16181b', 'Black'], ['#e2b31b', 'Yellow'], ['#d9dde0', 'Stainless']];
@@ -1147,11 +1162,11 @@ function camFields(o, spec) {
   const h = o.h != null ? o.h : spec.h;
   const armed = ui.attach && ui.attach.id === o.id;
   return `<div class="divider"></div><h3>Camera</h3>
-    <div class="field"><label>Colour</label><div class="chips">${CAM_COLORS.map((c) => `<button class="chip swatch${(o.color || '#f2f3f4') === c.hex ? ' on' : ''}" style="background:${c.hex}" title="${c.name}" data-act="set" data-key="color" data-value="${c.hex}"></button>`).join('')}</div></div>
+    <div class="field"><label>Colour</label><div class="chips">${CAM_COLORS.map((c) => `<button class="chip swatch${(o.color || spec.camColor || '#f2f3f4') === c.hex ? ' on' : ''}" style="background:${c.hex}" title="${c.name}" data-act="set" data-key="color" data-value="${c.hex}"></button>`).join('')}</div></div>
     <div class="field"><label for="c-h">Mount height<b>${Math.round(h)} ft</b></label>
       <input id="c-h" type="range" min="${spec.hMin || 6}" max="${spec.hMax || 60}" step="1" value="${Math.round(h)}" data-act="num" data-key="h"></div>
-    <div class="field"><label for="c-tilt">Tilt down<b>${Math.round(o.tilt ?? 25)}°</b></label>
-      <input id="c-tilt" type="range" min="0" max="80" step="1" value="${o.tilt ?? 25}" data-act="num" data-key="tilt"></div>
+    <div class="field"><label for="c-tilt">Tilt down<b>${Math.round(o.tilt ?? spec.tilt ?? 25)}°</b></label>
+      <input id="c-tilt" type="range" min="0" max="80" step="1" value="${o.tilt ?? spec.tilt ?? 25}" data-act="num" data-key="tilt"></div>
     <p class="note">Turn it with ↺ / ↻ above (or R) to aim it.</p>
     <div class="toggles">${toggle('cover', 'Show what it sees', !!o.cover)}${toggle('ir', 'Night vision (IR)', o.ir !== false)}</div>
     ${o.cover ? `<div class="field"><label for="c-range">View distance<b>${Math.round(o.range || 90)} ft</b></label>
@@ -1730,7 +1745,7 @@ function poleToWall(o, ev) {
   if (!best) return null;
   const { b, hit } = best;
   const fx = makeFixture(PROP_CAM[o.type] || 'cam-bullet', hit.face, hit.t, clamp(hit.y, 3, buildingHeight(b)), {
-    color: o.color || '#f2f3f4', tilt: o.tilt ?? 25, cover: !!o.cover, range: o.range || 90, ir: o.ir !== false,
+    color: o.color || '#f2f3f4', tilt: o.tilt ?? spec.tilt ?? 25, cover: !!o.cover, range: o.range || 90, ir: o.ir !== false,
   });
   b.fixtures = b.fixtures || [];
   b.fixtures.push(fx);
@@ -3082,6 +3097,12 @@ function applyAction(el, ev) {
         o.color = ms.color;
         if (ms.text) o.text = ms.text; else delete o.text;
       }
+      return commit();
+    }
+    case 'reroll': {
+      if (!o) return;
+      snapshot();
+      o.look = (o.look || 0) + 1;
       return commit();
     }
     case 'toggle': {

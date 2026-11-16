@@ -84,6 +84,31 @@ export function cameraHead(B, kind, { color = '#f2f3f4', tilt = 25, pan = 0, ir 
       g.userData.pan = { base: pan * DEG, range: 0.75, speed: 0.18, phase: (reach * 7 + tilt) % 6.28 };
       return { lens: [0, -1.5, reach], moving: g };
     }
+    case 'lpr': {
+      // A solar plate reader: a long squared-off housing on a hinged clamp,
+      // a recessed window with the lens and its infrared array behind it.
+      const at = [0, 0, wall ? 0.5 : 0.25];
+      if (wall) B.box(body, 0.5, 0.6, 0.12, 0, 0, 0.06);
+      B.box(body, 0.2, 0.34, at[2], 0, 0, at[2] / 2);
+      B.add(cylGeo(0.11, 0.11, 0.5, 10).rotateZ(Math.PI / 2), dark, { pos: at });
+      const head = [at[0], at[1], at[2]];
+      // The housing: rounded in section, 1.5 ft long.
+      const shell = new THREE.CylinderGeometry(0.34, 0.34, 1.5, 4, 1).rotateY(Math.PI / 4).rotateX(Math.PI / 2);
+      const p = shell.attributes.position;
+      for (let i = 0; i < p.count; i++) p.setXY(i, p.getX(i) * 1.08, p.getY(i) * 0.92);
+      shell.translate(0, 0.02, 0.86);
+      B.add(aim(shell, tilt, pan, head), body);
+      B.add(aim(boxGeo(0.58, 0.05, 1.72).translate(0, 0.27, 0.92), tilt, pan, head), body);
+      B.add(aim(boxGeo(0.46, 0.4, 0.04).translate(0, 0.02, 1.6), tilt, pan, head), M.vehicleGlass());
+      B.add(aim(along(cylGeo(0.11, 0.11, 0.05, 14), 1.62).translate(-0.09, 0.03, 0), tilt, pan, head), M.pianoBlack());
+      if (ir) B.add(aim(boxGeo(0.14, 0.2, 0.03).translate(0.13, 0.03, 1.615), tilt, pan, head), M.lamp('#ff2a1f', 1.3));
+      B.add(aim(boxGeo(0.03, 0.03, 0.02).translate(-0.18, -0.13, 1.62), tilt, pan, head), M.signal('#39d353', 1.6));
+      // Cable gland underneath.
+      B.add(aim(cylGeo(0.05, 0.05, 0.14, 8).translate(0, -0.26, 0.4), tilt, pan, head), dark);
+      const lensAt = [head[0], head[1], head[2]];
+      if (cover) coverCone(B, range, tilt, pan, lensAt, 22);
+      return { lens: lensAt, moving: null };
+    }
     default: {
       // Bullet: a bracket, a swivel, the barrel and its sun shield.
       const reach = wall ? 0.9 : 0;

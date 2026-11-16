@@ -11,7 +11,8 @@ import { Builder, cylGeo } from './builder.js';
 import * as M from './materials.js';
 import { rng, panelTexture, signTexture, safetyTexture, screenTexture } from './textures.js';
 import { cameraHead, markCones } from './cameras.js';
-import { plant, person } from './nature.js';
+import { plant } from './nature.js';
+import { personWith, peopleGroup } from './figures.js';
 import { vehicleModel } from './vehicles.js';
 import { PROP_BY_ID, BOOTH_BY_ID } from '../catalog.js';
 import { lotLayout } from '../lots.js';
@@ -650,6 +651,41 @@ const P = {
     });
     B.sphere(M.signal('#ff2a1f', 2.5), 0.18, 0, h + 0.35, 0, { seg: 8 });
     B.post(galv(), 0.05, 0.4, 0, h - 1.2, 0, 6);
+  },
+  /* A solar licence-plate camera of the kind seen at neighbourhood entrances:
+   * a slim black pole, the black reader, and its own solar panel on top. */
+  flockcam(B, o, { h }, ctx) {
+    const black = M.painted('#16181b', 0.55);
+    B.add(cylGeo(0.5, 0.56, 0.35, 16), M.concrete('#a8a59d'), { pos: [0, 0.17, 0] });
+    B.add(cylGeo(0.13, 0.13, h, 14), black, { pos: [0, h / 2, 0] });
+    B.add(cylGeo(0.145, 0.145, 0.05, 14), black, { pos: [0, h + 0.025, 0] });
+    // Band clamps and the camera on its bracket.
+    const cy = h - 2.6;
+    for (const dy of [-0.16, 0.16]) B.add(cylGeo(0.15, 0.15, 0.07, 14), M.metal('#8d949b', 0.4), { pos: [0, cy + dy, 0] });
+    B.box(black, 0.24, 0.5, 0.16, 0, cy, 0.17);
+    mountCam(B, ctx, 'lpr', [0, cy, 0.22], 0, { ...o, color: o.color || '#16181b', tilt: o.tilt ?? 14, range: o.range || 75 });
+    // The solar panel: above the pole on a tilting bracket, facing the sky.
+    const tilt = 0.6;
+    const pc = [0, h + 0.82, 0];
+    const R = [-(Math.PI / 2 - tilt), 0, 0];
+    const nrm = [0, Math.cos(tilt), Math.sin(tilt)];
+    const off = (k) => [pc[0], pc[1] + nrm[1] * k, pc[2] + nrm[2] * k];
+    B.box(M.metal('#2a2d31', 0.5), 1.62, 2.22, 0.09, ...pc, R);
+    B.box(M.solarPanel(), 1.5, 2.1, 0.03, ...off(0.05), R);
+    for (const k of [-0.7, 0, 0.7]) B.box(M.metal('#3a4658', 0.35), 1.5, 0.014, 0.034, pc[0], pc[1] + nrm[1] * 0.052 + Math.sin(tilt) * k, pc[2] + nrm[2] * 0.052 - Math.cos(tilt) * k, R);
+    B.box(M.metal('#3a4658', 0.35), 0.014, 2.1, 0.034, ...off(0.052), R);
+    B.box(black, 0.5, 0.5, 0.12, ...off(-0.1), R);
+    // The bracket: a sleeve on the pole top and two struts up to the panel's back.
+    B.add(cylGeo(0.17, 0.17, 0.5, 14), black, { pos: [0, h - 0.2, 0] });
+    B.tube(black, [0, h, 0], off(-0.12), 0.07, 8);
+    B.tube(black, [0, h - 0.3, 0.14], [0, pc[1] - 0.45 - 0.08, pc[2] + 0.62], 0.035, 6);
+    // The lead from the panel down to the camera.
+    B.tube(black, [0.1, h + 0.5, -0.08], [0.15, h - 0.5, 0.02], 0.022, 5);
+    B.tube(black, [0.15, h - 0.5, 0.02], [0.14, cy + 0.1, 0.16], 0.022, 5);
+    // The small ownership placard most of them carry.
+    const tex = panelTexture({ text: 'LICENSE PLATE CAMERA', sub: 'SOLAR POWERED · 24 HR', color: '#f4f4f2', bg: '#16181b', aspect: 1.5 });
+    face(B, panelMat(tex, ctx), 0.9, 0.6, 0, Math.min(6.2, h - 4.2), 0.16);
+    B.box(black, 0.96, 0.66, 0.04, 0, Math.min(6.2, h - 4.2), 0.13);
   },
   cctvanpr(B, o, { w, h }, ctx) {
     camPole(B, h, 0.16, 0.26);
@@ -2144,7 +2180,6 @@ function hashId(id) {
   return h >>> 0;
 }
 
-const PEOPLE = new Set(['worker', 'visitor', 'guard', 'group']);
 Object.assign(P, MORE);
 
 const PLANTS = new Set(['tree', 'oak', 'maple', 'birch', 'conifer', 'pine', 'palm', 'shrub', 'hedge']);
@@ -2174,14 +2209,10 @@ export function buildProp(o) {
     return group;
   } else if (PLANTS.has(o.type)) {
     plant(B, o.type, hashId(o.id), dims);
-  } else if (PEOPLE.has(o.type)) {
-    const seed = hashId(o.id);
-    if (o.type === 'group') {
-      const r = rng(seed);
-      for (let i = 0; i < 4; i++) person(B, r() > 0.7 ? 'worker' : 'visitor', seed + i * 7, (i % 2 - 0.5) * 3 + (r() - 0.5), (Math.floor(i / 2) - 0.5) * 2.6, r() * 6.28);
-    } else {
-      person(B, o.type, seed, 0, 0, 0);
-    }
+  } else if (spec && spec.person) {
+    const seed = hashId(o.id) + (o.look || 0) * 7919;
+    if (spec.person === 'group') peopleGroup(B, seed, spec.roles);
+    else personWith(B, spec.person, seed, { pose: o.pose || spec.pose || null });
   } else if (P[o.type]) {
     P[o.type](B, o, dims, ctx);
   } else {

@@ -368,6 +368,7 @@ export const PROPS = [
   P('CCTV', 'cctvptz', 'PTZ camera mast', '🛰️', 2.6, 3, 30, { cam: true, hMin: 10, hMax: 80 }),
   P('CCTV', 'cctvmulti', 'Multi-camera mast', '🗼', 3.4, 3.4, 40, { cam: true, hMin: 15, hMax: 100 }),
   P('CCTV', 'cctvanpr', 'ANPR camera', '🔍', 8, 1.6, 14, { cam: true, hMin: 8, hMax: 25 }),
+  P('CCTV', 'flockcam', 'Solar plate camera (Flock style)', '🔋', 2.2, 3, 12, { cam: true, hMin: 8, hMax: 24, camColor: '#16181b', tilt: 14 }),
   P('CCTV', 'cctvtower', 'Mobile CCTV tower', '🚨', 7, 12, 26, { cam: true, solid: true, hMin: 12, hMax: 40 }),
   // planting
   P('Playground', 'playstructure', 'Play structure', '🏰', 40, 30, 14, { solid: true }),
@@ -495,10 +496,25 @@ export const PROPS = [
   P('Vehicles', 'skidsteer', 'Skid steer loader', '🚜', 6, 11, 7.6, { vehicle: true, solid: true }),
   P('Vehicles', 'campervan', 'Camper van', '🚐', 7.6, 22, 10.5, { vehicle: true, solid: true }),
   // people
-  P('People', 'worker', 'Worker', '👷', 2, 1.4, 5.8),
-  P('People', 'visitor', 'Visitor', '🧍', 2, 1.4, 5.7),
-  P('People', 'guard', 'Security guard', '💂', 2, 1.4, 5.9),
-  P('People', 'group', 'Group of people', '👥', 8, 6, 5.8),
+  P('People', 'visitor', 'Visitor', '🧍', 2, 1.6, 5.8, { person: 'visitor' }),
+  P('People', 'officeworker', 'Office worker', '🧑‍💼', 2, 1.6, 5.8, { person: 'office' }),
+  P('People', 'shopper', 'Shopper', '🛍️', 2, 1.6, 5.8, { person: 'shopper' }),
+  P('People', 'student', 'Student', '🎒', 2, 1.6, 5.6, { person: 'student' }),
+  P('People', 'child', 'Child', '🧒', 1.6, 1.4, 4.4, { person: 'child' }),
+  P('People', 'guard', 'Security guard', '💂', 2, 1.6, 5.9, { person: 'guard' }),
+  P('People', 'worker', 'Construction worker', '👷', 2, 1.6, 5.9, { person: 'worker', work: true }),
+  P('People', 'foreman', 'Site foreman', '📋', 2, 1.6, 5.9, { person: 'foreman', work: true }),
+  P('People', 'flagger', 'Flagger with stop/slow paddle', '🛑', 2, 1.6, 7.5, { person: 'flagger', pose: 'flag' }),
+  P('People', 'mechanic', 'Mechanic', '🔧', 2, 1.6, 5.9, { person: 'mechanic', work: true }),
+  P('People', 'clerk', 'Shop assistant', '🏷️', 2, 1.6, 5.8, { person: 'clerk' }),
+  P('People', 'chefp', 'Chef', '🧑‍🍳', 2, 1.6, 6.4, { person: 'chef' }),
+  P('People', 'server', 'Waiter', '🍽️', 2, 1.6, 5.8, { person: 'server' }),
+  P('People', 'medic', 'Nurse in scrubs', '🩺', 2, 1.6, 5.8, { person: 'medic' }),
+  P('People', 'doctor', 'Doctor', '🥼', 2, 1.6, 5.8, { person: 'doctor' }),
+  P('People', 'athlete', 'Runner', '🏃', 2, 1.6, 5.8, { person: 'athlete', pose: 'run' }),
+  P('People', 'group', 'Group of people', '👥', 8, 6, 5.8, { person: 'group', roles: ['visitor', 'visitor', 'office', 'visitor'] }),
+  P('People', 'crew', 'Work crew', '🦺', 8, 6, 5.9, { person: 'group', roles: ['worker', 'worker', 'foreman', 'worker'] }),
+  P('People', 'family', 'Family', '👪', 7, 6, 5.8, { person: 'group', roles: ['visitor', 'visitor', 'child', 'child'] }),
 ];
 
 export const PROP_BY_ID = Object.fromEntries(PROPS.map((p) => [p.id, p]));
