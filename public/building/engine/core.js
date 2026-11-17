@@ -657,7 +657,7 @@ export class Engine {
       // world outside the windows burns out a little.
       this.hemi.color.lerp(new THREE.Color('#fff3e2'), 0.55 * this.indoor);
       this.hemi.groundColor.lerp(new THREE.Color('#8a8276'), 0.6 * this.indoor);
-      this.hemi.intensity = this.hemiBase = Math.max(this.hemi.intensity * (1 + 1.1 * this.indoor), 0.95 * this.indoor);
+      this.hemi.intensity = this.hemiBase = Math.max(this.hemi.intensity * (1 + 0.75 * this.indoor), 0.8 * this.indoor);
     }
     // A hazy sky model is far brighter than a clear one; even it out.
     const skyGain = 1 / (1 + Math.max(0, W.turbidity - 2) * 0.3);
@@ -675,7 +675,7 @@ export class Engine {
     // Exposure and glow
     // Like a camera, open up as the light gets low.
     const lowSun = golden * W.sun * smooth(-4, 2, e);
-    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.35 : 1) * (1 + lowSun * 1.7) * (1 + 0.15 * W.snow * day) * (this.q.exposure ?? 1) * (1 + 0.25 * this.indoor);
+    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.35 : 1) * (1 + lowSun * 1.7) * (1 + 0.15 * W.snow * day) * (this.q.exposure ?? 1) * (1 + 0.1 * this.indoor);
     this.tuneBloom();
     this.stars.material.opacity = night * (W.clouds > 0.8 ? 0.08 : 1 - W.clouds * 0.7);
     this.glow.material.uniforms.strength.value = night * (W.clouds > 0.8 ? 1.4 : 1);
