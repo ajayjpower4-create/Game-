@@ -551,8 +551,6 @@ export function scaffold(B, b, H, { sides = ['N', 'E', 'S', 'W'], lifts = 0, r =
     // Netting on the outside of a couple of bays.
     if (rand() < 0.75) {
       const i = Math.floor(rand() * bays);
-      const fc = new (b.__Face || Object)();
-      void fc;
       for (let k = 1; k <= n; k++) {
         const y = lift * k;
         const s0 = i * bw;

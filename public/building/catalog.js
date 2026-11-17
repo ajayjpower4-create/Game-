@@ -510,7 +510,7 @@ export const PROPS = [
   P('Construction', 'siteboard', 'Site safety board', '⚠️', 10, 1.5, 11, { sign: true, sub: true, hint: 'Rules board. The second line can hold several, separated by |.' }),
   P('Construction', 'roadsign', 'Road works sign', '🚧', 5, 1.5, 8.5, { variants: ['works', 'detour', 'closed', 'flag'] }),
   P('Construction', 'arrowboard', 'Arrow board', '➡️', 8, 12, 12, { solid: true }),
-  P('Construction', 'siteFence', 'Site fencing', '🚧', 46, 2.6, 7, { len: true, sign: true, color: true, hint: 'Mesh panels in rubber feet; the banner takes your own words.' }),
+  P('Construction', 'sitefence', 'Site fencing', '🚧', 46, 2.6, 7, { len: true, sign: true, color: true, hint: 'Mesh panels in rubber feet; the banner takes your own words.' }),
   P('Construction', 'hoardingrun', 'Site hoarding', '🪧', 60, 3.4, 9, { len: true, solid: true, sign: true, color: true }),
   P('Construction', 'barricade', 'Barricade', '🚧', 8, 2.4, 5, {}),
   P('Construction', 'trenchbox', 'Open trench', '🕳️', 10, 6, 7, { solid: true }),
@@ -1293,8 +1293,8 @@ export function freshState(preset = 'warehouse') {
     // Hoarding along the street and fencing round the rest.
     objects.push(prop('hoardingrun', 40, lot.depth - 14, 0, { w: 180 }));
     objects.push(prop('hoardingrun', cx + 170, lot.depth - 14, 0, { w: 170 }));
-    objects.push(prop('siteFence', 30, 20, 0, { w: 200 }), prop('siteFence', cx + 60, 20, 0, { w: 200 }));
-    objects.push(prop('siteFence', 20, 120, 90, { w: 200 }), prop('siteFence', lot.width - 20, 120, 90, { w: 200 }));
+    objects.push(prop('sitefence', 30, 20, 0, { w: 200 }), prop('sitefence', cx + 60, 20, 0, { w: 200 }));
+    objects.push(prop('sitefence', 20, 120, 90, { w: 200 }), prop('sitefence', lot.width - 20, 120, 90, { w: 200 }));
     // Plant on the pad.
     objects.push(prop('crane', cx - 20, 260));
     objects.push(prop('dozer', cx - 250, 250, 40), prop('loader', cx - 200, 90, 120));

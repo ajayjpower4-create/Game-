@@ -103,7 +103,7 @@ export const SITE = {
 
   /* ----------------------------------------------------- temporary works */
 
-  siteFence(B, o, { w, d, h }, ctx) {
+  sitefence(B, o, { w, d, h }, ctx) {
     // Heras fencing: welded mesh panels in rubber feet, with a printed banner.
     const panels = Math.max(1, Math.round(w / 11.5));
     const pw = w / panels;

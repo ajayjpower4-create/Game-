@@ -240,10 +240,11 @@ export function machineModel(B, type, { paint, color, w, L, h, z0 }) {
     }
     case 'dumper': {
       // Articulated site dumper with the skip tipped down.
+      // Tandem under the body, a single axle under the cab up front.
       for (const sx of [-1, 1]) {
-        wheel(B, sx * (w / 2 - 1.1), 2.6, z0 + 4, 2.6, 2.1, M.painted('#d9dde2', 0.4));
-        wheel(B, sx * (w / 2 - 1.1), 2.6, z0 + L - 4, 2.6, 2.1, M.painted('#d9dde2', 0.4));
-        wheel(B, sx * (w / 2 - 1.1), 2.6, z0 + L - 8.5, 2.6, 2.1, M.painted('#d9dde2', 0.4));
+        wheel(B, sx * (w / 2 - 1.1), 2.6, z0 + 4.5, 2.6, 2.1, M.painted('#d9dde2', 0.4));
+        wheel(B, sx * (w / 2 - 1.1), 2.6, z0 + 10, 2.6, 2.1, M.painted('#d9dde2', 0.4));
+        wheel(B, sx * (w / 2 - 1.1), 2.6, z0 + L - 5.5, 2.6, 2.1, M.painted('#d9dde2', 0.4));
       }
       B.box(yel, w - 1.6, 2.2, L - 6, 0, 3.4, 0);
       cab(B, yel, w - 3, 4.6, 5, 0, 4.5, z0 + L - 5.5);
@@ -258,7 +259,8 @@ export function machineModel(B, type, { paint, color, w, L, h, z0 }) {
       }
       bg.computeVertexNormals();
       B.add(bg, yel, { pos: [0, 6, z0 + L * 0.3] });
-      B.cone(M.dirt('#8a7558'), w / 2 - 1, 1.6, 0, 7.4, z0 + L * 0.3, 10);
+      B.cone(M.dirt('#8a7558'), w / 2 - 1.2, 2.2, 0, 7.6, z0 + L * 0.3, 10);
+      B.cone(M.dirt('#8a7558'), w / 2 - 2, 1.6, 0, 7.6, z0 + L * 0.3 - 3, 9);
       beacon(B, 0, h, z0 + L - 5.5);
       return true;
     }

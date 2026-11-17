@@ -329,7 +329,7 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   cube, container booth, twin-lane kiosk, pitched hut, raised lookout, round
   kiosk and a gate office — each lit inside at night, each with a fascia sign
   you write.
-- **282 props** — the new **cars**, **trucks**, **trailers**, **dealership**,
+- **286 props** — the new **cars**, **trucks**, **trailers**, **dealership**,
   **paint & drains**, **playground**, **garden tools** and **backyard** shelves
   (see the sections below), plus boundary (mesh, palisade, timber and black
   ornamental steel fences, walls, guard rail, bollards, sleeved pipe bollards in
