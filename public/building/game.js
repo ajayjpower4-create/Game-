@@ -22,6 +22,7 @@ import { lotLayout, LOT_ANGLES, STALL_WIDTHS, DEALER_ORGANIZE, DEALER_FACING, de
 import { CAR_MAKES, TRAILERS, TRAILER_BY_ID, TRUCK_BY_ID } from './vehiclelist.js';
 import { rigLength } from './engine/trucks.js';
 import { POSE_NAMES, STANDING, WORKING } from './engine/figures.js';
+import { BUILD_STAGES, FRAME_KINDS, STEEL_COLORS } from './engine/construction.js';
 import { createInteriorEditor } from './interiors.js';
 import { hasInterior } from './interiorlist.js';
 import { GARDEN, GARDEN_GROUPS, COVERS, COVER_BY_ID, stamp as gardenStamp, coverStamp, erase as gardenErase } from './engine/garden.js';
@@ -233,7 +234,7 @@ function drawMenu() {
       ${btn('new', '＋ New site', 'Pick a starting point and a lot size', saved ? '' : ' primary')}
       ${btn('load', '📂 Load site', slots ? `${slots} saved site${slots === 1 ? '' : 's'}` : 'Open a saved site or a .json file')}
       ${btn('settings', '⚙️ Settings', `Graphics: ${(QUALITY[prefs.quality] || {}).name || prefs.quality}`)}
-      ${btn('news', '✨ What’s new', 'Real cars and trucks, gardens, dealerships…')}
+      ${btn('news', '✨ What’s new', 'Interiors, real people, construction sites…')}
       ${IS_DESKTOP ? '<button class="menu-btn ghost" data-act="quit"><b>⏻ Quit</b><small>Close the game</small></button>' : ''}
     </nav>
     <footer class="menu-foot">${IS_DESKTOP ? 'Desktop edition · mods folder: Game › Open mods folder' : 'Tip: everything you place can be moved, turned and edited afterwards.'}</footer>`;
@@ -281,6 +282,10 @@ function menuPanel(kind) {
   }
   if (kind === 'news') {
     const items = [
+      ['🛋️', 'Interiors', 'Design the inside of any building: ceiling height and finish, floors, partition walls you draw yourself, then furnish it from 18 tabs — office, shop, warehouse, restaurant, kitchen, school, clinic, home, gym and more. Walk through it at eye height.'],
+      ['🧍', 'Real people', 'Every figure is built from scratch — build, face, hair, clothes — on a 17-bone skeleton with 30 poses, and the walkers on the site are the same people, animated.'],
+      ['🏗️', 'Construction sites', 'Put any building up stage by stage: pad, footings, steel or timber frame, decks, sheathing, fitting out, with scaffolding, hoardings, plant and materials. Or start a whole site on bare earth.'],
+      ['🔋', 'Solar cameras', 'A black bullet camera on a pole with its own solar panel, the way the plate readers at the lot entrance are done.'],
       ['🚗', 'Real cars', '24 detailed models, three from each of 8 makes — Toyota, Ford, Chevrolet, Honda, Tesla, BMW, Mercedes-Benz and Jeep — with cabins you can see into.'],
       ['🚛', 'Semi trucks & trailers', 'Six tractors, and eight trailers to hitch to them: dry van, reefer, flatbed with lumber, step deck, tanker, car hauler, container and end dump.'],
       ['🏬', 'Car superstore', 'A split-face block store with an open-truss entrance tower, glass service doors, and the lot kit: pylon, direction signs, row markers, kiosk, fence and lights.'],
@@ -963,6 +968,29 @@ function roofEditor(b) {
     ${list ? `<ul class="objlist">${list}</ul>` : '<p class="note">Nothing on this roof yet.</p>'}`;
 }
 
+/* How far up a building is, and what it is framed in. */
+function constructionEditor(b) {
+  const on = !!(b.build && b.build.stage && b.build.stage !== 'done');
+  const stage = on ? b.build.stage : 'frame';
+  const frame = (b.build && b.build.frame) || 'steel';
+  const cur = BUILD_STAGES.find((s) => s.id === stage) || BUILD_STAGES[2];
+  return `<h3>🏗️ Under construction</h3>
+    <div class="toggles">
+      <button class="toggle${on ? ' on' : ''}" data-act="build-on"><span>Still going up</span><span class="pill">${on ? 'Yes' : 'Finished'}</span></button>
+    </div>
+    ${on ? `<div class="field"><label>Stage</label><div class="chips">
+      ${BUILD_STAGES.map((s) => `<button class="chip${stage === s.id ? ' on' : ''}" data-act="build-set" data-key="stage" data-value="${s.id}">${s.icon} ${esc(s.name)}</button>`).join('')}
+    </div></div>
+    <p class="note">${esc(cur.blurb)}</p>
+    <div class="field"><label>Framed in</label><div class="chips">
+      ${FRAME_KINDS.map((f) => `<button class="chip${frame === f.id ? ' on' : ''}" data-act="build-set" data-key="frame" data-value="${f.id}">${f.icon} ${esc(f.name)}</button>`).join('')}
+    </div></div>
+    ${frame === 'steel' ? `<div class="field"><label>Steelwork</label><div class="chips">
+      ${STEEL_COLORS.map(([c, n]) => `<button class="chip swatch${((b.build && b.build.color) || STEEL_COLORS[0][0]) === c ? ' on' : ''}" style="background:${c}" title="${esc(n)}" data-act="build-set" data-key="color" data-value="${c}"></button>`).join('')}
+    </div></div>` : ''}
+    <p class="note">The frame follows this building's own size, floors, roof and window openings. Walk the site in Drone or Walk to look through it.</p>` : '<p class="note">Switch this on to put the building back up stage by stage — pad, footings, frame, decks, sheathing, fitting out.</p>'}`;
+}
+
 /* Styles whose model letters a name on itself (a brand panel, a school tower). */
 const NAMED_EXTRAS = new Set(['dealership', 'carstore', 'school', 'highschool']);
 
@@ -1012,6 +1040,8 @@ function buildingPanel(b) {
       <button class="toggle${b.roofGlass ? ' on' : ''}" data-act="toggle-true" data-key="roofGlass"><span>Glass roof</span><span class="pill">${b.roofGlass ? 'On' : 'Off'}</span></button>
     </div>
     <div class="divider"></div>
+    ${constructionEditor(b)}
+    <div class="divider"></div>
     ${doorEditor(b)}
     <div class="divider"></div>
     ${wallEditor(b)}
@@ -1050,6 +1080,9 @@ function propPanel(o) {
     </div></div>` : ''}
     ${spec.color || ['dumpster', 'skip', 'flag'].includes(o.type) ? `<div class="field"><label>${spec.car || spec.truck ? 'Paint' : 'Colour'}</label><div class="chips">
       ${(spec.car || spec.truck ? CAR_PAINTS : spec.paintArrow ? MARK_COLORS : ['#d9dde2', '#1d2735', '#7d2f2f', '#1e2229', '#f1f2f4', '#35543f', '#8d5a24', '#2c4a7c', '#c0392b', '#c9a227', '#b5482f', '#1f5b8a'].map((c) => [c, ''])).map(([c, n]) => `<button class="chip swatch${o.color === c ? ' on' : ''}" style="background:${c}" title="${n}" data-act="set" data-key="color" data-value="${c}"></button>`).join('')}
+    </div></div>` : ''}
+    ${spec.variants ? `<div class="field"><label>Kind</label><div class="chips">
+      ${spec.variants.map((v, i) => `<button class="chip${(o.variant || spec.variants[0]) === v ? ' on' : ''}" data-act="set" data-key="variant" data-value="${v}">${esc(v[0].toUpperCase() + v.slice(1))}</button>`).join('')}
     </div></div>` : ''}
     ${spec.car ? `<p class="note">${esc(spec.body || '')} · ${fmt(spec.d)} ft long, ${fmt(spec.w)} ft wide. Look through the glass: the seats, dashboard and steering wheel are all modelled.</p>` : ''}
     ${spec.truck ? `<p class="note">${esc(spec.body || '')} · ${fmt(spec.d)} ft long, ${fmt(spec.h)} ft tall. Air lines, fuel tanks, fifth wheel and dual drive wheels are all modelled.</p>${truckTrailerFields(o)}` : ''}
@@ -1964,6 +1997,8 @@ function armItem(kind, key) {
     if (kind === 'building') {
       const b = makeBuilding(key);
       b.fixtures = [];
+      // On a construction site, a new building starts as a frame.
+      if (state.mode === 'construct') b.build = { stage: 'frame', frame: b.w * b.d < 4000 ? 'timber' : 'steel', color: STEEL_COLORS[0][0] };
       return b;
     }
     if (kind === 'booth') return { id: 'ghost', kind: 'booth', design: key, rot: 0, x: 0, y: 0, sign: { text: 'SECURITY', color: '#ffffff', logo: '🛡️' } };
@@ -2836,6 +2871,22 @@ function applyAction(el, ev) {
   if (ui.interior && interiors && ['tab', 'restart', 'cat', 'arm'].includes(act)) interiors.close();
 
   switch (act) {
+    case 'build-on': {
+      if (!o || o.kind !== 'building') return;
+      snapshot();
+      o.build = (o.build && o.build.stage && o.build.stage !== 'done') ? null : { stage: 'frame', frame: 'steel', color: STEEL_COLORS[0][0] };
+      syncWorld();
+      drawPanel();
+      return queueSave();
+    }
+    case 'build-set': {
+      if (!o || o.kind !== 'building') return;
+      snapshot();
+      o.build = { stage: 'frame', frame: 'steel', color: STEEL_COLORS[0][0], ...(o.build || {}), [key]: value };
+      syncWorld();
+      drawPanel();
+      return queueSave();
+    }
     case 'interior': {
       const b = o && o.kind === 'building' ? o : null;
       if (!b) return;

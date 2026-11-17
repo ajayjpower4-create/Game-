@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { Builder } from './builder.js';
 import * as M from './materials.js';
+import { machineModel } from './machines.js';
 import { carModel, isCar } from './cars.js';
 import { truckModel, isTruck } from './trucks.js';
 import { trailerModel, isTrailer } from './trailers.js';
@@ -475,7 +476,7 @@ export function vehicleModel(type, color, w, L, h, paintOverride = null, { lit =
       break;
     }
     default:
-      B.box(paint, w, h, L, 0, h / 2, 0);
+      if (!machineModel(B, type, { paint, color, w, L, h, z0 })) B.box(paint, w, h, L, 0, h / 2, 0);
   }
   return B;
 }

@@ -495,6 +495,33 @@ export const PROPS = [
   P('Vehicles', 'motorbike', 'Motorbike', '🏍️', 2.6, 7, 4.2, { vehicle: true }),
   P('Vehicles', 'skidsteer', 'Skid steer loader', '🚜', 6, 11, 7.6, { vehicle: true, solid: true }),
   P('Vehicles', 'campervan', 'Camper van', '🚐', 7.6, 22, 10.5, { vehicle: true, solid: true }),
+  // construction plant
+  P('Construction', 'dozer', 'Bulldozer', '🚜', 12, 22, 11.5, { vehicle: true, solid: true, color: '#e2a51b' }),
+  P('Construction', 'loader', 'Wheel loader', '🚜', 11, 28, 12.5, { vehicle: true, solid: true, color: '#e2a51b' }),
+  P('Construction', 'backhoe', 'Backhoe loader', '🚜', 8.4, 24, 12.5, { vehicle: true, solid: true, color: '#e2a51b' }),
+  P('Construction', 'minidigger', 'Mini excavator', '🚜', 5.4, 15, 9.5, { vehicle: true, solid: true, color: '#e2a51b' }),
+  P('Construction', 'roller', 'Road roller', '🛞', 7.4, 16, 10.5, { vehicle: true, solid: true, color: '#e2a51b' }),
+  P('Construction', 'dumper', 'Articulated dumper', '🚚', 12, 36, 13, { vehicle: true, solid: true, color: '#e2a51b' }),
+  P('Construction', 'telehandler', 'Telehandler', '🏗️', 8.4, 26, 12, { vehicle: true, solid: true, color: '#e2a51b' }),
+  P('Construction', 'boomlift', 'Boom lift', '🛗', 7.4, 20, 34, { vehicle: true, solid: true, color: '#e05a20' }),
+  P('Construction', 'concretepump', 'Concrete pump', '🚛', 8.4, 30, 16, { vehicle: true, solid: true, color: '#c0392b' }),
+  P('Construction', 'sitecabin', 'Site cabins', '🏢', 12, 32, 21, { solid: true, color: '#e9eaea' }),
+  P('Construction', 'projectboard', 'Project board', '🪧', 24, 2, 14, { sign: true, sub: true, solid: true, color: true, hint: 'The board at the gate: the job, who is building it, and the colours they use.' }),
+  P('Construction', 'siteboard', 'Site safety board', '⚠️', 10, 1.5, 11, { sign: true, sub: true, hint: 'Rules board. The second line can hold several, separated by |.' }),
+  P('Construction', 'roadsign', 'Road works sign', '🚧', 5, 1.5, 8.5, { variants: ['works', 'detour', 'closed', 'flag'] }),
+  P('Construction', 'arrowboard', 'Arrow board', '➡️', 8, 12, 12, { solid: true }),
+  P('Construction', 'siteFence', 'Site fencing', '🚧', 46, 2.6, 7, { len: true, sign: true, color: true, hint: 'Mesh panels in rubber feet; the banner takes your own words.' }),
+  P('Construction', 'hoardingrun', 'Site hoarding', '🪧', 60, 3.4, 9, { len: true, solid: true, sign: true, color: true }),
+  P('Construction', 'barricade', 'Barricade', '🚧', 8, 2.4, 5, {}),
+  P('Construction', 'trenchbox', 'Open trench', '🕳️', 10, 6, 7, { solid: true }),
+  P('Construction', 'rebarcage', 'Reinforcing steel', '⛓️', 10, 14, 5, { solid: true }),
+  P('Construction', 'blockcube', 'Blocks and bricks', '🧱', 9, 4.4, 6, { solid: true, variants: ['block', 'brick'] }),
+  P('Construction', 'pipestack', 'Pipe stack', '🛢️', 14, 20, 7, { solid: true, variants: ['concrete', 'plastic'] }),
+  P('Construction', 'sandpile', 'Aggregate bay', '⛰️', 18, 16, 9, { solid: true, variants: ['sand', 'gravel'] }),
+  P('Construction', 'cementbags', 'Bagged cement', '🧱', 4.4, 4.4, 5, {}),
+  P('Construction', 'mixerstation', 'Site mixer', '🥣', 10, 7, 7, {}),
+  P('Construction', 'toolstore', 'Tool store', '🧰', 7, 5, 7.4, { solid: true, color: '#e2b31b' }),
+  P('Construction', 'lightmast', 'Lighting tower', '💡', 7, 12, 30, { light: true, solid: true, color: '#e2b31b' }),
   // people
   P('People', 'visitor', 'Visitor', '🧍', 2, 1.6, 5.8, { person: 'visitor' }),
   P('People', 'officeworker', 'Office worker', '🧑‍💼', 2, 1.6, 5.8, { person: 'office' }),
@@ -1077,6 +1104,7 @@ export const SITE_PRESETS = {
   town: { name: 'Town block', icon: '🏘️', lot: { width: 720, depth: 520 }, blurb: 'Flats, shops, a school and houses.' },
   storage: { name: 'Storage yard', icon: '🔒', lot: { width: 600, depth: 460 }, blurb: 'Rows of units behind a gate.' },
   retail: { name: 'Retail strip', icon: '🛒', lot: { width: 560, depth: 400 }, blurb: 'A storefront row facing a big lot.' },
+  construct: { name: 'Construction site', icon: '🏗️', lot: { width: 620, depth: 460 }, blurb: 'Bare earth, hoardings and plant. Every building goes up stage by stage.' },
   empty: { name: 'Empty lot', icon: '⬜', lot: { width: 560, depth: 420 }, blurb: 'Bare ground. Build it all yourself.' },
 };
 
@@ -1243,6 +1271,52 @@ export function freshState(preset = 'warehouse') {
     objects.push(prop('van', cx + 170, 150, 90, { color: '#f1f2f4' }), prop('cctv', cx + 160, 40), prop('cctv', cx - 165, 300));
     dress(objects, lot, cx - 150, { fenceType: 'palisade' });
     lightTheYard(objects, lot, [lot.width * 0.3, lot.width * 0.55, lot.width * 0.8], lot.depth - 150);
+  } else if (preset === 'construct') {
+    // A job in progress: a shed going up, an office block at footing stage,
+    // the compound along one side and plant all over the pad.
+    const shed = makeBuilding('shed', { x: cx - 180, y: 150, w: 360, d: 150 });
+    shed.fixtures = [];
+    shed.roofItems = [];
+    shed.build = { stage: 'frame', frame: 'steel', color: '#b4bcc4' };
+    const office = makeBuilding('office', { x: cx + 10, y: 40, w: 120, d: 80, floors: 3 });
+    office.build = { stage: 'found', frame: 'steel', color: '#8c4a33' };
+    const house = makeBuilding('house', { x: cx - 230, y: 40, w: 46, d: 38, floors: 2 });
+    house.build = { stage: 'close', frame: 'timber' };
+    objects.push(shed, office, house);
+    // The compound: cabins, stores, welfare and the boards at the gate.
+    objects.push(prop('sitecabin', cx + 190, 150, 90));
+    objects.push(prop('toolstore', cx + 196, 196, 90), prop('portaloo', cx + 196, 212));
+    objects.push(prop('generator', cx + 190, 232), prop('skip', cx + 150, 240, 90));
+    objects.push(prop('projectboard', cx + 60, lot.depth - 26), prop('siteboard', cx + 96, lot.depth - 26));
+    objects.push(prop('roadsign', cx + 130, lot.depth - 22, 0, { variant: 'works' }));
+    objects.push(prop('arrowboard', cx + 152, lot.depth - 30, 180));
+    // Hoarding along the street and fencing round the rest.
+    objects.push(prop('hoardingrun', 40, lot.depth - 14, 0, { w: 180 }));
+    objects.push(prop('hoardingrun', cx + 170, lot.depth - 14, 0, { w: 170 }));
+    objects.push(prop('siteFence', 30, 20, 0, { w: 200 }), prop('siteFence', cx + 60, 20, 0, { w: 200 }));
+    objects.push(prop('siteFence', 20, 120, 90, { w: 200 }), prop('siteFence', lot.width - 20, 120, 90, { w: 200 }));
+    // Plant on the pad.
+    objects.push(prop('crane', cx - 20, 260));
+    objects.push(prop('dozer', cx - 250, 250, 40), prop('loader', cx - 200, 90, 120));
+    objects.push(prop('dumper', cx + 120, 300, 200), prop('telehandler', cx - 60, 110, 70));
+    objects.push(prop('minidigger', cx + 60, 100, 250), prop('roller', cx + 150, 90, 90));
+    objects.push(prop('boomlift', cx - 150, 320, 10), prop('concretepump', cx + 110, 240, 170));
+    objects.push(prop('excavator', cx - 300, 160, 300));
+    // Materials and temporary works.
+    objects.push(prop('rebarcage', cx - 270, 110), prop('blockcube', cx - 240, 300, 0, { variant: 'block' }));
+    objects.push(prop('blockcube', cx - 225, 300, 0, { variant: 'brick' }));
+    objects.push(prop('pipestack', cx + 230, 90, 90, { variant: 'concrete' }));
+    objects.push(prop('sandpile', cx + 250, 300, 0, { variant: 'sand' }), prop('sandpile', cx + 250, 340, 0, { variant: 'gravel' }));
+    objects.push(prop('cementbags', cx - 290, 300), prop('mixerstation', cx - 290, 270, 90));
+    objects.push(prop('pallets', cx - 120, 330), prop('trenchbox', cx + 170, 350, 90));
+    objects.push(prop('barricade', cx + 150, 330), prop('barricade', cx + 190, 330));
+    objects.push(prop('lightmast', cx - 280, 200, 120), prop('lightmast', cx + 210, 330, 220));
+    for (const [x, y, who, pose] of [[cx - 170, 120, 'worker', ''], [cx - 158, 126, 'foreman', 'clipboard'],
+      [cx + 40, 90, 'worker', 'carry'], [cx - 30, 290, 'worker', 'dig'], [cx + 120, lot.depth - 40, 'flagger', ''],
+      [cx - 240, 250, 'crew', ''], [cx + 150, 150, 'worker', 'point']]) {
+      objects.push(prop(who, x, y, 0, pose ? { pose } : {}));
+    }
+    objects.push(prop('cone', cx + 100, lot.depth - 60), prop('cone', cx + 112, lot.depth - 66), prop('cone', cx + 124, lot.depth - 72));
   } else if (preset === 'retail') {
     objects.push(makeBuilding('strip', { x: cx - 150, y: 60, sign: sign('TOILET PLUS SOLUTIONS', 'SOLUTIONS THAT WORK FOR YOU') }));
     objects.push(prop('trolleybay' === 'x' ? 'x' : 'bikerack', cx - 40, 170), prop('recycling', cx + 170, 70));
@@ -1250,14 +1324,18 @@ export function freshState(preset = 'warehouse') {
     lightTheYard(objects, lot, [lot.width * 0.3, lot.width * 0.55, lot.width * 0.8], lot.depth - 150);
   }
 
+  const building = preset === 'construct';
   return {
     v: 4,
     preset,
+    mode: building ? 'construct' : 'site',
     lot,
     view: {},
     env: { hour: 15.5, weather: 'clear', season: 'summer', cycle: false, traffic: true, people: true },
     skin: { wall: '#d8dde3', band: '#1f3a63' },
-    site: { pavement: true, parking: true, cars: true, road: true, grass: true, markings: true },
+    site: building
+      ? { pavement: false, parking: false, cars: false, road: true, grass: false, ground: 'dirt', markings: false }
+      : { pavement: true, parking: true, cars: true, road: true, grass: true, markings: true },
     objects: pruneInsideBuildings(objects.filter((o) => o.type !== 'x')),
     garden: { items: [], covers: [] },
   };
@@ -1273,6 +1351,7 @@ export function normalize(state) {
   const base = freshState('empty');
   const out = {
     ...base,
+    mode: state.mode === 'construct' ? 'construct' : 'site',
     ...state,
     lot: { ...base.lot, ...state.lot },
     view: { ...(state.view || {}) },

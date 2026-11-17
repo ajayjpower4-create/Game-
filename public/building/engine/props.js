@@ -17,6 +17,7 @@ import { vehicleModel } from './vehicles.js';
 import { PROP_BY_ID, BOOTH_BY_ID } from '../catalog.js';
 import { lotLayout } from '../lots.js';
 import { MORE, dealerDress } from './props2.js';
+import { SITE } from './props3.js';
 
 const DEG = Math.PI / 180;
 
@@ -2180,7 +2181,7 @@ function hashId(id) {
   return h >>> 0;
 }
 
-Object.assign(P, MORE);
+Object.assign(P, MORE, SITE);
 
 const PLANTS = new Set(['tree', 'oak', 'maple', 'birch', 'conifer', 'pine', 'palm', 'shrub', 'hedge']);
 

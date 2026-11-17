@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { Builder, cylGeo, boxGeo } from './builder.js';
 import * as M from './materials.js';
+import { underConstruction, buildFrame, scaffold } from './construction.js';
 import { signTexture, panelTexture, neonTexture, safetyTexture, screenTexture } from './textures.js';
 import { cameraHead, markCones } from './cameras.js';
 import { buildingHeight, ROOF_BY_ID, isCam } from '../catalog.js';
@@ -1487,6 +1488,8 @@ export function roofItemModel(type, { ground = false } = {}) {
  * group.userData.disposables, textures and materials made just for it.
  */
 export function buildBuilding(b) {
+  // A building that is still going up is drawn as a frame, not as itself.
+  if (underConstruction(b) && b.build.stage !== 'fit') return buildFrame(b);
   const group = new THREE.Group();
   const B = new Builder();
   const H = buildingHeight(b);
@@ -1525,6 +1528,8 @@ export function buildBuilding(b) {
   // A plinth line where the walls meet the ground hides any gap with the paving.
   B.slab(M.concrete('#9c9a94'), b.w + 0.6, 0.35, b.d + 0.6, 0, -0.1, 0);
 
+  // Fitting out: the building is up, the scaffold is still round it.
+  if (underConstruction(b)) scaffold(B, b, flat && b.parapet ? H + PARAPET : H, {});
   B.finish(group);
   for (const h of fx.holders) group.add(h);
   for (const m of extra.moving) group.add(m);

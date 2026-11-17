@@ -138,10 +138,22 @@ export function buildGround(state, plan) {
   }
 
   /* ---- the lot itself: mown grass, with a low kerb around it ---- */
-  if (site.grass !== false) {
-    flat(b, M.grass('#f2f1e2'), { x: 0, y: 0, w: W, d: D + 3 }, 0.02);
-  } else {
+  const surface = site.ground || (site.grass === false ? 'gravel' : 'grass');
+  if (surface === 'dirt') {
+    // A site stripped back to the earth, with haul routes tracked across it.
+    flat(b, M.dirt('#8a7558'), { x: 0, y: 0, w: W, d: D + 3 }, 0.02);
+    for (let i = 0; i < 7; i++) {
+      const y = 30 + r() * (D - 60);
+      stripe(b, M.dirt('#6f5c42'), 10, y, W - 10, y + (r() - 0.5) * 90, 7 + r() * 5, 0.03);
+    }
+    for (let i = 0; i < 5; i++) {
+      const x = 40 + r() * (W - 80);
+      stripe(b, M.dirt('#776349'), x, 20, x + (r() - 0.5) * 60, D - 20, 6 + r() * 4, 0.03);
+    }
+  } else if (surface === 'gravel') {
     flat(b, M.gravel(), { x: 0, y: 0, w: W, d: D + 3 }, 0.02);
+  } else {
+    flat(b, M.grass('#f2f1e2'), { x: 0, y: 0, w: W, d: D + 3 }, 0.02);
   }
 
   /* ---- street ---- */

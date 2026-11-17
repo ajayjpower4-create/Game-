@@ -371,7 +371,84 @@ box truck or van up near a loading bay and it squares itself onto the bay.
   vehicles (trailer, reefer, tractor unit, box truck, tanker, flatbed, dump
   truck, mixer, bus, van, pickup, SUV, car, hatchback, police car, ambulance,
   fire engine, forklift, excavator, tower crane, mobile crane, refuse truck,
-  scissor lift, site buggy, motorbike, skid steer, camper van); and people.
+  scissor lift, site buggy, motorbike, skid steer, camper van); construction
+  (bulldozer, wheel loader, backhoe loader, mini excavator, road roller,
+  articulated dumper, telehandler, boom lift, concrete pump, stacked site
+  cabins, project board, safety board, road-works signs, arrow board, mesh
+  site fencing, plywood hoarding, barricades, open trench with shoring,
+  reinforcing steel, block and brick cubes, pipe stacks, aggregate bays,
+  bagged cement, site mixer, tool store, lighting tower); and people.
+
+## Interiors
+
+Select any building and press **🛋️ Design the interior**. The roof and the
+near walls are cut away and you are looking down into that storey, with the
+real window and door openings in the shell. Everything you put inside is kept
+with the building and saved with the site.
+
+- **Room** — ceiling height and type (lay-in tile, plasterboard, exposed deck,
+  timber), floor finish from eleven real materials (carpet, carpet tile,
+  hardwood, vinyl tile, porcelain, small tile, terrazzo, marble, sealed
+  concrete, epoxy, rubber), wall colour, and whether the lights come on by
+  themselves.
+- **Walls & floors** — draw partitions point to point, or drag out a whole
+  room and get its four walls at once, in ten constructions: plasterboard,
+  glazed, half height, painted blockwork, facing brick, timber slat screen,
+  cubicle, wire mesh, glass guard rail, curtain track. Then patch areas of
+  different flooring over the base finish.
+- **Furnish** — 293 pieces across eighteen tabs: doors, office, retail,
+  warehouse, restaurant, pro kitchen, school, medical, living, bedroom, home
+  kitchen, bath & WC, lobby, garage & showroom, gym, lighting, décor and
+  people. Doors and internal windows snap into a partition and cut their own
+  opening; wall pieces snap flat against the nearest wall; table-top pieces
+  settle onto whatever surface is under them.
+
+Click to select, drag to move, **R** turns, **Delete** removes, Ctrl+Z undoes.
+**🚶 Walk inside** drops you on the floor at eye height with the lights on.
+Storeys are edited one at a time, and a floor can be copied to another.
+
+Every piece is modelled in the game, not downloaded: a desk has its cable
+tray and a lit screen, a gondola is stocked shelf by shelf, the espresso
+machine has group heads and a portafilter, and the showroom car is one of the
+twenty-four real car models.
+
+## People
+
+Figures are built from scratch rather than posed from a kit. Each one is a
+single lofted skin over a seventeen-bone skeleton, with its own build, face,
+hair, skin tone and clothes, and thirty poses to put it in — standing,
+leaning, talking, carrying, kneeling, digging, sitting, typing, reading,
+eating, driving, running. Seventeen roles come dressed for the job (visitor,
+shopper, office worker, teacher, student, child, guard, warehouse operative,
+foreman, flagger, chef, waiter, nurse, doctor, mechanic, shop assistant, gym
+member), and what a pose needs comes with it: a box, a clipboard, a phone, a
+shovel, a stop/slow paddle. **🎲 Someone else** rolls a different person.
+
+The people walking the site are the same figures, animated — they stride,
+swing their arms and turn corners, and on a construction site the crowd is
+site workers instead of shoppers.
+
+## Construction sites
+
+Start a site from the **🏗️ Construction site** preset and the ground is bare
+earth tracked with haul routes, the compound is set up along one side, and
+the buildings are going up.
+
+Any building, on any site, can be put under construction from its own panel.
+Pick how far along it is and what it is framed in:
+
+| Stage | What you see |
+| --- | --- |
+| **Site cleared** | Graded pad, setting-out profiles and string lines, trenches dug, spoil heaps |
+| **Foundations** | Perimeter footings, stem walls, pad bases, slab with saw-cut joints, holding-down bolts |
+| **Frame up** | Steel columns, beams, open-web joists and cross bracing — or timber plates, studs at centres, headers over every opening, floor joists and roof trusses |
+| **Decked** | Metal deck and screed, or plywood over the joists, and the roof deck following the real roof shape |
+| **Sheathed** | OSB or ply panels sheet by sheet with the openings left out, weather barrier over them, scaffolding up |
+| **Fitting out** | The finished building with the scaffold still round it |
+
+The frame follows that building's own size, floors, roof type and window
+openings, so a tower frames as a tower and a shed as a shed. Steelwork can be
+galvanised, red oxide, blue, grey or yellow.
 
 ## Cars and trucks
 

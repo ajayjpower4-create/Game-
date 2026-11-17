@@ -608,14 +608,18 @@ const BATH = [
 const BATH_B = {
   bathtub(B, it, { w, d, h }) {
     const porc = M.porcelain(it.color || '#f6f6f3');
-    // The tub: an outer shell with an inset well.
-    rbox(B, porc, w, h, d, 0, 0, 0, 0.14);
-    const g = new THREE.BoxGeometry(w - 0.6, h, d - 0.5);
-    const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) { const t = (p.getY(i) + h / 2) / h; p.setX(i, p.getX(i) * (0.82 + t * 0.18)); p.setZ(i, p.getZ(i) * (0.8 + t * 0.2)); }
-    g.computeVertexNormals();
-    B.add(g, M.porcelain('#eceae4'), { pos: [0, h / 2 + 0.28, 0] });
-    slab(B, M.clearGlass('#cfe0e6'), w - 0.75, 0.05, d - 0.65, 0, h - 0.55, 0);
+    const inner = M.porcelain(shadeHex(it.color || '#f6f6f3', 0.93));
+    // Four sides and a floor, so the well really is a well.
+    const t = 0.28;
+    for (const sz of [-1, 1]) rbox(B, porc, w, h, t, 0, 0, sz * (d / 2 - t / 2), 0.1);
+    for (const sx of [-1, 1]) rbox(B, porc, t, h, d - t * 2, sx * (w / 2 - t / 2), 0, 0, 0.1);
+    slab(B, inner, w - t * 2, 0.35, d - t * 2, 0, 0, 0);
+    // A softened inner shell so the corners are not square.
+    for (const sz of [-1, 1]) B.box(inner, w - t * 2, h - 0.5, 0.18, 0, (h + 0.35) / 2, sz * (d / 2 - t - 0.09), [sz * -0.12, 0, 0]);
+    for (const sx of [-1, 1]) B.box(inner, 0.18, h - 0.5, d - t * 2 - 0.3, sx * (w / 2 - t - 0.09), (h + 0.35) / 2, 0, [0, 0, sx * 0.12]);
+    // Water, just below the overflow.
+    slab(B, M.clearGlass('#cfe0e6'), w - t * 2 - 0.3, 0.05, d - t * 2 - 0.3, 0, h - 0.6, 0);
+    disc(B, M.chrome(), 0.17, 0.03, 0, h - 1.1, d / 2 - t - 0.2, 12);
     B.tube(M.chrome(), [-w / 2 + 0.5, h, -d / 2 + 0.3], [-w / 2 + 0.5, h + 0.55, -d / 2 + 0.3], 0.05, 8);
     B.tube(M.chrome(), [-w / 2 + 0.5, h + 0.55, -d / 2 + 0.3], [-w / 2 + 0.5, h + 0.45, -d / 2 + 0.8], 0.045, 8);
     for (const sz of [-1, 1]) barZ(B, M.chrome(), 0.035, 0.4, -w / 2 + 0.5 + sz * 0.3, h + 0.25, -d / 2 + 0.3, 6);
