@@ -937,6 +937,316 @@ const builders = {
   },
 };
 
+/* ---- indoors: floors, ceilings, and what furniture is made of ---- */
+
+Object.assign(builders, {
+  carpet() {
+    // Loop-pile carpet: a fine, even nap with faint rows.
+    const s = SIZE;
+    const r = rng(211);
+    const n = fbmField(s, { base: 64, octaves: 2, seed: 212 });
+    const m = fbmField(s, { base: 5, octaves: 3, seed: 213 });
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const loop = (Math.sin(x * 1.9) * Math.sin(y * 1.9) + 1) / 2;
+      const v = 0.78 + n(x, y) * 0.16 + loop * 0.08 + (m(x, y) - 0.5) * 0.06 + (r() - 0.5) * 0.06;
+      h[y * s + x] = loop * 0.6 + n(x, y) * 0.4;
+      return clamp255(255 * v);
+    });
+    return { map: tex(col, { tileX: 3 }), normalMap: tex(normalMap(h, s, s, 1.6), { srgb: false, tileX: 3 }), roughnessMap: null };
+  },
+
+  carpettile() {
+    // 2 ft carpet tiles laid quarter-turned: each catches the light differently.
+    const s = SIZE;
+    const half = s / 2;
+    const r = rng(221);
+    const n = fbmField(s, { base: 64, octaves: 2, seed: 222 });
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const tx = Math.floor(x / half);
+      const ty = Math.floor(y / half);
+      const turned = (tx + ty) % 2;
+      const seam = x % half < 1 || y % half < 1;
+      const ribs = turned ? Math.sin(x * 1.2) : Math.sin(y * 1.2);
+      h[y * s + x] = seam ? 0 : 0.5 + ribs * 0.25 + n(x, y) * 0.2;
+      const v = (turned ? 0.815 : 0.785) + ribs * 0.035 + n(x, y) * 0.1 + (r() - 0.5) * 0.05;
+      return clamp255(255 * (seam ? v * 0.8 : v));
+    });
+    return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 1.8), { srgb: false, tileX: 4 }), roughnessMap: null };
+  },
+
+  hardwood() {
+    // Strip flooring: 4 in boards in random lengths, each its own shade and grain.
+    const s = SIZE;
+    const boards = 12;
+    const bw = s / boards;
+    const r = rng(231);
+    const grain = fbmField(s, { base: 3, octaves: 4, seed: 232 });
+    const ends = Array.from({ length: boards }, () => [Math.floor(r() * s), Math.floor(r() * s * 0.4 + s * 0.3)]);
+    const shade = Array.from({ length: boards * 4 }, () => 0.82 + r() * 0.2);
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const b = Math.floor(x / bw);
+      const [e0, len] = ends[b];
+      const along = (y + e0) % s;
+      const piece = Math.floor(along / len) % 4;
+      const joint = x % bw < 1.2 || along % len < 1.2;
+      const g = grain(x * 9 + piece * 31, y * 0.35 + b * 57);
+      const ring = Math.sin((g * 9 + x * 0.05) * 6) * 0.03;
+      h[y * s + x] = joint ? 0 : 0.6 + g * 0.1;
+      if (joint) return clamp255(255 * 0.55);
+      return clamp255(255 * shade[b * 4 + piece] * (0.88 + g * 0.16 + ring));
+    });
+    const rough = paint(canvas(s), (x, y) => (h[y * s + x] === 0 ? 235 : 120));
+    return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 2.2), { srgb: false, tileX: 4 }), roughnessMap: tex(rough, { srgb: false, tileX: 4 }) };
+  },
+
+  woodgrain() {
+    // Furniture timber: long, continuous grain with the odd cathedral figure.
+    const s = SIZE;
+    const grain = fbmField(s, { base: 2, octaves: 5, seed: 241 });
+    const fine = fbmField(s, { base: 48, octaves: 2, seed: 242 });
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const g = grain(x * 7, y * 0.5);
+      const rings = Math.sin((x / s) * 46 + g * 9) * 0.5 + 0.5;
+      const v = 0.8 + rings * 0.12 + g * 0.08 + fine(x * 3, y * 0.4) * 0.05;
+      h[y * s + x] = rings * 0.5 + fine(x * 3, y * 0.4) * 0.3;
+      return clamp255(255 * v);
+    });
+    return { map: tex(col, { tileX: 3, tileY: 6 }), normalMap: tex(normalMap(h, s, s, 0.9), { srgb: false, tileX: 3, tileY: 6 }), roughnessMap: null };
+  },
+
+  vct() {
+    // Vinyl composition tile: 12 in squares, flecked, with hairline joints.
+    const s = SIZE;
+    const per = 4;
+    const tw = s / per;
+    const r = rng(251);
+    const n = fbmField(s, { base: 24, octaves: 3, seed: 252 });
+    const shade = Array.from({ length: per * per }, () => 0.96 + r() * 0.05);
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const joint = x % tw < 1 || y % tw < 1;
+      const t = Math.floor(x / tw) + Math.floor(y / tw) * per;
+      const fleck = r() < 0.06 ? 0.86 : r() < 0.04 ? 1.05 : 1;
+      h[y * s + x] = joint ? 0 : 0.5;
+      return clamp255(255 * (joint ? 0.7 : 0.9 * shade[t] * (0.95 + n(x, y) * 0.08) * fleck));
+    });
+    return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 1.2), { srgb: false, tileX: 4 }), roughnessMap: null };
+  },
+
+  ceramic() {
+    // Porcelain floor tile, 12 x 24 in, in a third-offset bond with grout lines.
+    const s = SIZE;
+    const rows = 4;
+    const th = s / rows;
+    const tw = s / 2;
+    const r = rng(261);
+    const n = fbmField(s, { base: 6, octaves: 4, seed: 262 });
+    const shade = Array.from({ length: 16 }, () => 0.95 + r() * 0.06);
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const row = Math.floor(y / th);
+      const bx = (x + row * (tw / 3)) % s;
+      const grout = y % th < 2.5 || bx % tw < 2.5;
+      h[y * s + x] = grout ? 0 : 0.7;
+      if (grout) return clamp255(255 * 0.62);
+      return clamp255(255 * shade[(row * 2 + Math.floor(bx / tw)) % 16] * (0.93 + n(x, y) * 0.1));
+    });
+    const rough = paint(canvas(s), (x, y) => (h[y * s + x] === 0 ? 240 : 70));
+    return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 3), { srgb: false, tileX: 4 }), roughnessMap: tex(rough, { srgb: false, tileX: 4 }) };
+  },
+
+  smalltile() {
+    // 4 in wall and washroom tile in a straight grid.
+    const s = SIZE;
+    const per = 12;
+    const tw = s / per;
+    const r = rng(271);
+    const shade = Array.from({ length: per * per }, () => 0.96 + r() * 0.05);
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const grout = x % tw < 2 || y % tw < 2;
+      h[y * s + x] = grout ? 0 : 0.7;
+      return clamp255(255 * (grout ? 0.72 : shade[Math.floor(x / tw) + Math.floor(y / tw) * per]));
+    });
+    const rough = paint(canvas(s), (x, y) => (h[y * s + x] === 0 ? 235 : 50));
+    return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 3), { srgb: false, tileX: 4 }), roughnessMap: tex(rough, { srgb: false, tileX: 4 }) };
+  },
+
+  terrazzo() {
+    // Poured terrazzo: marble chips of every size in a cement matrix.
+    const s = SIZE;
+    const r = rng(281);
+    const c = canvas(s);
+    const g = c.getContext('2d');
+    g.fillStyle = '#dcdcd8';
+    g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 2600; i++) {
+      const x = r() * s;
+      const y = r() * s;
+      const rad = 1 + r() * r() * 7;
+      const v = Math.floor(120 + r() * 135);
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      g.beginPath();
+      g.ellipse(x, y, rad, rad * (0.5 + r() * 0.5), r() * 3.14, 0, 6.3);
+      g.fill();
+      // Wrap the chips that cross an edge so the tile repeats cleanly.
+      if (x < 8 || y < 8) { g.beginPath(); g.ellipse(x + (x < 8 ? s : 0), y + (y < 8 ? s : 0), rad, rad * 0.7, 0, 0, 6.3); g.fill(); }
+    }
+    return { map: tex(c, { tileX: 3 }), normalMap: null, roughnessMap: null };
+  },
+
+  marble() {
+    // Honed marble slabs, 2 ft square, with soft veining.
+    const s = SIZE;
+    const half = s / 2;
+    const n = fbmField(s, { base: 3, octaves: 5, seed: 291 });
+    const m = fbmField(s, { base: 5, octaves: 4, seed: 292 });
+    const col = paint(canvas(s), (x, y) => {
+      const joint = x % half < 1 || y % half < 1;
+      const vein = Math.abs(Math.sin((x + y * 0.6) / s * 14 + n(x, y) * 9));
+      const v = 0.93 + m(x, y) * 0.06 - (1 - Math.min(1, vein * 5)) * 0.2;
+      return clamp255(255 * (joint ? 0.72 : v));
+    });
+    return { map: tex(col, { tileX: 4 }), normalMap: null, roughnessMap: null };
+  },
+
+  rubberfloor() {
+    // Gym and workshop matting: black rubber with coloured flecks, in 4 ft tiles.
+    const s = SIZE;
+    const r = rng(301);
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const seam = x < 1.5 || y < 1.5;
+      const f = r();
+      h[y * s + x] = seam ? 0 : 0.5 + r() * 0.3;
+      return clamp255(255 * (seam ? 0.55 : f < 0.1 ? 1 : f < 0.16 ? 0.9 : 0.74 + r() * 0.06));
+    });
+    return { map: tex(col, { tileX: 4 }), normalMap: tex(normalMap(h, s, s, 1.2), { srgb: false, tileX: 4 }), roughnessMap: null };
+  },
+
+  acoustic() {
+    // Suspended ceiling: 2 ft lay-in tiles, fissured, in a white T-bar grid.
+    const s = SIZE;
+    const r = rng(311);
+    const c = canvas(s);
+    const g = c.getContext('2d');
+    g.fillStyle = '#eeeeea';
+    g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 5200; i++) {
+      const x = r() * s;
+      const y = r() * s;
+      const v = Math.floor(175 + r() * 50);
+      g.fillStyle = `rgb(${v},${v},${v})`;
+      g.fillRect(x, y, 1 + r() * (r() < 0.2 ? 5 : 1.5), 1 + r() * 1.2);
+    }
+    g.fillStyle = '#fbfbf9';
+    g.fillRect(0, 0, s, 7);
+    g.fillRect(0, 0, 7, s);
+    g.fillStyle = 'rgba(0,0,0,.22)';
+    g.fillRect(0, 7, s, 1.5);
+    g.fillRect(7, 0, 1.5, s);
+    return { map: tex(c, { tileX: 2 }), normalMap: null, roughnessMap: null };
+  },
+
+  weave() {
+    // Upholstery cloth: a plain basket weave.
+    const s = 256;
+    const r = rng(321);
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const u = Math.floor(x / 4);
+      const v = Math.floor(y / 4);
+      const over = (u + v) % 2;
+      const along = over ? (x % 4) / 4 : (y % 4) / 4;
+      const bump = Math.sin(along * Math.PI);
+      h[y * s + x] = bump * (over ? 1 : 0.8);
+      return clamp255(255 * (0.82 + bump * 0.12 + (over ? 0.03 : -0.03) + (r() - 0.5) * 0.05));
+    });
+    return { map: tex(col, { tileX: 0.8 }), normalMap: tex(normalMap(h, s, s, 1.4), { srgb: false, tileX: 0.8 }), roughnessMap: null };
+  },
+
+  leather() {
+    // Leather: fine pebbled grain with a few creases.
+    const s = 256;
+    const n = fbmField(s, { base: 40, octaves: 2, seed: 331 });
+    const m = fbmField(s, { base: 4, octaves: 3, seed: 332 });
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const cell = Math.abs(n(x, y) - 0.5) * 2;
+      h[y * s + x] = cell;
+      return clamp255(255 * (0.86 + cell * 0.1 + (m(x, y) - 0.5) * 0.08));
+    });
+    return { map: tex(col, { tileX: 1.2 }), normalMap: tex(normalMap(h, s, s, 1.1), { srgb: false, tileX: 1.2 }), roughnessMap: null };
+  },
+
+  osb() {
+    // Oriented strand board: flakes of wood pressed every which way.
+    const s = SIZE;
+    const r = rng(341);
+    const c = canvas(s);
+    const g = c.getContext('2d');
+    g.fillStyle = '#d9c9a0';
+    g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 2400; i++) {
+      const v = 0.72 + r() * 0.3;
+      g.fillStyle = `rgb(${Math.floor(232 * v)},${Math.floor(214 * v)},${Math.floor(170 * v)})`;
+      g.save();
+      g.translate(r() * s, r() * s);
+      g.rotate(r() * 6.3);
+      g.fillRect(-14 - r() * 18, -3 - r() * 4, 28 + r() * 36, 6 + r() * 8);
+      g.restore();
+    }
+    return { map: tex(c, { tileX: 4 }), normalMap: null, roughnessMap: null };
+  },
+
+  plywood() {
+    // Sheathing plywood: broad rotary-cut grain, sheet after sheet.
+    const s = SIZE;
+    const grain = fbmField(s, { base: 2, octaves: 5, seed: 351 });
+    const col = paint(canvas(s), (x, y) => {
+      const g = grain(x * 2.2, y * 0.6);
+      const rings = Math.sin((y / s) * 30 + g * 14) * 0.5 + 0.5;
+      const seam = x < 2 || y < 2;
+      return clamp255(255 * (seam ? 0.55 : 0.8 + rings * 0.14 + g * 0.06));
+    });
+    return { map: tex(col, { tileX: 4, tileY: 8 }), normalMap: null, roughnessMap: null };
+  },
+
+  wrap() {
+    // House wrap: a white membrane printed with a faint repeating mark, taped at the laps.
+    const s = SIZE;
+    const c = canvas(s);
+    const g = c.getContext('2d');
+    g.fillStyle = '#eef0f1';
+    g.fillRect(0, 0, s, s);
+    g.fillStyle = 'rgba(60,90,150,.28)';
+    g.font = `800 ${s * 0.07}px Helvetica, Arial, sans-serif`;
+    for (let row = 0; row < 4; row++) for (let k = 0; k < 2; k++) g.fillText('WEATHER BARRIER', k * s * 0.52 + (row % 2) * s * 0.26 - s * 0.1, (row + 0.6) * (s / 4));
+    g.fillStyle = 'rgba(0,0,0,.07)';
+    g.fillRect(0, 0, s, 3);
+    return { map: tex(c, { tileX: 9 }), normalMap: null, roughnessMap: null };
+  },
+
+  dirtfloor() {
+    // Graded site dirt: packed earth with stones and tyre-pressed streaks.
+    const s = SIZE;
+    const n = fbmField(s, { base: 4, octaves: 5, seed: 361 });
+    const f = fbmField(s, { base: 40, octaves: 2, seed: 362 });
+    const r = rng(363);
+    const h = new Float32Array(s * s);
+    const col = paint(canvas(s), (x, y) => {
+      const v = 0.72 + n(x, y) * 0.3 + f(x, y) * 0.12 + (r() < 0.012 ? 0.2 : 0);
+      h[y * s + x] = n(x, y) * 0.6 + f(x, y) * 0.4;
+      return clamp255(255 * v);
+    });
+    return { map: tex(col, { tileX: 18 }), normalMap: tex(normalMap(h, s, s, 3), { srgb: false, tileX: 18 }), roughnessMap: null };
+  },
+});
+
 const cache = new Map();
 
 /** The texture set for a surface, made on first use. */

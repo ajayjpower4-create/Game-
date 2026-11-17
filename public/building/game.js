@@ -22,6 +22,8 @@ import { lotLayout, LOT_ANGLES, STALL_WIDTHS, DEALER_ORGANIZE, DEALER_FACING, de
 import { CAR_MAKES, TRAILERS, TRAILER_BY_ID, TRUCK_BY_ID } from './vehiclelist.js';
 import { rigLength } from './engine/trucks.js';
 import { POSE_NAMES, STANDING, WORKING } from './engine/figures.js';
+import { createInteriorEditor } from './interiors.js';
+import { hasInterior } from './interiorlist.js';
 import { GARDEN, GARDEN_GROUPS, COVERS, COVER_BY_ID, stamp as gardenStamp, coverStamp, erase as gardenErase } from './engine/garden.js';
 import * as THREE from 'three';
 
@@ -64,6 +66,7 @@ const ui = {
   brushDensity: 1,     // 0.5 sparse, 1 normal, 2 dense
   brushErase: false,   // the brush takes out instead of planting
   menu: '',            // which panel the start menu has open
+  interior: null,      // { id, level, ... } while a building's interior is open (see interiors.js)
 };
 let pendingStart = { preset: 'warehouse', lot: { ...SITE_PRESETS.warehouse.lot } };
 const undoStack = [];
@@ -73,6 +76,7 @@ let engine = null;
 let world = null;
 let life = null;
 let slowWarned = false;
+let interiors = null;      // the interior editor, made with the engine
 let modsLoaded = false;
 
 /* ------------------------------------------------------------- persistence */
@@ -331,6 +335,11 @@ function ensureEngine(host) {
       flashHint('Running slowly — try a lower Graphics quality in the World tab');
     };
     engine.addTicker(tick);
+    interiors = createInteriorEditor({
+      ui, esc, fmt, byId, engine: () => engine, world: () => world, setCam, drawPanel, drawHud, flashHint,
+      hint: (t) => { if (ui.hint !== t) { ui.hint = t; drawHud(); } },
+      snapshot, once: () => interiorOnce(), queueSave, save, syncWorld, walkBlocked,
+    });
     exposeApi();
     return true;
   }
@@ -427,6 +436,7 @@ function syncWorld(force = false) {
     lastPlanSig = sig;
     life.setup(state, plan);
   }
+  if (ui.interior && interiors) interiors.refresh({ panel: false });
   refreshSelection();
   drawMinimap(true);
   crumb.textContent = `${state.objects.length} objects · ${state.lot.width}×${state.lot.depth} ft lot · ${(state.lot.width * state.lot.depth / 43560).toFixed(2)} acres`;
@@ -458,7 +468,7 @@ function refreshSelection() {
   } else if (ui.selected) {
     target = world.get(ui.selected);
   }
-  engine.setSelection(target ? [target] : []);
+  engine.setSelection(target && !ui.interior ? [target] : []);
   if (ui.doors && ui.selected !== ui.doors.id) { ui.doors = null; drawDoorMark(null); drawHud(); }
   if (ui.fix && ui.selected !== ui.fix.id) { ui.fix = null; drawDoorMark(null); drawHud(); }
   const sb = selected();
@@ -547,6 +557,7 @@ function drawHud() {
   if (hb) {
     const blocked = ui.pending && ui.ghost && !ui.ghost.ok;
     let text = ui.hint;
+    if (!text && ui.interior && interiors) text = interiors.status();
     if (!text) {
       if (engine && engine.mode === 'drone') text = 'Drone: WASD fly · Space up · C down · right-drag or click to look · wheel sets speed · Shift boosts · 1 returns to Orbit';
       else if (engine && engine.mode === 'walk') text = 'Walking: WASD to walk · Shift to run · click to look around (Esc frees the mouse) · 1 returns to Orbit';
@@ -688,6 +699,7 @@ function drawMinimap(force = false) {
 
 function tick(dt) {
   if (screen !== 'build') return;
+  if (ui.interior && interiors) interiors.tick();
   // The clock runs when asked: an hour of game time every eight seconds.
   if (state.env.cycle) {
     state.env.hour = (state.env.hour + (dt / 8) * ui.speed) % 24;
@@ -963,7 +975,11 @@ function buildingPanel(b) {
     ${objActions(b)}
     <div class="field"><label for="p-name">Name</label>
       <input id="p-name" type="text" maxlength="40" value="${esc(b.name)}" data-act="rename"></div>
-    ${NAMED_EXTRAS.has(style.extras) ? `<div class="field"><label for="p-brand">Name on the building</label>
+    <div class="row tight">
+      <button class="btn primary" data-act="interior">🛋️ ${hasInterior(b) ? 'Edit the interior' : 'Design the interior'}</button>
+      ${hasInterior(b) ? '<button class="btn" data-act="interior" data-value="walk">🚶 Walk inside</button>' : ''}
+    </div>
+        ${NAMED_EXTRAS.has(style.extras) ? `<div class="field"><label for="p-brand">Name on the building</label>
       <input id="p-brand" type="text" maxlength="28" placeholder="${style.extras === 'carstore' ? 'Auto Superstore' : esc(b.name)}" value="${esc((b.sign && b.sign.text) || '')}" data-act="sign" data-key="text"></div>` : ''}
     <div class="divider"></div>
     ${fixtureEditor(b)}
@@ -1388,7 +1404,8 @@ function drawPanel() {
   const body = document.getElementById('panelBody');
   if (!body) return;
   let html = '';
-  if (ui.tab === 'add') html = addPanel();
+  if (ui.interior && interiors) html = interiors.panel();
+  else if (ui.tab === 'add') html = addPanel();
   else if (ui.tab === 'site') html = sitePanel();
   else if (ui.tab === 'world') html = worldPanel();
   else if (ui.tab === 'stats') html = statsPanel();
@@ -1405,7 +1422,7 @@ function drawPanel() {
     else html = propPanel(o);
   }
   // Keep the scroll position while editing one thing; start at the top for a new one.
-  const key = `${ui.tab}|${ui.selected}`;
+  const key = ui.interior ? `in|${ui.interior.tab}|${ui.interior.cat}` : `${ui.tab}|${ui.selected}`;
   const scroll = key === drawPanel.key ? body.scrollTop : 0;
   drawPanel.key = key;
   body.innerHTML = html;
@@ -1816,6 +1833,9 @@ function exposeApi() {
     catalog: { BUILDING_STYLES, PROPS, PROP_BY_ID, ROOF_KIT, ROOF_BY_ID, BOOTHS, PROP_CATS },
     get state() { return state; },
     get selected() { return selected(); },
+    /** The interior editor (open(building, storey), close(), ...). */
+    get interiors() { return interiors; },
+    get ui() { return ui; },
     /** Re-read the state into the 3D scene and the panels after changing it. */
     refresh() { syncWorld(); drawPanel(); drawHud(); },
     commit,
@@ -2075,6 +2095,7 @@ window.addEventListener('pointerup', onUp);
 window.addEventListener('pointercancel', onUp);
 
 function onDown(ev) {
+  if (ui.interior && interiors) return interiors.down(ev);
   if (!engine || engine.mode !== 'orbit') return;
   press = { x: ev.clientX, y: ev.clientY, button: ev.button, shift: ev.shiftKey, alt: ev.altKey };
   engine.controls.enabled = true;
@@ -2166,6 +2187,7 @@ function onDown(ev) {
 
 let hoverT = 0;
 function onMove(ev) {
+  if (ui.interior && interiors) return interiors.move(ev);
   if (!engine || engine.mode !== 'orbit') return;
   if (ui.brush) {
     const at = engine.groundAt(ev);
@@ -2356,6 +2378,7 @@ function onMove(ev) {
 
 function onUp(ev) {
   if (!engine) return;
+  if (ui.interior && interiors) return interiors.up(ev);
   const wasClick = press && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) < 5 && press.button === 0;
   engine.controls.enabled = true;
   if (drag && drag.mode === 'brush') {
@@ -2473,6 +2496,7 @@ function onUp(ev) {
 }
 
 function onDoubleClick(ev) {
+  if (ui.interior && interiors) { interiors.dbl(ev); return; }
   if (ui.draw) { finishDraw(); return; }
   if (!engine || engine.mode !== 'orbit' || ui.pending) return;
   const hit = engine.pick(ev);
@@ -2516,6 +2540,7 @@ function setCam(mode) {
   if (mode !== 'orbit' && ui.draw) cancelDraw();
   engine.lockOnClick = mode === 'walk';
   engine.setMode(mode);
+  if (ui.interior && interiors) interiors.camChanged(mode);
   if (mode !== 'orbit') {
     ui.pending = null;
     ui.ghost = null;
@@ -2806,7 +2831,18 @@ function applyAction(el, ev) {
   const value = el.dataset.value;
   const o = selected();
 
+  if (act.startsWith('in-')) return interiors && interiors.action(el, ev);
+  // Leaving for another tab, a new site or a save closes an open interior first.
+  if (ui.interior && interiors && ['tab', 'restart', 'cat', 'arm'].includes(act)) interiors.close();
+
   switch (act) {
+    case 'interior': {
+      const b = o && o.kind === 'building' ? o : null;
+      if (!b) return;
+      interiors.open(b, 0);
+      if (value === 'walk') applyAction({ dataset: { act: 'in-walk' } }, ev);
+      return;
+    }
     case 'tab': ui.tab = value; document.getElementById('panel')?.classList.remove('collapsed'); return drawPanel();
     case 'panel-toggle': document.getElementById('panel')?.classList.toggle('collapsed'); return;
     case 'cat': ui.cat = value; return drawPanel();
@@ -3327,6 +3363,7 @@ document.addEventListener('change', (ev) => {
 });
 
 let editSnapT = 0;
+let interiorOnce = () => snapshot();
 document.addEventListener('input', (ev) => {
   const el = ev.target;
   const act = el.dataset.act;
@@ -3335,6 +3372,7 @@ document.addEventListener('input', (ev) => {
   const label = document.querySelector(`label[for="${el.id}"] b`);
   // One undo step per gesture, not one per pixel of slider travel.
   const once = () => { const now = performance.now(); if (now - editSnapT > 900) snapshot(); editSnapT = now; };
+  if (act.startsWith('in-')) { if (interiors) { interiorOnce = once; interiors.input(el); } return; }
 
   if (act === 'mark-text') {
     const o = selected();
@@ -3421,6 +3459,7 @@ document.addEventListener('input', (ev) => {
 document.addEventListener('keydown', (ev) => {
   if (screen === 'start' && ev.key === 'Escape' && ui.menu) { ui.menu = ''; return drawMenu(); }
   if (screen !== 'build' || ev.target.matches('input, textarea, select')) return;
+  if (ui.interior && interiors && interiors.key(ev)) return;
   const step = ev.shiftKey ? 10 : 2;
   const key = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
   if (ui.draw) {

@@ -483,6 +483,102 @@ export function brickMat(hex = '#9c5b47') {
   return wall('brick', hex);
 }
 
+/* ----------------------------------------------------------- indoors */
+
+/** Floor finishes. `gloss` is how polished it is (0 matte, 1 mirror-like). */
+export const FLOORS = {
+  carpet: { name: 'Carpet', surf: 'carpet', rough: 1, colors: ['#5d6670', '#7a7468', '#3f5876', '#6b4a3a', '#4d5a4a', '#8a3b3b', '#2b2f36'] },
+  carpettile: { name: 'Carpet tile', surf: 'carpettile', rough: 1, colors: ['#5a626c', '#3f4a5c', '#6a6156', '#3f5d54', '#2f343b'] },
+  hardwood: { name: 'Hardwood', surf: 'hardwood', rough: 0.45, colors: ['#b98654', '#8a5a36', '#d2ad7c', '#5b3a26', '#a8a093'] },
+  vct: { name: 'Vinyl tile', surf: 'vct', rough: 0.4, colors: ['#d9d6cc', '#b9c2c9', '#c9b79c', '#8f979e', '#3f4a57'] },
+  ceramic: { name: 'Porcelain tile', surf: 'ceramic', rough: 0.3, colors: ['#d8d4cb', '#a9a59c', '#6f6d69', '#e9e6df', '#b08d6c'] },
+  smalltile: { name: 'Small tile', surf: 'smalltile', rough: 0.25, colors: ['#eef0ee', '#bcd4d8', '#3f6f8a', '#2b2f36', '#d9c9a8'] },
+  terrazzo: { name: 'Terrazzo', surf: 'terrazzo', rough: 0.22, colors: ['#e3e0d8', '#c9bfae', '#a9b3b8', '#8a8f96'] },
+  marble: { name: 'Marble', surf: 'marble', rough: 0.14, colors: ['#f1efe9', '#d9d3c7', '#3b3d42', '#c9b9a2'] },
+  concrete: { name: 'Sealed concrete', surf: 'concrete', rough: 0.55, colors: ['#a9a8a2', '#8d8f93', '#c2bfb6', '#6f7378'] },
+  epoxy: { name: 'Epoxy coating', surf: null, rough: 0.22, colors: ['#8f979e', '#3f6f8a', '#5b8a5e', '#b9a35c', '#a3352c', '#d9dde0'] },
+  rubber: { name: 'Rubber matting', surf: 'rubberfloor', rough: 0.9, colors: ['#3a3d42', '#2a3a55', '#4a2f2f'] },
+};
+
+export function floorFinish(kind, hex) {
+  const f = FLOORS[kind] || FLOORS.concrete;
+  const color = hex || f.colors[0];
+  return once(`floor|${kind}|${color}`, () => {
+    // Polished floors keep a soft sheen, not a mirror of the sky when the roof is off.
+    return std({ ...(f.surf ? withSurface(f.surf) : {}), color: new THREE.Color(color), roughness: Math.max(0.3, f.rough), metalness: 0, envMapIntensity: f.rough < 0.35 ? 0.35 : 0.2 });
+  });
+}
+
+export const CEILINGS = {
+  tile: { name: 'Acoustic tile' },
+  drywall: { name: 'Plasterboard' },
+  open: { name: 'Open to the structure' },
+  wood: { name: 'Timber boards' },
+};
+
+export function ceilingFinish(kind, hex) {
+  // A ceiling is lit by what bounces up off the room; give it that glow itself.
+  const lift = (m, k) => { m.emissive = m.color.clone(); m.emissiveMap = m.map || null; m.emissiveIntensity = k; return m; };
+  if (kind === 'tile') return once(`ceil|tile|${hex}`, () => lift(std({ ...withSurface('acoustic'), color: new THREE.Color(hex || '#f4f4f1'), roughness: 0.95, side: THREE.DoubleSide }), 0.42));
+  if (kind === 'wood') return once(`ceil|wood|${hex}`, () => lift(std({ ...withSurface('timber'), color: new THREE.Color(hex || '#b98f5b'), roughness: 0.7, side: THREE.DoubleSide }), 0.3));
+  if (kind === 'open') return once('ceil|open', () => lift(std({ ...withSurface('rib'), color: new THREE.Color('#c9cdd0'), roughness: 0.6, metalness: 0.2, side: THREE.DoubleSide }), 0.3));
+  return once(`ceil|dry|${hex}`, () => lift(std({ color: new THREE.Color(hex || '#f4f4f1'), roughness: 0.95, side: THREE.DoubleSide }), 0.42));
+}
+
+/** Painted plaster for interior walls. */
+export function wallPaint(hex = '#eceae4') {
+  return once(`wallpaint|${hex}`, () => std({ color: new THREE.Color(hex), roughness: 0.92, metalness: 0 }));
+}
+
+/** Furniture timber with a continuous grain: oiled, lacquered or painted. */
+export function grain(hex = '#a8743f', rough = 0.5) {
+  return once(`grain|${hex}|${rough}`, () => std({ ...withSurface('woodgrain'), color: new THREE.Color(hex), roughness: rough, metalness: 0, normalScale: new THREE.Vector2(0.5, 0.5) }));
+}
+
+/** Laminate and melamine: flat colour with a slight sheen. */
+export function laminate(hex = '#e9e6df', rough = 0.42) {
+  return once(`lam|${hex}|${rough}`, () => std({ color: new THREE.Color(hex), roughness: rough, metalness: 0 }));
+}
+
+/** Woven upholstery. */
+export function cloth(hex = '#5d6670') {
+  return once(`cloth|${hex}`, () => std({ ...withSurface('weave'), color: new THREE.Color(hex), roughness: 0.95, metalness: 0 }));
+}
+
+export function leather(hex = '#3b2a1c', rough = 0.48) {
+  return once(`leather|${hex}|${rough}`, () => std({ ...withSurface('leather'), color: new THREE.Color(hex), roughness: rough, metalness: 0, normalScale: new THREE.Vector2(0.6, 0.6) }));
+}
+
+/** Brushed stainless steel for kitchens and appliances. */
+export function stainless(rough = 0.3) {
+  return once(`stainless|${rough}`, () => shiny(std({ color: new THREE.Color('#c9ccce'), roughness: rough, metalness: 0.95, envMapIntensity: 1 })));
+}
+
+/** Glazed china: sinks, toilets, plates. */
+export function porcelain(hex = '#f6f6f3') {
+  return once(`porcelain|${hex}`, () => shiny(new THREE.MeshPhysicalMaterial({ color: new THREE.Color(hex), roughness: 0.12, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08, envMapIntensity: 0.9 })));
+}
+
+/** Something that glows all the time: light panels, screens, signs indoors. */
+export function glow(hex = '#fff6e6', strength = 1.6) {
+  return once(`glow|${hex}|${strength}`, () => std({ color: new THREE.Color(hex), emissive: new THREE.Color(hex), emissiveIntensity: strength, roughness: 0.5 }));
+}
+
+/** A mirror. */
+export function mirror() {
+  return once('mirror', () => shiny(std({ color: new THREE.Color('#dfe6ea'), roughness: 0.03, metalness: 1, envMapIntensity: 1.4 })));
+}
+
+/** Sheathing and framing materials for buildings going up. */
+export function sheet(kind, hex) {
+  return once(`sheet|${kind}|${hex}`, () => std({ ...withSurface(kind), color: new THREE.Color(hex || '#ffffff'), roughness: 0.85, side: THREE.DoubleSide }));
+}
+
+/** Bare graded earth. */
+export function dirt(hex = '#8a7558') {
+  return once(`dirtfloor|${hex}`, () => snowy(wet(antiTile(std({ ...withSurface('dirtfloor'), color: new THREE.Color(hex), roughness: 1 }), 150, 0.3)), '#eef2f5'));
+}
+
 /** People: one material for every figure, coloured per vertex (skin, clothes, hair). */
 export function figure() {
   return once('figure', () => std({ vertexColors: true, roughness: 0.78, metalness: 0 }));

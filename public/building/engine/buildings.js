@@ -390,6 +390,46 @@ function bay(F, type, c, ctx) {
   }
 }
 
+/**
+ * The hole a bay leaves in its wall, measured from the bay's left edge and
+ * its floor: { s0, s1, h0, h1, fill, cols } — fill is 'glass', 'door' (a
+ * steel leaf), 'panel' (a sectional or roller door) or 'open' — or null for
+ * solid wall. The interior uses this to open the same holes from inside.
+ */
+export function openingRect(type, cw, fh) {
+  const tall = fh > 18;
+  const mid = cw / 2;
+  const span = (w, h0, h1, fill, cols = 1) => ({ s0: mid - w / 2, s1: mid + w / 2, h0, h1: Math.min(h1, fh - 0.3), fill, cols });
+  switch (type) {
+    case 'window': {
+      const w = Math.min(cw * 0.62, tall ? 10 : 8);
+      const sill = tall ? 4 : fh * 0.3;
+      return span(w, sill, sill + (tall ? Math.min(fh * 0.55, fh - 8) : fh * 0.47), 'glass', w > 5 ? 2 : 1);
+    }
+    case 'ribbon': {
+      const sill = tall ? 6 : fh * 0.33;
+      return span(cw, sill, sill + (tall ? Math.min(7, fh - 10) : fh * 0.42), 'glass', Math.max(1, Math.round(cw / 5)));
+    }
+    case 'glass': return span(cw, 1.3, fh, 'glass', cw > 7 ? 2 : 1);
+    case 'balcony': return span(cw * 0.62, 0, Math.min(fh - 2.6, 8.4), 'glass', 2);
+    case 'shopfront': return span(cw - 1, 1.3, Math.min(fh - 3, 12), 'glass', Math.max(2, Math.round(cw / 5)));
+    case 'door': return { ...span(Math.min(cw * 0.78, 9.5), 0, Math.min(9, fh * 0.72), 'glass', 4), entrance: true };
+    case 'firedoor': return span(3.6, 0, 7.4, 'door');
+    case 'dock': return span(Math.min(9, cw - 2), 4, Math.min(14, fh - 2), 'panel');
+    case 'roll': return span(Math.min(cw * 0.8, 14), 0, Math.min(fh * 0.72, 16), 'panel');
+    case 'fullview': return span(Math.min(cw * 0.84, 12), 0, Math.min(fh * 0.7, 14), 'glass', 4);
+    case 'garage': return span(Math.min(cw * 0.82, 9), 0, 7.4, 'panel');
+    case 'open': return span(cw - 1.8, 3.4, fh - 1.6, 'open');
+    default: return null;
+  }
+}
+
+/** The bay type a storey really shows: doors and docks exist on the ground floor only. */
+export function cellOnFloor(type, floor) {
+  if (floor > 0 && GROUND_ONLY.has(type)) return type === 'shopfront' ? 'window' : 'blank';
+  return type || 'blank';
+}
+
 /* ------------------------------------------------------------------ walls */
 
 const GROUND_ONLY = new Set(['door', 'firedoor', 'dock', 'roll', 'fullview', 'garage', 'shopfront']);

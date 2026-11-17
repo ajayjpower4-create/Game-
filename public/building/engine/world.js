@@ -127,7 +127,8 @@ export class World {
     for (const o of state.objects) {
       seen.add(o.id);
       // Moving or turning something only re-places its model.
-      const { x, y, rot, ...shape } = o;
+      // (A building's interior is drawn by the interior view, on its own.)
+      const { x, y, rot, interior, ...shape } = o;
       const sig = JSON.stringify(shape) + (o.kind === 'run' ? layout : '');
       const at = `${x}|${y}|${rot}`;
       const have = this.items.get(o.id);
@@ -223,7 +224,8 @@ export class World {
         list.push({ ...l, x: v.x, y: v.y, z: v.z, tx: t.x, tz: t.z });
       }
     }
-    this.engine.setLightSources(list);
+    // Lamps indoors, while an interior is open, join the pool but throw no pools outside.
+    this.engine.setLightSources(this.indoorLights ? list.concat(this.indoorLights) : list);
     this.lightPools(list);
   }
 

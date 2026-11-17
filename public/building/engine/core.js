@@ -103,6 +103,8 @@ export class Engine {
     this.cloudAt = new THREE.Vector2(0, 0);
     this.env = { hour: 15.5, weather: 'clear', season: 'summer' };
     this.mode = 'orbit';
+    this.walkBase = 0;      // floor level the walk camera stands on
+    this.indoor = 0;        // 1 while the camera is inside a building: exposure opens up
     this.keys = new Set();
     this.tickers = [];
     this.lightSources = [];
@@ -600,6 +602,16 @@ export class Engine {
     this.sun.position.copy(t).addScaledVector(lightDir, 3000);
   }
 
+  /** Tell the engine the camera has gone indoors (or come back out). */
+  setIndoor(k) {
+    k = k ? 1 : 0;
+    if (k === this.indoor) return;
+    this.indoor = k;
+    this.camera.near = k ? 0.35 : 1;
+    this.camera.updateProjectionMatrix();
+    this.applyEnv();
+  }
+
   /** Recompute everything that follows the clock and the weather. */
   applyEnv(force = false) {
     const W = WEATHER[this.env.weather] || WEATHER.clear;
@@ -640,6 +652,13 @@ export class Engine {
     this.hemi.groundColor.set('#0b0d12').lerp(new THREE.Color('#6b6253'), day);
     const gloom = 1 - Math.min(0.5, (W.rain || 0) * 0.32);
     this.hemi.intensity = this.hemiBase = lerp(0.62, (0.16 + overcast * 0.85 + golden * 0.5 * W.sun) * gloom, day);
+    if (this.indoor) {
+      // Indoors the eye (and a camera) opens up: rooms read bright, the
+      // world outside the windows burns out a little.
+      this.hemi.color.lerp(new THREE.Color('#fff3e2'), 0.55 * this.indoor);
+      this.hemi.groundColor.lerp(new THREE.Color('#8a8276'), 0.6 * this.indoor);
+      this.hemi.intensity = this.hemiBase = Math.max(this.hemi.intensity * (1 + 1.1 * this.indoor), 0.95 * this.indoor);
+    }
     // A hazy sky model is far brighter than a clear one; even it out.
     const skyGain = 1 / (1 + Math.max(0, W.turbidity - 2) * 0.3);
     this.skyGain = skyGain;
@@ -656,7 +675,7 @@ export class Engine {
     // Exposure and glow
     // Like a camera, open up as the light gets low.
     const lowSun = golden * W.sun * smooth(-4, 2, e);
-    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.35 : 1) * (1 + lowSun * 1.7) * (1 + 0.15 * W.snow * day) * (this.q.exposure ?? 1);
+    this.renderer.toneMappingExposure = lerp(1.25, 0.8, day) * (W.sun < 0.3 ? 1.35 : 1) * (1 + lowSun * 1.7) * (1 + 0.15 * W.snow * day) * (this.q.exposure ?? 1) * (1 + 0.25 * this.indoor);
     this.tuneBloom();
     this.stars.material.opacity = night * (W.clouds > 0.8 ? 0.08 : 1 - W.clouds * 0.7);
     this.glow.material.uniforms.strength.value = night * (W.clouds > 0.8 ? 1.4 : 1);
@@ -721,13 +740,16 @@ export class Engine {
   updatePool() {
     const n = this.pool.length;
     const on = this.night > 0.35 ? smooth(0.35, 0.8, this.night) : 0;
-    if (!on) {
+    // Lamps indoors burn by day as well, once the camera is in the room with them.
+    const indoor = this.indoor && this.lightSources.some((s) => s.indoor);
+    if (!on && !indoor) {
       for (const l of this.pool) l.intensity = 0;
       return;
     }
     const focus = this.mode === 'orbit' ? this.controls.target : this.camera.position;
     const ranked = this.lightSources
-      .map((s) => ({ s, d: (s.x - focus.x) ** 2 + (s.z - focus.z) ** 2 }))
+      .filter((s) => on || s.indoor)
+      .map((s) => ({ s, d: (s.x - focus.x) ** 2 + (s.z - focus.z) ** 2 - (s.indoor && this.indoor ? 1e6 : 0) }))
       .sort((a, b) => a.d - b.d)
       .slice(0, n);
     this.pool.forEach((l, i) => {
@@ -740,12 +762,12 @@ export class Engine {
         this.shadowDirty = true;
       }
       l.position.set(s.x, s.y, s.z);
-      l.target.position.set(s.tx != null ? s.tx : s.x, 0, s.tz != null ? s.tz : s.z);
+      l.target.position.set(s.tx != null ? s.tx : s.x, s.ty || 0, s.tz != null ? s.tz : s.z);
       l.target.updateMatrixWorld();
       l.color.set(s.color || '#ffd9a0');
       l.angle = (s.angle || 62) * DEG;
       l.distance = s.range || 140;
-      l.intensity = (s.power || 900) * on * 0.45;
+      l.intensity = (s.power || 900) * (s.indoor ? Math.max(on, this.indoor ? 0.5 : 0) : on) * 0.45;
     });
   }
 
@@ -830,7 +852,7 @@ export class Engine {
       if (mode === 'walk') {
         // From up high, come down to eye level a little short of the spot we
         // were looking at, facing it — and never outside the site.
-        if (cam.position.y > 12) {
+        if (cam.position.y > this.walkBase + 12) {
           const d = cam.getWorldDirection(new THREE.Vector3());
           const spot = prev === 'orbit'
             ? this.controls.target.clone()
@@ -838,11 +860,11 @@ export class Engine {
           spot.x = clamp(spot.x, 10, this.lot.width - 10);
           spot.z = clamp(spot.z, 10, this.lot.depth + 30);
           const back = _v2.set(Math.sin(this.look.yaw), 0, Math.cos(this.look.yaw)).multiplyScalar(45);
-          cam.position.set(clamp(spot.x + back.x, -150, this.lot.width + 150), 5.6, clamp(spot.z + back.z, -150, this.lot.depth + 100));
+          cam.position.set(clamp(spot.x + back.x, -150, this.lot.width + 150), this.walkBase + 5.6, clamp(spot.z + back.z, -150, this.lot.depth + 100));
           this.look.pitch = -0.05;
-          if (this.blocked && this.blocked(cam.position.x, cam.position.z)) cam.position.set(spot.x, 5.6, this.lot.depth + 6);
+          if (this.blocked && this.blocked(cam.position.x, cam.position.z)) cam.position.set(spot.x, this.walkBase + 5.6, this.lot.depth + 6);
         }
-        cam.position.y = 5.6;
+        cam.position.y = this.walkBase + 5.6;
         this.look.speed = 7;
       } else {
         this.look.speed = clamp(cam.position.y * 0.6, 20, 160);
@@ -976,7 +998,7 @@ export class Engine {
       if (!this.blocked(nx, cam.position.z)) cam.position.x = nx;
       if (!this.blocked(cam.position.x, nz)) cam.position.z = nz;
       this.stride = (this.stride || 0) + Math.hypot(dx, dz);
-      cam.position.y = 5.6 + Math.sin(this.stride * 1.1) * 0.06;
+      cam.position.y = this.walkBase + 5.6 + Math.sin(this.stride * 1.1) * 0.06;
     } else {
       cam.position.x = nx;
       cam.position.z = nz;

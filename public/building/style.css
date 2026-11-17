@@ -396,3 +396,11 @@ body.photo .photo-bar {
 .lotstat b { font-size: 18px; color: var(--accent-2); }
 .note.modnote { color: #b48a2c; }
 .note.modnote .chip { margin-left: 6px; padding: 2px 8px; }
+
+/* ---- interior editor ---- */
+.seg.wide { margin: 4px 0 12px; }
+.seg.wide button { flex: 1; white-space: nowrap; }
+.seg.wide button.active { background: var(--accent); color: #fff; font-weight: 600; }
+.selcard { border: 1px solid #2d4a78; background: rgba(40,80,150,.12); border-radius: 12px; padding: 10px 12px 4px; margin-bottom: 4px; }
+.selcard h3 { margin-top: 2px; }
+.selcard h3 small, h2 small { color: var(--dim); font-weight: 500; font-size: 12px; margin-left: 6px; }
