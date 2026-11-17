@@ -15,6 +15,7 @@ import {
 import { InteriorView, wallRuns, FLOOR_UP } from './engine/interior.js';
 import './engine/furniture.js';
 import './engine/furniture-work.js';
+import './engine/furniture-civic.js';
 import './engine/furniture-home.js';
 import { FLOORS, CEILINGS } from './engine/materials.js';
 import { POSE_NAMES } from './engine/figures.js';
